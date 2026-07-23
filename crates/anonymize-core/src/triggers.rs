@@ -2264,6 +2264,14 @@ fn classify_numeric_identifier_continuation(
   completed_numeric_groups: usize,
   has_structured_digit_prefix: bool,
 ) -> IdentifierContinuation {
+  if has_structured_digit_prefix {
+    return classify_structured_prefix_numeric_continuation(
+      bytes,
+      end,
+      digits,
+      prior_digits,
+    );
+  }
   let grouped_numeric = classify_grouped_numeric_continuation(
     bytes,
     end,
@@ -2272,23 +2280,12 @@ fn classify_numeric_identifier_continuation(
     current_leading_alpha,
     completed_numeric_groups,
   );
-  let mixed_prefix_numeric = classify_mixed_prefix_numeric_continuation(
-    bytes,
-    end,
-    digits,
-    prior_digits,
-    completed_numeric_groups,
-    has_structured_digit_prefix,
-  );
-  if matches!(grouped_numeric, IdentifierContinuation::Reject)
-    || matches!(mixed_prefix_numeric, IdentifierContinuation::Reject)
-  {
+  if matches!(grouped_numeric, IdentifierContinuation::Reject) {
     return IdentifierContinuation::Reject;
   }
   if digits >= 2
     && ((prior_digits == 0 && (1..=3).contains(&current_leading_alpha))
-      || matches!(grouped_numeric, IdentifierContinuation::Consume)
-      || matches!(mixed_prefix_numeric, IdentifierContinuation::Consume))
+      || matches!(grouped_numeric, IdentifierContinuation::Consume))
   {
     IdentifierContinuation::Consume
   } else {
@@ -2307,7 +2304,7 @@ fn classify_grouped_numeric_continuation(
   if !(2..=3).contains(&digits) || completed_numeric_groups == 0 {
     return IdentifierContinuation::Stop;
   }
-  match following_numeric_group(bytes, end) {
+  match following_numeric_group(bytes, end, NumericGroupPolicy::Grouped) {
     FollowingNumericGroup::Absent
       if completed_numeric_groups >= 2
         || (current_leading_alpha == 0 && (2..=3).contains(&prior_digits))
@@ -2321,24 +2318,19 @@ fn classify_grouped_numeric_continuation(
   }
 }
 
-fn classify_mixed_prefix_numeric_continuation(
+fn classify_structured_prefix_numeric_continuation(
   bytes: &[u8],
   end: usize,
   digits: usize,
   prior_digits: usize,
-  completed_numeric_groups: usize,
-  has_structured_digit_prefix: bool,
 ) -> IdentifierContinuation {
-  if completed_numeric_groups > 0
-    || prior_digits == 0
-    || !has_structured_digit_prefix
-  {
+  if prior_digits == 0 {
     return IdentifierContinuation::Stop;
   }
   if digits < 2 {
     return IdentifierContinuation::Reject;
   }
-  match following_numeric_group(bytes, end) {
+  match following_numeric_group(bytes, end, NumericGroupPolicy::Structured) {
     FollowingNumericGroup::Absent | FollowingNumericGroup::Valid => {
       IdentifierContinuation::Consume
     }
@@ -2367,12 +2359,19 @@ enum FollowingNumericGroup {
   Invalid,
 }
 
+#[derive(Clone, Copy)]
+enum NumericGroupPolicy {
+  Grouped,
+  Structured,
+}
+
 const PROSE_YEAR_MIN: u16 = 1900;
 const PROSE_YEAR_MAX: u16 = 2099;
 
 fn following_numeric_group(
   bytes: &[u8],
   mut start: usize,
+  policy: NumericGroupPolicy,
 ) -> FollowingNumericGroup {
   if start > MAX_IDENTIFIER_VALUE_CHARS {
     return FollowingNumericGroup::Invalid;
@@ -2414,14 +2413,16 @@ fn following_numeric_group(
   let dirty_boundary = bytes.get(end).is_some_and(|value| {
     value.is_ascii_alphanumeric() || matches!(value, b'_' | b'-' | b'/')
   });
-  let prose_year = !dirty_boundary
+  let structured = matches!(policy, NumericGroupPolicy::Structured);
+  let prose_year = !structured
+    && !dirty_boundary
     && bytes
       .get(start..end)
       .and_then(parse_ascii_year)
       .is_some_and(|year| (PROSE_YEAR_MIN..=PROSE_YEAR_MAX).contains(&year));
   if prose_year {
     FollowingNumericGroup::Absent
-  } else if !(2..=3).contains(&digits) || dirty_boundary {
+  } else if digits < 2 || (!structured && digits > 3) || dirty_boundary {
     FollowingNumericGroup::Invalid
   } else {
     FollowingNumericGroup::Valid

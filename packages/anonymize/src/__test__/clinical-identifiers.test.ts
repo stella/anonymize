@@ -229,8 +229,10 @@ const ALPHANUMERIC_FIXTURES = [
     "ABCD123 2025-07-23T123456789",
   ],
   ["en", "Patient number: AB12 345.", "AB12 345"],
+  ["en", "Patient number: AB12 345 8901.", "AB12 345 8901"],
   ["en", "Patient number: AB-12 345.", "AB-12 345"],
   ["en", "Patient number: FR A1 123 456.", "FR A1 123 456"],
+  ["en", "Patient number: FR A1 123 456 8901.", "FR A1 123 456 8901"],
   ["en", "Patient number: 197 38 269.", "197 38 269"],
   ["en", "Patient number: 78 123 456 789.", "78 123 456 789"],
   ["en", "Patient number: 197\t38\t269.", "197\t38\t269"],
@@ -268,9 +270,7 @@ const PARTIAL_REDACTION_FIXTURES = [
   ["en", "Patient number: 12345 67 89_tail."],
   ["en", "Patient number: 482 731 8."],
   ["en", "Patient number: AB12 345 8."],
-  ["en", "Patient number: AB12 345 8901."],
   ["en", "Patient number: ABCD123 456 8."],
-  ["en", "Patient number: ABCD123 456 8901."],
   ["en", "Patient number: ABCD123 456 789_tail."],
   ["en", "Patient number: ABCD123 4567 8."],
   ["en", "Patient number: ABCD123 8."],
@@ -286,7 +286,6 @@ const PARTIAL_REDACTION_FIXTURES = [
   ["en", "Patient number: 123-45 _678."],
   ["en", `Patient number: 123-45 ${"1".repeat(129)}.`],
   ["en", "Patient number: FR A1 123 456 8."],
-  ["en", "Patient number: FR A1 123 456 8901."],
   ["en", "Patient number: 197 38 269 8."],
   ["en", "Patient number: 197 38 269 8901."],
   ["en", "Patient number: 197 38 269 1000."],
@@ -438,6 +437,45 @@ describe("multilingual clinical identifiers", () => {
       expect(values).toContain(expected);
     },
   );
+
+  test("preserves structured identifier state across later numeric groups", async () => {
+    for (const prefix of ["123-45", "123/45", "123.45", "ABCD123"]) {
+      for (const finalGroup of ["67", "678", "6789", "67890"]) {
+        const value = `${prefix} 111 222 ${finalGroup}`;
+        const values = (await detect("en", `Patient number: ${value}, next`))
+          .filter((entity) => entity.label === "registration number")
+          .map((entity) => entity.text);
+
+        expect(values).toEqual([value]);
+      }
+
+      const yearValue = `${prefix} 111 222 2025`;
+      const yearValues = (
+        await detect("en", `Patient number: ${yearValue}, next`)
+      )
+        .filter((entity) => entity.label === "registration number")
+        .map((entity) => entity.text);
+      expect(yearValues).toEqual([yearValue]);
+
+      for (const malformedTail of [
+        "111 222 67 8",
+        "111 222 67 _89",
+        "111 222 67_tail",
+        `111 222 67 ${"1".repeat(129)}`,
+      ]) {
+        expect(
+          await detect("en", `Patient number: ${prefix} ${malformedTail}`),
+        ).toEqual([]);
+      }
+    }
+
+    for (const value of ["123-45 678 901", "197-38 269 123"]) {
+      const values = (await detect("en", `Patient number: ${value}.`))
+        .filter((entity) => entity.label === "registration number")
+        .map((entity) => entity.text);
+      expect(values).toEqual([value]);
+    }
+  });
 
   test.each(PARTIAL_REDACTION_FIXTURES)(
     "%s rejects a partial clinical identifier",

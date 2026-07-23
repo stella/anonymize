@@ -431,8 +431,10 @@ fn company_id_trigger_consumes_complete_alphanumeric_identifier() {
     "ABCD123 2025-07-23T1234567",
     "ABCD123 2025-07-23T123456789",
     "AB12 345",
+    "AB12 345 8901",
     "AB-12 345",
     "FR A1 123 456",
+    "FR A1 123 456 8901",
     "197 38 269",
     "78 123 456 789",
     "197\t38\t269",
@@ -444,6 +446,57 @@ fn company_id_trigger_consumes_complete_alphanumeric_identifier() {
       .detect_static_entities(&text)
       .expect("static detection should succeed");
 
+    assert_eq!(trigger_texts(&result), [value]);
+  }
+}
+
+#[test]
+fn company_id_trigger_preserves_structured_prefix_state_across_groups() {
+  let prepared = prepared_for_trigger(
+    "Patient number",
+    "registration number",
+    TriggerStrategy::CompanyIdValue,
+  );
+
+  for prefix in ["123-45", "123/45", "123.45", "ABCD123"] {
+    for final_group in ["67", "678", "6789", "67890"] {
+      let value = format!("{prefix} 111 222 {final_group}");
+      let result = prepared
+        .detect_static_entities(&format!("Patient number: {value}, next"))
+        .expect("static detection should succeed");
+
+      assert_eq!(trigger_texts(&result), [value.as_str()]);
+    }
+
+    let year_value = format!("{prefix} 111 222 2025");
+    let year_result = prepared
+      .detect_static_entities(&format!("Patient number: {year_value}, next"))
+      .expect("static detection should succeed");
+    assert_eq!(trigger_texts(&year_result), [year_value.as_str()]);
+
+    for malformed_tail in [
+      "111 222 67 8".to_owned(),
+      "111 222 67 _89".to_owned(),
+      "111 222 67_tail".to_owned(),
+      format!("111 222 67 {}", "1".repeat(129)),
+    ] {
+      let result = prepared
+        .detect_static_entities(&format!(
+          "Patient number: {prefix} {malformed_tail}"
+        ))
+        .expect("static detection should succeed");
+
+      assert!(
+        result.entities.trigger().is_empty(),
+        "must reject malformed continuation after {prefix:?}: {malformed_tail:?}"
+      );
+    }
+  }
+
+  for value in ["123-45 678 901", "197-38 269 123"] {
+    let result = prepared
+      .detect_static_entities(&format!("Patient number: {value}."))
+      .expect("static detection should succeed");
     assert_eq!(trigger_texts(&result), [value]);
   }
 }
@@ -615,9 +668,7 @@ fn company_id_trigger_rejects_partial_or_overlong_identifier() {
     "12345 67 89_tail",
     "482 731 8",
     "AB12 345 8",
-    "AB12 345 8901",
     "ABCD123 456 8",
-    "ABCD123 456 8901",
     "ABCD123 456 789_tail",
     "ABCD123 4567 8",
     "ABCD123 8",
@@ -632,7 +683,6 @@ fn company_id_trigger_rejects_partial_or_overlong_identifier() {
     "123-45 67_tail",
     "123-45 _678",
     "FR A1 123 456 8",
-    "FR A1 123 456 8901",
     "197 38 269 8",
     "197 38 269 8901",
     "197 38 269 1000",
