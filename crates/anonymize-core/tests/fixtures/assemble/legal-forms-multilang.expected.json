@@ -12682,6 +12682,18 @@
       "CC",
       "RF"
     ],
+    "non_ascii_name_short_suffixes": [
+      "AG",
+      "KG",
+      "OG",
+      "SE",
+      "BV",
+      "NV",
+      "SA",
+      "SC",
+      "LP",
+      "UG"
+    ],
     "detection_only_suffixes": [],
     "institutional_heads": [],
     "normalized_boundary_suffixes": [

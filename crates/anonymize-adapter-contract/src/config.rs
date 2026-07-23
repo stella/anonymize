@@ -167,6 +167,7 @@ fn date_data_from_binding(data: crate::BindingDateData) -> DateData {
 fn legal_form_data_from_binding(data: BindingLegalFormData) -> LegalFormData {
   LegalFormData {
     suffixes: data.suffixes,
+    non_ascii_name_short_suffixes: data.non_ascii_name_short_suffixes,
     normalized_boundary_suffixes: data.normalized_boundary_suffixes,
     normalized_in_name_words: data.normalized_in_name_words,
     normalized_suffix_words: data.normalized_suffix_words,

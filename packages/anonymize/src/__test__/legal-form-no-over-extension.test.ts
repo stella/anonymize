@@ -61,6 +61,14 @@ const detect = async (fullText: string): Promise<NativePipelineEntity[]> => {
   return detectNative({ ...baseConfig, dictionaries }, fullText);
 };
 
+const detectForLanguage = async (
+  language: string,
+  fullText: string,
+): Promise<NativePipelineEntity[]> => {
+  const dictionaries = await getDictionaries();
+  return detectNative({ ...baseConfig, language, dictionaries }, fullText);
+};
+
 const orgs = (entities: NativePipelineEntity[]): NativePipelineEntity[] =>
   entities.filter((e) => e.label === "organization");
 
@@ -106,6 +114,48 @@ describe("legal-form ORG span discipline — suffix word boundary", () => {
     const samsungSe = orgs(entities).find((e) => e.text === "Samsung SE");
     expect(appleAg).toBeDefined();
     expect(samsungSe).toBeDefined();
+  });
+
+  test("short suffixes support Unicode organization names", async () => {
+    const text =
+      "Küstenwerke AG, Société générale SA, and Řeka SE filed jointly.";
+    const entities = orgs(await detect(text)).map(({ text: entityText }) =>
+      entityText.replace(/,$/, ""),
+    );
+
+    expect(entities).toContain("Küstenwerke AG");
+    expect(entities).toContain("Société générale SA");
+    expect(entities).toContain("Řeka SE");
+  });
+
+  test("short suffixes reject Unicode prose ending in abbreviations", async () => {
+    const text = [
+      "Zapsaná v obchodním rejstříku vedeném u KS Brno.",
+      "Výkon motoru je 191 KW, benzín BA 95.",
+    ].join("\n");
+    const entities = orgs(await detect(text));
+
+    expect(
+      entities.some(({ text: entityText }) => /\b(KS|BA)$/.test(entityText)),
+    ).toBeFalse();
+  });
+
+  test("short suffix Unicode names follow the configured language", async () => {
+    const czechOrganization = orgs(
+      await detectForLanguage("cs", "Řeka SE filed jointly."),
+    );
+    const czechVehicle = orgs(
+      await detectForLanguage("cs", "Škoda Octavia 110 PS was inspected."),
+    );
+    const latvian = orgs(
+      await detectForLanguage("lv", "Latvijas Šķiedra PS filed jointly."),
+    );
+
+    expect(czechOrganization.some(({ text }) => text === "Řeka SE")).toBeTrue();
+    expect(czechVehicle.some(({ text }) => text.endsWith(" PS"))).toBeFalse();
+    expect(
+      latvian.some(({ text }) => text === "Latvijas Šķiedra PS"),
+    ).toBeTrue();
   });
 
   test("short suffix followed by an accented Latin letter is rejected", async () => {

@@ -12501,6 +12501,7 @@
       "CC",
       "RF"
     ],
+    "non_ascii_name_short_suffixes": ["SE"],
     "detection_only_suffixes": [],
     "institutional_heads": [],
     "normalized_boundary_suffixes": [

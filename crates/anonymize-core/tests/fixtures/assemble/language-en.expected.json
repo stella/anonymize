@@ -12489,6 +12489,16 @@
       "CC",
       "RF"
     ],
+    "non_ascii_name_short_suffixes": [
+      "NL",
+      "LP",
+      "SE",
+      "GP",
+      "LC",
+      "NA",
+      "PA",
+      "PC"
+    ],
     "detection_only_suffixes": [
       "Directorate",
       "Commission",
