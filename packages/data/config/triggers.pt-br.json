@@ -166,5 +166,37 @@
     ],
     "extensions": ["add-colon"],
     "validations": [{ "type": "has-digits" }]
+  },
+  {
+    "id": "pt-br-clinical-medical-record-number",
+    "label": "registration number",
+    "strategy": { "type": "company-id-value" },
+    "triggers": ["número do prontuário", "número do prontuário médico"],
+    "extensions": ["add-colon", "add-colon-space"],
+    "validations": [{ "type": "has-digits" }]
+  },
+  {
+    "id": "pt-br-clinical-patient-number",
+    "label": "registration number",
+    "strategy": { "type": "company-id-value" },
+    "triggers": [
+      "número do paciente",
+      "ID do paciente",
+      "identificador do paciente"
+    ],
+    "extensions": ["add-colon", "add-colon-space"],
+    "validations": [{ "type": "has-digits" }]
+  },
+  {
+    "id": "pt-br-clinical-health-card-number",
+    "label": "registration number",
+    "strategy": { "type": "company-id-value" },
+    "triggers": [
+      "número do Cartão Nacional de Saúde",
+      "número do cartão SUS",
+      "número do cartão de saúde"
+    ],
+    "extensions": ["add-colon", "add-colon-space"],
+    "validations": [{ "type": "has-digits" }]
   }
 ]

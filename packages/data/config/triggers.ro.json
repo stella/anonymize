@@ -46,5 +46,37 @@
       "count": 4
     },
     "triggers": ["născut la", "născută la"]
+  },
+  {
+    "id": "ro-clinical-medical-record-number",
+    "label": "registration number",
+    "strategy": { "type": "company-id-value" },
+    "triggers": [
+      "numărul dosarului medical",
+      "număr dosar medical",
+      "numărul foii de observație"
+    ],
+    "extensions": ["add-colon", "add-colon-space"],
+    "validations": [{ "type": "has-digits" }]
+  },
+  {
+    "id": "ro-clinical-patient-number",
+    "label": "registration number",
+    "strategy": { "type": "company-id-value" },
+    "triggers": ["număr pacient", "numărul pacientului", "ID pacient"],
+    "extensions": ["add-colon", "add-colon-space"],
+    "validations": [{ "type": "has-digits" }]
+  },
+  {
+    "id": "ro-clinical-health-card-number",
+    "label": "registration number",
+    "strategy": { "type": "company-id-value" },
+    "triggers": [
+      "numărul cardului național de sănătate",
+      "număr card de sănătate",
+      "număr card de asigurat"
+    ],
+    "extensions": ["add-colon", "add-colon-space"],
+    "validations": [{ "type": "has-digits" }]
   }
 ]

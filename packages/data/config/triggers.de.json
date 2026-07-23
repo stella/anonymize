@@ -150,5 +150,37 @@
       { "type": "starts-uppercase" },
       { "type": "min-length", "min": 3 }
     ]
+  },
+  {
+    "id": "de-clinical-medical-record-number",
+    "label": "registration number",
+    "strategy": { "type": "company-id-value" },
+    "triggers": [
+      "Krankenaktennummer",
+      "Patientenaktennummer",
+      "medizinische Aktennummer"
+    ],
+    "extensions": ["add-colon", "add-colon-space"],
+    "validations": [{ "type": "has-digits" }]
+  },
+  {
+    "id": "de-clinical-patient-number",
+    "label": "registration number",
+    "strategy": { "type": "company-id-value" },
+    "triggers": ["Patientennummer", "Patienten-ID", "Patientenkennung"],
+    "extensions": ["add-colon", "add-colon-space"],
+    "validations": [{ "type": "has-digits" }]
+  },
+  {
+    "id": "de-clinical-health-card-number",
+    "label": "registration number",
+    "strategy": { "type": "company-id-value" },
+    "triggers": [
+      "Krankenversichertennummer",
+      "Gesundheitskartennummer",
+      "Nummer der Gesundheitskarte"
+    ],
+    "extensions": ["add-colon", "add-colon-space"],
+    "validations": [{ "type": "has-digits" }]
   }
 ]

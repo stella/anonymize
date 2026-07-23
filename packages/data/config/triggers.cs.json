@@ -610,5 +610,33 @@
         "type": "starts-uppercase"
       }
     ]
+  },
+  {
+    "id": "cs-clinical-medical-record-number",
+    "label": "registration number",
+    "strategy": { "type": "company-id-value" },
+    "triggers": [
+      "číslo zdravotnické dokumentace",
+      "číslo zdravotní dokumentace",
+      "číslo chorobopisu"
+    ],
+    "extensions": ["add-colon", "add-colon-space"],
+    "validations": [{ "type": "has-digits" }]
+  },
+  {
+    "id": "cs-clinical-patient-number",
+    "label": "registration number",
+    "strategy": { "type": "company-id-value" },
+    "triggers": ["číslo pacienta", "ID pacienta", "identifikátor pacienta"],
+    "extensions": ["add-colon", "add-colon-space"],
+    "validations": [{ "type": "has-digits" }]
+  },
+  {
+    "id": "cs-clinical-health-card-number",
+    "label": "registration number",
+    "strategy": { "type": "company-id-value" },
+    "triggers": ["číslo průkazu pojištěnce", "číslo kartičky pojištěnce"],
+    "extensions": ["add-colon", "add-colon-space"],
+    "validations": [{ "type": "has-digits" }]
   }
 ]

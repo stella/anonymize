@@ -459,5 +459,29 @@
     "includeTrigger": true,
     "extensions": [],
     "validations": [{ "type": "min-length", "min": 3 }]
+  },
+  {
+    "id": "sk-clinical-medical-record-number",
+    "label": "registration number",
+    "strategy": { "type": "company-id-value" },
+    "triggers": ["číslo zdravotnej dokumentácie", "číslo chorobopisu"],
+    "extensions": ["add-colon", "add-colon-space"],
+    "validations": [{ "type": "has-digits" }]
+  },
+  {
+    "id": "sk-clinical-patient-number",
+    "label": "registration number",
+    "strategy": { "type": "company-id-value" },
+    "triggers": ["číslo pacienta", "ID pacienta", "identifikátor pacienta"],
+    "extensions": ["add-colon", "add-colon-space"],
+    "validations": [{ "type": "has-digits" }]
+  },
+  {
+    "id": "sk-clinical-health-card-number",
+    "label": "registration number",
+    "strategy": { "type": "company-id-value" },
+    "triggers": ["číslo preukazu poistenca", "číslo kartičky poistenca"],
+    "extensions": ["add-colon", "add-colon-space"],
+    "validations": [{ "type": "has-digits" }]
   }
 ]

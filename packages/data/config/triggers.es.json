@@ -73,5 +73,41 @@
     "strategy": { "type": "n-words", "count": 1 },
     "triggers": ["C.P.", "CP", "código postal"],
     "validations": [{ "type": "matches-pattern", "pattern": "^\\d{5}\\.?$" }]
+  },
+  {
+    "id": "es-clinical-medical-record-number",
+    "label": "registration number",
+    "strategy": { "type": "company-id-value" },
+    "triggers": [
+      "número de historia clínica",
+      "número de expediente clínico",
+      "número de historia médica"
+    ],
+    "extensions": ["add-colon", "add-colon-space"],
+    "validations": [{ "type": "has-digits" }]
+  },
+  {
+    "id": "es-clinical-patient-number",
+    "label": "registration number",
+    "strategy": { "type": "company-id-value" },
+    "triggers": [
+      "número de paciente",
+      "ID de paciente",
+      "identificador de paciente"
+    ],
+    "extensions": ["add-colon", "add-colon-space"],
+    "validations": [{ "type": "has-digits" }]
+  },
+  {
+    "id": "es-clinical-health-card-number",
+    "label": "registration number",
+    "strategy": { "type": "company-id-value" },
+    "triggers": [
+      "número de tarjeta sanitaria",
+      "número de la tarjeta sanitaria",
+      "número de tarjeta de seguro médico"
+    ],
+    "extensions": ["add-colon", "add-colon-space"],
+    "validations": [{ "type": "has-digits" }]
   }
 ]

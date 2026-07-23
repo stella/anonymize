@@ -117,5 +117,33 @@
     ],
     "extensions": ["add-colon", "add-colon-space"],
     "validations": [{ "type": "matches-pattern", "pattern": "^\\d{10}$" }]
+  },
+  {
+    "id": "en-clinical-medical-record-number",
+    "label": "registration number",
+    "strategy": { "type": "company-id-value" },
+    "triggers": ["medical record number", "clinical record number", "MRN"],
+    "extensions": ["add-colon", "add-colon-space"],
+    "validations": [{ "type": "has-digits" }]
+  },
+  {
+    "id": "en-clinical-patient-number",
+    "label": "registration number",
+    "strategy": { "type": "company-id-value" },
+    "triggers": ["patient number", "patient ID", "patient identifier"],
+    "extensions": ["add-colon", "add-colon-space"],
+    "validations": [{ "type": "has-digits" }]
+  },
+  {
+    "id": "en-clinical-health-card-number",
+    "label": "registration number",
+    "strategy": { "type": "company-id-value" },
+    "triggers": [
+      "health card number",
+      "health insurance card number",
+      "insurance card number"
+    ],
+    "extensions": ["add-colon", "add-colon-space"],
+    "validations": [{ "type": "has-digits" }]
   }
 ]
