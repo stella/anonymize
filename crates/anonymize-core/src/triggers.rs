@@ -2251,6 +2251,54 @@ fn following_numeric_group(
 }
 
 fn is_ascii_date_shape(token: &[u8]) -> bool {
+  let Some(separator) =
+    token.iter().position(|value| matches!(value, b'T' | b't'))
+  else {
+    return is_conventional_ascii_date(token);
+  };
+  let Some((date, time_prefix)) = token
+    .split_at_checked(separator)
+    .and_then(|(date, suffix)| suffix.get(1..).map(|time| (date, time)))
+  else {
+    return false;
+  };
+  is_ascii_time_prefix(time_prefix) && is_conventional_ascii_date(date)
+}
+
+fn is_ascii_time_prefix(token: &[u8]) -> bool {
+  let mut end = token
+    .iter()
+    .take_while(|value| value.is_ascii_digit())
+    .count();
+  if end == 0 {
+    return false;
+  }
+  if token.get(end) == Some(&b'.') {
+    end = end.saturating_add(1);
+    let fraction_digits = token
+      .get(end..)
+      .into_iter()
+      .flatten()
+      .take_while(|value| value.is_ascii_digit())
+      .count();
+    if fraction_digits == 0 {
+      return false;
+    }
+    end = end.saturating_add(fraction_digits);
+  }
+  let Some(suffix) = token.get(end..) else {
+    return false;
+  };
+  match suffix {
+    [] | [b'Z' | b'z'] => true,
+    [b'-', offset @ ..] => {
+      matches!(offset.len(), 2 | 4) && offset.iter().all(u8::is_ascii_digit)
+    }
+    _ => false,
+  }
+}
+
+fn is_conventional_ascii_date(token: &[u8]) -> bool {
   let mut separators = token
     .iter()
     .filter(|value| matches!(value, b'.' | b'-' | b'/'));
