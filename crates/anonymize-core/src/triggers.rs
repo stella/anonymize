@@ -1898,12 +1898,29 @@ fn id_value_prefix(text: &str) -> Option<&str> {
       {
         next = next.saturating_add(1);
       }
+      let mut segment_end = next;
+      let mut segment_has_digit = false;
+      while bytes
+        .get(segment_end)
+        .is_some_and(u8::is_ascii_alphanumeric)
+      {
+        segment_has_digit |=
+          bytes.get(segment_end).is_some_and(u8::is_ascii_digit);
+        segment_end = segment_end.saturating_add(1);
+      }
+      let segment_len = segment_end.saturating_sub(next);
+      let short_mixed_segment = digits == 0
+        && leading_alpha <= 3
+        && segment_has_digit
+        && (1..=3).contains(&segment_len);
+      let next_is_digit = bytes.get(next).is_some_and(u8::is_ascii_digit);
       if end == 0
-        || !bytes.get(next).is_some_and(u8::is_ascii_digit)
-        || !(bytes
-          .get(end.saturating_sub(1))
-          .is_some_and(u8::is_ascii_digit)
-          || (digits == 0 && leading_alpha <= 3))
+        || !(short_mixed_segment
+          || (next_is_digit
+            && (bytes
+              .get(end.saturating_sub(1))
+              .is_some_and(u8::is_ascii_digit)
+              || (digits == 0 && leading_alpha <= 3))))
       {
         break;
       }

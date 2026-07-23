@@ -378,7 +378,12 @@ fn company_id_trigger_consumes_complete_alphanumeric_identifier() {
     TriggerStrategy::CompanyIdValue,
   );
 
-  for value in ["ABCD-12345", "12345-ABCD", "ABCD/12345.XY"] {
+  for value in [
+    "ABCD-12345",
+    "12345-ABCD",
+    "ABCD/12345.XY",
+    "FR A1 123456789",
+  ] {
     let text = format!("Patient number: {value}, next field");
     let result = prepared
       .detect_static_entities(&text)
