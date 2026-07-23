@@ -141,7 +141,31 @@ const LANGUAGE_ISOLATION_FIXTURES = POSITIVE_FIXTURES.map(
   },
 );
 
+const EXACT_LIMIT_IDENTIFIER = Array.from({ length: 43 }, () => "12").join(" ");
+const NEAR_LIMIT_IDENTIFIER = Array.from({ length: 42 }, () => "12").join(" ");
+
 const ALPHANUMERIC_FIXTURES = [
+  ["en", `Patient number: ${EXACT_LIMIT_IDENTIFIER}`, EXACT_LIMIT_IDENTIFIER],
+  [
+    "en",
+    `Patient number: ${EXACT_LIMIT_IDENTIFIER}, next`,
+    EXACT_LIMIT_IDENTIFIER,
+  ],
+  [
+    "en",
+    `Patient number: ${EXACT_LIMIT_IDENTIFIER} confirmed`,
+    EXACT_LIMIT_IDENTIFIER,
+  ],
+  [
+    "en",
+    `Patient number: ${EXACT_LIMIT_IDENTIFIER} follow-up`,
+    EXACT_LIMIT_IDENTIFIER,
+  ],
+  [
+    "en",
+    `Patient number: ${NEAR_LIMIT_IDENTIFIER}   confirmed`,
+    NEAR_LIMIT_IDENTIFIER,
+  ],
   ["en", "Medical record number: ABCD-12345.", "ABCD-12345"],
   ["de", "Patientennummer: 12345-ABCD.", "12345-ABCD"],
   ["cs", "Číslo průkazu pojištěnce: AB12/345.XY.", "AB12/345.XY"],
@@ -191,6 +215,18 @@ const ALPHANUMERIC_FIXTURES = [
 ] as const;
 
 const PARTIAL_REDACTION_FIXTURES = [
+  ["en", `Patient number: ${EXACT_LIMIT_IDENTIFIER}3.`],
+  ["en", `Patient number: ${EXACT_LIMIT_IDENTIFIER}A2.`],
+  ["en", `Patient number: ${EXACT_LIMIT_IDENTIFIER} 34.`],
+  ["en", `Patient number: ${EXACT_LIMIT_IDENTIFIER} page2.`],
+  ["en", `Patient number: ${EXACT_LIMIT_IDENTIFIER}_tail.`],
+  ["en", `Patient number: ${EXACT_LIMIT_IDENTIFIER} -tail.`],
+  ["en", `Patient number: ${EXACT_LIMIT_IDENTIFIER} (v2).`],
+  ["en", `Patient number: ${NEAR_LIMIT_IDENTIFIER}   34.`],
+  [
+    "en",
+    `Patient number: ${Array.from({ length: 44 }, () => "12").join(" ")}.`,
+  ],
   ["en", "Patient number: ABCD-12345_tail."],
   ["de", "Krankenaktennummer: 12345-."],
   ["sv", `Journalnummer: AB-${"1".repeat(129)}.`],

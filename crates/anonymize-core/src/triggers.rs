@@ -2331,13 +2331,27 @@ fn following_numeric_group(
   bytes: &[u8],
   mut start: usize,
 ) -> FollowingNumericGroup {
+  if start > MAX_IDENTIFIER_VALUE_CHARS {
+    return FollowingNumericGroup::Invalid;
+  }
+  if start == MAX_IDENTIFIER_VALUE_CHARS {
+    return following_group_at_identifier_cap(bytes, start, false);
+  }
   let limit = bytes.len().min(MAX_IDENTIFIER_VALUE_CHARS);
+  let before_whitespace = start;
   while start < limit
     && bytes
       .get(start)
       .is_some_and(|value| matches!(value, b' ' | b'\t'))
   {
     start = start.saturating_add(1);
+  }
+  if start == MAX_IDENTIFIER_VALUE_CHARS {
+    return following_group_at_identifier_cap(
+      bytes,
+      start,
+      start > before_whitespace,
+    );
   }
   if start >= limit {
     return if bytes.get(start).is_none() {
@@ -2368,6 +2382,74 @@ fn following_numeric_group(
     FollowingNumericGroup::Invalid
   } else {
     FollowingNumericGroup::Valid
+  }
+}
+
+fn following_group_at_identifier_cap(
+  bytes: &[u8],
+  start: usize,
+  preceded_by_whitespace: bool,
+) -> FollowingNumericGroup {
+  let Some(tail) = bytes.get(start..) else {
+    return FollowingNumericGroup::Invalid;
+  };
+  let Some(tail) = bounded_utf8_prefix(tail) else {
+    return FollowingNumericGroup::Invalid;
+  };
+  if tail.is_empty() {
+    return FollowingNumericGroup::Absent;
+  }
+
+  let mut token_start = 0_usize;
+  let mut whitespace = 0_usize;
+  for ch in tail.chars() {
+    if !ch.is_whitespace() {
+      break;
+    }
+    whitespace = whitespace.saturating_add(1);
+    token_start = token_start.saturating_add(ch.len_utf8());
+    if whitespace >= MAX_IDENTIFIER_VALUE_CHARS {
+      return FollowingNumericGroup::Invalid;
+    }
+  }
+  if token_start == 0 && !preceded_by_whitespace {
+    return if is_clean_identifier_boundary(tail) {
+      FollowingNumericGroup::Absent
+    } else {
+      FollowingNumericGroup::Invalid
+    };
+  }
+
+  let Some(after_whitespace) = tail.get(token_start..) else {
+    return FollowingNumericGroup::Invalid;
+  };
+  let Some(first) = after_whitespace.chars().next() else {
+    return FollowingNumericGroup::Absent;
+  };
+  if is_clean_identifier_boundary(after_whitespace) {
+    return FollowingNumericGroup::Absent;
+  }
+  if !first.is_alphanumeric() {
+    return FollowingNumericGroup::Invalid;
+  }
+  let token = immediate_boundary_token(after_whitespace);
+  if first.is_numeric() || token.has_numeric() {
+    FollowingNumericGroup::Invalid
+  } else {
+    FollowingNumericGroup::Absent
+  }
+}
+
+fn bounded_utf8_prefix(bytes: &[u8]) -> Option<&str> {
+  let end = bytes
+    .len()
+    .min(MAX_IDENTIFIER_VALUE_CHARS.saturating_mul(4));
+  match str::from_utf8(bytes.get(..end)?) {
+    Ok(prefix) => Some(prefix),
+    Err(error) if error.error_len().is_none() => {
+      str::from_utf8(bytes.get(..error.valid_up_to())?).ok()
+    }
+    Err(_) => None,
   }
 }
 

@@ -646,13 +646,47 @@ fn company_id_trigger_rejects_partial_or_overlong_identifier() {
       "overlong identifier-shaped continuation must reject without a partial prefix"
     );
   }
+}
+
+#[test]
+fn company_id_trigger_classifies_the_exact_length_boundary() {
+  let prepared = prepared_for_trigger(
+    "Patient number",
+    "registration number",
+    TriggerStrategy::CompanyIdValue,
+  );
 
   let exact_limit = ["12"; 43].join(" ");
   assert_eq!(exact_limit.len(), 128);
+  for suffix in ["", ", next", " confirmed", " follow-up", " , next"] {
+    let accepted = prepared
+      .detect_static_entities(&format!("Patient number: {exact_limit}{suffix}"))
+      .expect("static detection should succeed");
+    assert_eq!(trigger_texts(&accepted), [exact_limit.as_str()]);
+  }
+
+  for suffix in ["3", "A2", " 34", " page2", "_tail", " -tail", " (v2)"] {
+    let rejected = prepared
+      .detect_static_entities(&format!("Patient number: {exact_limit}{suffix}"))
+      .expect("static detection should succeed");
+    assert!(
+      rejected.entities.trigger().is_empty(),
+      "exact-limit identifier must reject overflow suffix {suffix:?}"
+    );
+  }
+
+  let near_limit = ["12"; 42].join(" ");
+  assert_eq!(near_limit.len(), 125);
   let accepted = prepared
-    .detect_static_entities(&format!("Patient number: {exact_limit}"))
+    .detect_static_entities(&format!(
+      "Patient number: {near_limit}   confirmed"
+    ))
     .expect("static detection should succeed");
-  assert_eq!(trigger_texts(&accepted), [exact_limit.as_str()]);
+  assert_eq!(trigger_texts(&accepted), [near_limit.as_str()]);
+  let rejected = prepared
+    .detect_static_entities(&format!("Patient number: {near_limit}   34"))
+    .expect("static detection should succeed");
+  assert!(rejected.entities.trigger().is_empty());
 
   for value in [["12"; 44].join(" "), vec!["12"; 10_000].join(" ")] {
     let result = prepared
