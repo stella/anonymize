@@ -23083,6 +23083,126 @@
     },
     {
       "kind": "literal-with-options",
+      "pattern": "číslo zdravotnické dokumentace",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "číslo zdravotní dokumentace",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "číslo chorobopisu",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "číslo zdravotnické dokumentace:",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "číslo zdravotnické dokumentace: ",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "číslo zdravotní dokumentace:",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "číslo zdravotní dokumentace: ",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "číslo chorobopisu:",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "číslo chorobopisu: ",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "číslo pacienta",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "id pacienta",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "identifikátor pacienta",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "číslo pacienta:",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "číslo pacienta: ",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "id pacienta:",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "id pacienta: ",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "identifikátor pacienta:",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "identifikátor pacienta: ",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "číslo průkazu pojištěnce",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "číslo kartičky pojištěnce",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "číslo průkazu pojištěnce:",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "číslo průkazu pojištěnce: ",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "číslo kartičky pojištěnce:",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "číslo kartičky pojištěnce: ",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
       "pattern": "swift code",
       "case_insensitive": true
     },
@@ -27227,6 +27347,318 @@
         "validations": [
           {
             "type": "starts-uppercase"
+          }
+        ],
+        "include_trigger": false
+      },
+      {
+        "trigger": "číslo zdravotnické dokumentace",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [
+          {
+            "type": "has-digits"
+          }
+        ],
+        "include_trigger": false
+      },
+      {
+        "trigger": "číslo zdravotní dokumentace",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [
+          {
+            "type": "has-digits"
+          }
+        ],
+        "include_trigger": false
+      },
+      {
+        "trigger": "číslo chorobopisu",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [
+          {
+            "type": "has-digits"
+          }
+        ],
+        "include_trigger": false
+      },
+      {
+        "trigger": "číslo zdravotnické dokumentace:",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [
+          {
+            "type": "has-digits"
+          }
+        ],
+        "include_trigger": false
+      },
+      {
+        "trigger": "číslo zdravotnické dokumentace: ",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [
+          {
+            "type": "has-digits"
+          }
+        ],
+        "include_trigger": false
+      },
+      {
+        "trigger": "číslo zdravotní dokumentace:",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [
+          {
+            "type": "has-digits"
+          }
+        ],
+        "include_trigger": false
+      },
+      {
+        "trigger": "číslo zdravotní dokumentace: ",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [
+          {
+            "type": "has-digits"
+          }
+        ],
+        "include_trigger": false
+      },
+      {
+        "trigger": "číslo chorobopisu:",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [
+          {
+            "type": "has-digits"
+          }
+        ],
+        "include_trigger": false
+      },
+      {
+        "trigger": "číslo chorobopisu: ",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [
+          {
+            "type": "has-digits"
+          }
+        ],
+        "include_trigger": false
+      },
+      {
+        "trigger": "číslo pacienta",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [
+          {
+            "type": "has-digits"
+          }
+        ],
+        "include_trigger": false
+      },
+      {
+        "trigger": "ID pacienta",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [
+          {
+            "type": "has-digits"
+          }
+        ],
+        "include_trigger": false
+      },
+      {
+        "trigger": "identifikátor pacienta",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [
+          {
+            "type": "has-digits"
+          }
+        ],
+        "include_trigger": false
+      },
+      {
+        "trigger": "číslo pacienta:",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [
+          {
+            "type": "has-digits"
+          }
+        ],
+        "include_trigger": false
+      },
+      {
+        "trigger": "číslo pacienta: ",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [
+          {
+            "type": "has-digits"
+          }
+        ],
+        "include_trigger": false
+      },
+      {
+        "trigger": "ID pacienta:",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [
+          {
+            "type": "has-digits"
+          }
+        ],
+        "include_trigger": false
+      },
+      {
+        "trigger": "ID pacienta: ",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [
+          {
+            "type": "has-digits"
+          }
+        ],
+        "include_trigger": false
+      },
+      {
+        "trigger": "identifikátor pacienta:",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [
+          {
+            "type": "has-digits"
+          }
+        ],
+        "include_trigger": false
+      },
+      {
+        "trigger": "identifikátor pacienta: ",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [
+          {
+            "type": "has-digits"
+          }
+        ],
+        "include_trigger": false
+      },
+      {
+        "trigger": "číslo průkazu pojištěnce",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [
+          {
+            "type": "has-digits"
+          }
+        ],
+        "include_trigger": false
+      },
+      {
+        "trigger": "číslo kartičky pojištěnce",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [
+          {
+            "type": "has-digits"
+          }
+        ],
+        "include_trigger": false
+      },
+      {
+        "trigger": "číslo průkazu pojištěnce:",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [
+          {
+            "type": "has-digits"
+          }
+        ],
+        "include_trigger": false
+      },
+      {
+        "trigger": "číslo průkazu pojištěnce: ",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [
+          {
+            "type": "has-digits"
+          }
+        ],
+        "include_trigger": false
+      },
+      {
+        "trigger": "číslo kartičky pojištěnce:",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [
+          {
+            "type": "has-digits"
+          }
+        ],
+        "include_trigger": false
+      },
+      {
+        "trigger": "číslo kartičky pojištěnce: ",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [
+          {
+            "type": "has-digits"
           }
         ],
         "include_trigger": false
@@ -87263,7 +87695,7 @@
     },
     "triggers": {
       "start": 1381,
-      "end": 1725
+      "end": 1749
     },
     "deny_list": {
       "start": 0,
