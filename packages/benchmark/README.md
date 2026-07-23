@@ -48,13 +48,14 @@ bun run bench:compare
 # Add --full for the entire 127-document test split.
 bun run bench:blind
 
-# Run every executable sealed corpus (TAB, RedactionBench, and MEDDOCAN).
+# Run every executable sealed corpus.
 bun run bench:sealed
 
 # Or run one complete public test split.
 bun run bench:sealed:tab
 bun run bench:sealed:redactionbench
 bun run bench:sealed:meddocan
+bun run bench:sealed:german-ler
 
 # Development-only five-document TAB comparison (aggregate by default).
 bun run bench:dev-gap
@@ -74,7 +75,7 @@ PII-Shield is included when its CLI and GLiNER model are installed; set
 Blind results can reject a release, but must not be used to inspect examples or
 tune behavior. See the repository instructions in `AGENTS.md`.
 
-All three sealed runners use the same versioned JSON contract in
+All sealed runners use the same versioned JSON contract in
 `src/sealed-report.ts`. The contract has exact fields and task-discriminated
 aggregate metrics; unknown fields fail closed. The shared serializer and
 Markdown renderer cannot accept document text, examples, categories,
@@ -134,6 +135,13 @@ not flattened into one score when their annotations mean different things:
   email, financial/government records, source code, files, logs, and terminals.
 - MEDDOCAN: all 250 documents in the public Spanish clinical test split,
   loaded from its checksum-pinned Zenodo archive.
+- German LER: all 6,673 sentences in the public German federal-court test split.
+  Because its seven coarse classes include legal norms, decisions, and
+  literature, the suite reports label-agnostic entity coverage as a diagnostic;
+  it does not call this PII recall or label-aware NER accuracy. The underlying
+  decisions were already anonymized before annotation. The published split
+  contains token sequences rather than original spacing, so the runner joins
+  tokens with one space and derives all evaluated offsets from that text.
   Restricted or gated corpora are intentionally absent. A paper, model, dataset
   card, or click-through registration page is not enough: the runner only lists
   corpora it can retrieve as a versioned public artifact without credentials.

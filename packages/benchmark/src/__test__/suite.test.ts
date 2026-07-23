@@ -9,6 +9,7 @@ import {
 import { parseRedactionBenchRows } from "../suite/redactionbench";
 import { scoreRedactionBench } from "../suite/redactionbench-score";
 import { parseMeddocanArchive } from "../suite/meddocan";
+import { parseGermanLerRows } from "../suite/german-ler";
 import { scoreSpanCorpus } from "../suite/span-score";
 
 const rows = () => [
@@ -36,6 +37,7 @@ describe("benchmark suite registry", () => {
     ).toBe(true);
     expect(BENCHMARK_CORPORA.some(({ id }) => id === "tab-echr")).toBe(true);
     expect(BENCHMARK_CORPORA.some(({ id }) => id === "meddocan")).toBe(true);
+    expect(BENCHMARK_CORPORA.some(({ id }) => id === "german-ler")).toBe(true);
     expect(BENCHMARK_CORPORA.every(({ access }) => access !== undefined)).toBe(
       true,
     );
@@ -43,7 +45,12 @@ describe("benchmark suite registry", () => {
       BENCHMARK_CORPORA.filter(
         ({ runnable, policy }) => runnable && policy === "evaluation-only",
       ).map(({ execution }) => execution?.script),
-    ).toEqual(["blind.ts", "redactionbench.ts", "meddocan.ts"]);
+    ).toEqual([
+      "blind.ts",
+      "redactionbench.ts",
+      "meddocan.ts",
+      "german-ler.ts",
+    ]);
     for (const corpus of BENCHMARK_CORPORA.filter(
       ({ policy }) => policy === "evaluation-only",
     )) {
@@ -51,6 +58,31 @@ describe("benchmark suite registry", () => {
       expect(corpus.artifact?.split).toBe("test");
       expect(corpus.artifact?.sha256).toMatch(/^[a-f0-9]{64}$/u);
     }
+  });
+});
+
+describe("German LER normalization", () => {
+  test("reconstructs sentence offsets and validates coarse IOB2 tags", () => {
+    expect(
+      parseGermanLerRows([
+        {
+          id: "1",
+          tokens: ["Das", "Bundesverfassungsgericht", "entschied", "."],
+          "coarse-ner": ["O", "B-ORG", "O", "O"],
+        },
+      ]),
+    ).toEqual([
+      {
+        id: "sentence-0",
+        text: "Das Bundesverfassungsgericht entschied .",
+        spans: [{ start: 4, end: 28, label: "ORG" }],
+      },
+    ]);
+    expect(() =>
+      parseGermanLerRows([
+        { id: "1", tokens: ["Gericht"], "coarse-ner": ["I-ORG"] },
+      ]),
+    ).toThrow("invalid IOB2 sequence");
   });
 });
 
