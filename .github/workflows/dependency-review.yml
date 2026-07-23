@@ -37,18 +37,20 @@ jobs:
             Unlicense,
             CC0-1.0,
             CC-BY-4.0,
+            CDLA-Permissive-2.0,
             MIT-0,
             MPL-2.0,
             Python-2.0,
             Zlib,
             Unicode-3.0
-          # rangemap and unicode-properties declare the verified upstream
-          # deprecated MIT/Apache-2.0 dual-license syntax via lopdf.
+          # matrixmultiply, rangemap, and unicode-properties declare verified
+          # upstream MIT/Apache-2.0 licenses that GitHub cannot normalize.
           allow-dependencies-licenses: >-
             pkg:cargo/stella-aho-corasick-core,
             pkg:cargo/stella-fuzzy-search-core,
             pkg:cargo/stella-regex-set-core,
             pkg:cargo/libfuzzer-sys,
+            pkg:cargo/matrixmultiply,
             pkg:cargo/rangemap,
             pkg:cargo/unicode-properties
           comment-summary-in-pr: always
