@@ -18,6 +18,35 @@ pub(crate) struct SpanIndex<T> {
   leaf_count: usize,
 }
 
+trait VisitWork {
+  fn observe_node(&mut self);
+}
+
+struct UnmeasuredVisitWork;
+
+impl VisitWork for UnmeasuredVisitWork {
+  #[inline]
+  fn observe_node(&mut self) {}
+}
+
+struct VisitState<'a, W, F> {
+  work: &'a mut W,
+  visit: &'a mut F,
+}
+
+#[cfg(test)]
+#[derive(Default)]
+struct MeasuredVisitWork {
+  nodes: usize,
+}
+
+#[cfg(test)]
+impl VisitWork for MeasuredVisitWork {
+  fn observe_node(&mut self) {
+    self.nodes = self.nodes.saturating_add(1);
+  }
+}
+
 impl<T> SpanIndex<T> {
   pub(crate) fn new(spans: impl IntoIterator<Item = (u32, u32, T)>) -> Self {
     let mut spans = spans
@@ -115,22 +144,39 @@ impl<T> SpanIndex<T> {
     end: u32,
     mut visit: impl FnMut(&T) -> std::result::Result<(), E>,
   ) -> std::result::Result<(), E> {
+    self.try_for_each_intersecting_with_work(
+      start,
+      end,
+      &mut UnmeasuredVisitWork,
+      &mut visit,
+    )
+  }
+
+  fn try_for_each_intersecting_with_work<E>(
+    &self,
+    start: u32,
+    end: u32,
+    work: &mut impl VisitWork,
+    visit: &mut impl FnMut(&T) -> std::result::Result<(), E>,
+  ) -> std::result::Result<(), E> {
     if start > end || self.spans.is_empty() {
       return Ok(());
     }
     let candidate_end = self.spans.partition_point(|span| span.start <= end);
-    self.visit_tree(1, 0, self.leaf_count, candidate_end, start, &mut visit)
+    let mut state = VisitState { work, visit };
+    self.visit_tree(1, 0, self.leaf_count, candidate_end, start, &mut state)
   }
 
-  fn visit_tree<E>(
+  fn visit_tree<E, W: VisitWork, F: FnMut(&T) -> std::result::Result<(), E>>(
     &self,
     node: usize,
     left: usize,
     right: usize,
     candidate_end: usize,
     minimum_end: u32,
-    visit: &mut impl FnMut(&T) -> std::result::Result<(), E>,
+    state: &mut VisitState<'_, W, F>,
   ) -> std::result::Result<(), E> {
+    state.work.observe_node();
     if left >= candidate_end
       || self.max_end_tree.get(node).copied().unwrap_or_default() < minimum_end
     {
@@ -138,7 +184,7 @@ impl<T> SpanIndex<T> {
     }
     if right.saturating_sub(left) == 1 {
       if let Some(span) = self.spans.get(left) {
-        visit(&span.value)?;
+        (state.visit)(&span.value)?;
       }
       return Ok(());
     }
@@ -150,7 +196,7 @@ impl<T> SpanIndex<T> {
       midpoint,
       candidate_end,
       minimum_end,
-      visit,
+      state,
     )?;
     self.visit_tree(
       node.saturating_mul(2).saturating_add(1),
@@ -158,8 +204,21 @@ impl<T> SpanIndex<T> {
       right,
       candidate_end,
       minimum_end,
-      visit,
+      state,
     )
+  }
+
+  #[cfg(test)]
+  pub(crate) fn intersecting_query_work(&self, start: u32, end: u32) -> usize {
+    let mut work = MeasuredVisitWork::default();
+    let result = self.try_for_each_intersecting_with_work(
+      start,
+      end,
+      &mut work,
+      &mut |_| Ok::<_, ()>(()),
+    );
+    debug_assert!(result.is_ok(), "the test visitor is infallible");
+    work.nodes
   }
 
   fn range_max_end(&self, start: usize, end: usize) -> u32 {

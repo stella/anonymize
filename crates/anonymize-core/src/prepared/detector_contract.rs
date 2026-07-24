@@ -19,6 +19,7 @@ use crate::triggers::{PreparedTriggerData, process_trigger_matches};
 use crate::types::{Error, Result, SearchMatch};
 
 use super::PreparedEngine;
+use super::detector_document::DetectorDocument;
 use super::results::PreparedEngineMatches;
 use super::support_resources::SupportResourceId;
 use super::timing::{StaticEntityPasses, TimedEntities};
@@ -244,7 +245,7 @@ impl StaticDetectorSpec {
         .any(|resource| resource.spec().detector_input() == Some(input))
   }
 
-  fn require_input(self, input: StaticDetectorInput) -> Result<()> {
+  pub(super) fn require_input(self, input: StaticDetectorInput) -> Result<()> {
     if self.declares_input(input) {
       return Ok(());
     }
@@ -276,7 +277,7 @@ pub(super) struct StaticDetectorContext<'a> {
   spec: StaticDetectorSpec,
   engine: &'a PreparedEngine,
   matches: &'a PreparedEngineMatches,
-  full_text: &'a str,
+  document: DetectorDocument<'a>,
 }
 
 impl<'a> StaticDetectorContext<'a> {
@@ -290,7 +291,7 @@ impl<'a> StaticDetectorContext<'a> {
       spec,
       engine,
       matches,
-      full_text,
+      document: DetectorDocument::new(full_text),
     }
   }
 
@@ -418,10 +419,11 @@ impl<'a> StaticDetectorContext<'a> {
   }
 
   pub(super) fn detect_signature(&self) -> Result<Vec<PipelineEntity>> {
+    let full_text = self.full_text()?;
     Ok(
       self
         .signature_data()?
-        .map_or_else(Vec::new, |data| detect_signatures(self.full_text, data)),
+        .map_or_else(Vec::new, |data| detect_signatures(full_text, data)),
     )
   }
 
@@ -454,7 +456,7 @@ impl<'a> StaticDetectorContext<'a> {
     };
     data.detect_configured_profiled(
       self.full_text()?,
-      dependencies.entities(StaticDetectorId::DenyList)?,
+      dependencies.deny_list_entities()?,
     )
   }
 
@@ -469,7 +471,7 @@ impl<'a> StaticDetectorContext<'a> {
     let Some(data) = self.address_seed_data()? else {
       return Ok((AddressSeedDetection::default(), 0));
     };
-    let entities = dependencies.collect();
+    let entities = dependencies.collect_context_entities()?;
     let count = entities.len();
     let detection = data.process_profiled(
       self.literal_matches()?,
@@ -481,12 +483,11 @@ impl<'a> StaticDetectorContext<'a> {
   }
 
   pub(super) const fn input_bytes(&self) -> usize {
-    self.full_text.len()
+    self.document.len()
   }
 
   fn full_text(&self) -> Result<&'a str> {
-    self.require(StaticDetectorInput::FullText)?;
-    Ok(self.full_text)
+    self.document.full_text(self.spec)
   }
 
   fn regex_matches(&self) -> Result<&'a [SearchMatch]> {
@@ -629,7 +630,8 @@ impl<'a> StaticDetectorContext<'a> {
 #[derive(Clone, Copy)]
 pub(super) struct DetectorDependencies<'a> {
   detector: StaticDetectorId,
-  declared: &'static [StaticDetectorId],
+  declared_dependencies: &'static [StaticDetectorId],
+  declared_inputs: &'static [StaticDetectorInput],
   passes: &'a StaticEntityPasses,
 }
 
@@ -640,7 +642,8 @@ impl<'a> DetectorDependencies<'a> {
   ) -> Self {
     Self {
       detector: spec.id(),
-      declared: spec.dependencies(),
+      declared_dependencies: spec.dependencies(),
+      declared_inputs: spec.declared_inputs,
       passes,
     }
   }
@@ -648,8 +651,10 @@ impl<'a> DetectorDependencies<'a> {
   fn entities(
     self,
     detector: StaticDetectorId,
+    input: StaticDetectorInput,
   ) -> Result<&'a [PipelineEntity]> {
-    if !self.declared.contains(&detector) {
+    self.require_input(input)?;
+    if !self.declared_dependencies.contains(&detector) {
       return Err(Error::InvalidStaticData {
         field: "detector rule dependencies",
         reason: format!(
@@ -661,8 +666,16 @@ impl<'a> DetectorDependencies<'a> {
     Ok(self.passes.entities(detector))
   }
 
-  fn collect(self) -> Vec<PipelineEntity> {
-    let dependencies = self.declared;
+  fn deny_list_entities(self) -> Result<&'a [PipelineEntity]> {
+    self.entities(
+      StaticDetectorId::DenyList,
+      StaticDetectorInput::DenyListEntities,
+    )
+  }
+
+  fn collect_context_entities(self) -> Result<Vec<PipelineEntity>> {
+    self.require_input(StaticDetectorInput::ContextEntities)?;
+    let dependencies = self.declared_dependencies;
     let capacity = dependencies
       .iter()
       .map(|detector| self.passes.entities(*detector).len())
@@ -671,7 +684,20 @@ impl<'a> DetectorDependencies<'a> {
     for detector in dependencies {
       entities.extend(self.passes.entities(*detector).iter().cloned());
     }
-    entities
+    Ok(entities)
+  }
+
+  fn require_input(self, input: StaticDetectorInput) -> Result<()> {
+    if self.declared_inputs.contains(&input) {
+      return Ok(());
+    }
+    Err(Error::InvalidStaticData {
+      field: "detector rule inputs",
+      reason: format!(
+        "detector {:?} accessed undeclared input {input:?}",
+        self.detector,
+      ),
+    })
   }
 }
 
@@ -854,6 +880,41 @@ mod tests {
       return;
     };
     assert!(error.to_string().contains("undeclared dependency DenyList"));
+  }
+
+  #[test]
+  fn dependency_access_requires_the_matching_entity_input() {
+    let passes = StaticEntityPasses::new();
+    let missing_input = StaticDetectorSpec::define(
+      StaticDetectorId::NameCorpus,
+      DiagnosticStage::EntityNameCorpus,
+    )
+    .after(&[StaticDetectorId::DenyList]);
+    let result =
+      DetectorDependencies::new(missing_input, &passes).deny_list_entities();
+    assert!(result.is_err(), "dependency input must fail closed");
+
+    let declared =
+      missing_input.requires(&[StaticDetectorInput::DenyListEntities]);
+    assert!(
+      DetectorDependencies::new(declared, &passes)
+        .deny_list_entities()
+        .is_ok(),
+      "declaring both the dependency and entity input must permit access",
+    );
+  }
+
+  #[test]
+  fn dependency_collection_requires_context_entity_input() {
+    let passes = StaticEntityPasses::new();
+    let missing_input = StaticDetectorSpec::define(
+      StaticDetectorId::AddressSeed,
+      DiagnosticStage::EntityAddressSeed,
+    )
+    .after(&[StaticDetectorId::Regex]);
+    let result = DetectorDependencies::new(missing_input, &passes)
+      .collect_context_entities();
+    assert!(result.is_err(), "context input must fail closed");
   }
 
   #[test]

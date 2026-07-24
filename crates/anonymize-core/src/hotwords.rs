@@ -468,6 +468,10 @@ mod tests {
     })?;
 
     assert_eq!(visited, vec![50_000, 50_010, 50_020]);
+    assert!(
+      index.intersecting_query_work(50_000, 50_020) < 128,
+      "a narrow hotword query must traverse the index, not all 10,000 spans",
+    );
     Ok(())
   }
 
