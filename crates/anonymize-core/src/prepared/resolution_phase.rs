@@ -85,7 +85,7 @@ impl PreparedEngine {
     )?;
     let sanitize_timer = PhaseTimer::start();
     let sanitized_entities =
-      sanitize_entities_with_document(&consistent, &document)?;
+      sanitize_entities_with_document(consistent, &document)?;
     let false_positive_filters =
       self.data.false_positive_filters.as_ref().or_else(|| {
         self
@@ -249,7 +249,7 @@ impl PreparedEngine {
       document,
       self.person_span_terminators(),
     )?;
-    let sanitized = sanitize_entities_with_document(&consistent, document)?;
+    let sanitized = sanitize_entities_with_document(consistent, document)?;
     let filtered = filter_entity_false_positives(
       sanitized,
       full_text,
