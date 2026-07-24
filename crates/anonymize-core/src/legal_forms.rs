@@ -555,9 +555,11 @@ fn token_before(
   let mut end = pos;
   while let Some((prev_start, ch)) = previous_char(text, end) {
     if ch == '\n' {
-      // Soft EDGAR wrap inside a comma-separated firm name:
-      // "Slate,\nMeagher & Flom LLP". A bare paragraph break still stops.
-      if !comma_before_soft_wrap(
+      // Soft EDGAR wrap inside a firm name. Comma lists
+      // ("Slate,\nMeagher & Flom LLP") and single-token ALL-CAPS mid-name
+      // wraps ("CHANGE\nAGENTS CORPORATION") may continue; bare paragraph
+      // breaks still stop.
+      if !allows_soft_wrap_continuation(
         text,
         prev_start,
         allow_suffix_adjacent_jurisdiction,
@@ -604,6 +606,15 @@ fn token_before(
   })
 }
 
+fn allows_soft_wrap_continuation(
+  text: &str,
+  newline_start: usize,
+  suffix_is_the_continuation: bool,
+) -> bool {
+  comma_before_soft_wrap(text, newline_start, suffix_is_the_continuation)
+    || all_caps_name_soft_wrap(text, newline_start)
+}
+
 fn comma_before_soft_wrap(
   text: &str,
   newline_start: usize,
@@ -648,6 +659,57 @@ fn comma_before_soft_wrap(
       )
     });
   segment_count >= 3 && all_name_shaped
+}
+
+fn all_caps_name_soft_wrap(text: &str, newline_start: usize) -> bool {
+  let before_newline = text.get(..newline_start).unwrap_or_default();
+  let line_start = before_newline
+    .rfind('\n')
+    .map_or(0, |index| index.saturating_add(1));
+  let line = before_newline.get(line_start..).unwrap_or_default().trim();
+  if line.chars().any(|character| {
+    character.is_numeric() || matches!(character, ':' | '：' | ',')
+  }) {
+    return false;
+  }
+  // Continuation must be an ALL-CAPS name token (`CHANGE\nAGENTS`), not a
+  // street number or mixed-case prose after a finished firm line.
+  let after = text
+    .get(newline_start.saturating_add(1)..)
+    .unwrap_or_default();
+  let after_token = after
+    .trim_start_matches(is_inter_token_space)
+    .split_whitespace()
+    .next()
+    .unwrap_or_default()
+    .trim_end_matches([',', ';']);
+  if !is_all_caps_name_token(after_token) {
+    return false;
+  }
+  // Mid-name EDGAR wrap after an ALL-CAPS headword. Lowercase context on the
+  // same line corroborates that the headword belongs to the surrounding prose;
+  // a standalone ALL-CAPS legal heading must remain a hard boundary.
+  let Some((prefix, token)) = line.rsplit_once(char::is_whitespace) else {
+    return false;
+  };
+  is_all_caps_name_token(token) && prefix.chars().any(char::is_lowercase)
+}
+
+fn is_all_caps_name_token(token: &str) -> bool {
+  let mut letter_count = 0_usize;
+  for character in token.chars() {
+    if character.is_uppercase() {
+      letter_count = letter_count.saturating_add(1);
+      continue;
+    }
+    if matches!(character, '-' | '\'' | '’') {
+      continue;
+    }
+    return false;
+  }
+  // A single capital commonly terminates structural labels (`Exhibit A`).
+  // Require enough name shape to cross a line boundary without vocabulary.
+  letter_count >= 2
 }
 
 fn jurisdiction_parenthetical_open(
@@ -1118,7 +1180,14 @@ fn process_candidate(
     false
   };
 
-  if processed_text.contains('\n') && has_disallowed_line_break(processed_text)
+  if processed_text.contains('\n')
+    && has_disallowed_line_break(
+      full_text,
+      TextSpan {
+        start: processed_start,
+        text: processed_text,
+      },
+    )
   {
     return;
   }
@@ -1191,7 +1260,15 @@ fn emit_candidate_segments(
       segment_start = segment_start.saturating_add(leading_ws_len(trimmed));
     }
 
-    if segment_text.contains('\n') && has_disallowed_line_break(segment_text) {
+    if segment_text.contains('\n')
+      && has_disallowed_line_break(
+        full_text,
+        TextSpan {
+          start: segment_start,
+          text: segment_text,
+        },
+      )
+    {
       continue;
     }
 
@@ -1609,14 +1686,22 @@ fn is_single_cap_token(text: &str) -> bool {
   first.is_uppercase() && chars.next().is_none()
 }
 
-fn has_disallowed_line_break(text: &str) -> bool {
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct TextSpan<'a> {
+  start: usize,
+  text: &'a str,
+}
+
+fn has_disallowed_line_break(full_text: &str, span: TextSpan<'_>) -> bool {
   let mut search_start = 0_usize;
-  while let Some(relative) =
-    text.get(search_start..).and_then(|tail| tail.find('\n'))
+  while let Some(relative) = span
+    .text
+    .get(search_start..)
+    .and_then(|tail| tail.find('\n'))
   {
     let index = search_start.saturating_add(relative);
-    let before = text.get(..index).unwrap_or_default();
-    let after = text.get(index.saturating_add(1)..).unwrap_or_default();
+    let before = span.text.get(..index).unwrap_or_default();
+    let after = span.text.get(index.saturating_add(1)..).unwrap_or_default();
     let before_trimmed = before.trim_end_matches(is_inter_token_space);
     let dotted_designator_before = before_trimmed.ends_with('.');
     // EDGAR often soft-wraps comma-separated firm names:
@@ -1631,7 +1716,11 @@ fn has_disallowed_line_break(text: &str) -> bool {
       && after_trimmed.chars().any(char::is_uppercase);
     let upper_name_after =
       after_trimmed.chars().next().is_some_and(is_name_initial);
+    let absolute_newline = span.start.saturating_add(index);
+    let all_caps_name_continuation =
+      all_caps_name_soft_wrap(full_text, absolute_newline);
     let allowed = (comma_continuation_before && upper_name_after)
+      || all_caps_name_continuation
       || (dotted_designator_before
         && (legal_suffix_after || all_caps_suffix_after));
     if !allowed {
@@ -3593,6 +3682,29 @@ mod tests {
     .collect()
   }
 
+  fn org_texts_for_suffix(text: &str, suffix: &str) -> Vec<String> {
+    let data = PreparedLegalFormData::new(LegalFormData {
+      suffixes: vec![String::from(suffix)],
+      ..LegalFormData::default()
+    });
+    let suffix_start = text.find(suffix).expect("suffix present");
+    let found = SearchMatch::Literal {
+      pattern: 0,
+      start: u32::try_from(suffix_start).unwrap(),
+      end: u32::try_from(suffix_start.saturating_add(suffix.len())).unwrap(),
+    };
+    process_legal_form_matches(
+      &[found],
+      PatternSlice { start: 0, end: 1 },
+      text,
+      &data,
+    )
+    .unwrap()
+    .into_iter()
+    .map(|entity| entity.text)
+    .collect()
+  }
+
   #[test]
   fn jurisdiction_parenthetical_before_llp_keeps_firm_name() {
     // Law-firm notices often insert a jurisdiction marker before the
@@ -3682,10 +3794,75 @@ mod tests {
   }
 
   #[test]
+  fn contextual_all_caps_soft_wrap_supports_unicode_names() {
+    let text = "We are counsel to ÉLAN\nO’NEILL CORPORATION for this matter";
+    let texts = org_texts_for_suffix(text, "CORPORATION");
+    assert!(
+      texts.iter().any(|candidate| candidate
+        .replace('\n', " ")
+        .ends_with("ÉLAN O’NEILL CORPORATION")),
+      "expected Unicode soft-wrapped organization, got {texts:?}"
+    );
+  }
+
+  #[test]
+  fn contextual_all_caps_soft_wrap_allows_trailing_comma() {
+    let text = "We are counsel to ACME\nHOLDINGS, INC. for this matter";
+    let texts = org_texts_for_suffix(text, "INC.");
+    assert!(
+      texts.iter().any(|candidate| candidate
+        .replace('\n', " ")
+        .ends_with("ACME HOLDINGS, INC.")),
+      "expected comma-delimited soft-wrapped organization, got {texts:?}"
+    );
+  }
+
+  #[test]
+  fn all_caps_legal_headings_still_stop_name_walk() {
+    for heading in [
+      "SIGNATURE",
+      "EXHIBIT",
+      "SCHEDULE",
+      "THE COMPANY",
+      "Exhibit A",
+    ] {
+      let text = format!("{heading}\nACME CORPORATION");
+      let texts = org_texts_for_suffix(&text, "CORPORATION");
+      assert_eq!(
+        texts,
+        vec![String::from("ACME CORPORATION")],
+        "heading must remain outside organization: {heading}"
+      );
+    }
+  }
+
+  #[test]
   fn paragraph_break_still_stops_firm_name_walk() {
     let text = "Unrelated Party.\n\nMeagher & Flom LLP";
     let texts = org_texts_for(text, "LLP");
     assert_eq!(texts, vec![String::from("Meagher & Flom LLP")]);
+  }
+
+  #[test]
+  fn notice_intro_line_does_not_drop_skadden_firm() {
+    let text = "with a copy (which shall not constitute notice) to:\nSkadden, Arps, Slate, Meagher & Flom LLP\n525 University Ave, Suite 1400";
+    let texts = org_texts_for(text, "LLP");
+    assert!(
+      texts.iter().any(|candidate| {
+        candidate == "Skadden, Arps, Slate, Meagher & Flom LLP"
+      }),
+      "expected Skadden firm, got {texts:?}"
+    );
+  }
+
+  #[test]
+  fn finished_firm_line_does_not_soft_wrap_into_street_address() {
+    let text = "Skadden, Arps, Slate, Meagher & Flom LLP\n525 University Ave, Suite 1400";
+    let texts = org_texts_for(text, "LLP");
+    assert_eq!(
+      texts,
+      vec![String::from("Skadden, Arps, Slate, Meagher & Flom LLP")]
+    );
   }
 
   #[test]
