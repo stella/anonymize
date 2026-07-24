@@ -26,7 +26,7 @@ src/
   report.ts               Markdown report renderer
   adhoc.ts                unseen-document mode: side-by-side detections, no gold
   bench.ts                runner: bun run bench:compare [--input <file|dir>]
-  adapters/               stella, Python, redact-pii, and PII-Shield adapters
+  adapters/               stella, Python libraries, redact-pii, PII-Shield, Nym
 REPRODUCING.md            exact versions, models, hardware, mapping decisions
 ```
 
@@ -57,12 +57,11 @@ bun run bench:sealed:redactionbench
 bun run bench:sealed:meddocan
 bun run bench:sealed:german-ler
 
+# German LER with the optional pinned Nym ONNX assistance lane.
+bun run bench:sealed:german-ler:assisted
+
 # Development-only five-document TAB comparison (aggregate by default).
 bun run bench:dev-gap
-# Explicitly opt in to printing public-corpus entity examples locally:
-bun run bench:dev-gap --examples
-# Restrict local examples to one TAB entity type (for example, organizations):
-bun run bench:dev-gap --examples=ORG
 ```
 
 `bench:blind` verifies the upstream file against a pinned SHA-256 digest before
@@ -90,9 +89,12 @@ initialization, two passes, and—in subprocess adapters—runtime startup, impo
 serialization, and protocol overhead. Timings are one-shot and machine-load
 sensitive; use repeated isolated runs and compare medians for performance work.
 
-For optimization work, `bun run bench:performance` is the canonical scaling
-harness. It uses only the public-safe synthetic English fixture, expands it to
-48, 256, 512, and 1,024 KiB, then starts a fresh process for every observation.
+For optimization work, `bun run bench:performance` is stella's scaling harness.
+`bun run bench:performance:providers` runs the controlled cross-provider lanes:
+stella's full pipeline, stella regex-only, base scrubadub, and DataFog
+regex-only. The harness uses only the public-safe synthetic English fixture,
+expands it to 48, 256, 512, and 1,024 KiB, then starts a fresh process for every
+observation.
 Three warmup rounds are discarded; 20 measured rounds report every observation
 plus median, median absolute deviation, and p95 for process startup, pipeline
 initialization, cold detection, warm detection, and warm characters per second.
@@ -188,8 +190,7 @@ the aligned regions. Paste any previously unseen file and compare directly.
 
 - Ground truth is independent of stella: the repo's `.snapshot.json` fixtures
   are stella's own output and are not used here.
-- Every label is reported, including those where stella loses (e.g. Presidio
-  scores higher recall on `organization` and `person`).
+- Every label is reported, including those where stella loses.
 - The bundled synthetic development corpus is legal-domain and multilingual,
   which favours stella; this caveat is stated in every generated report. It is
   never presented as the sealed multi-corpus suite.

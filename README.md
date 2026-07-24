@@ -231,11 +231,13 @@ optional dependencies of `@stll/anonymize`.
 
 ## Benchmarks
 
-The sealed reports compare stella with Presidio, base scrubadub, DataFog's
-model-free regex engine, and redact-pii across TAB-ECHR, RedactionBench, and
-MEDDOCAN. Each corpus keeps its native metrics, and committed holdout reports
-contain aggregate values only. PII-Shield is included only when its external
-CLI and model are installed.
+The sealed suite compares stella with Presidio, base scrubadub, DataFog's
+model-free regex engine, and redact-pii on TAB-ECHR, RedactionBench, MEDDOCAN,
+and German Legal Entity Recognition. Each corpus keeps its own task and metrics;
+German LER is reported as legal-entity coverage, not PII recall. Holdout reports
+contain aggregate values only. PII-Shield is included when its external CLI and
+model are installed, and the German runner can also report an optional pinned
+Nym ONNX model as an assisted stella lane.
 
 Quality-suite timings are one-shot corpus passes, so they are directional
 rather than speed rankings. The separate cross-provider harness runs stella's
