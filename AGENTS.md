@@ -364,6 +364,26 @@ diagnostic-stage mapping, or activation logic outside the detector module.
 Brand-new detector concepts may still require adding a detector id, input, or
 support resource, but the rule metadata and behavior stay module-local.
 
+### Runtime Complexity
+
+- Treat asymptotic work as part of the runtime contract. Detector and resolver
+  code must not scan every entity, match, rule, or hit for each candidate;
+  build a typed index once and expose only the bounded query needed by callers.
+- Reuse the request's lazy document analysis for offsets, tokens, lines,
+  boundaries, and normalized views. Do not build an independent full-text map
+  or rescan the document in each detector when a shared analysis resource can
+  own that work.
+- Keep index storage private. Hot-path callers receive query APIs, not backing
+  slices or maps that make an accidental fallback to full iteration possible.
+- Prove indexed implementations equivalent to a simple reference model with
+  generated fixtures. Add deterministic operation-count or structural scaling
+  tests for dense inputs; wall-clock benchmarks are evidence, not the CI
+  correctness gate.
+- A performance optimization must preserve exact resolved output and report
+  cold preparation, warm execution, and the affected diagnostic stages
+  separately. Disabling detectors or narrowing the full-pipeline profile is not
+  an optimization.
+
 ## Cursor Cloud specific instructions
 
 The VM snapshot already provides Bun 1.3.14, Node 22 (via nvm, set as the

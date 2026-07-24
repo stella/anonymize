@@ -86,6 +86,27 @@ The detector registry and support-resource contracts are snapshot-tested, so
 changes to ids, stages, inputs, dependencies, and required prepared data produce
 reviewable diffs.
 
+### Execution Complexity
+
+Runtime phases share lazy per-document analysis and typed indexes. Offset maps,
+token and line boundaries, normalized views, entity spans, and match locations
+are prepared at most once per request and only when an enabled phase needs
+them. The backing collections remain private; detectors and resolvers use
+bounded query methods so candidate processing cannot silently become a nested
+full scan.
+
+This is enforced with three complementary gates:
+
+1. detector metadata declares every analysis resource it consumes;
+2. indexed implementations are checked against straightforward reference
+   models for exact behavioral equivalence;
+3. dense synthetic scaling tests count structural work rather than asserting
+   noisy wall-clock thresholds.
+
+The cross-provider performance runner remains the release measurement. Its
+`stella-full` profile must keep every default detector enabled; a faster narrow
+profile does not satisfy the full-pipeline performance contract.
+
 ## Extension Rules
 
 - Add vocabulary and language data in data files, organized by language and
@@ -101,4 +122,6 @@ reviewable diffs.
 - Are TS/Python/Rust fixture outputs still aligned through native SDK tests?
 - Are cold start, warm run, package load, prepare, and execution measured
   separately when performance changes?
+- Does candidate processing use bounded indexed queries, with deterministic
+  scaling coverage for dense inputs?
 - Is raw input text kept out of logs and snapshots?
