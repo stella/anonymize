@@ -97,12 +97,13 @@ reviewable diffs.
 
 ### Execution Complexity
 
-Runtime phases share lazy per-document analysis and typed indexes. Offset maps,
-token and line boundaries, normalized views, entity spans, and match locations
-are prepared at most once per request and only when an enabled phase needs
-them. The backing collections remain private; detectors and resolvers use
-bounded query methods so candidate processing cannot silently become a nested
-full scan.
+Resolution phases share lazy per-document analysis, and candidate-dense paths
+use typed indexes. Any document-wide analysis needed by more than one phase
+belongs on the request document and is built at most once, only when an enabled
+phase needs it. Growing match and dependency collections remain private behind
+the detector contract; detector modules receive domain operations instead of
+iterable storage. Resolver indexes likewise keep their backing collections
+private and expose bounded queries.
 
 This is enforced with three complementary gates:
 

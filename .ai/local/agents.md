@@ -114,9 +114,9 @@ support resource, but the rule metadata and behavior stay module-local.
   cold preparation, warm execution, and the affected diagnostic stages
   separately. Disabling detectors or narrowing the full-pipeline profile is not
   an optimization.
-- Detector code must use `StaticDetectorContext` and
-  `DetectorDependencies` accessors. Declare every input and dependency in the
-  rule block so undeclared ambient access fails closed in every build.
+- Detector code must use `StaticDetectorContext` capability operations.
+  Declare every input and dependency in the rule block so undeclared ambient
+  access fails closed in every build.
 - Detector modules receive capability operations, never iterable match or
   dependency collections. Keep raw growing-domain storage private to the
   detector contract. The mandatory `scales` declaration must list every
