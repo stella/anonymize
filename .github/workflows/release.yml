@@ -7,9 +7,19 @@ env:
 on:
   push:
     branches: [main]
-    paths: [VERSION]
+    paths:
+      - VERSION
+      - packages/data/package.json
   workflow_dispatch:
     inputs:
+      release_target:
+        description: Package set to publish
+        required: true
+        default: runtime
+        type: choice
+        options:
+          - runtime
+          - data
       publish_to_npm:
         description: Publish the current package versions to npm AND PyPI after verification (PyPI releases are immutable)
         required: true
@@ -27,8 +37,60 @@ jobs:
       contents: read
     outputs:
       dist_tag: ${{ steps.dist-tag.outputs.dist_tag }}
+      publish_data: ${{ steps.release-scope.outputs.publish_data }}
+      publish_runtime: ${{ steps.release-scope.outputs.publish_runtime }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+
+      - name: Classify release scope
+        id: release-scope
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_SHA: ${{ github.sha }}
+          RELEASE_TARGET: ${{ inputs.release_target }}
+        run: |
+          set -euo pipefail
+          publish_data=false
+          publish_runtime=false
+
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            if [[ "$RELEASE_TARGET" == "data" ]]; then
+              publish_data=true
+            fi
+            if [[ "$RELEASE_TARGET" == "runtime" ]]; then
+              publish_runtime=true
+            fi
+          else
+            mapfile -t changed_files < <(git diff --name-only "$BEFORE_SHA" "$HEAD_SHA")
+            if printf '%s\n' "${changed_files[@]}" | grep -Fxq 'VERSION'; then
+              publish_runtime=true
+            fi
+            if printf '%s\n' "${changed_files[@]}" | grep -Fxq 'packages/data/package.json'; then
+              before_data_version="$(
+                git show "${BEFORE_SHA}:packages/data/package.json" |
+                  node -e '
+                    let input = "";
+                    process.stdin.on("data", chunk => { input += chunk; });
+                    process.stdin.on("end", () => { process.stdout.write(JSON.parse(input).version); });
+                  '
+              )"
+              head_data_version="$(node -p 'require("./packages/data/package.json").version')"
+              if [[ "$before_data_version" != "$head_data_version" ]]; then
+                publish_data=true
+              fi
+            fi
+          fi
+
+          if [[ "$publish_data" == true && "$publish_runtime" == true ]]; then
+            echo "::error::Data and runtime versions must be released in separate commits"
+            exit 1
+          fi
+
+          echo "publish_data=$publish_data" >> "$GITHUB_OUTPUT"
+          echo "publish_runtime=$publish_runtime" >> "$GITHUB_OUTPUT"
 
       - name: Derive npm dist-tag from VERSION
         id: dist-tag
@@ -105,7 +167,7 @@ jobs:
 
   pack-native:
     needs: verify
-    if: github.event_name == 'push' || inputs.publish_to_npm == true
+    if: needs.verify.outputs.publish_runtime == 'true' && (github.event_name == 'push' || inputs.publish_to_npm == true)
     name: Pack ${{ matrix.package }}
     runs-on: ${{ matrix.runner }}
     permissions:
@@ -212,7 +274,7 @@ jobs:
 
   publish-native:
     needs: [verify, pack-native]
-    if: github.event_name == 'push' || inputs.publish_to_npm == true
+    if: needs.verify.outputs.publish_runtime == 'true' && (github.event_name == 'push' || inputs.publish_to_npm == true)
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -261,7 +323,7 @@ jobs:
 
   publish:
     needs: [verify, publish-native]
-    if: github.event_name == 'push' || inputs.publish_to_npm == true
+    if: needs.verify.outputs.publish_runtime == 'true' && (github.event_name == 'push' || inputs.publish_to_npm == true)
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -272,7 +334,6 @@ jobs:
       matrix:
         package:
           - packages/anonymize
-          - packages/data
           - packages/anonymize/wasm
           - packages/cli
           - packages/document-docx
@@ -322,7 +383,6 @@ jobs:
           echo "artifact_name=${artifact_name}" >> "$GITHUB_OUTPUT"
 
       - name: Pack package
-        if: github.event_name != 'push' || matrix.package != 'packages/data'
         id: pack
         working-directory: ${{ matrix.package }}
         run: |
@@ -341,7 +401,6 @@ jobs:
           echo "tarball=${pack_dir}/${filename}" >> "$GITHUB_OUTPUT"
 
       - name: Upload package tarball
-        if: github.event_name != 'push' || matrix.package != 'packages/data'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v5
         with:
           name: ${{ steps.package.outputs.artifact_name }}
@@ -349,15 +408,147 @@ jobs:
           if-no-files-found: error
 
       - name: Publish package
-        if: github.event_name != 'push' || matrix.package != 'packages/data'
         uses: stella/.github/.github/actions/npm-publish-hardened@4292546b5b6e5bd8660bd727913b4038644c3d0b
         with:
           tarball: ${{ steps.pack.outputs.tarball }}
           tag: ${{ needs.verify.outputs.dist_tag }}
 
+  pack-data:
+    needs: verify
+    if: needs.verify.outputs.publish_data == 'true' && (github.event_name == 'push' || inputs.publish_to_npm == true)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      dist_tag: ${{ steps.data-version.outputs.dist_tag }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
+        with:
+          node-version: "22"
+
+      - name: Install npm for packing
+        run: npm install --global --ignore-scripts "npm@${{ env.NPM_VERSION }}"
+
+      - name: Verify Bun workflow pin
+        run: node .github/tools/check-bun-workflows.mjs
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build data package
+        run: bun run --filter @stll/anonymize-data build
+
+      - name: Validate data package
+        run: |
+          bun run --filter @stll/anonymize-data lint
+          bun run --filter @stll/anonymize-data typecheck
+          node .github/tools/check-packlist.mjs --package packages/data
+
+      - name: Derive data package dist-tag
+        id: data-version
+        working-directory: packages/data
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./package.json').version")"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-(rc|beta|alpha)\.[0-9]+)?$ ]]; then
+            echo "::error::Data package version is invalid: $version"
+            exit 1
+          fi
+          dist_tag=latest
+          if [[ "$version" =~ -(rc|beta|alpha)\. ]]; then
+            dist_tag="${BASH_REMATCH[1]}"
+          fi
+          echo "dist_tag=$dist_tag" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Pack data package
+        id: pack
+        working-directory: packages/data
+        env:
+          EXPECTED_VERSION: ${{ steps.data-version.outputs.version }}
+        run: |
+          set -euo pipefail
+          pack_dir="$RUNNER_TEMP/npm-tarballs"
+          mkdir -p "$pack_dir"
+          pack_json="$(npm pack --json --ignore-scripts --pack-destination "$pack_dir")"
+          # shellcheck disable=SC2016  # ${...} is a JS template literal, not a shell expansion
+          filename="$(node -e '
+            const pack = JSON.parse(process.argv[1]);
+            if (pack.length !== 1) throw new Error(`Expected one packed package, got ${pack.length}`);
+            if (pack[0].name !== "@stll/anonymize-data") {
+              throw new Error(`Unexpected package name: ${pack[0].name}`);
+            }
+            if (pack[0].version !== process.env.EXPECTED_VERSION) {
+              throw new Error(`Unexpected package version: ${pack[0].version}`);
+            }
+            console.log(pack[0].filename);
+          ' "$pack_json")"
+          tarball="${pack_dir}/${filename}"
+          (cd "$pack_dir" && sha256sum "$filename" > "${filename}.sha256")
+          echo "tarball=$tarball" >> "$GITHUB_OUTPUT"
+
+      - name: Upload data package tarball
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v5
+        with:
+          name: data-package-stll-anonymize-data
+          path: |
+            ${{ steps.pack.outputs.tarball }}
+            ${{ steps.pack.outputs.tarball }}.sha256
+          if-no-files-found: error
+
+  publish-data:
+    needs: [verify, pack-data]
+    if: needs.verify.outputs.publish_data == 'true' && needs.pack-data.result == 'success' && (github.event_name == 'push' || inputs.publish_to_npm == true)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: data-package-stll-anonymize-data
+          path: data-tarball
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
+        with:
+          node-version: "22"
+          registry-url: https://registry.npmjs.org
+
+      - name: Install npm for trusted publishing
+        run: npm install --global --ignore-scripts "npm@${{ env.NPM_VERSION }}"
+
+      - name: Find data package tarball
+        id: tarball
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          tarballs=(data-tarball/*.tgz)
+          checksums=(data-tarball/*.tgz.sha256)
+          if [[ "${#tarballs[@]}" -ne 1 || "${#checksums[@]}" -ne 1 ]]; then
+            echo "::error::Expected one data tarball and checksum"
+            exit 1
+          fi
+          (cd data-tarball && sha256sum --check "$(basename "${checksums[0]}")")
+          echo "path=${tarballs[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish data package
+        uses: stella/.github/.github/actions/npm-publish-hardened@4292546b5b6e5bd8660bd727913b4038644c3d0b
+        with:
+          tarball: ${{ steps.tarball.outputs.path }}
+          tag: ${{ needs.pack-data.outputs.dist_tag }}
+
   build-wheels:
     needs: verify
-    if: github.event_name == 'push' || inputs.publish_to_npm == true
+    if: needs.verify.outputs.publish_runtime == 'true' && (github.event_name == 'push' || inputs.publish_to_npm == true)
     name: Build wheel ${{ matrix.target }}
     runs-on: ${{ matrix.runner }}
     permissions:
@@ -479,7 +670,7 @@ jobs:
 
   publish-pypi:
     needs: [verify, build-wheels]
-    if: github.event_name == 'push' || inputs.publish_to_npm == true
+    if: needs.verify.outputs.publish_runtime == 'true' && (github.event_name == 'push' || inputs.publish_to_npm == true)
     runs-on: ubuntu-latest
     permissions:
       # Trusted Publishing (OIDC): no PyPI API token is stored in the repo.
@@ -511,7 +702,7 @@ jobs:
   github-release:
     name: Create GitHub release
     needs: [verify, publish-native, publish, publish-pypi]
-    if: needs.verify.result == 'success' && needs.publish-native.result == 'success' && needs.publish.result == 'success' && needs.publish-pypi.result == 'success' && (github.event_name == 'push' || inputs.publish_to_npm == true)
+    if: needs.verify.outputs.publish_runtime == 'true' && needs.verify.result == 'success' && needs.publish-native.result == 'success' && needs.publish.result == 'success' && needs.publish-pypi.result == 'success' && (github.event_name == 'push' || inputs.publish_to_npm == true)
     runs-on: ubuntu-latest
     permissions:
       contents: write

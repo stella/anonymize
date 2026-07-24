@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.0.7 (2026-07-24)
+
+### Fixes
+
+- Publish language-scoped legal address exits, conjunctions, unit designators,
+  and in-name connectors used by the runtime pipeline.
+- Add labeled clinical identifier triggers across every supported content
+  language.
+- Refresh the English first-name data used by the legal-document pipeline.
+
 ## 0.0.6 (2026-05-17)
 
 ### Fixes
