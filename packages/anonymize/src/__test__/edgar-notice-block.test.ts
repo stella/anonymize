@@ -14,6 +14,7 @@
  *   Skadden (UK) LLP counsel block.
  * - Utz Brands voting agreement (2026-07-22): notice-block counsel
  *   given names missing from the scoped English first-name corpus.
+ * - ALL-CAPS issuer names soft-wrapped mid-name without a comma.
  */
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 
@@ -279,6 +280,58 @@ Attn: Lorenzo Corte`;
           entity.label === "person" && entity.text === "Lorenzo Corte",
       ),
     ).toBe(true);
+  });
+
+  test("soft-wrapped all-caps issuer mid-name is an organization", async () => {
+    const text = `We are counsel to ÉLAN
+O’NEILL CORPORATION for this matter.`;
+    const entities = await detect(text);
+    expect(
+      entities.some(
+        (entity) =>
+          entity.label === "organization" &&
+          entity.text.replaceAll(/\s+/g, " ") === "ÉLAN O’NEILL CORPORATION",
+      ),
+    ).toBe(true);
+  });
+
+  test("soft-wrapped organization before comma-delimited suffix stays whole", async () => {
+    const entities = await detect(
+      "We are counsel to ACME\nHOLDINGS, INC. for this matter.",
+    );
+    expect(
+      entities.some(
+        (entity) =>
+          entity.label === "organization" &&
+          entity.text.replaceAll(/\s+/g, " ") === "ACME HOLDINGS, INC.",
+      ),
+    ).toBe(true);
+  });
+
+  test("standalone all-caps legal headings stay outside organizations", async () => {
+    for (const heading of [
+      "SIGNATURE",
+      "EXHIBIT",
+      "SCHEDULE",
+      "Exhibit A",
+      "Exhibit AA",
+      "Schedule II",
+    ]) {
+      const entities = await detect(`${heading}\nACME CORPORATION`);
+      expect(
+        entities.some(
+          (entity) =>
+            entity.label === "organization" && entity.text.includes(heading),
+        ),
+      ).toBe(false);
+      expect(
+        entities.some(
+          (entity) =>
+            entity.label === "organization" &&
+            entity.text === "ACME CORPORATION",
+        ),
+      ).toBe(true);
+    }
   });
 
   test("counsel name on a line after Attention is a person", async () => {
