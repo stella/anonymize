@@ -90,6 +90,34 @@ const isPdfToolchainUnavailable = (error: unknown): boolean =>
   (error as { name?: unknown }).name === "PdfLocalProviderError" &&
   (error as { code?: unknown }).code === "executable-failed";
 
+/**
+ * The docx package refuses under requireFull coverage with a
+ * `DocxAnonymizationError` (code `incomplete-coverage`). Map it to a
+ * validation_error so the agent gets the actionable allowPartialCoverage hint
+ * instead of a generic internal_error; pass anything else through unchanged.
+ * Duck-typed to avoid importing the docx error class.
+ */
+const mapDocxCoverageError = (error: unknown): unknown => {
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    (error as { name?: unknown }).name === "DocxAnonymizationError" &&
+    (error as { code?: unknown }).code === "incomplete-coverage"
+  ) {
+    // Preserve the docx package's specific (content-free) coverage message; add
+    // the stable code and the actionable hint.
+    return new AnonymizeSurfaceError(
+      "validation_error",
+      (error as Error).message,
+      {
+        hint: "Re-run with allowPartialCoverage: true to accept partial coverage.",
+        cause: error,
+      },
+    );
+  }
+  return error;
+};
+
 const observedAtEpochSeconds = (): number => {
   const seconds = Math.floor(Date.now() / 1000);
   if (seconds < 0 || seconds > 0xff_ff_ff_ff) {
@@ -1283,7 +1311,7 @@ export class LocalAnonymizeService {
       };
     } catch (error) {
       await this.#rollbackSession(lease);
-      throw error;
+      throw mapDocxCoverageError(error);
     }
   }
 
