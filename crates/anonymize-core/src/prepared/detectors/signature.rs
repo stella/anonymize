@@ -16,24 +16,21 @@ static_detector_rules! {
   }
 }
 
-const fn signature_is_active(context: &StaticDetectorContext<'_>) -> bool {
-  context.engine.data.signatures.is_some()
+fn signature_is_active(context: &StaticDetectorContext<'_>) -> Result<bool> {
+  Ok(context.signature_data()?.is_some())
 }
 
 fn detect_signature(
   context: &StaticDetectorContext<'_>,
-  _passes: &StaticEntityPasses,
+  _dependencies: DetectorDependencies<'_>,
   _diagnostics: StaticDetectorDiagnostics<'_>,
 ) -> Result<TimedEntities> {
-  let engine = context.engine;
-  let full_text = context.full_text;
+  let full_text = context.full_text()?;
   timed_entities(|| {
     Ok(
-      engine
-        .data
-        .signatures
-        .as_ref()
-        .map_or_else(Vec::new, |data| detect_signatures(full_text, data)),
+      context.signature_data()?.map_or_else(Vec::new, |data| {
+        detect_signatures(full_text, data)
+      }),
     )
   })
 }

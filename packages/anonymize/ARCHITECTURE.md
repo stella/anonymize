@@ -79,6 +79,11 @@ The Rust prepared engine is split by phase:
 Detector modules live under `crates/anonymize-core/src/prepared/detectors`.
 Adding a detector should mean adding module-local rule metadata and detection
 logic through `static_detector_rules!`; the registry only preserves module order.
+The registry constructs a capability-scoped `StaticDetectorContext` for each
+rule. Detectors cannot reach the whole engine, arbitrary search branches, or
+undeclared prior layers: context and dependency accessors correspond to the
+inputs declared in the rule metadata. This keeps cross-domain joins visible and
+prevents a new detector from quietly coupling itself to every match or entity.
 Prepared support resources are declared once in `support_resources.rs`; prepare
 timing, detector input checks, and snapshots derive from that declaration where
 the resource-specific data type still allows it.
@@ -106,6 +111,11 @@ This is enforced with three complementary gates:
 The cross-provider performance runner remains the release measurement. Its
 `stella-full` profile must keep every default detector enabled; a faster narrow
 profile does not satisfy the full-pipeline performance contract.
+
+Candidate-dense paths have release-mode scaling contracts. CI runs every
+ignored core test as one automatically discovered serial suite, so adding a
+contract does not require editing a workflow allowlist. Wall time remains only
+a secondary ceiling where retained.
 
 ## Extension Rules
 

@@ -28,6 +28,7 @@ modules:
         inputs:
           - LiteralMatches
           - DenyListData
+          - FullText
         dependencies: []
         support_resources: []
       - id: Gazetteer
@@ -35,6 +36,7 @@ modules:
         inputs:
           - LiteralMatches
           - GazetteerData
+          - FullText
         dependencies: []
         support_resources: []
       - id: Country
@@ -42,6 +44,7 @@ modules:
         inputs:
           - LiteralMatches
           - CountryData
+          - FullText
         dependencies: []
         support_resources: []
   - name: anchored
@@ -60,6 +63,8 @@ modules:
         stage: EntityTrigger
         inputs:
           - RegexMatches
+          - FullText
+          - TitleTokens
         dependencies: []
         support_resources:
           - Triggers
@@ -78,6 +83,7 @@ modules:
         stage: EntityLegalForm
         inputs:
           - RegexMatches
+          - FullText
         dependencies: []
         support_resources:
           - LegalForms
@@ -99,6 +105,7 @@ modules:
         inputs:
           - LiteralMatches
           - ContextEntities
+          - FullText
         dependencies:
           - Regex
           - CustomRegex

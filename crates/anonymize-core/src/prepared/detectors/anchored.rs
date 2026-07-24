@@ -18,26 +18,26 @@ static_detector_rules! {
   }
 }
 
-const fn anchored_is_active(context: &StaticDetectorContext<'_>) -> bool {
-  context.engine.data.dates.is_some()
-    || (context.engine.policy.monetary_extraction
-      && context.engine.data.monetary.is_some())
+fn anchored_is_active(context: &StaticDetectorContext<'_>) -> Result<bool> {
+  Ok(
+    context.date_data()?.is_some()
+      || (context.monetary_extraction()? && context.monetary_data()?.is_some()),
+  )
 }
 
 fn detect_anchored(
   context: &StaticDetectorContext<'_>,
-  _passes: &StaticEntityPasses,
+  _dependencies: DetectorDependencies<'_>,
   _diagnostics: StaticDetectorDiagnostics<'_>,
 ) -> Result<TimedEntities> {
-  let engine = context.engine;
-  let full_text = context.full_text;
+  let full_text = context.full_text()?;
   timed_entities(|| {
     let mut entities = Vec::new();
-    if let Some(data) = &engine.data.dates {
+    if let Some(data) = context.date_data()? {
       entities.extend(data.process(full_text)?);
     }
-    if engine.policy.monetary_extraction
-      && let Some(data) = &engine.data.monetary
+    if context.monetary_extraction()?
+      && let Some(data) = context.monetary_data()?
     {
       entities.extend(data.process(full_text)?);
     }

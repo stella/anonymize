@@ -113,6 +113,12 @@ support resource, but the rule metadata and behavior stay module-local.
   cold preparation, warm execution, and the affected diagnostic stages
   separately. Disabling detectors or narrowing the full-pipeline profile is not
   an optimization.
+- Detector code must use `StaticDetectorContext` and
+  `DetectorDependencies` accessors. Declare every input and dependency in the
+  rule block so undeclared ambient access fails closed in every build.
+- Mark release-mode scaling contracts ignored in the ordinary test suite. CI
+  discovers and runs the complete ignored core set automatically; never add a
+  manually maintained workflow allowlist.
 
 ## Cursor Cloud specific instructions
 

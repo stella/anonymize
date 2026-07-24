@@ -9,34 +9,30 @@ static_detector_rules! {
   LEGAL_FORM_RULE {
     id: DetectorId::LegalForm;
     stage: DiagnosticStage::EntityLegalForm;
-    inputs: &[DetectorInput::RegexMatches];
+    inputs: &[DetectorInput::RegexMatches, DetectorInput::FullText];
     uses: &[SupportResource::LegalForms];
     active: legal_form_is_active;
     detect: detect_legal_form;
   }
 }
 
-const fn legal_form_is_active(context: &StaticDetectorContext<'_>) -> bool {
-  !context.matches.regex.is_empty()
-    && context.engine.data.legal_forms.is_some()
+fn legal_form_is_active(context: &StaticDetectorContext<'_>) -> Result<bool> {
+  Ok(!context.regex_matches()?.is_empty() && context.legal_form_data()?.is_some())
 }
 
 fn detect_legal_form(
   context: &StaticDetectorContext<'_>,
-  _passes: &StaticEntityPasses,
+  _dependencies: DetectorDependencies<'_>,
   _diagnostics: StaticDetectorDiagnostics<'_>,
 ) -> Result<TimedEntities> {
-  let engine = context.engine;
-  let matches = context.matches;
-  let full_text = context.full_text;
   timed_entities(|| {
-    let Some(data) = &engine.data.legal_forms else {
+    let Some(data) = context.legal_form_data()? else {
       return Ok(Vec::new());
     };
     process_legal_form_matches(
-      &matches.regex,
-      engine.policy.slices.legal_forms,
-      full_text,
+      context.regex_matches()?,
+      context.legal_forms_slice()?,
+      context.full_text()?,
       data,
     )
   })

@@ -30,48 +30,45 @@ static_detector_rules! {
   }
 }
 
-const fn regex_is_active(context: &StaticDetectorContext<'_>) -> bool {
-  !context.matches.regex.is_empty()
-    && !context.engine.policy.regex_meta.is_empty()
+fn regex_is_active(context: &StaticDetectorContext<'_>) -> Result<bool> {
+  Ok(!context.regex_matches()?.is_empty() && !context.regex_meta()?.is_empty())
 }
 
-const fn custom_regex_is_active(context: &StaticDetectorContext<'_>) -> bool {
-  !context.matches.custom_regex.is_empty()
-    && !context.engine.policy.custom_regex_meta.is_empty()
+fn custom_regex_is_active(context: &StaticDetectorContext<'_>) -> Result<bool> {
+  Ok(
+    !context.custom_regex_matches()?.is_empty()
+      && !context.custom_regex_meta()?.is_empty(),
+  )
 }
 
 fn detect_regex(
   context: &StaticDetectorContext<'_>,
-  _passes: &StaticEntityPasses,
+  _dependencies: DetectorDependencies<'_>,
   _diagnostics: StaticDetectorDiagnostics<'_>,
 ) -> Result<TimedEntities> {
-  let engine = context.engine;
-  let matches = context.matches;
-  let full_text = context.full_text;
+  let full_text = context.full_text()?;
   timed_entities(|| {
     process_regex_matches(
-      &matches.regex,
-      engine.policy.slices.regex,
+      context.regex_matches()?,
+      context.regex_slice()?,
       full_text,
-      &engine.policy.regex_meta,
+      context.regex_meta()?,
     )
   })
 }
 
 fn detect_custom_regex(
   context: &StaticDetectorContext<'_>,
-  _passes: &StaticEntityPasses,
+  _dependencies: DetectorDependencies<'_>,
   _diagnostics: StaticDetectorDiagnostics<'_>,
 ) -> Result<TimedEntities> {
-  let engine = context.engine;
-  let matches = context.matches;
-  let full_text = context.full_text;
+  let full_text = context.full_text()?;
   timed_entities(|| {
     process_regex_matches(
-      &matches.custom_regex,
-      engine.policy.slices.custom_regex,
+      context.custom_regex_matches()?,
+      context.custom_regex_slice()?,
       full_text,
-      &engine.policy.custom_regex_meta,
+      context.custom_regex_meta()?,
     )
   })
 }

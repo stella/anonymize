@@ -14,6 +14,7 @@ static_detector_rules! {
     inputs: &[
       DetectorInput::LiteralMatches,
       DetectorInput::DenyListData,
+      DetectorInput::FullText,
     ];
     active: deny_list_is_active;
     detect: detect_deny_list;
@@ -24,6 +25,7 @@ static_detector_rules! {
     inputs: &[
       DetectorInput::LiteralMatches,
       DetectorInput::GazetteerData,
+      DetectorInput::FullText,
     ];
     active: gazetteer_is_active;
     detect: detect_gazetteer;
@@ -34,40 +36,38 @@ static_detector_rules! {
     inputs: &[
       DetectorInput::LiteralMatches,
       DetectorInput::CountryData,
+      DetectorInput::FullText,
     ];
     active: country_is_active;
     detect: detect_country;
   }
 }
 
-const fn deny_list_is_active(context: &StaticDetectorContext<'_>) -> bool {
-  !context.matches.literal.is_empty() && context.engine.data.deny_list.is_some()
+fn deny_list_is_active(context: &StaticDetectorContext<'_>) -> Result<bool> {
+  Ok(!context.literal_matches()?.is_empty() && context.deny_list_data()?.is_some())
 }
 
-const fn gazetteer_is_active(context: &StaticDetectorContext<'_>) -> bool {
-  !context.matches.literal.is_empty() && context.engine.data.gazetteer.is_some()
+fn gazetteer_is_active(context: &StaticDetectorContext<'_>) -> Result<bool> {
+  Ok(!context.literal_matches()?.is_empty() && context.gazetteer_data()?.is_some())
 }
 
-const fn country_is_active(context: &StaticDetectorContext<'_>) -> bool {
-  !context.matches.literal.is_empty() && context.engine.data.countries.is_some()
+fn country_is_active(context: &StaticDetectorContext<'_>) -> Result<bool> {
+  Ok(!context.literal_matches()?.is_empty() && context.country_data()?.is_some())
 }
 
 fn detect_deny_list(
   context: &StaticDetectorContext<'_>,
-  _passes: &StaticEntityPasses,
+  _dependencies: DetectorDependencies<'_>,
   _diagnostics: StaticDetectorDiagnostics<'_>,
 ) -> Result<TimedEntities> {
-  let engine = context.engine;
-  let matches = context.matches;
-  let full_text = context.full_text;
   timed_entities(|| {
-    let Some(data) = &engine.data.deny_list else {
+    let Some(data) = context.deny_list_data()? else {
       return Ok(Vec::new());
     };
     process_deny_list_matches(
-      &matches.literal,
-      engine.policy.slices.deny_list,
-      full_text,
+      context.literal_matches()?,
+      context.deny_list_slice()?,
+      context.full_text()?,
       data,
     )
   })
@@ -75,20 +75,17 @@ fn detect_deny_list(
 
 fn detect_gazetteer(
   context: &StaticDetectorContext<'_>,
-  _passes: &StaticEntityPasses,
+  _dependencies: DetectorDependencies<'_>,
   _diagnostics: StaticDetectorDiagnostics<'_>,
 ) -> Result<TimedEntities> {
-  let engine = context.engine;
-  let matches = context.matches;
-  let full_text = context.full_text;
   timed_entities(|| {
-    let Some(data) = &engine.data.gazetteer else {
+    let Some(data) = context.gazetteer_data()? else {
       return Ok(Vec::new());
     };
     process_gazetteer_matches(
-      &matches.literal,
-      engine.policy.slices.gazetteer,
-      full_text,
+      context.literal_matches()?,
+      context.gazetteer_slice()?,
+      context.full_text()?,
       data,
     )
   })
@@ -96,20 +93,17 @@ fn detect_gazetteer(
 
 fn detect_country(
   context: &StaticDetectorContext<'_>,
-  _passes: &StaticEntityPasses,
+  _dependencies: DetectorDependencies<'_>,
   _diagnostics: StaticDetectorDiagnostics<'_>,
 ) -> Result<TimedEntities> {
-  let engine = context.engine;
-  let matches = context.matches;
-  let full_text = context.full_text;
   timed_entities(|| {
-    let Some(data) = &engine.data.countries else {
+    let Some(data) = context.country_data()? else {
       return Ok(Vec::new());
     };
     process_country_matches(
-      &matches.literal,
-      engine.policy.slices.countries,
-      full_text,
+      context.literal_matches()?,
+      context.countries_slice()?,
+      context.full_text()?,
       data,
     )
   })

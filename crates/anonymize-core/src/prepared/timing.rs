@@ -4,7 +4,7 @@ use crate::resolution::PipelineEntity;
 use crate::search::SearchIndexFindStats;
 use crate::types::SearchMatch;
 
-use super::detector_contract::StaticDetectorId;
+use super::detector_contract::{StaticDetectorId, StaticDetectorSpec};
 
 pub(super) struct TimedEntities {
   pub(super) entities: Vec<PipelineEntity>,
@@ -103,6 +103,46 @@ impl StaticEntityPasses {
 
   pub(super) fn into_layers(self) -> Vec<DetectorEntityPass> {
     self.layers
+  }
+}
+
+#[derive(Clone, Copy)]
+pub(super) struct DetectorDependencies<'a> {
+  spec: StaticDetectorSpec,
+  passes: &'a StaticEntityPasses,
+}
+
+impl<'a> DetectorDependencies<'a> {
+  pub(super) const fn new(
+    spec: StaticDetectorSpec,
+    passes: &'a StaticEntityPasses,
+  ) -> Self {
+    Self { spec, passes }
+  }
+
+  pub(super) fn entities(
+    self,
+    detector: StaticDetectorId,
+  ) -> crate::types::Result<&'a [PipelineEntity]> {
+    self.require(detector)?;
+    Ok(self.passes.entities(detector))
+  }
+
+  pub(super) fn collect(self) -> Vec<PipelineEntity> {
+    let dependencies = self.spec.dependencies();
+    let capacity = dependencies
+      .iter()
+      .map(|detector| self.passes.entities(*detector).len())
+      .fold(0usize, usize::saturating_add);
+    let mut entities = Vec::with_capacity(capacity);
+    for detector in dependencies {
+      entities.extend(self.passes.entities(*detector).iter().cloned());
+    }
+    entities
+  }
+
+  fn require(self, detector: StaticDetectorId) -> crate::types::Result<()> {
+    self.spec.require_dependency(detector)
   }
 }
 

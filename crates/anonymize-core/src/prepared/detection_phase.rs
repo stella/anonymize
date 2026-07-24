@@ -57,13 +57,9 @@ impl PreparedEngine {
     mut diagnostics: Option<&mut StaticRedactionDiagnostics>,
   ) -> Result<StaticEntityPasses> {
     let mut passes = StaticEntityPasses::new();
-    let context = StaticDetectorContext {
-      engine: self,
-      matches,
-      full_text,
-    };
     for rule in static_entity_rules() {
       let spec = rule.spec();
+      let context = StaticDetectorContext::new(spec, self, matches, full_text);
       debug_assert!(
         spec.has_declared_inputs(),
         "static detector registry entries must declare required inputs",
@@ -78,7 +74,7 @@ impl PreparedEngine {
         }),
         "static detector support resources must expose declared inputs",
       );
-      if !rule.is_active(&context) {
+      if !rule.is_active(&context)? {
         passes.push_detector_entities(spec.id(), TimedEntities::empty());
         continue;
       }

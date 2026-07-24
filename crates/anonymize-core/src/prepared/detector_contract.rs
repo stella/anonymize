@@ -1,10 +1,23 @@
+use std::collections::BTreeSet;
+
+use crate::address_seeds::PreparedAddressSeedData;
+use crate::dates::PreparedDateData;
 use crate::diagnostics::{DiagnosticStage, StaticRedactionDiagnostics};
-use crate::types::Result;
+use crate::legal_forms::PreparedLegalFormData;
+use crate::money::PreparedMonetaryData;
+use crate::name_corpus::PreparedNameCorpusData;
+use crate::processors::{
+  CountryMatchData, DenyListMatchData, GazetteerMatchData, PatternSlice,
+  RegexMatchMeta,
+};
+use crate::signatures::PreparedSignatureData;
+use crate::triggers::PreparedTriggerData;
+use crate::types::{Error, Result, SearchMatch};
 
 use super::PreparedEngine;
 use super::results::PreparedEngineMatches;
 use super::support_resources::SupportResourceId;
-use super::timing::{StaticEntityPasses, TimedEntities};
+use super::timing::{DetectorDependencies, StaticEntityPasses, TimedEntities};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum StaticDetectorId {
@@ -35,6 +48,7 @@ pub(super) enum StaticDetectorInput {
   DateData,
   MonetaryData,
   TriggerData,
+  TitleTokens,
   SignatureData,
   LegalFormData,
   NameCorpusData,
@@ -126,23 +140,222 @@ impl StaticDetectorSpec {
         .iter()
         .any(|resource| resource.spec().detector_input() == Some(input))
   }
+
+  fn require_input(self, input: StaticDetectorInput) -> Result<()> {
+    if self.declares_input(input) {
+      return Ok(());
+    }
+    Err(Error::InvalidStaticData {
+      field: "detector rule inputs",
+      reason: format!(
+        "detector {:?} accessed undeclared input {input:?}",
+        self.id,
+      ),
+    })
+  }
+
+  pub(super) fn require_dependency(
+    self,
+    detector: StaticDetectorId,
+  ) -> Result<()> {
+    if self.dependencies.contains(&detector) {
+      return Ok(());
+    }
+    Err(Error::InvalidStaticData {
+      field: "detector rule dependencies",
+      reason: format!(
+        "detector {:?} accessed undeclared dependency {detector:?}",
+        self.id,
+      ),
+    })
+  }
 }
 
 pub(super) struct StaticDetectorContext<'a> {
-  pub(super) engine: &'a PreparedEngine,
-  pub(super) matches: &'a PreparedEngineMatches,
-  pub(super) full_text: &'a str,
+  spec: StaticDetectorSpec,
+  engine: &'a PreparedEngine,
+  matches: &'a PreparedEngineMatches,
+  full_text: &'a str,
+}
+
+impl<'a> StaticDetectorContext<'a> {
+  pub(super) const fn new(
+    spec: StaticDetectorSpec,
+    engine: &'a PreparedEngine,
+    matches: &'a PreparedEngineMatches,
+    full_text: &'a str,
+  ) -> Self {
+    Self {
+      spec,
+      engine,
+      matches,
+      full_text,
+    }
+  }
+
+  pub(super) fn full_text(&self) -> Result<&'a str> {
+    self.require(StaticDetectorInput::FullText)?;
+    Ok(self.full_text)
+  }
+
+  pub(super) fn regex_matches(&self) -> Result<&'a [SearchMatch]> {
+    self.require(StaticDetectorInput::RegexMatches)?;
+    Ok(&self.matches.regex)
+  }
+
+  pub(super) fn custom_regex_matches(&self) -> Result<&'a [SearchMatch]> {
+    self.require(StaticDetectorInput::CustomRegexMatches)?;
+    Ok(&self.matches.custom_regex)
+  }
+
+  pub(super) fn literal_matches(&self) -> Result<&'a [SearchMatch]> {
+    self.require(StaticDetectorInput::LiteralMatches)?;
+    Ok(&self.matches.literal)
+  }
+
+  pub(super) fn regex_meta(&self) -> Result<&'a [RegexMatchMeta]> {
+    self.require(StaticDetectorInput::RegexMeta)?;
+    Ok(&self.engine.policy.regex_meta)
+  }
+
+  pub(super) fn custom_regex_meta(&self) -> Result<&'a [RegexMatchMeta]> {
+    self.require(StaticDetectorInput::CustomRegexMeta)?;
+    Ok(&self.engine.policy.custom_regex_meta)
+  }
+
+  pub(super) fn regex_slice(&self) -> Result<PatternSlice> {
+    self.require(StaticDetectorInput::RegexMatches)?;
+    Ok(self.engine.policy.slices.regex)
+  }
+
+  pub(super) fn custom_regex_slice(&self) -> Result<PatternSlice> {
+    self.require(StaticDetectorInput::CustomRegexMatches)?;
+    Ok(self.engine.policy.slices.custom_regex)
+  }
+
+  pub(super) fn deny_list_slice(&self) -> Result<PatternSlice> {
+    self.require(StaticDetectorInput::DenyListData)?;
+    Ok(self.engine.policy.slices.deny_list)
+  }
+
+  pub(super) fn gazetteer_slice(&self) -> Result<PatternSlice> {
+    self.require(StaticDetectorInput::GazetteerData)?;
+    Ok(self.engine.policy.slices.gazetteer)
+  }
+
+  pub(super) fn countries_slice(&self) -> Result<PatternSlice> {
+    self.require(StaticDetectorInput::CountryData)?;
+    Ok(self.engine.policy.slices.countries)
+  }
+
+  pub(super) fn triggers_slice(&self) -> Result<PatternSlice> {
+    self.require(StaticDetectorInput::TriggerData)?;
+    Ok(self.engine.policy.slices.triggers)
+  }
+
+  pub(super) fn legal_forms_slice(&self) -> Result<PatternSlice> {
+    self.require(StaticDetectorInput::LegalFormData)?;
+    Ok(self.engine.policy.slices.legal_forms)
+  }
+
+  pub(super) fn street_types_slice(&self) -> Result<PatternSlice> {
+    self.require(StaticDetectorInput::AddressSeedData)?;
+    Ok(self.engine.policy.slices.street_types)
+  }
+
+  pub(super) fn deny_list_data(&self) -> Result<Option<&'a DenyListMatchData>> {
+    self.require(StaticDetectorInput::DenyListData)?;
+    Ok(self.engine.data.deny_list.as_ref())
+  }
+
+  pub(super) fn gazetteer_data(
+    &self,
+  ) -> Result<Option<&'a GazetteerMatchData>> {
+    self.require(StaticDetectorInput::GazetteerData)?;
+    Ok(self.engine.data.gazetteer.as_ref())
+  }
+
+  pub(super) fn country_data(&self) -> Result<Option<&'a CountryMatchData>> {
+    self.require(StaticDetectorInput::CountryData)?;
+    Ok(self.engine.data.countries.as_ref())
+  }
+
+  pub(super) fn date_data(&self) -> Result<Option<&'a PreparedDateData>> {
+    self.require(StaticDetectorInput::DateData)?;
+    Ok(self.engine.data.dates.as_ref())
+  }
+
+  pub(super) fn monetary_data(
+    &self,
+  ) -> Result<Option<&'a PreparedMonetaryData>> {
+    self.require(StaticDetectorInput::MonetaryData)?;
+    Ok(self.engine.data.monetary.as_ref())
+  }
+
+  pub(super) fn monetary_extraction(&self) -> Result<bool> {
+    self.require(StaticDetectorInput::MonetaryData)?;
+    Ok(self.engine.policy.monetary_extraction)
+  }
+
+  pub(super) fn trigger_data(&self) -> Result<Option<&'a PreparedTriggerData>> {
+    self.require(StaticDetectorInput::TriggerData)?;
+    Ok(self.engine.data.triggers.as_ref())
+  }
+
+  pub(super) fn title_tokens(&self) -> Result<Option<&'a BTreeSet<String>>> {
+    self.require(StaticDetectorInput::TitleTokens)?;
+    Ok(
+      self
+        .engine
+        .data
+        .false_positive_filters
+        .as_ref()
+        .map(|filters| &filters.title_tokens),
+    )
+  }
+
+  pub(super) fn signature_data(
+    &self,
+  ) -> Result<Option<&'a PreparedSignatureData>> {
+    self.require(StaticDetectorInput::SignatureData)?;
+    Ok(self.engine.data.signatures.as_ref())
+  }
+
+  pub(super) fn legal_form_data(
+    &self,
+  ) -> Result<Option<&'a PreparedLegalFormData>> {
+    self.require(StaticDetectorInput::LegalFormData)?;
+    Ok(self.engine.data.legal_forms.as_ref())
+  }
+
+  pub(super) fn name_corpus_data(
+    &self,
+  ) -> Result<Option<&'a PreparedNameCorpusData>> {
+    self.require(StaticDetectorInput::NameCorpusData)?;
+    Ok(self.engine.data.name_corpus.as_ref())
+  }
+
+  pub(super) fn address_seed_data(
+    &self,
+  ) -> Result<Option<&'a PreparedAddressSeedData>> {
+    self.require(StaticDetectorInput::AddressSeedData)?;
+    Ok(self.engine.data.address_seed.as_ref())
+  }
+
+  fn require(&self, input: StaticDetectorInput) -> Result<()> {
+    self.spec.require_input(input)
+  }
 }
 
 pub(super) type StaticDetectorDiagnostics<'d> =
   Option<&'d mut StaticRedactionDiagnostics>;
 
 pub(super) type StaticDetectorActiveFn =
-  for<'a> fn(&StaticDetectorContext<'a>) -> bool;
+  for<'a> fn(&StaticDetectorContext<'a>) -> Result<bool>;
 
 pub(super) type StaticDetectFn = for<'a, 'p, 'd> fn(
   &StaticDetectorContext<'a>,
-  &'p StaticEntityPasses,
+  DetectorDependencies<'p>,
   StaticDetectorDiagnostics<'d>,
 ) -> Result<TimedEntities>;
 
@@ -197,7 +410,10 @@ impl StaticDetectorRule {
     self.spec
   }
 
-  pub(super) fn is_active(self, context: &StaticDetectorContext<'_>) -> bool {
+  pub(super) fn is_active(
+    self,
+    context: &StaticDetectorContext<'_>,
+  ) -> Result<bool> {
     (self.is_active)(context)
   }
 
@@ -207,7 +423,11 @@ impl StaticDetectorRule {
     passes: &StaticEntityPasses,
     diagnostics: StaticDetectorDiagnostics<'_>,
   ) -> Result<TimedEntities> {
-    (self.detect)(context, passes, diagnostics)
+    (self.detect)(
+      context,
+      DetectorDependencies::new(self.spec, passes),
+      diagnostics,
+    )
   }
 }
 
@@ -272,3 +492,37 @@ macro_rules! static_detector_modules {
 
 pub(super) use static_detector_modules;
 pub(super) use static_detector_rules;
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn undeclared_input_access_is_rejected() {
+    let result = StaticDetectorSpec::define(
+      StaticDetectorId::Regex,
+      DiagnosticStage::EntityRegex,
+    )
+    .requires(&[StaticDetectorInput::RegexMatches])
+    .require_input(StaticDetectorInput::FullText);
+    assert!(result.is_err(), "undeclared input must fail closed");
+    let Some(error) = result.err() else {
+      return;
+    };
+    assert!(error.to_string().contains("undeclared input FullText"));
+  }
+
+  #[test]
+  fn undeclared_dependency_access_is_rejected() {
+    let result = StaticDetectorSpec::define(
+      StaticDetectorId::NameCorpus,
+      DiagnosticStage::EntityNameCorpus,
+    )
+    .require_dependency(StaticDetectorId::DenyList);
+    assert!(result.is_err(), "undeclared dependency must fail closed");
+    let Some(error) = result.err() else {
+      return;
+    };
+    assert!(error.to_string().contains("undeclared dependency DenyList"));
+  }
+}

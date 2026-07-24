@@ -22,24 +22,23 @@ static_detector_rules! {
   }
 }
 
-const fn name_corpus_is_active(context: &StaticDetectorContext<'_>) -> bool {
-  context.engine.data.name_corpus.is_some()
+fn name_corpus_is_active(context: &StaticDetectorContext<'_>) -> Result<bool> {
+  Ok(context.name_corpus_data()?.is_some())
 }
 
 fn detect_name_corpus(
   context: &StaticDetectorContext<'_>,
-  passes: &StaticEntityPasses,
+  dependencies: DetectorDependencies<'_>,
   diagnostics: StaticDetectorDiagnostics<'_>,
 ) -> Result<TimedEntities> {
-  let engine = context.engine;
-  let full_text = context.full_text;
+  let full_text = context.full_text()?;
   let start = Instant::now();
-  let Some(data) = &engine.data.name_corpus else {
+  let Some(data) = context.name_corpus_data()? else {
     return Ok(TimedEntities::empty());
   };
   let detection = data.detect_configured_profiled(
     full_text,
-    passes.entities(DetectorId::DenyList),
+    dependencies.entities(DetectorId::DenyList)?,
   )?;
   record_name_corpus_profile(diagnostics, &detection.profile, full_text.len());
   Ok(TimedEntities {
