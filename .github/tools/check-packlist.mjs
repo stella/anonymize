@@ -114,7 +114,9 @@ const PACKAGES = [
   },
 ];
 
-for (const { dir, expected, forbidden = [] } of PACKAGES) {
+const selectedPackages = selectPackages(process.argv.slice(2));
+
+for (const { dir, expected, forbidden = [] } of selectedPackages) {
   const packJson = execFileSync("npm", ["pack", "--dry-run", "--json"], {
     cwd: dir,
     encoding: "utf8",
@@ -140,4 +142,19 @@ for (const { dir, expected, forbidden = [] } of PACKAGES) {
     );
     process.exit(1);
   }
+}
+
+function selectPackages(args) {
+  if (args.length === 0) return PACKAGES;
+  if (args.length !== 2 || args[0] !== "--package") {
+    console.error("Usage: check-packlist.mjs [--package <package-directory>]");
+    process.exit(2);
+  }
+
+  const selected = PACKAGES.filter(({ dir }) => dir === args[1]);
+  if (selected.length !== 1) {
+    console.error(`Unknown package directory: ${args[1]}`);
+    process.exit(2);
+  }
+  return selected;
 }

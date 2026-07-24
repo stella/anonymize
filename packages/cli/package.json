@@ -37,7 +37,7 @@
   },
   "dependencies": {
     "@stll/anonymize": "^2.4.1",
-    "@stll/anonymize-data": "^0.0.6",
+    "@stll/anonymize-data": "^0.0.7",
     "@stll/anonymize-docx": "^2.4.1",
     "@stll/anonymize-pdf": "^2.4.1"
   },
