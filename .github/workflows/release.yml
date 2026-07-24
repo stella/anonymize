@@ -70,13 +70,19 @@ jobs:
               publish_runtime=true
             fi
             if printf '%s\n' "${changed_files[@]}" | grep -Fxq 'packages/data/package.json'; then
-              publish_data=true
+              before_data_version="$(
+                git show "${BEFORE_SHA}:packages/data/package.json" |
+                  node -e '
+                    let input = "";
+                    process.stdin.on("data", chunk => { input += chunk; });
+                    process.stdin.on("end", () => { process.stdout.write(JSON.parse(input).version); });
+                  '
+              )"
+              head_data_version="$(node -p 'require("./packages/data/package.json").version')"
+              if [[ "$before_data_version" != "$head_data_version" ]]; then
+                publish_data=true
+              fi
             fi
-          fi
-
-          if [[ "$publish_data" != true && "$publish_runtime" != true ]]; then
-            echo "::error::Release workflow was triggered without a releasable version change"
-            exit 1
           fi
 
           echo "publish_data=$publish_data" >> "$GITHUB_OUTPUT"
