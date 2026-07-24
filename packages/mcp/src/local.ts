@@ -791,12 +791,13 @@ export class LocalAnonymizeService {
     if (this.#state !== "open") {
       throw new Error("MCP anonymize service is closing or closed");
     }
-    // Install the runtime binding (wasm under Bun) before any native call in the
-    // operation, including the inline `loadNativeAnonymizeBinding()` inside the
-    // docx and pdf packages. A no-op on Node and after the first call.
-    await preloadNativeBinding();
     this.#activeOperations += 1;
     try {
+      // Count the operation before the asynchronous preload so close() cannot
+      // pass its drain barrier while this call is waiting for the binding.
+      // The preload installs wasm under Bun before any inline native load in
+      // the docx or pdf package; it is a no-op on Node.
+      await preloadNativeBinding();
       return await operation();
     } finally {
       this.#activeOperations -= 1;

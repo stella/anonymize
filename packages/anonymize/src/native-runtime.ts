@@ -1,5 +1,6 @@
 import type { NativeAnonymizeBinding } from "./native";
 import {
+  assertNativeBindingVersion,
   loadNativeAnonymizeBinding,
   setNativeBindingOverride,
   type LoadNativeBindingOptions,
@@ -44,7 +45,14 @@ export const loadDefaultNativeBinding = async (
     return loadNativeAnonymizeBinding(options);
   }
   wasmBindingPromise ??= loadWasmBinding();
-  return wasmBindingPromise;
+  const binding = await wasmBindingPromise;
+  if (options.expectedVersion !== undefined) {
+    assertNativeBindingVersion({
+      binding,
+      expectedVersion: options.expectedVersion,
+    });
+  }
+  return binding;
 };
 
 let preloadPromise: Promise<void> | undefined;
