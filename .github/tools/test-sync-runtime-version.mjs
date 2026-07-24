@@ -65,8 +65,17 @@ const packingJobs = releaseJobs.filter(({ body }) =>
 if (packingJobs.length === 0) {
   throw new Error("release workflow has no npm-packing jobs");
 }
+const independentlyVersionedPackingJobs = new Set(["pack-data"]);
 for (const { name, body } of packingJobs) {
   const syncIndex = body.indexOf("run: bun run sync:version -- --release");
+  if (independentlyVersionedPackingJobs.has(name)) {
+    if (syncIndex !== -1) {
+      throw new Error(
+        `independently versioned release job ${name} must not sync runtime versions`,
+      );
+    }
+    continue;
+  }
   const packIndex = Math.min(
     ...npmPackingCommands
       .map((command) => body.indexOf(command))
