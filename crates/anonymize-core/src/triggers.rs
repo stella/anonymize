@@ -369,10 +369,14 @@ pub(crate) fn process_trigger_matches(
       continue;
     }
     // A to-next-comma cue can also occur after an organization as its legal
-    // form. Only suppress that unambiguous comma-delimited suffix direction;
+    // form. Only suppress a comma-delimited cue that is terminal on its line;
     // the same vocabulary remains valid before an organization name.
     if rule.suppress_after_legal_form_suffix
-      && is_comma_delimited_suffix_occurrence(full_text, found.start())
+      && is_comma_delimited_terminal_suffix_occurrence(
+        full_text,
+        found.start(),
+        found.end(),
+      )
     {
       record_trigger_rejection(
         &mut diagnostics,
@@ -2662,19 +2666,30 @@ fn normalize_phrase_identity(text: &str) -> String {
     .to_lowercase()
 }
 
-fn is_comma_delimited_suffix_occurrence(text: &str, start: u32) -> bool {
-  let Ok(start) = usize::try_from(start) else {
+fn is_comma_delimited_terminal_suffix_occurrence(
+  text: &str,
+  start: u32,
+  end: u32,
+) -> bool {
+  let (Ok(start), Ok(end)) = (usize::try_from(start), usize::try_from(end))
+  else {
     return false;
   };
-  let Some(prefix) = text.get(..start) else {
+  let (Some(prefix), Some(suffix)) = (text.get(..start), text.get(end..))
+  else {
     return false;
   };
-  prefix
+  let comma_delimited = prefix
     .rsplit_once('\n')
     .map_or(prefix, |(_, line)| line)
     .trim_end()
     .strip_suffix(',')
-    .is_some_and(|name| name.chars().any(char::is_alphabetic))
+    .is_some_and(|name| name.chars().any(char::is_alphabetic));
+  comma_delimited
+    && suffix
+      .chars()
+      .take_while(|ch| !matches!(ch, '\r' | '\n'))
+      .all(char::is_whitespace)
 }
 
 /// True when `text` is only a dotted document section id (`V.1`, `IV.2`,
@@ -3548,6 +3563,22 @@ mod tests {
     );
     let texts =
       run_named_org_trigger("public foundation Blue River\n", trigger, &data);
+    assert_eq!(
+      texts,
+      vec![(String::from("organization"), String::from("Blue River"))]
+    );
+  }
+
+  #[test]
+  fn comma_preceded_same_line_legal_form_remains_a_prefix_cue() {
+    let trigger = "foundation";
+    let data =
+      legal_form_suffix_org_trigger_data(trigger, vec![String::from(trigger)]);
+    let texts = run_named_org_trigger(
+      "Organization type, foundation Blue River\n",
+      trigger,
+      &data,
+    );
     assert_eq!(
       texts,
       vec![(String::from("organization"), String::from("Blue River"))]
