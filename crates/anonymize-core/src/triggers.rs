@@ -3441,10 +3441,8 @@ mod tests {
     // Vocabulary-driven: any legal-form suffix listed as an org prefix cue
     // must not capture trailing prose (list markers / section titles).
     let trigger = "contribution organization";
-    let data = legal_form_suffix_org_trigger_data(
-      trigger,
-      vec![String::from(trigger)],
-    );
+    let data =
+      legal_form_suffix_org_trigger_data(trigger, vec![String::from(trigger)]);
     let texts = run_named_org_trigger(
       "Institute Name, contribution organization\n\n          c)    Phase start\n",
       trigger,
@@ -3459,11 +3457,8 @@ mod tests {
     // following organization name when it is not a legal-form suffix.
     let trigger = "primary school";
     let data = legal_form_suffix_org_trigger_data(trigger, Vec::new());
-    let texts = run_named_org_trigger(
-      "primary school Husova\n",
-      trigger,
-      &data,
-    );
+    let texts =
+      run_named_org_trigger("primary school Husova\n", trigger, &data);
     assert_eq!(
       texts,
       vec![(String::from("organization"), String::from("Husova"))]
@@ -3473,10 +3468,8 @@ mod tests {
   #[test]
   fn czech_contribution_organization_suffix_cue_does_not_capture_prose() {
     let trigger = "příspěvková organizace";
-    let data = legal_form_suffix_org_trigger_data(
-      trigger,
-      vec![String::from(trigger)],
-    );
+    let data =
+      legal_form_suffix_org_trigger_data(trigger, vec![String::from(trigger)]);
     let texts = run_named_org_trigger(
       "14|15 Baťův institut, příspěvková organizace\n\n          c)    Fáze uvedení díla do provozu\n",
       trigger,
@@ -3509,7 +3502,8 @@ mod tests {
     })
     .unwrap();
 
-    let text = "V.   place of performance\nV.1.    Detailed site description follows.\n";
+    let text =
+      "V.   place of performance\nV.1.    Detailed site description follows.\n";
     let start = text.find("place of performance").unwrap();
     let end = start.saturating_add("place of performance".len());
     let entities = process_trigger_matches(
