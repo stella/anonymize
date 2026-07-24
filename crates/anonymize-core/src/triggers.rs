@@ -369,10 +369,10 @@ pub(crate) fn process_trigger_matches(
       continue;
     }
     // A to-next-comma cue can also occur after an organization as its legal
-    // form. Only suppress a comma-delimited cue that is terminal on its line;
-    // the same vocabulary remains valid before an organization name.
+    // form. Only suppress a comma-delimited cue followed by no value or a
+    // structural list marker; wrapped organization names remain valid values.
     if rule.suppress_after_legal_form_suffix
-      && is_comma_delimited_terminal_suffix_occurrence(
+      && is_comma_delimited_suffix_before_structural_content(
         full_text,
         found.start(),
         found.end(),
@@ -2666,7 +2666,7 @@ fn normalize_phrase_identity(text: &str) -> String {
     .to_lowercase()
 }
 
-fn is_comma_delimited_terminal_suffix_occurrence(
+fn is_comma_delimited_suffix_before_structural_content(
   text: &str,
   start: u32,
   end: u32,
@@ -2685,11 +2685,33 @@ fn is_comma_delimited_terminal_suffix_occurrence(
     .trim_end()
     .strip_suffix(',')
     .is_some_and(|name| name.chars().any(char::is_alphabetic));
-  comma_delimited
-    && suffix
-      .chars()
-      .take_while(|ch| !matches!(ch, '\r' | '\n'))
-      .all(char::is_whitespace)
+  if !comma_delimited {
+    return false;
+  }
+  suffix
+    .split_whitespace()
+    .next()
+    .is_none_or(is_structural_list_marker)
+}
+
+fn is_structural_list_marker(token: &str) -> bool {
+  let without_closing_parenthesis = token.strip_suffix(')').unwrap_or(token);
+  if is_document_section_marker(without_closing_parenthesis) {
+    return true;
+  }
+  let delimited = token.ends_with([')', '.']);
+  if !delimited {
+    return false;
+  }
+  let without_delimiter = without_closing_parenthesis
+    .strip_suffix('.')
+    .unwrap_or(without_closing_parenthesis);
+  let marker = without_delimiter
+    .strip_prefix('(')
+    .unwrap_or(without_delimiter);
+  is_document_section_part(marker)
+    || (marker.chars().count() == 1
+      && marker.chars().all(|ch| ch.is_ascii_alphabetic()))
 }
 
 /// True when `text` is only a dotted document section id (`V.1`, `IV.2`,
@@ -3583,6 +3605,37 @@ mod tests {
       texts,
       vec![(String::from("organization"), String::from("Blue River"))]
     );
+  }
+
+  #[test]
+  fn comma_preceded_wrapped_legal_form_remains_a_prefix_cue() {
+    let trigger = "foundation";
+    let data =
+      legal_form_suffix_org_trigger_data(trigger, vec![String::from(trigger)]);
+    let texts = run_named_org_trigger(
+      "Organization type, foundation\nBlue River\n",
+      trigger,
+      &data,
+    );
+    assert_eq!(
+      texts,
+      vec![(String::from("organization"), String::from("Blue River"))]
+    );
+  }
+
+  #[test]
+  fn legal_form_suffix_rejects_structural_following_markers() {
+    let trigger = "foundation";
+    let data =
+      legal_form_suffix_org_trigger_data(trigger, vec![String::from(trigger)]);
+    for marker in ["c)", "IV.2", "3.1.4", "1)", "2."] {
+      let texts = run_named_org_trigger(
+        &format!("Institute Name, foundation\n\n  {marker} Section title\n"),
+        trigger,
+        &data,
+      );
+      assert!(texts.is_empty(), "{marker}: {texts:?}");
+    }
   }
 
   #[test]
