@@ -267,9 +267,9 @@ impl PreparedEngine {
     full_text: &str,
     entities: Vec<PipelineEntity>,
   ) -> Vec<PipelineEntity> {
-    let Some(data) = &self.data.monetary else {
-      return entities;
-    };
-    data.extend_entities(full_text, &entities)
+    self
+      .data
+      .anchored
+      .extend_monetary_entities(full_text, entities)
   }
 }

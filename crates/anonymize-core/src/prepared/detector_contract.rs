@@ -2,11 +2,9 @@ use std::collections::BTreeSet;
 
 use crate::address_seeds::AddressSeedDetection;
 use crate::address_seeds::PreparedAddressSeedData;
-use crate::dates::PreparedDateData;
 use crate::diagnostics::{DiagnosticStage, StaticRedactionDiagnostics};
 use crate::legal_forms::PreparedLegalFormData;
 use crate::legal_forms::process_legal_form_matches;
-use crate::money::PreparedMonetaryData;
 use crate::name_corpus::{NameCorpusDetection, PreparedNameCorpusData};
 use crate::processors::{
   CountryMatchData, DenyListMatchData, GazetteerMatchData, PatternSlice,
@@ -373,23 +371,11 @@ impl<'a> StaticDetectorContext<'a> {
   }
 
   pub(super) fn anchored_is_active(&self) -> Result<bool> {
-    Ok(
-      self.date_data()?.is_some()
-        || (self.monetary_extraction()? && self.monetary_data()?.is_some()),
-    )
+    Ok(self.anchored_data()?.is_active())
   }
 
   pub(super) fn detect_anchored(&self) -> Result<Vec<PipelineEntity>> {
-    let mut entities = Vec::new();
-    if let Some(data) = self.date_data()? {
-      entities.extend(data.process(self.full_text()?)?);
-    }
-    if self.monetary_extraction()?
-      && let Some(data) = self.monetary_data()?
-    {
-      entities.extend(data.process(self.full_text()?)?);
-    }
-    Ok(entities)
+    self.anchored_data()?.detect(self.full_text()?)
   }
 
   pub(super) fn trigger_is_active(&self) -> Result<bool> {
@@ -570,19 +556,12 @@ impl<'a> StaticDetectorContext<'a> {
     Ok(self.engine.data.countries.as_ref())
   }
 
-  fn date_data(&self) -> Result<Option<&'a PreparedDateData>> {
+  fn anchored_data(
+    &self,
+  ) -> Result<&'a super::engine_state::PreparedAnchoredData> {
     self.require(StaticDetectorInput::DateData)?;
-    Ok(self.engine.data.dates.as_ref())
-  }
-
-  fn monetary_data(&self) -> Result<Option<&'a PreparedMonetaryData>> {
     self.require(StaticDetectorInput::MonetaryData)?;
-    Ok(self.engine.data.monetary.as_ref())
-  }
-
-  fn monetary_extraction(&self) -> Result<bool> {
-    self.require(StaticDetectorInput::MonetaryData)?;
-    Ok(self.engine.policy.monetary_extraction)
+    Ok(&self.engine.data.anchored)
   }
 
   fn trigger_data(&self) -> Result<Option<&'a PreparedTriggerData>> {
