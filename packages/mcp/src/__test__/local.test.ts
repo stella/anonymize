@@ -794,7 +794,9 @@ try {
   test("registers only path-oriented tools", async () => {
     const root = await temporaryDirectory();
     const scope = await PathScope.create([root]);
-    const server = createAnonymizeMcpServer(new LocalAnonymizeService(scope));
+    const server = await createAnonymizeMcpServer(
+      new LocalAnonymizeService(scope),
+    );
     const client = new Client({ name: "test-client", version: "1.0.0" });
     const [clientTransport, serverTransport] =
       InMemoryTransport.createLinkedPair();

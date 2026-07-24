@@ -6,6 +6,7 @@ import {
   type NativeTextReplacement,
   type PreparedNativePipeline,
 } from "@stll/anonymize";
+import { preloadNativeBinding } from "@stll/anonymize/native-runtime";
 import {
   AnonymizeSurfaceError,
   classifyToEnvelope,
@@ -760,6 +761,10 @@ export class LocalAnonymizeService {
     if (this.#state !== "open") {
       throw new Error("MCP anonymize service is closing or closed");
     }
+    // Install the runtime binding (wasm under Bun) before any native call in the
+    // operation, including the inline `loadNativeAnonymizeBinding()` inside the
+    // docx and pdf packages. A no-op on Node and after the first call.
+    await preloadNativeBinding();
     this.#activeOperations += 1;
     try {
       return await operation();
@@ -1453,7 +1458,10 @@ const guard = async (
   }
 };
 
-const capabilitiesResult = (service: LocalAnonymizeService) => {
+const capabilitiesResult = async (
+  service: LocalAnonymizeService,
+): Promise<CallToolResult> => {
+  await preloadNativeBinding();
   const value = {
     capabilityManifest: CAPABILITY_MANIFEST,
     runtimeVersion: nativeNodeSurface.native_package_version(),
@@ -1512,9 +1520,10 @@ Sessions: reversible replace mode uses a session; a restore needs the same sessi
 
 Hit a bug or a gap? Use send_feedback: it sanitizes your text locally and returns a prefilled GitHub issue URL you open and submit yourself. It sends nothing over the network.`;
 
-export const createAnonymizeMcpServer = (
+export const createAnonymizeMcpServer = async (
   service: LocalAnonymizeService,
-): McpServer => {
+): Promise<McpServer> => {
+  await preloadNativeBinding();
   const server = new McpServer(
     {
       name: "stella-anonymize-local",
