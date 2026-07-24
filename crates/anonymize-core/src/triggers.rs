@@ -348,6 +348,22 @@ pub(crate) fn process_trigger_matches(
       record_trigger_rejection(&mut diagnostics, found, rule, "right-boundary");
       continue;
     }
+    // Organization cues that are themselves known legal-form suffixes
+    // (e.g. contribution-organization descriptors) must not run as prefix
+    // extractors: the legal-form detector already owns left-extension, and
+    // prefix capture after a suffix cue swallows trailing list markers and
+    // section titles as fake organizations.
+    if rule.label == crate::labels::ORGANIZATION_LABEL
+      && has_known_legal_form_suffix(&rule.trigger, &data.legal_form_suffixes)
+    {
+      record_trigger_rejection(
+        &mut diagnostics,
+        found,
+        rule,
+        "legal-form-suffix-as-prefix",
+      );
+      continue;
+    }
     let Some(raw_value) = extract_value(
       full_text,
       &offsets,
@@ -396,6 +412,19 @@ pub(crate) fn process_trigger_matches(
     }
     if !apply_validations(&value.text, &rule.validations) {
       record_trigger_rejection(&mut diagnostics, found, rule, "validation");
+      continue;
+    }
+    // Address cues in headings often sit immediately before a section
+    // marker (`V.1`, `IV.2`). Those markers are not place values.
+    if rule.label == crate::labels::ADDRESS_LABEL
+      && is_document_section_marker(&value.text)
+    {
+      record_trigger_rejection(
+        &mut diagnostics,
+        found,
+        rule,
+        "section-marker-value",
+      );
       continue;
     }
     if rule.label == crate::labels::PHONE_NUMBER_LABEL
@@ -2607,6 +2636,31 @@ fn single_digit_dotted_prefix(text: &str) -> bool {
     && chars.next().is_some_and(|ch| ch.is_ascii_digit())
 }
 
+/// True when `text` is only a dotted document section id (`V.1`, `IV.2`,
+/// `3.1.4`), not an address value.
+fn is_document_section_marker(text: &str) -> bool {
+  let trimmed = text.trim().trim_end_matches('.');
+  if trimmed.is_empty() || trimmed.chars().count() > 12 {
+    return false;
+  }
+  let mut saw_part = false;
+  for part in trimmed.split('.') {
+    if part.is_empty() {
+      return false;
+    }
+    let roman = !part.is_empty()
+      && part
+        .chars()
+        .all(|ch| matches!(ch, 'I' | 'V' | 'X' | 'L' | 'C' | 'D' | 'M'));
+    let digits = !part.is_empty() && part.chars().all(|ch| ch.is_ascii_digit());
+    if !(roman || digits) {
+      return false;
+    }
+    saw_part = true;
+  }
+  saw_part
+}
+
 fn has_known_legal_form_suffix(text: &str, suffixes: &[String]) -> bool {
   suffixes.iter().any(|suffix| {
     let mut from = 0;
@@ -3325,6 +3379,194 @@ mod tests {
       texts,
       vec![(String::from("organization"), String::from("LAFURNI"))]
     );
+  }
+
+  fn legal_form_suffix_org_trigger_data(
+    trigger: &str,
+    legal_form_suffixes: Vec<String>,
+  ) -> PreparedTriggerData {
+    PreparedTriggerData::new(TriggerData {
+      rules: vec![TriggerRule {
+        trigger: String::from(trigger),
+        label: String::from(crate::labels::ORGANIZATION_LABEL),
+        strategy: TriggerStrategy::ToNextComma {
+          stop_words: Vec::new(),
+          max_length: None,
+        },
+        validations: Vec::new(),
+        include_trigger: false,
+      }],
+      address_stop_keywords: Vec::new(),
+      party_position_terms: Vec::new(),
+      legal_form_suffixes,
+      post_nominals: Vec::new(),
+      sentence_terminal_currency_terms: Vec::new(),
+      phone_extension_labels: Vec::new(),
+      number_markers: Vec::new(),
+      number_labels: Vec::new(),
+      person_field_labels: Vec::new(),
+    })
+    .unwrap()
+  }
+
+  fn run_named_org_trigger(
+    text: &str,
+    trigger: &str,
+    data: &PreparedTriggerData,
+  ) -> Vec<(String, String)> {
+    let Some(start) = text.to_lowercase().find(&trigger.to_lowercase()) else {
+      return Vec::new();
+    };
+    let end = start.saturating_add(trigger.len());
+    process_trigger_matches(
+      &[SearchMatch::Literal {
+        pattern: 0,
+        start: u32::try_from(start).unwrap(),
+        end: u32::try_from(end).unwrap(),
+      }],
+      PatternSlice { start: 0, end: 1 },
+      text,
+      data,
+      &BTreeSet::new(),
+      None,
+    )
+    .unwrap()
+    .into_iter()
+    .map(|entity| (entity.label, entity.text))
+    .collect()
+  }
+
+  #[test]
+  fn organization_prefix_trigger_that_is_legal_form_suffix_is_skipped() {
+    // Vocabulary-driven: any legal-form suffix listed as an org prefix cue
+    // must not capture trailing prose (list markers / section titles).
+    let trigger = "contribution organization";
+    let data = legal_form_suffix_org_trigger_data(
+      trigger,
+      vec![String::from(trigger)],
+    );
+    let texts = run_named_org_trigger(
+      "Institute Name, contribution organization\n\n          c)    Phase start\n",
+      trigger,
+      &data,
+    );
+    assert_eq!(texts, Vec::<(String, String)>::new());
+  }
+
+  #[test]
+  fn organization_prefix_trigger_unchanged_when_not_legal_form_suffix() {
+    // Negative control: an ordinary institution prefix still captures the
+    // following organization name when it is not a legal-form suffix.
+    let trigger = "primary school";
+    let data = legal_form_suffix_org_trigger_data(trigger, Vec::new());
+    let texts = run_named_org_trigger(
+      "primary school Husova\n",
+      trigger,
+      &data,
+    );
+    assert_eq!(
+      texts,
+      vec![(String::from("organization"), String::from("Husova"))]
+    );
+  }
+
+  #[test]
+  fn czech_contribution_organization_suffix_cue_does_not_capture_prose() {
+    let trigger = "příspěvková organizace";
+    let data = legal_form_suffix_org_trigger_data(
+      trigger,
+      vec![String::from(trigger)],
+    );
+    let texts = run_named_org_trigger(
+      "14|15 Baťův institut, příspěvková organizace\n\n          c)    Fáze uvedení díla do provozu\n",
+      trigger,
+      &data,
+    );
+    assert_eq!(texts, Vec::<(String, String)>::new());
+  }
+
+  #[test]
+  fn address_trigger_rejects_document_section_marker_values() {
+    let data = PreparedTriggerData::new(TriggerData {
+      rules: vec![TriggerRule {
+        trigger: String::from("place of performance"),
+        label: String::from(crate::labels::ADDRESS_LABEL),
+        strategy: TriggerStrategy::Address { max_chars: 120 },
+        validations: Vec::new(),
+        include_trigger: false,
+      }],
+      address_stop_keywords: Vec::new(),
+      party_position_terms: Vec::new(),
+      legal_form_suffixes: Vec::new(),
+      post_nominals: Vec::new(),
+      sentence_terminal_currency_terms: Vec::new(),
+      phone_extension_labels: Vec::new(),
+      number_markers: Vec::new(),
+      number_labels: Vec::new(),
+      person_field_labels: Vec::new(),
+    })
+    .unwrap();
+
+    let text = "V.   place of performance\nV.1.    Detailed site description follows.\n";
+    let start = text.find("place of performance").unwrap();
+    let end = start.saturating_add("place of performance".len());
+    let entities = process_trigger_matches(
+      &[SearchMatch::Literal {
+        pattern: 0,
+        start: u32::try_from(start).unwrap(),
+        end: u32::try_from(end).unwrap(),
+      }],
+      PatternSlice { start: 0, end: 1 },
+      text,
+      &data,
+      &BTreeSet::new(),
+      None,
+    )
+    .unwrap();
+    assert!(entities.is_empty(), "{entities:?}");
+  }
+
+  #[test]
+  fn address_trigger_keeps_real_place_value_after_cue() {
+    let data = PreparedTriggerData::new(TriggerData {
+      rules: vec![TriggerRule {
+        trigger: String::from("place of performance"),
+        label: String::from(crate::labels::ADDRESS_LABEL),
+        strategy: TriggerStrategy::Address { max_chars: 120 },
+        validations: Vec::new(),
+        include_trigger: false,
+      }],
+      address_stop_keywords: Vec::new(),
+      party_position_terms: Vec::new(),
+      legal_form_suffixes: Vec::new(),
+      post_nominals: Vec::new(),
+      sentence_terminal_currency_terms: Vec::new(),
+      phone_extension_labels: Vec::new(),
+      number_markers: Vec::new(),
+      number_labels: Vec::new(),
+      person_field_labels: Vec::new(),
+    })
+    .unwrap();
+
+    let text = "place of performance: Main Street 12, 110 00 Prague\n";
+    let start = text.find("place of performance").unwrap();
+    let end = start.saturating_add("place of performance".len());
+    let entities = process_trigger_matches(
+      &[SearchMatch::Literal {
+        pattern: 0,
+        start: u32::try_from(start).unwrap(),
+        end: u32::try_from(end).unwrap(),
+      }],
+      PatternSlice { start: 0, end: 1 },
+      text,
+      &data,
+      &BTreeSet::new(),
+      None,
+    )
+    .unwrap();
+    assert_eq!(entities.len(), 1);
+    assert_eq!(entities[0].label, "address");
+    assert!(entities[0].text.contains("Main Street"));
   }
 
   #[test]
