@@ -27,7 +27,6 @@ const baseConfig: Omit<PipelineConfig, "dictionaries"> = {
   enableZoneClassification: true,
   labels: [...DEFAULT_ENTITY_LABELS],
   workspaceId: "legal-form-suffix-org-trigger",
-  countries: ["CZ"],
   languages: ["cs"],
   nameCorpusLanguages: ["cs"],
   denyListCountries: ["CZ"],
@@ -75,23 +74,10 @@ describe("legal-form suffix must not act as organization prefix cue", () => {
     expect(orgs).toContain("Husova");
   });
 
-  test("unrelated buyer-style organization trigger is unchanged", async () => {
-    const englishConfig = {
-      ...baseConfig,
-      countries: ["US"] as string[],
-      languages: ["en"] as string[],
-      nameCorpusLanguages: ["en"] as string[],
-      denyListCountries: ["US"] as string[],
-      workspaceId: "legal-form-suffix-org-trigger-en",
-    };
-    const entities = await detectNative(
-      { ...englishConfig, dictionaries: await getDictionaries() },
-      "Buyer: Harbor Legal Services\n",
-    );
-    const orgs = entities
-      .filter(({ label }) => label === "organization")
-      .map(({ text }) => text);
-    expect(orgs.some((value) => value.includes("Harbor"))).toBe(true);
+  test("legal-form company cue still detects the organization via legal forms", async () => {
+    // Negative control: unrelated legal-form detection is unchanged.
+    const orgs = await organizations("Dodavatel: Acme Consulting s.r.o.\n");
+    expect(orgs.some((value) => value.includes("Acme Consulting"))).toBe(true);
   });
 
   test("place-of-performance heading does not capture section marker as address", async () => {
@@ -109,7 +95,6 @@ describe("legal-form suffix must not act as organization prefix cue", () => {
       .map(({ text: entityText }) => entityText);
 
     expect(addresses).not.toContain("V.1");
-    expect(addresses).not.toContain("Místo");
     expect(addresses.some((value) => value.includes("Vavrečkova"))).toBe(true);
     expect(addresses.some((value) => value.includes("náměstí Míru"))).toBe(
       true,

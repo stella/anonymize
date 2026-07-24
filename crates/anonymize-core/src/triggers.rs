@@ -3491,7 +3491,9 @@ mod tests {
       rules: vec![TriggerRule {
         trigger: String::from("place of performance"),
         label: String::from(crate::labels::ADDRESS_LABEL),
-        strategy: TriggerStrategy::Address { max_chars: 120 },
+        strategy: TriggerStrategy::Address {
+          max_chars: Some(120),
+        },
         validations: Vec::new(),
         include_trigger: false,
       }],
@@ -3532,7 +3534,9 @@ mod tests {
       rules: vec![TriggerRule {
         trigger: String::from("place of performance"),
         label: String::from(crate::labels::ADDRESS_LABEL),
-        strategy: TriggerStrategy::Address { max_chars: 120 },
+        strategy: TriggerStrategy::Address {
+          max_chars: Some(120),
+        },
         validations: Vec::new(),
         include_trigger: false,
       }],
