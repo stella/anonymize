@@ -59,6 +59,7 @@ impl PreparedEngine {
     let mut passes = StaticEntityPasses::new();
     for rule in static_entity_rules() {
       let spec = rule.spec();
+      spec.validate_complexity()?;
       let context = StaticDetectorContext::new(spec, self, matches, full_text);
       debug_assert!(
         spec.has_declared_inputs(),

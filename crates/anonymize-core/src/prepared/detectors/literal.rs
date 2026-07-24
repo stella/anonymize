@@ -1,8 +1,4 @@
 use crate::diagnostics::DiagnosticStage;
-use crate::processors::{
-  process_country_matches, process_deny_list_matches, process_gazetteer_matches,
-};
-
 use super::prelude::*;
 use super::timed_entities;
 
@@ -16,6 +12,7 @@ static_detector_rules! {
       DetectorInput::DenyListData,
       DetectorInput::FullText,
     ];
+    scales: &[DetectorInput::LiteralMatches, DetectorInput::FullText];
     active: deny_list_is_active;
     detect: detect_deny_list;
   }
@@ -27,6 +24,7 @@ static_detector_rules! {
       DetectorInput::GazetteerData,
       DetectorInput::FullText,
     ];
+    scales: &[DetectorInput::LiteralMatches, DetectorInput::FullText];
     active: gazetteer_is_active;
     detect: detect_gazetteer;
   }
@@ -38,21 +36,22 @@ static_detector_rules! {
       DetectorInput::CountryData,
       DetectorInput::FullText,
     ];
+    scales: &[DetectorInput::LiteralMatches, DetectorInput::FullText];
     active: country_is_active;
     detect: detect_country;
   }
 }
 
 fn deny_list_is_active(context: &StaticDetectorContext<'_>) -> Result<bool> {
-  Ok(!context.literal_matches()?.is_empty() && context.deny_list_data()?.is_some())
+  context.deny_list_is_active()
 }
 
 fn gazetteer_is_active(context: &StaticDetectorContext<'_>) -> Result<bool> {
-  Ok(!context.literal_matches()?.is_empty() && context.gazetteer_data()?.is_some())
+  context.gazetteer_is_active()
 }
 
 fn country_is_active(context: &StaticDetectorContext<'_>) -> Result<bool> {
-  Ok(!context.literal_matches()?.is_empty() && context.country_data()?.is_some())
+  context.country_is_active()
 }
 
 fn detect_deny_list(
@@ -60,17 +59,7 @@ fn detect_deny_list(
   _dependencies: DetectorDependencies<'_>,
   _diagnostics: StaticDetectorDiagnostics<'_>,
 ) -> Result<TimedEntities> {
-  timed_entities(|| {
-    let Some(data) = context.deny_list_data()? else {
-      return Ok(Vec::new());
-    };
-    process_deny_list_matches(
-      context.literal_matches()?,
-      context.deny_list_slice()?,
-      context.full_text()?,
-      data,
-    )
-  })
+  timed_entities(|| context.detect_deny_list())
 }
 
 fn detect_gazetteer(
@@ -78,17 +67,7 @@ fn detect_gazetteer(
   _dependencies: DetectorDependencies<'_>,
   _diagnostics: StaticDetectorDiagnostics<'_>,
 ) -> Result<TimedEntities> {
-  timed_entities(|| {
-    let Some(data) = context.gazetteer_data()? else {
-      return Ok(Vec::new());
-    };
-    process_gazetteer_matches(
-      context.literal_matches()?,
-      context.gazetteer_slice()?,
-      context.full_text()?,
-      data,
-    )
-  })
+  timed_entities(|| context.detect_gazetteer())
 }
 
 fn detect_country(
@@ -96,15 +75,5 @@ fn detect_country(
   _dependencies: DetectorDependencies<'_>,
   _diagnostics: StaticDetectorDiagnostics<'_>,
 ) -> Result<TimedEntities> {
-  timed_entities(|| {
-    let Some(data) = context.country_data()? else {
-      return Ok(Vec::new());
-    };
-    process_country_matches(
-      context.literal_matches()?,
-      context.countries_slice()?,
-      context.full_text()?,
-      data,
-    )
-  })
+  timed_entities(|| context.detect_country())
 }

@@ -84,6 +84,10 @@ rule. Detectors cannot reach the whole engine, arbitrary search branches, or
 undeclared prior layers: context and dependency accessors correspond to the
 inputs declared in the rule metadata. This keeps cross-domain joins visible and
 prevents a new detector from quietly coupling itself to every match or entity.
+Detector modules receive domain operations such as `detect_regex`, not the
+iterable match/entity storage behind those operations. Every rule also declares
+the growing domains in which its work scales additively; construction fails
+closed if that declaration omits, duplicates, or invents a growing input.
 Prepared support resources are declared once in `support_resources.rs`; prepare
 timing, detector input checks, and snapshots derive from that declaration where
 the resource-specific data type still allows it.

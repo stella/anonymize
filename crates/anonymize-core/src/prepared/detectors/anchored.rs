@@ -13,16 +13,14 @@ static_detector_rules! {
       DetectorInput::DateData,
       DetectorInput::MonetaryData,
     ];
+    scales: &[DetectorInput::FullText];
     active: anchored_is_active;
     detect: detect_anchored;
   }
 }
 
 fn anchored_is_active(context: &StaticDetectorContext<'_>) -> Result<bool> {
-  Ok(
-    context.date_data()?.is_some()
-      || (context.monetary_extraction()? && context.monetary_data()?.is_some()),
-  )
+  context.anchored_is_active()
 }
 
 fn detect_anchored(
@@ -30,17 +28,5 @@ fn detect_anchored(
   _dependencies: DetectorDependencies<'_>,
   _diagnostics: StaticDetectorDiagnostics<'_>,
 ) -> Result<TimedEntities> {
-  let full_text = context.full_text()?;
-  timed_entities(|| {
-    let mut entities = Vec::new();
-    if let Some(data) = context.date_data()? {
-      entities.extend(data.process(full_text)?);
-    }
-    if context.monetary_extraction()?
-      && let Some(data) = context.monetary_data()?
-    {
-      entities.extend(data.process(full_text)?);
-    }
-    Ok(entities)
-  })
+  timed_entities(|| context.detect_anchored())
 }

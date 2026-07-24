@@ -73,6 +73,7 @@ mod tests {
     inputs: Vec<String>,
     dependencies: Vec<String>,
     support_resources: Vec<String>,
+    additive_scaling_domains: Vec<String>,
   }
 
   #[test]
@@ -121,6 +122,11 @@ mod tests {
       assert!(
         metadata.has_declared_inputs(),
         "detectors must declare their required inputs",
+      );
+      assert!(
+        metadata.complexity_covers_growing_inputs(),
+        "detector complexity contract must cover each growing input exactly once: {:?}",
+        metadata.id(),
       );
       let mut dependencies = Vec::new();
       for dependency in metadata.dependencies() {
@@ -240,6 +246,12 @@ mod tests {
         .support_resources()
         .iter()
         .map(|resource| format!("{resource:?}"))
+        .collect(),
+      additive_scaling_domains: spec
+        .declared_inputs()
+        .iter()
+        .filter(|input| input.is_growing())
+        .map(|input| format!("{input:?}"))
         .collect(),
     }
   }

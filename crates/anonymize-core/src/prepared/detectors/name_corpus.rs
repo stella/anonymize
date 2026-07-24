@@ -15,6 +15,10 @@ static_detector_rules! {
       DetectorInput::FullText,
       DetectorInput::DenyListEntities,
     ];
+    scales: &[
+      DetectorInput::FullText,
+      DetectorInput::DenyListEntities,
+    ];
     after: &[DetectorId::DenyList];
     uses: &[SupportResource::NameCorpus];
     active: name_corpus_is_active;
@@ -23,7 +27,7 @@ static_detector_rules! {
 }
 
 fn name_corpus_is_active(context: &StaticDetectorContext<'_>) -> Result<bool> {
-  Ok(context.name_corpus_data()?.is_some())
+  context.name_corpus_is_active()
 }
 
 fn detect_name_corpus(
@@ -31,16 +35,13 @@ fn detect_name_corpus(
   dependencies: DetectorDependencies<'_>,
   diagnostics: StaticDetectorDiagnostics<'_>,
 ) -> Result<TimedEntities> {
-  let full_text = context.full_text()?;
   let start = Instant::now();
-  let Some(data) = context.name_corpus_data()? else {
-    return Ok(TimedEntities::empty());
-  };
-  let detection = data.detect_configured_profiled(
-    full_text,
-    dependencies.entities(DetectorId::DenyList)?,
-  )?;
-  record_name_corpus_profile(diagnostics, &detection.profile, full_text.len());
+  let detection = context.detect_name_corpus(dependencies)?;
+  record_name_corpus_profile(
+    diagnostics,
+    &detection.profile,
+    context.input_bytes(),
+  );
   Ok(TimedEntities {
     entities: detection.entities,
     elapsed_us: elapsed_us(start),

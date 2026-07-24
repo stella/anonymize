@@ -28,6 +28,11 @@ static_detector_rules! {
       DetectorInput::ContextEntities,
       DetectorInput::FullText,
     ];
+    scales: &[
+      DetectorInput::LiteralMatches,
+      DetectorInput::ContextEntities,
+      DetectorInput::FullText,
+    ];
     after: ADDRESS_SEED_DEPENDENCIES;
     uses: &[SupportResource::AddressSeed];
     active: address_seed_is_active;
@@ -36,7 +41,7 @@ static_detector_rules! {
 }
 
 fn address_seed_is_active(context: &StaticDetectorContext<'_>) -> Result<bool> {
-  Ok(context.address_seed_data()?.is_some())
+  context.address_seed_is_active()
 }
 
 fn detect_address_seed(
@@ -44,26 +49,16 @@ fn detect_address_seed(
   dependencies: DetectorDependencies<'_>,
   diagnostics: StaticDetectorDiagnostics<'_>,
 ) -> Result<TimedEntities> {
-  let full_text = context.full_text()?;
   let start = Instant::now();
-  let Some(data) = context.address_seed_data()? else {
-    return Ok(TimedEntities::empty());
-  };
   let context_start = Instant::now();
-  let existing_entities = dependencies.collect();
+  let (detection, context_count) = context.detect_address_seed(dependencies)?;
   let context_elapsed_us = elapsed_us(context_start);
-  let detection = data.process_profiled(
-    context.literal_matches()?,
-    context.street_types_slice()?,
-    full_text,
-    &existing_entities,
-  )?;
   record_address_seed_profile(
     diagnostics,
     &detection.profile,
-    existing_entities.len(),
+    context_count,
     context_elapsed_us,
-    full_text.len(),
+    context.input_bytes(),
   );
   Ok(TimedEntities {
     entities: detection.entities,

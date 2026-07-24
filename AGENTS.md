@@ -351,6 +351,7 @@ static_detector_rules! {
     id: DetectorId::Example;
     stage: DiagnosticStage::EntityExample;
     inputs: &[DetectorInput::FullText];
+    scales: &[DetectorInput::FullText];
     uses: &[SupportResource::Example];
     active: example_is_active;
     detect: detect_example;
@@ -386,6 +387,11 @@ support resource, but the rule metadata and behavior stay module-local.
 - Detector code must use `StaticDetectorContext` and
   `DetectorDependencies` accessors. Declare every input and dependency in the
   rule block so undeclared ambient access fails closed in every build.
+- Detector modules receive capability operations, never iterable match or
+  dependency collections. Keep raw growing-domain storage private to the
+  detector contract. The mandatory `scales` declaration must list every
+  growing input exactly once; it describes additive work, never permission to
+  multiply those domains with a nested scan.
 - Mark release-mode scaling contracts ignored in the ordinary test suite. CI
   discovers and runs the complete ignored core set automatically; never add a
   manually maintained workflow allowlist.
