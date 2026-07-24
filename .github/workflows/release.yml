@@ -20,7 +20,6 @@ on:
         options:
           - runtime
           - data
-          - all
       publish_to_npm:
         description: Publish the current package versions to npm AND PyPI after verification (PyPI releases are immutable)
         required: true
@@ -58,10 +57,10 @@ jobs:
           publish_runtime=false
 
           if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
-            if [[ "$RELEASE_TARGET" == "data" || "$RELEASE_TARGET" == "all" ]]; then
+            if [[ "$RELEASE_TARGET" == "data" ]]; then
               publish_data=true
             fi
-            if [[ "$RELEASE_TARGET" == "runtime" || "$RELEASE_TARGET" == "all" ]]; then
+            if [[ "$RELEASE_TARGET" == "runtime" ]]; then
               publish_runtime=true
             fi
           else
@@ -83,6 +82,11 @@ jobs:
                 publish_data=true
               fi
             fi
+          fi
+
+          if [[ "$publish_data" == true && "$publish_runtime" == true ]]; then
+            echo "::error::Data and runtime versions must be released in separate commits"
+            exit 1
           fi
 
           echo "publish_data=$publish_data" >> "$GITHUB_OUTPUT"
@@ -494,7 +498,7 @@ jobs:
       - name: Upload data package tarball
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v5
         with:
-          name: npm-tarball-stll-anonymize-data
+          name: data-package-stll-anonymize-data
           path: |
             ${{ steps.pack.outputs.tarball }}
             ${{ steps.pack.outputs.tarball }}.sha256
@@ -511,7 +515,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
-          name: npm-tarball-stll-anonymize-data
+          name: data-package-stll-anonymize-data
           path: data-tarball
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
