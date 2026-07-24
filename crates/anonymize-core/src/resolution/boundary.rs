@@ -5,6 +5,7 @@ use crate::signatures::PersonSpanTerminators;
 use crate::types::Result;
 
 use super::common::{byte_len, contains_span, entity_len, is_caller_owned};
+use super::document::{CharSpan, ResolutionDocument};
 use super::{DetectionSource, PipelineEntity};
 
 /// Inputs to the boundary pass. `person_terminators` is empty when the
@@ -24,14 +25,35 @@ pub fn enforce_boundary_consistency(
     full_text,
     person_terminators,
   } = params;
-  let offsets = ByteOffsets::new(full_text);
-  let spans = char_spans(full_text);
-  let boundaries = word_boundaries(&spans);
-  let fixed = fix_partial_words(entities, &offsets, &spans, &boundaries)?;
+  let document = ResolutionDocument::new(full_text);
+  enforce_boundary_consistency_with_document(
+    entities,
+    &document,
+    person_terminators,
+  )
+}
+
+pub(crate) fn enforce_boundary_consistency_with_document(
+  entities: &[PipelineEntity],
+  document: &ResolutionDocument<'_>,
+  person_terminators: PersonSpanTerminators<'_>,
+) -> Result<Vec<PipelineEntity>> {
+  let offsets = document.offsets();
+  let analysis = document.word_analysis();
+  let fixed = fix_partial_words(
+    entities,
+    &offsets,
+    &analysis.spans,
+    &analysis.boundaries,
+  )?;
   // Truncation runs after word-boundary expansion so expansion cannot push a
   // person span back across a terminator it was just pulled behind.
-  let truncated =
-    truncate_person_spans(&fixed, full_text, &offsets, person_terminators)?;
+  let truncated = truncate_person_spans(
+    &fixed,
+    document.text(),
+    &offsets,
+    person_terminators,
+  )?;
   let resolved = resolve_cross_label_overlaps(&truncated, &offsets)?;
   let deduped = deduplicate_spans(&resolved);
   let merged = merge_adjacent(&deduped, &offsets)?;
@@ -226,13 +248,6 @@ fn trim_trailing_space(full_text: &str, start: u32, end: u32) -> u32 {
   };
   let trimmed = slice.trim_end();
   start.saturating_add(byte_len(trimmed))
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct CharSpan {
-  start: u32,
-  end: u32,
-  ch: char,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -566,7 +581,7 @@ fn fix_partial_words_with_stats(
       continue;
     }
 
-    if entity.text != offsets.slice(entity.start, entity.end)? {
+    if entity.text != offsets.slice_ref(entity.start, entity.end)? {
       fixed.push(entity.clone());
       continue;
     }
@@ -623,6 +638,17 @@ fn fix_partial_words_with_stats(
 }
 
 fn resolve_cross_label_overlaps(
+  entities: &[PipelineEntity],
+  offsets: &ByteOffsets<'_>,
+) -> Result<Vec<PipelineEntity>> {
+  if entities.len() < BOUNDARY_INDEX_MIN_ENTITIES {
+    return resolve_cross_label_overlaps_linear(entities, offsets);
+  }
+  resolve_cross_label_overlaps_with_stats(entities, offsets)
+    .map(|(resolved, _)| resolved)
+}
+
+fn resolve_cross_label_overlaps_linear(
   entities: &[PipelineEntity],
   offsets: &ByteOffsets<'_>,
 ) -> Result<Vec<PipelineEntity>> {
@@ -693,6 +719,88 @@ fn resolve_cross_label_overlaps(
   )
 }
 
+fn resolve_cross_label_overlaps_with_stats(
+  entities: &[PipelineEntity],
+  offsets: &ByteOffsets<'_>,
+) -> Result<(Vec<PipelineEntity>, CrossingOverlapStats)> {
+  let mut sorted = entities.to_vec();
+  sorted.sort_by_key(|entity| entity.start);
+  let mut index = CrossingOverlapIndex::new(&sorted);
+  #[cfg(test)]
+  let mut stats = CrossingOverlapStats::default();
+  #[cfg(not(test))]
+  let stats = CrossingOverlapStats::default();
+
+  for left_index in 0..sorted.len() {
+    let mut search_from = left_index.saturating_add(1);
+    while let Some(left) = sorted.get(left_index) {
+      let barrier = index.first_start_at_least(search_from, left.end);
+      #[cfg(test)]
+      stats.record_search(&barrier);
+      let search_end = barrier.index.unwrap_or(sorted.len());
+      let crossing = index.first_crossing(
+        search_from,
+        search_end,
+        left.start,
+        left.end,
+        index.label_id(left_index),
+      );
+      #[cfg(test)]
+      stats.record_search(&crossing);
+      let Some(right_index) = crossing.index else {
+        break;
+      };
+
+      let Some(right) = sorted.get(right_index) else {
+        break;
+      };
+      let left_len = entity_len(left);
+      let right_len = entity_len(right);
+      let left_locked = has_locked_boundary(left);
+      let right_locked = has_locked_boundary(right);
+      let left_wins = if left_locked == right_locked {
+        match left.score.total_cmp(&right.score) {
+          std::cmp::Ordering::Greater => true,
+          std::cmp::Ordering::Less => false,
+          std::cmp::Ordering::Equal => left_len >= right_len,
+        }
+      } else {
+        left_locked
+      };
+
+      if left_wins {
+        let new_start = left.end;
+        if let Some(right_mut) = sorted.get_mut(right_index) {
+          right_mut.start = new_start;
+          right_mut.text = offsets.slice(new_start, right_mut.end)?;
+        }
+        index.update_start(right_index, new_start);
+        #[cfg(test)]
+        {
+          stats.start_updates = stats.start_updates.saturating_add(1);
+        }
+        search_from = right_index.saturating_add(1);
+        continue;
+      }
+
+      let new_end = right.start;
+      if let Some(left_mut) = sorted.get_mut(left_index) {
+        left_mut.end = new_end;
+        left_mut.text = offsets.slice(left_mut.start, new_end)?;
+      }
+      break;
+    }
+  }
+
+  Ok((
+    sorted
+      .into_iter()
+      .filter(|entity| entity.start < entity.end)
+      .collect(),
+    stats,
+  ))
+}
+
 fn deduplicate_spans(entities: &[PipelineEntity]) -> Vec<PipelineEntity> {
   let mut seen = BTreeMap::<(u32, u32, String), PipelineEntity>::new();
 
@@ -756,6 +864,388 @@ impl CrossLabelMaxEnds {
       .or(self.second)
       .map(|entry| entry.end)
   }
+
+  fn combine(left: Self, right: Self) -> Self {
+    let mut combined = Self::default();
+    for candidate in [left.first, left.second, right.first, right.second]
+      .into_iter()
+      .flatten()
+    {
+      combined.insert(candidate);
+    }
+    combined
+  }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct CrossLabelMinEnds {
+  first: Option<LabelEnd>,
+  second: Option<LabelEnd>,
+}
+
+impl CrossLabelMinEnds {
+  fn insert(&mut self, candidate: LabelEnd) {
+    if let Some(first) = &mut self.first
+      && first.label_id == candidate.label_id
+    {
+      first.end = first.end.min(candidate.end);
+      return;
+    }
+    if let Some(second) = &mut self.second
+      && second.label_id == candidate.label_id
+    {
+      second.end = second.end.min(candidate.end);
+      if self.first.is_some_and(|first| second.end < first.end) {
+        std::mem::swap(&mut self.first, &mut self.second);
+      }
+      return;
+    }
+
+    if self.first.is_none_or(|first| candidate.end < first.end) {
+      self.second = self.first;
+      self.first = Some(candidate);
+      return;
+    }
+    if self.second.is_none_or(|second| candidate.end < second.end) {
+      self.second = Some(candidate);
+    }
+  }
+
+  fn min_end_excluding(self, excluded_label: usize) -> Option<u32> {
+    self
+      .first
+      .filter(|entry| entry.label_id != excluded_label)
+      .or(self.second)
+      .map(|entry| entry.end)
+  }
+
+  fn combine(left: Self, right: Self) -> Self {
+    let mut combined = Self::default();
+    for candidate in [left.first, left.second, right.first, right.second]
+      .into_iter()
+      .flatten()
+    {
+      combined.insert(candidate);
+    }
+    combined
+  }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct CrossingOverlapSearch {
+  index: Option<usize>,
+  #[cfg(test)]
+  node_visits: usize,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct CrossingOverlapStats {
+  #[cfg(test)]
+  searches: usize,
+  #[cfg(test)]
+  node_visits: usize,
+  #[cfg(test)]
+  start_updates: usize,
+}
+
+impl CrossingOverlapStats {
+  #[cfg(test)]
+  const fn record_search(&mut self, search: &CrossingOverlapSearch) {
+    self.searches = self.searches.saturating_add(1);
+    self.node_visits = self.node_visits.saturating_add(search.node_visits);
+  }
+}
+
+struct CrossingOverlapIndex {
+  starts: Vec<u32>,
+  label_ids: Vec<usize>,
+  max_starts: Vec<u32>,
+  min_starts: Vec<u32>,
+  max_ends: Vec<CrossLabelMaxEnds>,
+  min_ends: Vec<CrossLabelMinEnds>,
+  leaf_count: usize,
+}
+
+impl CrossingOverlapIndex {
+  fn new(entities: &[PipelineEntity]) -> Self {
+    let leaf_count = entities.len().next_power_of_two().max(1);
+    let tree_len = leaf_count.saturating_mul(2);
+    let mut labels = BTreeMap::<&str, usize>::new();
+    let label_ids = entities
+      .iter()
+      .map(|entity| {
+        let next_id = labels.len();
+        *labels.entry(&entity.label).or_insert(next_id)
+      })
+      .collect::<Vec<_>>();
+    let starts = entities
+      .iter()
+      .map(|entity| entity.start)
+      .collect::<Vec<_>>();
+    let mut max_starts = vec![0_u32; tree_len];
+    let mut min_starts = vec![u32::MAX; tree_len];
+    let mut max_ends = vec![CrossLabelMaxEnds::default(); tree_len];
+    let mut min_ends = vec![CrossLabelMinEnds::default(); tree_len];
+
+    for (index, entity) in entities.iter().enumerate() {
+      let leaf = leaf_count.saturating_add(index);
+      if let Some(start) = max_starts.get_mut(leaf) {
+        *start = entity.start;
+      }
+      if let Some(start) = min_starts.get_mut(leaf) {
+        *start = entity.start;
+      }
+      if let Some(summary) = max_ends.get_mut(leaf) {
+        summary.insert(LabelEnd {
+          label_id: label_ids.get(index).copied().unwrap_or_default(),
+          end: entity.end,
+        });
+      }
+      if let Some(summary) = min_ends.get_mut(leaf) {
+        summary.insert(LabelEnd {
+          label_id: label_ids.get(index).copied().unwrap_or_default(),
+          end: entity.end,
+        });
+      }
+    }
+    for node in (1..leaf_count).rev() {
+      let left = node.saturating_mul(2);
+      let right = left.saturating_add(1);
+      let max_left_start = max_starts.get(left).copied().unwrap_or_default();
+      let max_right_start = max_starts.get(right).copied().unwrap_or_default();
+      if let Some(start) = max_starts.get_mut(node) {
+        *start = max_left_start.max(max_right_start);
+      }
+      let min_left_start = min_starts.get(left).copied().unwrap_or(u32::MAX);
+      let min_right_start = min_starts.get(right).copied().unwrap_or(u32::MAX);
+      if let Some(start) = min_starts.get_mut(node) {
+        *start = min_left_start.min(min_right_start);
+      }
+      let max_left_ends = max_ends.get(left).copied().unwrap_or_default();
+      let max_right_ends = max_ends.get(right).copied().unwrap_or_default();
+      if let Some(summary) = max_ends.get_mut(node) {
+        *summary = CrossLabelMaxEnds::combine(max_left_ends, max_right_ends);
+      }
+      let min_left_ends = min_ends.get(left).copied().unwrap_or_default();
+      let min_right_ends = min_ends.get(right).copied().unwrap_or_default();
+      if let Some(summary) = min_ends.get_mut(node) {
+        *summary = CrossLabelMinEnds::combine(min_left_ends, min_right_ends);
+      }
+    }
+
+    Self {
+      starts,
+      label_ids,
+      max_starts,
+      min_starts,
+      max_ends,
+      min_ends,
+      leaf_count,
+    }
+  }
+
+  fn label_id(&self, index: usize) -> usize {
+    self.label_ids.get(index).copied().unwrap_or_default()
+  }
+
+  fn update_start(&mut self, index: usize, start: u32) {
+    let Some(stored) = self.starts.get_mut(index) else {
+      return;
+    };
+    *stored = start;
+    let mut node = self.leaf_count.saturating_add(index);
+    if let Some(max_start) = self.max_starts.get_mut(node) {
+      *max_start = start;
+    }
+    if let Some(min_start) = self.min_starts.get_mut(node) {
+      *min_start = start;
+    }
+    while node > 1 {
+      node >>= 1;
+      let left = node.saturating_mul(2);
+      let right = left.saturating_add(1);
+      let maximum = self
+        .max_starts
+        .get(left)
+        .copied()
+        .unwrap_or_default()
+        .max(self.max_starts.get(right).copied().unwrap_or_default());
+      if let Some(max_start) = self.max_starts.get_mut(node) {
+        *max_start = maximum;
+      }
+      let minimum = self
+        .min_starts
+        .get(left)
+        .copied()
+        .unwrap_or(u32::MAX)
+        .min(self.min_starts.get(right).copied().unwrap_or(u32::MAX));
+      if let Some(min_start) = self.min_starts.get_mut(node) {
+        *min_start = minimum;
+      }
+    }
+  }
+
+  fn first_start_at_least(
+    &self,
+    from: usize,
+    threshold: u32,
+  ) -> CrossingOverlapSearch {
+    self.search(
+      from,
+      self.starts.len(),
+      |node| {
+        self.max_starts.get(node).copied().unwrap_or_default() >= threshold
+      },
+      |index| {
+        self
+          .starts
+          .get(index)
+          .is_some_and(|start| *start >= threshold)
+      },
+    )
+  }
+
+  fn first_crossing(
+    &self,
+    from: usize,
+    to: usize,
+    left_start: u32,
+    left_end: u32,
+    excluded_label: usize,
+  ) -> CrossingOverlapSearch {
+    self.search(
+      from,
+      to,
+      |node| {
+        let right_crossing =
+          self.max_starts.get(node).copied().unwrap_or_default() > left_start
+            && self
+              .max_ends
+              .get(node)
+              .copied()
+              .unwrap_or_default()
+              .max_end_excluding(excluded_label)
+              .is_some_and(|end| end > left_end);
+        let left_crossing =
+          self.min_starts.get(node).copied().unwrap_or(u32::MAX) < left_start
+            && self
+              .min_ends
+              .get(node)
+              .copied()
+              .unwrap_or_default()
+              .min_end_excluding(excluded_label)
+              .is_some_and(|end| end < left_end);
+        right_crossing || left_crossing
+      },
+      |index| {
+        let start = self.starts.get(index).copied().unwrap_or_default();
+        let end = self
+          .max_ends
+          .get(self.leaf_count.saturating_add(index))
+          .copied()
+          .unwrap_or_default()
+          .max_end_excluding(excluded_label);
+        self.label_id(index) != excluded_label
+          && end.is_some_and(|end| {
+            (start > left_start && end > left_end)
+              || (start < left_start && end < left_end)
+          })
+      },
+    )
+  }
+
+  fn search(
+    &self,
+    from: usize,
+    to: usize,
+    node_may_match: impl Fn(usize) -> bool,
+    leaf_matches: impl Fn(usize) -> bool,
+  ) -> CrossingOverlapSearch {
+    #[cfg(test)]
+    let mut node_visits = 0_usize;
+    #[cfg(test)]
+    let mut record_visit = || {
+      node_visits = node_visits.saturating_add(1);
+    };
+    #[cfg(not(test))]
+    let mut record_visit = || {};
+    let index = Self::search_node(
+      TreeSearchParams {
+        node: 1,
+        node_start: 0,
+        node_end: self.leaf_count,
+        query_start: from,
+        query_end: to,
+      },
+      &node_may_match,
+      &leaf_matches,
+      &mut record_visit,
+    );
+    CrossingOverlapSearch {
+      index,
+      #[cfg(test)]
+      node_visits,
+    }
+  }
+
+  fn search_node(
+    params: TreeSearchParams,
+    node_may_match: &impl Fn(usize) -> bool,
+    leaf_matches: &impl Fn(usize) -> bool,
+    record_visit: &mut impl FnMut(),
+  ) -> Option<usize> {
+    if params.node_end <= params.query_start
+      || params.node_start >= params.query_end
+    {
+      return None;
+    }
+    record_visit();
+    if !node_may_match(params.node) {
+      return None;
+    }
+    if params.node_end.saturating_sub(params.node_start) == 1 {
+      return leaf_matches(params.node_start).then_some(params.node_start);
+    }
+
+    let midpoint = params
+      .node_start
+      .saturating_add(params.node_end.saturating_sub(params.node_start) >> 1);
+    Self::search_node(
+      TreeSearchParams {
+        node: params.node.saturating_mul(2),
+        node_start: params.node_start,
+        node_end: midpoint,
+        query_start: params.query_start,
+        query_end: params.query_end,
+      },
+      node_may_match,
+      leaf_matches,
+      record_visit,
+    )
+    .or_else(|| {
+      Self::search_node(
+        TreeSearchParams {
+          node: params.node.saturating_mul(2).saturating_add(1),
+          node_start: midpoint,
+          node_end: params.node_end,
+          query_start: params.query_start,
+          query_end: params.query_end,
+        },
+        node_may_match,
+        leaf_matches,
+        record_visit,
+      )
+    })
+  }
+}
+
+#[derive(Clone, Copy)]
+struct TreeSearchParams {
+  node: usize,
+  node_start: usize,
+  node_end: usize,
+  query_start: usize,
+  query_end: usize,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -906,7 +1396,7 @@ fn merge_adjacent_with_stats(
       continue;
     }
 
-    let gap = offsets.slice(previous.end, entity.start)?;
+    let gap = offsets.slice_ref(previous.end, entity.start)?;
     let gap_start = previous.end;
     let gap_end = entity.start;
     let legal_form_comma = (is_legal_form_organization(previous)
@@ -916,7 +1406,7 @@ fn merge_adjacent_with_stats(
     let mergeable = !has_locked_boundary(previous)
       && !legal_form_comma
       && entity.label != "country"
-      && is_mergeable_gap(&gap);
+      && is_mergeable_gap(gap);
     let gap_occupied = mergeable
       && occupancy_index.as_mut().map_or_else(
         || {
@@ -974,90 +1464,6 @@ fn remove_nested_same_label(
   }
 
   result
-}
-
-fn char_spans(text: &str) -> Vec<CharSpan> {
-  let mut spans = Vec::new();
-  let mut offset = 0_u32;
-
-  for ch in text.chars() {
-    let width = u32::try_from(ch.len_utf8()).unwrap_or(u32::MAX);
-    let end = offset.saturating_add(width);
-    spans.push(CharSpan {
-      start: offset,
-      end,
-      ch,
-    });
-    offset = end;
-  }
-
-  spans
-}
-
-fn word_boundaries(spans: &[CharSpan]) -> BTreeSet<u32> {
-  let mut boundaries = BTreeSet::new();
-  let mut run_start = None::<u32>;
-  let mut run_end = None::<u32>;
-
-  for (index, span) in spans.iter().enumerate() {
-    if is_word_body(span.ch) || is_word_connector_between(spans, index) {
-      if run_start.is_none() {
-        run_start = Some(span.start);
-      }
-      run_end = Some(span.end);
-      continue;
-    }
-
-    if let (Some(start), Some(end)) = (run_start.take(), run_end.take()) {
-      boundaries.insert(start);
-      boundaries.insert(end);
-    }
-  }
-
-  if let (Some(start), Some(end)) = (run_start, run_end) {
-    boundaries.insert(start);
-    boundaries.insert(end);
-  }
-
-  boundaries
-}
-
-fn is_word_connector_between(spans: &[CharSpan], index: usize) -> bool {
-  let Some(span) = spans.get(index) else {
-    return false;
-  };
-  if !is_word_connector(span.ch) {
-    return false;
-  }
-
-  let Some(previous) = index.checked_sub(1).and_then(|prev| spans.get(prev))
-  else {
-    return false;
-  };
-  let Some(next) = spans.get(index.saturating_add(1)) else {
-    return false;
-  };
-
-  is_word_body(previous.ch) && is_word_body(next.ch)
-}
-
-const fn is_word_connector(ch: char) -> bool {
-  matches!(ch, '\'' | '\u{2018}' | '\u{2019}' | '\u{02bc}' | '\u{ff07}')
-}
-
-fn is_word_body(ch: char) -> bool {
-  ch.is_alphanumeric() || is_combining_mark(ch)
-}
-
-const fn is_combining_mark(ch: char) -> bool {
-  matches!(
-    ch,
-    '\u{0300}'..='\u{036f}'
-      | '\u{1ab0}'..='\u{1aff}'
-      | '\u{1dc0}'..='\u{1dff}'
-      | '\u{20d0}'..='\u{20ff}'
-      | '\u{fe20}'..='\u{fe2f}'
-  )
 }
 
 fn word_start_at(
@@ -1312,12 +1718,22 @@ mod tests {
         })
         .collect::<Vec<_>>();
       let offsets = ByteOffsets::new(&full_text);
-      let spans = char_spans(&full_text);
-      let boundaries = word_boundaries(&spans);
+      let document = ResolutionDocument::new(&full_text);
+      let analysis = document.word_analysis();
 
       prop_assert_eq!(
-        fix_partial_words(&entities, &offsets, &spans, &boundaries)?,
-        fix_partial_words_legacy(&entities, &offsets, &spans, &boundaries)?,
+        fix_partial_words(
+          &entities,
+          &offsets,
+          &analysis.spans,
+          &analysis.boundaries,
+        )?,
+        fix_partial_words_legacy(
+          &entities,
+          &offsets,
+          &analysis.spans,
+          &analysis.boundaries,
+        )?,
       );
     }
 
@@ -1387,6 +1803,96 @@ mod tests {
         merge_adjacent_legacy(&entities, &offsets),
       );
     }
+
+    #[test]
+    fn indexed_cross_label_overlap_matches_legacy_scan(
+      characters in proptest::collection::vec(
+        prop_oneof![Just('a'), Just(' '), Just('é'), Just('東'), Just('🙂')],
+        0..96,
+      ),
+      raw_entities in proptest::collection::vec(
+        (any::<u16>(), any::<u16>(), 0_u8..4, 0_u8..4, 0_u8..5),
+        0..128,
+      ),
+    ) {
+      let full_text = characters.into_iter().collect::<String>();
+      let mut boundaries = full_text
+        .char_indices()
+        .map(|(index, _)| index)
+        .collect::<Vec<_>>();
+      boundaries.push(full_text.len());
+      let entities = raw_entities
+        .into_iter()
+        .map(|(raw_left, raw_right, label_index, source_index, score_index)| {
+          let left_index = usize::from(raw_left)
+            .checked_rem(boundaries.len())
+            .unwrap_or_default();
+          let right_index = usize::from(raw_right)
+            .checked_rem(boundaries.len())
+            .unwrap_or_default();
+          let left = boundaries.get(left_index).copied().unwrap_or_default();
+          let right = boundaries.get(right_index).copied().unwrap_or_default();
+          let start = left.min(right);
+          let end = left.max(right);
+          let label = match label_index {
+            0 => "person",
+            1 => crate::labels::ORGANIZATION_LABEL,
+            2 => "address",
+            _ => crate::labels::PHONE_NUMBER_LABEL,
+          };
+          let source = match source_index {
+            0 => DetectionSource::Ner,
+            1 => DetectionSource::Trigger,
+            2 => DetectionSource::Caller,
+            _ => DetectionSource::Regex,
+          };
+          PipelineEntity::detected(
+            u32::try_from(start).unwrap_or(u32::MAX),
+            u32::try_from(end).unwrap_or(u32::MAX),
+            label,
+            full_text.get(start..end).unwrap_or_default(),
+            f64::from(score_index) / 4.0,
+            source,
+          )
+        })
+        .collect::<Vec<_>>();
+      let offsets = ByteOffsets::new(&full_text);
+
+      prop_assert_eq!(
+        resolve_cross_label_overlaps_with_stats(&entities, &offsets)
+          .map(|(resolved, _)| resolved),
+        resolve_cross_label_overlaps_linear(&entities, &offsets),
+      );
+    }
+  }
+
+  #[test]
+  #[ignore = "release-mode scaling regression check"]
+  fn cross_label_overlap_containment_scaling_is_bounded() -> Result<()> {
+    let full_text = "x".repeat(SAME_LABEL_SCALING_ENTITY_COUNT + 1);
+    let entities = (0..SAME_LABEL_SCALING_ENTITY_COUNT)
+      .map(|index| {
+        PipelineEntity::detected(
+          0,
+          u32::try_from(index.saturating_add(1)).unwrap_or(u32::MAX),
+          if index % 2 == 0 { "person" } else { "address" },
+          "x",
+          0.9,
+          DetectionSource::Ner,
+        )
+      })
+      .collect::<Vec<_>>();
+    let offsets = ByteOffsets::new(&full_text);
+    let (resolved, stats) =
+      resolve_cross_label_overlaps_with_stats(&entities, &offsets)?;
+
+    assert_eq!(resolved, entities);
+    assert_eq!(stats.start_updates, 0);
+    let expected_searches = SAME_LABEL_SCALING_ENTITY_COUNT.saturating_mul(2);
+    assert_eq!(stats.searches, expected_searches);
+    assert_eq!(stats.node_visits, expected_searches);
+
+    Ok(())
   }
 
   #[test]
@@ -1394,8 +1900,8 @@ mod tests {
   fn fix_partial_words_same_label_scaling_is_bounded() -> Result<()> {
     let full_text = "word";
     let offsets = ByteOffsets::new(full_text);
-    let spans = char_spans(full_text);
-    let boundaries = word_boundaries(&spans);
+    let document = ResolutionDocument::new(full_text);
+    let analysis = document.word_analysis();
     let entities = (0..SAME_LABEL_SCALING_ENTITY_COUNT)
       .map(|index| {
         let start = u32::try_from(index % 4).unwrap_or(u32::MAX);
@@ -1410,8 +1916,12 @@ mod tests {
       })
       .collect::<Vec<_>>();
 
-    let (fixed, stats) =
-      fix_partial_words_with_stats(&entities, &offsets, &spans, &boundaries)?;
+    let (fixed, stats) = fix_partial_words_with_stats(
+      &entities,
+      &offsets,
+      &analysis.spans,
+      &analysis.boundaries,
+    )?;
 
     assert_eq!(fixed.len(), SAME_LABEL_SCALING_ENTITY_COUNT);
     assert!(

@@ -3,8 +3,9 @@ use crate::false_positives::filter_entity_false_positives;
 use crate::hotwords::apply_hotword_rules;
 use crate::processors::DenyListFilterData;
 use crate::resolution::{
-  BoundaryParams, PipelineEntity, enforce_boundary_consistency,
-  merge_and_dedup, sanitize_entities_with_source,
+  PipelineEntity, ResolutionDocument,
+  enforce_boundary_consistency_with_document, merge_and_dedup,
+  sanitize_entities_with_document,
 };
 use crate::signatures::{PersonSpanTerminators, PreparedSignatureData};
 use crate::types::{Result, SearchMatch};
@@ -30,6 +31,7 @@ impl PreparedEngine {
     diagnostics: &mut Option<&mut StaticRedactionDiagnostics>,
     event_stream: &mut DiagnosticEventStream<'_>,
   ) -> Result<Vec<PipelineEntity>> {
+    let document = ResolutionDocument::new(full_text);
     let pre_threshold_entities = self.prepare_pre_threshold_entities(
       detections,
       caller_entities,
@@ -68,11 +70,11 @@ impl PreparedEngine {
       merge_timer,
     )?;
     let boundary_timer = PhaseTimer::start();
-    let consistent = enforce_boundary_consistency(BoundaryParams {
-      entities: &merged,
-      full_text,
-      person_terminators: self.person_span_terminators(),
-    })?;
+    let consistent = enforce_boundary_consistency_with_document(
+      &merged,
+      &document,
+      self.person_span_terminators(),
+    )?;
     record_resolver_entities(
       diagnostics,
       event_stream,
@@ -83,7 +85,7 @@ impl PreparedEngine {
     )?;
     let sanitize_timer = PhaseTimer::start();
     let sanitized_entities =
-      sanitize_entities_with_source(&consistent, full_text)?;
+      sanitize_entities_with_document(&consistent, &document)?;
     let false_positive_filters =
       self.data.false_positive_filters.as_ref().or_else(|| {
         self
@@ -103,6 +105,7 @@ impl PreparedEngine {
     );
     resolved_entities = self.process_coreference_entities(
       full_text,
+      &document,
       resolved_entities,
       false_positive_filters,
       diagnostics.as_deref_mut(),
@@ -216,6 +219,7 @@ impl PreparedEngine {
   fn process_coreference_entities(
     &self,
     full_text: &str,
+    document: &ResolutionDocument<'_>,
     existing_entities: Vec<PipelineEntity>,
     false_positive_filters: Option<&DenyListFilterData>,
     mut diagnostics: Option<&mut StaticRedactionDiagnostics>,
@@ -240,12 +244,12 @@ impl PreparedEngine {
 
     let merged =
       merge_and_dedup(&[existing_entities, coreference_entities].concat());
-    let consistent = enforce_boundary_consistency(BoundaryParams {
-      entities: &merged,
-      full_text,
-      person_terminators: self.person_span_terminators(),
-    })?;
-    let sanitized = sanitize_entities_with_source(&consistent, full_text)?;
+    let consistent = enforce_boundary_consistency_with_document(
+      &merged,
+      document,
+      self.person_span_terminators(),
+    )?;
+    let sanitized = sanitize_entities_with_document(&consistent, document)?;
     let filtered = filter_entity_false_positives(
       sanitized,
       full_text,

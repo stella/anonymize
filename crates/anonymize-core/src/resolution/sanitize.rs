@@ -1,7 +1,7 @@
-use crate::byte_offsets::ByteOffsets;
 use crate::types::Result;
 
 use super::common::{byte_len, is_caller_owned};
+use super::document::ResolutionDocument;
 use super::{DetectionSource, PipelineEntity, SourceDetail};
 
 const LEGAL_PERIOD_SUFFIXES: &str =
@@ -28,11 +28,10 @@ pub fn sanitize_entities(entities: &[PipelineEntity]) -> Vec<PipelineEntity> {
   sanitized
 }
 
-pub(crate) fn sanitize_entities_with_source(
+pub(crate) fn sanitize_entities_with_document(
   entities: &[PipelineEntity],
-  full_text: &str,
+  document: &ResolutionDocument<'_>,
 ) -> Result<Vec<PipelineEntity>> {
-  let offsets = ByteOffsets::new(full_text);
   let mut sanitized = Vec::new();
 
   for entity in entities {
@@ -41,8 +40,8 @@ pub(crate) fn sanitize_entities_with_source(
       continue;
     }
 
-    let raw_text = offsets.slice(entity.start, entity.end)?;
-    let Some(cleaned) = clean_entity_text(entity, &raw_text) else {
+    let raw_text = document.slice_ref(entity.start, entity.end)?;
+    let Some(cleaned) = clean_entity_text(entity, raw_text) else {
       continue;
     };
     sanitized.push(cleaned);
