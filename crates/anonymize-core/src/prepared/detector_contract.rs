@@ -17,8 +17,9 @@ use crate::triggers::{PreparedTriggerData, process_trigger_matches};
 use crate::types::{Error, Result, SearchMatch};
 
 use super::PreparedEngine;
-use super::detector_document::DetectorDocument;
+use super::prepared_document::PreparedDocument;
 use super::results::PreparedEngineMatches;
+use super::rule_contract::{RulePack, RuleSpec};
 use super::support_resources::SupportResourceId;
 use super::timing::{StaticEntityPasses, TimedEntities};
 
@@ -72,146 +73,38 @@ impl StaticDetectorInput {
         | Self::DenyListEntities
     )
   }
-
-  const fn bit(self) -> u32 {
-    match self {
-      Self::FullText => 1 << 0,
-      Self::RegexMatches => 1 << 1,
-      Self::CustomRegexMatches => 1 << 2,
-      Self::LiteralMatches => 1 << 3,
-      Self::RegexMeta => 1 << 4,
-      Self::CustomRegexMeta => 1 << 5,
-      Self::DenyListData => 1 << 6,
-      Self::GazetteerData => 1 << 7,
-      Self::CountryData => 1 << 8,
-      Self::DateData => 1 << 9,
-      Self::MonetaryData => 1 << 10,
-      Self::TriggerData => 1 << 11,
-      Self::TitleTokens => 1 << 12,
-      Self::SignatureData => 1 << 13,
-      Self::LegalFormData => 1 << 14,
-      Self::NameCorpusData => 1 << 15,
-      Self::AddressSeedData => 1 << 16,
-      Self::ContextEntities => 1 << 17,
-      Self::DenyListEntities => 1 << 18,
-    }
-  }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) struct StaticDetectorComplexity {
-  additive_mask: u32,
-  domain_count: u32,
-}
-
-impl StaticDetectorComplexity {
-  #[allow(clippy::indexing_slicing)]
-  pub(super) const fn additive(
-    additive_domains: &'static [StaticDetectorInput],
-  ) -> Self {
-    let mut additive_mask = 0;
-    let mut domain_count = 0_u32;
-    let mut index = 0;
-    while index < additive_domains.len() {
-      // SAFETY: the loop condition proves `index` is within the slice.
-      additive_mask |= additive_domains[index].bit();
-      domain_count = domain_count.saturating_add(1);
-      index = index.saturating_add(1);
-    }
-    Self {
-      additive_mask,
-      domain_count,
-    }
-  }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) struct StaticDetectorSpec {
-  id: StaticDetectorId,
-  diagnostic_stage: DiagnosticStage,
-  declared_inputs: &'static [StaticDetectorInput],
-  dependencies: &'static [StaticDetectorId],
-  support_resources: &'static [SupportResourceId],
-  complexity: StaticDetectorComplexity,
-}
+pub(super) type StaticDetectorSpec = RuleSpec<
+  StaticDetectorId,
+  StaticDetectorInput,
+  SupportResourceId,
+  DiagnosticStage,
+>;
 
 impl StaticDetectorSpec {
-  pub(super) const fn define(
-    id: StaticDetectorId,
-    diagnostic_stage: DiagnosticStage,
-  ) -> Self {
-    Self {
-      id,
-      diagnostic_stage,
-      declared_inputs: &[],
-      dependencies: &[],
-      support_resources: &[],
-      complexity: StaticDetectorComplexity::additive(&[]),
-    }
-  }
-
-  pub(super) const fn requires(
-    mut self,
-    declared_inputs: &'static [StaticDetectorInput],
-  ) -> Self {
-    self.declared_inputs = declared_inputs;
-    self
-  }
-
-  pub(super) const fn after(
-    mut self,
-    dependencies: &'static [StaticDetectorId],
-  ) -> Self {
-    self.dependencies = dependencies;
-    self
-  }
-
-  pub(super) const fn uses(
-    mut self,
-    support_resources: &'static [SupportResourceId],
-  ) -> Self {
-    self.support_resources = support_resources;
-    self
-  }
-
-  pub(super) const fn scales_additively_in(
-    mut self,
-    domains: &'static [StaticDetectorInput],
-  ) -> Self {
-    self.complexity = StaticDetectorComplexity::additive(domains);
-    self
-  }
-
-  pub(super) const fn id(self) -> StaticDetectorId {
-    self.id
-  }
-
   pub(super) const fn diagnostic_stage(self) -> DiagnosticStage {
-    self.diagnostic_stage
-  }
-
-  #[cfg(test)]
-  pub(super) const fn declared_inputs(self) -> &'static [StaticDetectorInput] {
-    self.declared_inputs
-  }
-
-  pub(super) const fn dependencies(self) -> &'static [StaticDetectorId] {
-    self.dependencies
-  }
-
-  pub(super) const fn support_resources(self) -> &'static [SupportResourceId] {
-    self.support_resources
+    self.stage()
   }
 
   pub(super) fn complexity_covers_growing_inputs(self) -> bool {
-    let expected_mask = self
-      .declared_inputs
+    let growing_inputs = self
+      .declared_inputs()
       .iter()
       .copied()
-      .filter(|input| input.is_growing())
-      .fold(0_u32, |mask, input| mask | input.bit());
-    self.complexity.additive_mask == expected_mask
-      && self.complexity.domain_count == expected_mask.count_ones()
+      .filter(|input| input.is_growing());
+    let domains = self.additive_scaling_domains();
+    growing_inputs.clone().all(|input| {
+      domains.iter().filter(|domain| **domain == input).count() == 1
+    }) && domains.iter().all(|domain| {
+      domain.is_growing()
+        && self.declared_inputs().contains(domain)
+        && domains
+          .iter()
+          .filter(|candidate| *candidate == domain)
+          .count()
+          == 1
+    })
   }
 
   pub(super) fn validate_complexity(self) -> Result<()> {
@@ -222,23 +115,23 @@ impl StaticDetectorSpec {
       field: "detector complexity contract",
       reason: format!(
         "detector {:?} must declare each growing input exactly once as an additive scaling domain",
-        self.id,
+        self.id(),
       ),
     })
   }
 
   pub(super) fn has_declared_inputs(self) -> bool {
-    !self.declared_inputs.is_empty()
+    !self.declared_inputs().is_empty()
       || self
-        .support_resources
+        .support_resources()
         .iter()
         .any(|resource| resource.spec().detector_input().is_some())
   }
 
   pub(super) fn declares_input(self, input: StaticDetectorInput) -> bool {
-    self.declared_inputs.contains(&input)
+    self.declared_inputs().contains(&input)
       || self
-        .support_resources
+        .support_resources()
         .iter()
         .any(|resource| resource.spec().detector_input() == Some(input))
   }
@@ -251,21 +144,21 @@ impl StaticDetectorSpec {
       field: "detector rule inputs",
       reason: format!(
         "detector {:?} accessed undeclared input {input:?}",
-        self.id,
+        self.id(),
       ),
     })
   }
 
   #[cfg(test)]
   fn require_dependency(self, detector: StaticDetectorId) -> Result<()> {
-    if self.dependencies.contains(&detector) {
+    if self.dependencies().contains(&detector) {
       return Ok(());
     }
     Err(Error::InvalidStaticData {
       field: "detector rule dependencies",
       reason: format!(
         "detector {:?} accessed undeclared dependency {detector:?}",
-        self.id,
+        self.id(),
       ),
     })
   }
@@ -275,21 +168,21 @@ pub(super) struct StaticDetectorContext<'a> {
   spec: StaticDetectorSpec,
   engine: &'a PreparedEngine,
   matches: &'a PreparedEngineMatches,
-  document: DetectorDocument<'a>,
+  document: PreparedDocument<'a>,
 }
 
 impl<'a> StaticDetectorContext<'a> {
   pub(super) const fn new(
-    spec: StaticDetectorSpec,
+    spec: &StaticDetectorSpec,
     engine: &'a PreparedEngine,
     matches: &'a PreparedEngineMatches,
     full_text: &'a str,
   ) -> Self {
     Self {
-      spec,
+      spec: *spec,
       engine,
       matches,
-      document: DetectorDocument::new(full_text),
+      document: PreparedDocument::new(full_text),
     }
   }
 
@@ -473,7 +366,7 @@ impl<'a> StaticDetectorContext<'a> {
   }
 
   fn full_text(&self) -> Result<&'a str> {
-    self.document.full_text(self.spec)
+    self.document.text(&self.spec)
   }
 
   fn regex_matches(&self) -> Result<&'a [SearchMatch]> {
@@ -616,13 +509,13 @@ pub(super) struct DetectorDependencies<'a> {
 
 impl<'a> DetectorDependencies<'a> {
   const fn new(
-    spec: StaticDetectorSpec,
+    spec: &StaticDetectorSpec,
     passes: &'a StaticEntityPasses,
   ) -> Self {
     Self {
       detector: spec.id(),
       declared_dependencies: spec.dependencies(),
-      declared_inputs: spec.declared_inputs,
+      declared_inputs: spec.declared_inputs(),
       passes,
     }
   }
@@ -693,47 +586,22 @@ pub(super) type StaticDetectFn = for<'a, 'p, 'd> fn(
 ) -> Result<TimedEntities>;
 
 #[derive(Clone, Copy)]
-pub(super) struct StaticDetectorModule {
-  name: &'static str,
-  rules: &'static [StaticDetectorRule],
-}
-
-impl StaticDetectorModule {
-  pub(super) const fn declare(
-    name: &'static str,
-    rules: &'static [StaticDetectorRule],
-  ) -> Self {
-    Self { name, rules }
-  }
-
-  pub(super) const fn name(self) -> &'static str {
-    self.name
-  }
-
-  pub(super) const fn rules(self) -> &'static [StaticDetectorRule] {
-    self.rules
-  }
-
-  pub(super) const fn is_empty(self) -> bool {
-    self.rules.is_empty()
-  }
-}
-
-#[derive(Clone, Copy)]
 pub(super) struct StaticDetectorRule {
   spec: StaticDetectorSpec,
   is_active: StaticDetectorActiveFn,
   detect: StaticDetectFn,
 }
 
+pub(super) type StaticDetectorModule = RulePack<StaticDetectorRule>;
+
 impl StaticDetectorRule {
   pub(super) const fn declare(
-    spec: StaticDetectorSpec,
+    spec: &StaticDetectorSpec,
     is_active: StaticDetectorActiveFn,
     detect: StaticDetectFn,
   ) -> Self {
     Self {
-      spec,
+      spec: *spec,
       is_active,
       detect,
     }
@@ -758,9 +626,19 @@ impl StaticDetectorRule {
   ) -> Result<TimedEntities> {
     (self.detect)(
       context,
-      DetectorDependencies::new(self.spec, passes),
+      DetectorDependencies::new(&self.spec, passes),
       diagnostics,
     )
+  }
+
+  #[cfg(test)]
+  pub(super) const fn active_hook(self) -> StaticDetectorActiveFn {
+    self.is_active
+  }
+
+  #[cfg(test)]
+  pub(super) const fn detect_hook(self) -> StaticDetectFn {
+    self.detect
   }
 }
 
@@ -784,7 +662,7 @@ macro_rules! static_detector_rules {
       $visibility const $rule_name:
         $crate::prepared::detector_contract::StaticDetectorRule =
         $crate::prepared::detector_contract::StaticDetectorRule::declare(
-          $crate::prepared::detector_contract::StaticDetectorSpec::define(
+          &$crate::prepared::detector_contract::StaticDetectorSpec::define(
             $id,
             $stage,
           )
@@ -870,13 +748,13 @@ mod tests {
     )
     .after(&[StaticDetectorId::DenyList]);
     let result =
-      DetectorDependencies::new(missing_input, &passes).deny_list_entities();
+      DetectorDependencies::new(&missing_input, &passes).deny_list_entities();
     assert!(result.is_err(), "dependency input must fail closed");
 
     let declared =
       missing_input.requires(&[StaticDetectorInput::DenyListEntities]);
     assert!(
-      DetectorDependencies::new(declared, &passes)
+      DetectorDependencies::new(&declared, &passes)
         .deny_list_entities()
         .is_ok(),
       "declaring both the dependency and entity input must permit access",
@@ -891,7 +769,7 @@ mod tests {
       DiagnosticStage::EntityAddressSeed,
     )
     .after(&[StaticDetectorId::Regex]);
-    let result = DetectorDependencies::new(missing_input, &passes)
+    let result = DetectorDependencies::new(&missing_input, &passes)
       .collect_context_entities();
     assert!(result.is_err(), "context input must fail closed");
   }

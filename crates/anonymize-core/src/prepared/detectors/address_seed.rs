@@ -60,10 +60,7 @@ fn detect_address_seed(
     context_elapsed_us,
     context.input_bytes(),
   );
-  Ok(TimedEntities {
-    entities: detection.entities,
-    elapsed_us: elapsed_us(start),
-  })
+  TimedEntities::new(detection.entities, elapsed_us(start))
 }
 
 fn record_address_seed_profile(

@@ -60,7 +60,7 @@ impl PreparedEngine {
     for rule in static_entity_rules() {
       let spec = rule.spec();
       spec.validate_complexity()?;
-      let context = StaticDetectorContext::new(spec, self, matches, full_text);
+      let context = StaticDetectorContext::new(&spec, self, matches, full_text);
       debug_assert!(
         spec.has_declared_inputs(),
         "static detector registry entries must declare required inputs",
@@ -100,7 +100,7 @@ fn record_static_entity_diagnostics(
     );
     record_detector_entities(
       diagnostics,
-      detector,
+      &detector,
       passes.detector_entities(detector.id()),
       full_text,
     );

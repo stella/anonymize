@@ -42,10 +42,7 @@ fn detect_name_corpus(
     &detection.profile,
     context.input_bytes(),
   );
-  Ok(TimedEntities {
-    entities: detection.entities,
-    elapsed_us: elapsed_us(start),
-  })
+  TimedEntities::new(detection.entities, elapsed_us(start))
 }
 
 fn record_name_corpus_profile(
