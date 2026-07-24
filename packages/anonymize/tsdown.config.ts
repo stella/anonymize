@@ -11,6 +11,7 @@ export default defineConfig([
       "src/feedback-sanitize.ts",
       "src/native.ts",
       "src/native-node.ts",
+      "src/native-runtime.ts",
     ],
     outDir: "dist",
     format: ["esm"],

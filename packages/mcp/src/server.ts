@@ -194,7 +194,7 @@ export const runServer = async (): Promise<void> => {
         : { tesseractPath: arguments_.tesseractPath }),
     },
   });
-  const server = createAnonymizeMcpServer(service);
+  const server = await createAnonymizeMcpServer(service);
   const transport = new StdioServerTransport();
   await runMcpLifecycle({
     closeServer: () => server.close(),

@@ -46,6 +46,11 @@
       "types": "./dist/native-node.d.mts",
       "import": "./dist/native-node.mjs",
       "default": "./dist/native-node.mjs"
+    },
+    "./native-runtime": {
+      "types": "./dist/native-runtime.d.mts",
+      "import": "./dist/native-runtime.mjs",
+      "default": "./dist/native-runtime.mjs"
     }
   },
   "types": "dist/index.d.mts",
@@ -99,6 +104,7 @@
     }
   },
   "optionalDependencies": {
+    "@stll/anonymize-wasm": "2.4.1",
     "@stll/anonymize-darwin-arm64": "2.4.1",
     "@stll/anonymize-darwin-x64": "2.4.1",
     "@stll/anonymize-linux-arm64-gnu": "2.4.1",
