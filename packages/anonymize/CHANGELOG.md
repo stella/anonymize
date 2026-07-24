@@ -1,5 +1,37 @@
 # Changelog
 
+## 2.4.2
+
+### Patch Changes
+
+- [#372](https://github.com/stella/anonymize/pull/372) [`e019d1d`](https://github.com/stella/anonymize/commit/e019d1dee10a76660fd7cf041dfffe165acc1c24) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Stop address expansion at contextual delivery or notice phrases after an address. Conjunctions remain per-language grammar and only become boundaries when composed with a same-language address-exit follower, preserving address components such as `Suite A and B`.
+
+- [#367](https://github.com/stella/anonymize/pull/367) [`458db0a`](https://github.com/stella/anonymize/commit/458db0a9c9b4eaa778af93be4e453c8057365f24) Thanks [@cursor](https://github.com/apps/cursor)! - Reject birth-number detections that contain no digits, and trim trailing letterhead bullets from entity values.
+
+- [#386](https://github.com/stella/anonymize/pull/386) [`8bb15b6`](https://github.com/stella/anonymize/commit/8bb15b632af0c045fdfd87559e9a330fa802cad1) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Consume complete space-separated clinical identifiers and accept localized quotation marks as identifier boundaries.
+
+- [#384](https://github.com/stella/anonymize/pull/384) [`9ed1c05`](https://github.com/stella/anonymize/commit/9ed1c05d6cfb06ef66d7a6be4ed7935a4fa87fca) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Detect labeled medical-record, patient, and health-card identifiers in every supported content language. Consume complete bounded alphanumeric identifier values and reject partial-token redactions.
+
+- [#383](https://github.com/stella/anonymize/pull/383) [`3073898`](https://github.com/stella/anonymize/commit/3073898db52a5b178efac30cffc37875f3b81b13) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Detect EDGAR notice-block counsel names whose unambiguous given names were missing from the scoped English first-name corpus.
+
+- [#391](https://github.com/stella/anonymize/pull/391) [`9821929`](https://github.com/stella/anonymize/commit/982192969e618a49ea5989ce6961ce68d33e89f2) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Recognize English legal-notice exit phrases after addresses without applying that grammar to other language scopes.
+
+- [#396](https://github.com/stella/anonymize/pull/396) [`e1ca10d`](https://github.com/stella/anonymize/commit/e1ca10d4260fb4911fedfa921d0cc96687803449) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Require the independently versioned data package that contains the language
+  and clinical data shipped with this release.
+
+- [#393](https://github.com/stella/anonymize/pull/393) [`ae46b72`](https://github.com/stella/anonymize/commit/ae46b720c37dd7b5c84fbe419971ff3b7df8db0e) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Keep legal-form detection responsive in large documents by indexing suffixes
+  used to separate organization lists instead of exhaustively rescanning them.
+
+- [#377](https://github.com/stella/anonymize/pull/377) [`aaff4d7`](https://github.com/stella/anonymize/commit/aaff4d7e369eb3b76f420a648f53a7a698011d11) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Detect person names in structured contract-party fields while rejecting role titles and organization values.
+
+- [#390](https://github.com/stella/anonymize/pull/390) [`a66cd04`](https://github.com/stella/anonymize/commit/a66cd04e2fd0af5ab6c54cac0bbf6efd03edc492) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Move the last two hardcoded false-positive vocabularies into per-language data: building unit designators (`unit-designators.json`) and in-name connective words (`in-name-connectors.json`). Both are now threaded through the prepared config's false-positive filters instead of inline Rust consts. Behavior-neutral (same word sets). The `check:vocab` gate now also skips Rust `#[cfg(test)]` modules so test fixtures do not trip it, and its allowlist no longer carries any migration debt.
+
+- [#388](https://github.com/stella/anonymize/pull/388) [`d937fd6`](https://github.com/stella/anonymize/commit/d937fd67b08a3ee73e4af7e67c656c95edeb6af4) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Remove redundant hardcoded sentence-verb and address-stop seeds. First-name stopword exclusions now come only from the effective language-scoped name corpus, preventing one language's names from changing another language's deny-list behavior.
+
+- [#381](https://github.com/stella/anonymize/pull/381) [`b8adef9`](https://github.com/stella/anonymize/commit/b8adef93d03260f736f5e642bacbfbcf7842fd3b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Detect organization names containing non-ASCII characters before short legal forms such as AG, SA, and SE while keeping short-form ambiguity scoped to the configured content language.
+
+- [#392](https://github.com/stella/anonymize/pull/392) [`cced835`](https://github.com/stella/anonymize/commit/cced8358593a4381d7323a26ad7bad99547b69af) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add sourced English first-name coverage for Kai and Sam.
+
 ## 2.4.1
 
 ### Patch Changes
