@@ -125,9 +125,12 @@ Interactive prompt:
   and agents never block on input.
 
 Exit codes:
-  0  success
-  1  runtime error (message on stderr)
-  2  usage error (message on stderr)
+  0  success                  4  not found (missing path)
+  1  runtime error            5  unsupported format
+  2  usage error              6  output already exists
+  3  path not allowed         7  session unavailable
+                              8  dependency missing
+  Messages and, for coded failures, a "hint:" line print on stderr.
 
 JSON output (--json):
   { "entityCount": number,
