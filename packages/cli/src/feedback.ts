@@ -58,22 +58,33 @@ const renderHuman = (
     "",
   ].join("\n");
 
+/** Parse the feedback flags, rethrowing parse errors as usage errors (exit 2). */
+const parseFeedbackArgs = (argv: readonly string[]) => {
+  try {
+    return parseArgs({
+      args: [...argv],
+      allowPositionals: true,
+      options: {
+        kind: { type: "string" },
+        title: { type: "string" },
+        body: { type: "string" },
+        json: { type: "boolean" },
+        help: { type: "boolean", short: "h" },
+      },
+    });
+  } catch (error) {
+    throw new UsageError(
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+};
+
 export const runFeedbackCommand = async ({
   argv,
   readStdin,
   write,
 }: FeedbackCommandOptions): Promise<void> => {
-  const { values, positionals } = parseArgs({
-    args: [...argv],
-    allowPositionals: true,
-    options: {
-      kind: { type: "string" },
-      title: { type: "string" },
-      body: { type: "string" },
-      json: { type: "boolean" },
-      help: { type: "boolean", short: "h" },
-    },
-  });
+  const { values, positionals } = parseFeedbackArgs(argv);
   if (values.help === true) {
     write(FEEDBACK_HELP);
     return;

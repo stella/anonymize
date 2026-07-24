@@ -54,6 +54,8 @@ import {
 } from "node:path";
 import * as z from "zod/v4";
 
+import pkg from "../package.json" with { type: "json" };
+
 import { DurableSessionStore } from "./durable-sessions";
 
 const TEXT_MAX_BYTES = 64 * 1024 * 1024;
@@ -1548,14 +1550,16 @@ Sessions: reversible replace mode uses a session; a restore needs the same sessi
 
 Hit a bug or a gap? Use send_feedback: it sanitizes your text locally and returns a prefilled GitHub issue URL you open and submit yourself. It sends nothing over the network.`;
 
-export const createAnonymizeMcpServer = async (
+export const createAnonymizeMcpServer = (
   service: LocalAnonymizeService,
-): Promise<McpServer> => {
-  await preloadNativeBinding();
+): McpServer => {
+  // Synchronous by contract (public factory). The server version comes from the
+  // package manifest, not a native call, so construction touches no binding; the
+  // wasm binding is preloaded lazily on the first operation (see `#runOperation`).
   const server = new McpServer(
     {
       name: "stella-anonymize-local",
-      version: nativeNodeSurface.native_package_version(),
+      version: pkg.version,
     },
     {
       instructions: MCP_INSTRUCTIONS,
