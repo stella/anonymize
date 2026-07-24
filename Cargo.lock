@@ -1369,8 +1369,8 @@ dependencies = [
 
 [[package]]
 name = "stella-text-search-core"
-version = "1.0.6"
-source = "git+https://github.com/stella/text-search?rev=bf3c572b6f9df046e89ba0767d459483aa4a77cc#bf3c572b6f9df046e89ba0767d459483aa4a77cc"
+version = "1.0.8"
+source = "git+https://github.com/stella/text-search?tag=v1.0.8#9e35db729fbb90cc0680d8cbf137c052516df432"
 dependencies = [
  "stella-aho-corasick-core",
  "stella-fuzzy-search-core",
