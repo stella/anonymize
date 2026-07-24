@@ -4,7 +4,9 @@ use crate::byte_offsets::ByteOffsets;
 use crate::signatures::PersonSpanTerminators;
 use crate::types::Result;
 
-use super::common::{byte_len, contains_span, entity_len, is_caller_owned};
+#[cfg(test)]
+use super::common::contains_span;
+use super::common::{byte_len, entity_len, is_caller_owned};
 use super::document::{CharSpan, ResolutionDocument};
 use super::{DetectionSource, PipelineEntity};
 
@@ -27,14 +29,14 @@ pub fn enforce_boundary_consistency(
   } = params;
   let document = ResolutionDocument::new(full_text);
   enforce_boundary_consistency_with_document(
-    entities,
+    entities.to_vec(),
     &document,
     person_terminators,
   )
 }
 
 pub(crate) fn enforce_boundary_consistency_with_document(
-  entities: &[PipelineEntity],
+  entities: Vec<PipelineEntity>,
   document: &ResolutionDocument<'_>,
   person_terminators: PersonSpanTerminators<'_>,
 ) -> Result<Vec<PipelineEntity>> {
@@ -49,15 +51,15 @@ pub(crate) fn enforce_boundary_consistency_with_document(
   // Truncation runs after word-boundary expansion so expansion cannot push a
   // person span back across a terminator it was just pulled behind.
   let truncated = truncate_person_spans(
-    &fixed,
+    fixed,
     document.text(),
     &offsets,
     person_terminators,
   )?;
-  let resolved = resolve_cross_label_overlaps(&truncated, &offsets)?;
-  let deduped = deduplicate_spans(&resolved);
-  let merged = merge_adjacent(&deduped, &offsets)?;
-  Ok(remove_nested_same_label(&merged))
+  let resolved = resolve_cross_label_overlaps(truncated, &offsets)?;
+  let deduped = deduplicate_spans(resolved);
+  let merged = merge_adjacent(deduped, &offsets)?;
+  Ok(remove_nested_same_label(merged))
 }
 
 /// Stop person spans at a signature-stamp phrase or a form-field label.
@@ -65,27 +67,27 @@ pub(crate) fn enforce_boundary_consistency_with_document(
 /// Stamp phrases are configured terminators, while field labels are exact,
 /// language-keyed vocabulary from `signature-detection.json`.
 fn truncate_person_spans(
-  entities: &[PipelineEntity],
+  entities: Vec<PipelineEntity>,
   full_text: &str,
   offsets: &ByteOffsets<'_>,
   terminators: PersonSpanTerminators<'_>,
 ) -> Result<Vec<PipelineEntity>> {
   if terminators.stamp_phrases.is_empty() && terminators.field_labels.is_empty()
   {
-    return Ok(entities.to_vec());
+    return Ok(entities);
   }
 
   let mut result = Vec::with_capacity(entities.len());
-  for entity in entities {
+  for mut entity in entities {
     if entity.label != crate::labels::PERSON_LABEL
-      || has_locked_boundary(entity)
+      || has_locked_boundary(&entity)
     {
-      result.push(entity.clone());
+      result.push(entity);
       continue;
     }
 
     if let Some(prefix_end) =
-      leading_terminator_end(full_text, entity, terminators)
+      leading_terminator_end(full_text, &entity, terminators)
     {
       // A detector may include both a leading signing-software stamp and the
       // signer. Retain the name after the exact terminator; only discard the
@@ -94,16 +96,15 @@ fn truncate_person_spans(
       if trimmed_start >= entity.end {
         continue;
       }
-      let mut adjusted = entity.clone();
-      adjusted.start = trimmed_start;
-      adjusted.text = offsets.slice(trimmed_start, entity.end)?;
-      result.push(adjusted);
+      entity.start = trimmed_start;
+      entity.text = offsets.slice(trimmed_start, entity.end)?;
+      result.push(entity);
       continue;
     }
 
-    let Some(cut) = terminator_start_within(full_text, entity, terminators)
+    let Some(cut) = terminator_start_within(full_text, &entity, terminators)
     else {
-      result.push(entity.clone());
+      result.push(entity);
       continue;
     };
 
@@ -112,10 +113,9 @@ fn truncate_person_spans(
       continue;
     }
 
-    let mut adjusted = entity.clone();
-    adjusted.end = trimmed_end;
-    adjusted.text = offsets.slice(entity.start, trimmed_end)?;
-    result.push(adjusted);
+    entity.end = trimmed_end;
+    entity.text = offsets.slice(entity.start, trimmed_end)?;
+    result.push(entity);
   }
 
   Ok(result)
@@ -524,9 +524,6 @@ struct BoundaryOverlapIndexes {
   ends: BoundaryPositionIndex,
 }
 
-// Linear scans avoid index construction overhead on ordinary small inputs.
-const BOUNDARY_INDEX_MIN_ENTITIES: usize = 64;
-
 impl BoundaryOverlapIndexes {
   fn new(entities: &[PipelineEntity]) -> Self {
     let mut labels = BTreeMap::<&str, usize>::new();
@@ -550,7 +547,7 @@ impl BoundaryOverlapIndexes {
 }
 
 fn fix_partial_words(
-  entities: &[PipelineEntity],
+  entities: Vec<PipelineEntity>,
   offsets: &ByteOffsets<'_>,
   spans: &[CharSpan],
   boundaries: &BTreeSet<u32>,
@@ -560,36 +557,31 @@ fn fix_partial_words(
 }
 
 fn fix_partial_words_with_stats(
-  entities: &[PipelineEntity],
+  mut entities: Vec<PipelineEntity>,
   offsets: &ByteOffsets<'_>,
   spans: &[CharSpan],
   boundaries: &BTreeSet<u32>,
 ) -> Result<(Vec<PipelineEntity>, BoundaryFixStats)> {
-  let mut sorted = entities.to_vec();
-  sorted.sort_by_key(|entity| entity.start);
-  let indexes = (sorted.len() >= BOUNDARY_INDEX_MIN_ENTITIES)
-    .then(|| BoundaryOverlapIndexes::new(&sorted));
-  let mut fixed = Vec::with_capacity(sorted.len());
+  entities.sort_by_key(|entity| entity.start);
+  let indexes = BoundaryOverlapIndexes::new(&entities);
   #[cfg(test)]
   let mut stats = BoundaryFixStats::default();
   #[cfg(not(test))]
   let stats = BoundaryFixStats::default();
 
-  for (index, entity) in sorted.iter().enumerate() {
+  for (index, entity) in entities.iter_mut().enumerate() {
     if has_locked_boundary(entity) || has_detector_locked_boundary(entity) {
-      fixed.push(entity.clone());
       continue;
     }
 
     if entity.text != offsets.slice_ref(entity.start, entity.end)? {
-      fixed.push(entity.clone());
       continue;
     }
 
     let mut new_start = word_start_at(entity.start, boundaries, spans);
     let mut new_end = word_end_at(entity.end, boundaries, spans);
 
-    if let Some(indexes) = indexes.as_ref() {
+    {
       let label_id = indexes.label_ids.get(index).copied().unwrap_or_default();
       let left =
         indexes
@@ -608,46 +600,29 @@ fn fix_partial_words_with_stats(
       if let Some(start) = right.position {
         new_end = new_end.min(start);
       }
-    } else {
-      for (other_index, other) in sorted.iter().enumerate() {
-        if other_index == index || other.label == entity.label {
-          continue;
-        }
-        if other.end > new_start && other.end <= entity.start {
-          new_start = new_start.max(other.end);
-        }
-        if other.start >= entity.end && other.start < new_end {
-          new_end = new_end.min(other.start);
-        }
-      }
     }
 
     if new_start == entity.start && new_end == entity.end {
-      fixed.push(entity.clone());
       continue;
     }
 
-    let mut adjusted = entity.clone();
-    adjusted.start = new_start;
-    adjusted.end = new_end;
-    adjusted.text = offsets.slice(new_start, new_end)?;
-    fixed.push(adjusted);
+    entity.start = new_start;
+    entity.end = new_end;
+    entity.text = offsets.slice(new_start, new_end)?;
   }
 
-  Ok((fixed, stats))
+  Ok((entities, stats))
 }
 
 fn resolve_cross_label_overlaps(
-  entities: &[PipelineEntity],
+  entities: Vec<PipelineEntity>,
   offsets: &ByteOffsets<'_>,
 ) -> Result<Vec<PipelineEntity>> {
-  if entities.len() < BOUNDARY_INDEX_MIN_ENTITIES {
-    return resolve_cross_label_overlaps_linear(entities, offsets);
-  }
   resolve_cross_label_overlaps_with_stats(entities, offsets)
     .map(|(resolved, _)| resolved)
 }
 
+#[cfg(test)]
 fn resolve_cross_label_overlaps_linear(
   entities: &[PipelineEntity],
   offsets: &ByteOffsets<'_>,
@@ -720,24 +695,23 @@ fn resolve_cross_label_overlaps_linear(
 }
 
 fn resolve_cross_label_overlaps_with_stats(
-  entities: &[PipelineEntity],
+  mut entities: Vec<PipelineEntity>,
   offsets: &ByteOffsets<'_>,
 ) -> Result<(Vec<PipelineEntity>, CrossingOverlapStats)> {
-  let mut sorted = entities.to_vec();
-  sorted.sort_by_key(|entity| entity.start);
-  let mut index = CrossingOverlapIndex::new(&sorted);
+  entities.sort_by_key(|entity| entity.start);
+  let mut index = CrossingOverlapIndex::new(&entities);
   #[cfg(test)]
   let mut stats = CrossingOverlapStats::default();
   #[cfg(not(test))]
   let stats = CrossingOverlapStats::default();
 
-  for left_index in 0..sorted.len() {
+  for left_index in 0..entities.len() {
     let mut search_from = left_index.saturating_add(1);
-    while let Some(left) = sorted.get(left_index) {
+    while let Some(left) = entities.get(left_index) {
       let barrier = index.first_start_at_least(search_from, left.end);
       #[cfg(test)]
       stats.record_search(&barrier);
-      let search_end = barrier.index.unwrap_or(sorted.len());
+      let search_end = barrier.index.unwrap_or(entities.len());
       let crossing = index.first_crossing(
         search_from,
         search_end,
@@ -751,7 +725,7 @@ fn resolve_cross_label_overlaps_with_stats(
         break;
       };
 
-      let Some(right) = sorted.get(right_index) else {
+      let Some(right) = entities.get(right_index) else {
         break;
       };
       let left_len = entity_len(left);
@@ -770,7 +744,7 @@ fn resolve_cross_label_overlaps_with_stats(
 
       if left_wins {
         let new_start = left.end;
-        if let Some(right_mut) = sorted.get_mut(right_index) {
+        if let Some(right_mut) = entities.get_mut(right_index) {
           right_mut.start = new_start;
           right_mut.text = offsets.slice(new_start, right_mut.end)?;
         }
@@ -784,7 +758,7 @@ fn resolve_cross_label_overlaps_with_stats(
       }
 
       let new_end = right.start;
-      if let Some(left_mut) = sorted.get_mut(left_index) {
+      if let Some(left_mut) = entities.get_mut(left_index) {
         left_mut.end = new_end;
         left_mut.text = offsets.slice(left_mut.start, new_end)?;
       }
@@ -793,7 +767,7 @@ fn resolve_cross_label_overlaps_with_stats(
   }
 
   Ok((
-    sorted
+    entities
       .into_iter()
       .filter(|entity| entity.start < entity.end)
       .collect(),
@@ -801,20 +775,21 @@ fn resolve_cross_label_overlaps_with_stats(
   ))
 }
 
-fn deduplicate_spans(entities: &[PipelineEntity]) -> Vec<PipelineEntity> {
-  let mut seen = BTreeMap::<(u32, u32, String), PipelineEntity>::new();
-
-  for entity in entities {
-    let key = (entity.start, entity.end, entity.label.clone());
-    let replace = seen
-      .get(&key)
-      .is_none_or(|existing| entity.score.total_cmp(&existing.score).is_gt());
-    if replace {
-      seen.insert(key, entity.clone());
-    }
-  }
-
-  seen.into_values().collect()
+fn deduplicate_spans(mut entities: Vec<PipelineEntity>) -> Vec<PipelineEntity> {
+  entities.sort_by(|left, right| {
+    left
+      .start
+      .cmp(&right.start)
+      .then_with(|| left.end.cmp(&right.end))
+      .then_with(|| left.label.cmp(&right.label))
+      .then_with(|| right.score.total_cmp(&left.score))
+  });
+  entities.dedup_by(|right, left| {
+    left.start == right.start
+      && left.end == right.end
+      && left.label == right.label
+  });
+  entities
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -1258,15 +1233,16 @@ struct GapOccupancyResult {
 /// Start-sorted intervals activated once as the right edge advances. Keeping
 /// the two greatest ends from distinct labels makes each cross-label overlap
 /// query constant-time after amortized linear activation.
-struct GapOccupancyIndex<'a> {
-  entities: &'a [PipelineEntity],
+struct GapOccupancyIndex {
+  starts: Vec<u32>,
+  ends: Vec<u32>,
   label_ids: Vec<usize>,
   activation_cursor: usize,
   max_ends: CrossLabelMaxEnds,
 }
 
-impl<'a> GapOccupancyIndex<'a> {
-  fn new(entities: &'a [PipelineEntity]) -> Self {
+impl GapOccupancyIndex {
+  fn new(entities: &[PipelineEntity]) -> Self {
     let mut labels = BTreeMap::<&str, usize>::new();
     let label_ids = entities
       .iter()
@@ -1276,7 +1252,8 @@ impl<'a> GapOccupancyIndex<'a> {
       })
       .collect();
     Self {
-      entities,
+      starts: entities.iter().map(|entity| entity.start).collect(),
+      ends: entities.iter().map(|entity| entity.end).collect(),
       label_ids,
       activation_cursor: 0,
       max_ends: CrossLabelMaxEnds::default(),
@@ -1292,11 +1269,11 @@ impl<'a> GapOccupancyIndex<'a> {
     #[cfg(test)]
     let mut activated_entities = 0_usize;
     while self
-      .entities
+      .starts
       .get(self.activation_cursor)
-      .is_some_and(|entity| entity.start < gap_end)
+      .is_some_and(|start| *start < gap_end)
     {
-      let Some(entity) = self.entities.get(self.activation_cursor) else {
+      let Some(end) = self.ends.get(self.activation_cursor).copied() else {
         break;
       };
       let label_id = self
@@ -1304,10 +1281,7 @@ impl<'a> GapOccupancyIndex<'a> {
         .get(self.activation_cursor)
         .copied()
         .unwrap_or_default();
-      self.max_ends.insert(LabelEnd {
-        label_id,
-        end: entity.end,
-      });
+      self.max_ends.insert(LabelEnd { label_id, end });
       self.activation_cursor = self.activation_cursor.saturating_add(1);
       #[cfg(test)]
       {
@@ -1350,20 +1324,18 @@ impl MergeAdjacentStats {
 }
 
 fn merge_adjacent(
-  entities: &[PipelineEntity],
+  entities: Vec<PipelineEntity>,
   offsets: &ByteOffsets<'_>,
 ) -> Result<Vec<PipelineEntity>> {
   merge_adjacent_with_stats(entities, offsets).map(|(merged, _)| merged)
 }
 
 fn merge_adjacent_with_stats(
-  entities: &[PipelineEntity],
+  mut entities: Vec<PipelineEntity>,
   offsets: &ByteOffsets<'_>,
 ) -> Result<(Vec<PipelineEntity>, MergeAdjacentStats)> {
-  let mut sorted = entities.to_vec();
-  sorted.sort_by_key(|entity| entity.start);
-  let mut occupancy_index = (sorted.len() >= BOUNDARY_INDEX_MIN_ENTITIES)
-    .then(|| GapOccupancyIndex::new(&sorted));
+  entities.sort_by_key(|entity| entity.start);
+  let mut occupancy_index = GapOccupancyIndex::new(&entities);
   let mut result = Vec::<PipelineEntity>::new();
   let mut last_by_label = BTreeMap::<String, usize>::new();
   #[cfg(test)]
@@ -1371,28 +1343,28 @@ fn merge_adjacent_with_stats(
   #[cfg(not(test))]
   let stats = MergeAdjacentStats::default();
 
-  for (entity_index, entity) in sorted.iter().enumerate() {
-    if has_locked_boundary(entity) {
-      result.push(entity.clone());
+  for (entity_index, entity) in entities.into_iter().enumerate() {
+    if has_locked_boundary(&entity) {
+      result.push(entity);
       continue;
     }
 
     let Some(previous_index) = last_by_label.get(&entity.label).copied() else {
       let index = result.len();
-      result.push(entity.clone());
       last_by_label.insert(entity.label.clone(), index);
+      result.push(entity);
       continue;
     };
 
     let Some(previous) = result.get(previous_index) else {
       let index = result.len();
-      result.push(entity.clone());
       last_by_label.insert(entity.label.clone(), index);
+      result.push(entity);
       continue;
     };
 
     if !has_locked_boundary(previous) && entity.start < previous.end {
-      merge_into_previous(&mut result, previous_index, entity, offsets)?;
+      merge_into_previous(&mut result, previous_index, &entity, offsets)?;
       continue;
     }
 
@@ -1400,49 +1372,41 @@ fn merge_adjacent_with_stats(
     let gap_start = previous.end;
     let gap_end = entity.start;
     let legal_form_comma = (is_legal_form_organization(previous)
-      || is_legal_form_organization(entity))
+      || is_legal_form_organization(&entity))
       && gap.contains(',');
 
     let mergeable = !has_locked_boundary(previous)
       && !legal_form_comma
       && entity.label != "country"
       && is_mergeable_gap(gap);
-    let gap_occupied = mergeable
-      && occupancy_index.as_mut().map_or_else(
-        || {
-          sorted.iter().any(|other| {
-            other.label != entity.label
-              && other.start < gap_end
-              && other.end > gap_start
-          })
-        },
-        |index| {
-          let query =
-            index.has_cross_label_overlap(entity_index, gap_start, gap_end);
-          #[cfg(test)]
-          stats.record_query(query);
-          query.occupied
-        },
+    let gap_occupied = mergeable && {
+      let query = occupancy_index.has_cross_label_overlap(
+        entity_index,
+        gap_start,
+        gap_end,
       );
+      #[cfg(test)]
+      stats.record_query(query);
+      query.occupied
+    };
 
     if mergeable && !gap_occupied {
-      merge_into_previous(&mut result, previous_index, entity, offsets)?;
+      merge_into_previous(&mut result, previous_index, &entity, offsets)?;
       continue;
     }
 
     let index = result.len();
-    result.push(entity.clone());
     last_by_label.insert(entity.label.clone(), index);
+    result.push(entity);
   }
 
   Ok((result, stats))
 }
 
 fn remove_nested_same_label(
-  entities: &[PipelineEntity],
+  mut entities: Vec<PipelineEntity>,
 ) -> Vec<PipelineEntity> {
-  let mut sorted = entities.to_vec();
-  sorted.sort_by(|left, right| {
+  entities.sort_by(|left, right| {
     left
       .start
       .cmp(&right.start)
@@ -1452,7 +1416,7 @@ fn remove_nested_same_label(
   let mut result = Vec::new();
   let mut max_end_by_label = BTreeMap::<String, u32>::new();
 
-  for entity in sorted {
+  for entity in entities {
     if max_end_by_label
       .get(&entity.label)
       .is_some_and(|max_end| entity.end <= *max_end)
@@ -1562,6 +1526,53 @@ mod tests {
   use super::*;
 
   const SAME_LABEL_SCALING_ENTITY_COUNT: usize = 20_000;
+
+  #[test]
+  fn production_resolution_owns_its_growing_entity_buffer() {
+    let boundary_source = include_str!("boundary.rs");
+    let resolution_source = include_str!("../prepared/resolution_phase.rs");
+
+    for stage in [
+      "fix_partial_words",
+      "truncate_person_spans",
+      "resolve_cross_label_overlaps",
+      "deduplicate_spans",
+      "merge_adjacent",
+      "remove_nested_same_label",
+    ] {
+      let marker = format!("fn {stage}");
+      let signature_start = boundary_source.find(&marker).unwrap_or_default();
+      let signature_end = signature_start
+        .saturating_add(160)
+        .min(boundary_source.len());
+      let signature = boundary_source
+        .get(signature_start..signature_end)
+        .unwrap_or_default();
+      assert!(
+        signature.contains("Vec<PipelineEntity>"),
+        "resolution stages must consume the owned entity buffer: {stage}"
+      );
+      assert!(!signature.contains("&[PipelineEntity]"));
+    }
+    assert!(
+      !resolution_source.contains("].concat()"),
+      "resolution must extend an owned buffer instead of concatenating clones"
+    );
+
+    let production_end = boundary_source
+      .find("\n#[cfg(test)]\nmod tests {")
+      .unwrap_or(boundary_source.len());
+    let production = boundary_source.get(..production_end).unwrap_or_default();
+    assert_eq!(
+      production.matches("entities.to_vec()").count(),
+      2,
+      "only the public borrowed compatibility API and test reference model may clone the entity buffer"
+    );
+    assert!(
+      production.matches("entities.sort_by").count() <= 5,
+      "new full-buffer sorts require an explicit resolution complexity review"
+    );
+  }
 
   fn fix_partial_words_legacy(
     entities: &[PipelineEntity],
@@ -1723,7 +1734,7 @@ mod tests {
 
       prop_assert_eq!(
         fix_partial_words(
-          &entities,
+          entities.clone(),
           &offsets,
           &analysis.spans,
           &analysis.boundaries,
@@ -1799,7 +1810,7 @@ mod tests {
       let offsets = ByteOffsets::new(&full_text);
 
       prop_assert_eq!(
-        merge_adjacent(&entities, &offsets),
+        merge_adjacent(entities.clone(), &offsets),
         merge_adjacent_legacy(&entities, &offsets),
       );
     }
@@ -1859,7 +1870,7 @@ mod tests {
       let offsets = ByteOffsets::new(&full_text);
 
       prop_assert_eq!(
-        resolve_cross_label_overlaps_with_stats(&entities, &offsets)
+        resolve_cross_label_overlaps_with_stats(entities.clone(), &offsets)
           .map(|(resolved, _)| resolved),
         resolve_cross_label_overlaps_linear(&entities, &offsets),
       );
@@ -1884,7 +1895,7 @@ mod tests {
       .collect::<Vec<_>>();
     let offsets = ByteOffsets::new(&full_text);
     let (resolved, stats) =
-      resolve_cross_label_overlaps_with_stats(&entities, &offsets)?;
+      resolve_cross_label_overlaps_with_stats(entities.clone(), &offsets)?;
 
     assert_eq!(resolved, entities);
     assert_eq!(stats.start_updates, 0);
@@ -1917,7 +1928,7 @@ mod tests {
       .collect::<Vec<_>>();
 
     let (fixed, stats) = fix_partial_words_with_stats(
-      &entities,
+      entities,
       &offsets,
       &analysis.spans,
       &analysis.boundaries,
@@ -1965,7 +1976,7 @@ mod tests {
       .collect::<Vec<_>>();
     let offsets = ByteOffsets::new(&full_text);
     let (separated, separated_stats) =
-      merge_adjacent_with_stats(&entities, &offsets)?;
+      merge_adjacent_with_stats(entities.clone(), &offsets)?;
 
     assert_eq!(separated, entities);
     assert_eq!(separated_stats.gap_queries, 0);
@@ -1987,7 +1998,7 @@ mod tests {
       .collect::<Vec<_>>();
     let mergeable_offsets = ByteOffsets::new(&mergeable_text);
     let (merged, merged_stats) =
-      merge_adjacent_with_stats(&mergeable_entities, &mergeable_offsets)?;
+      merge_adjacent_with_stats(mergeable_entities, &mergeable_offsets)?;
 
     assert_eq!(merged.len(), 1);
     let only = merged

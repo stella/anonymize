@@ -106,6 +106,10 @@ support resource, but the rule metadata and behavior stay module-local.
   own that work.
 - Keep index storage private. Hot-path callers receive query APIs, not backing
   slices or maps that make an accidental fallback to full iteration possible.
+- Transfer ownership of the entity buffer between resolution stages. A stage
+  must consume and return the buffer; do not accept a growing entity slice and
+  clone it, concatenate entity vectors, or retain a borrowed backing slice in
+  an index. Build compact owned indexes before consuming the buffer.
 - Prove indexed implementations equivalent to a simple reference model with
   generated fixtures. Add deterministic operation-count or structural scaling
   tests for dense inputs; wall-clock benchmarks are evidence, not the CI

@@ -60,7 +60,7 @@ impl PreparedEngine {
     raw_entities.extend(address_context_entities);
     let merge_timer = PhaseTimer::start();
     let merged = merge_and_dedup(&raw_entities);
-    let merged = self.extend_monetary_entities(full_text, &merged);
+    let merged = self.extend_monetary_entities(full_text, merged);
     record_resolver_entities(
       diagnostics,
       event_stream,
@@ -71,7 +71,7 @@ impl PreparedEngine {
     )?;
     let boundary_timer = PhaseTimer::start();
     let consistent = enforce_boundary_consistency_with_document(
-      &merged,
+      merged,
       &document,
       self.person_span_terminators(),
     )?;
@@ -242,10 +242,11 @@ impl PreparedEngine {
       return Ok(existing_entities);
     }
 
-    let merged =
-      merge_and_dedup(&[existing_entities, coreference_entities].concat());
+    let mut all_entities = existing_entities;
+    all_entities.extend(coreference_entities);
+    let merged = merge_and_dedup(&all_entities);
     let consistent = enforce_boundary_consistency_with_document(
-      &merged,
+      merged,
       document,
       self.person_span_terminators(),
     )?;
@@ -264,11 +265,11 @@ impl PreparedEngine {
   fn extend_monetary_entities(
     &self,
     full_text: &str,
-    entities: &[PipelineEntity],
+    entities: Vec<PipelineEntity>,
   ) -> Vec<PipelineEntity> {
     let Some(data) = &self.data.monetary else {
-      return entities.to_vec();
+      return entities;
     };
-    data.extend_entities(full_text, entities)
+    data.extend_entities(full_text, &entities)
   }
 }
