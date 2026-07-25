@@ -300,38 +300,42 @@ impl Document {
   pub(crate) fn prepare_non_structural_patch(
     &self,
     changes: &[DocumentChange],
-    positions: &BTreeMap<BlockId, usize>,
     current_text_bytes: usize,
+    position_of: &dyn Fn(&BlockId) -> Option<usize>,
   ) -> Result<Option<NonStructuralDocumentPatch>> {
     if changes.iter().any(DocumentChange::changes_structure) {
       return Ok(None);
     }
 
-    let mut pending = BTreeMap::<usize, PendingBlockUpdate>::new();
+    let mut pending = Vec::<PendingBlockUpdate>::new();
     let mut document_metadata = None;
     for change in changes {
       match change {
         DocumentChange::ReplaceText { block_id, text } => {
-          let Some(position) = positions.get(block_id).copied() else {
+          let Some(position) = position_of(block_id) else {
             return Err(Error::UnknownBlock {
               block_id: block_id.clone(),
             });
           };
-          pending
-            .entry(position)
-            .or_insert_with(|| PendingBlockUpdate::new(block_id.clone()))
-            .text = Some(Arc::clone(text));
+          replace_pending_value(
+            &mut pending,
+            block_id,
+            position,
+            PendingBlockValue::Text(Arc::clone(text)),
+          );
         }
         DocumentChange::ReplaceBlockMetadata { block_id, metadata } => {
-          let Some(position) = positions.get(block_id).copied() else {
+          let Some(position) = position_of(block_id) else {
             return Err(Error::UnknownBlock {
               block_id: block_id.clone(),
             });
           };
-          pending
-            .entry(position)
-            .or_insert_with(|| PendingBlockUpdate::new(block_id.clone()))
-            .metadata = Some(metadata.clone());
+          replace_pending_value(
+            &mut pending,
+            block_id,
+            position,
+            PendingBlockValue::Metadata(metadata.clone()),
+          );
         }
         DocumentChange::ReplaceDocumentMetadata { metadata } => {
           document_metadata = Some(metadata.clone());
@@ -344,7 +348,8 @@ impl Document {
 
     let mut text_bytes = current_text_bytes;
     let mut block_updates = Vec::with_capacity(pending.len());
-    for (position, pending_update) in pending {
+    for pending_update in pending {
+      let position = pending_update.position;
       let Some(block) = self
         .blocks
         .get(position)
@@ -533,19 +538,55 @@ fn validate_block_text(block_id: &BlockId, text: &str) -> Result<()> {
 #[cfg(feature = "incremental")]
 struct PendingBlockUpdate {
   block_id: BlockId,
+  position: usize,
   text: Option<Arc<str>>,
   metadata: Option<Metadata>,
 }
 
 #[cfg(feature = "incremental")]
 impl PendingBlockUpdate {
-  const fn new(block_id: BlockId) -> Self {
+  const fn new(block_id: BlockId, position: usize) -> Self {
     Self {
       block_id,
+      position,
       text: None,
       metadata: None,
     }
   }
+
+  fn replace(&mut self, value: PendingBlockValue) {
+    match value {
+      PendingBlockValue::Text(text) => self.text = Some(text),
+      PendingBlockValue::Metadata(metadata) => {
+        self.metadata = Some(metadata);
+      }
+    }
+  }
+}
+
+#[cfg(feature = "incremental")]
+enum PendingBlockValue {
+  Text(Arc<str>),
+  Metadata(Metadata),
+}
+
+#[cfg(feature = "incremental")]
+fn replace_pending_value(
+  pending: &mut Vec<PendingBlockUpdate>,
+  block_id: &BlockId,
+  position: usize,
+  value: PendingBlockValue,
+) {
+  if let Some(existing) = pending
+    .iter_mut()
+    .find(|update| update.position == position && &update.block_id == block_id)
+  {
+    existing.replace(value);
+    return;
+  }
+  let mut update = PendingBlockUpdate::new(block_id.clone(), position);
+  update.replace(value);
+  pending.push(update);
 }
 
 #[cfg(feature = "incremental")]

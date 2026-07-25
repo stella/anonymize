@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use salsa::Setter as _;
@@ -7,10 +7,10 @@ use salsa::Setter as _;
 use crate::engine::{
   AnalysisSnapshot, BlockAnalysis, ExecutionCounters, RuleEngine,
   analyze_block, neighborhood_bounds, run_block_rules, run_document_rules,
-  run_neighborhood_rules, validate_findings_indexed,
+  run_neighborhood_rules, validate_span_for_block,
 };
 use crate::model::{
-  BlockId, Document, DocumentBlock, DocumentPatch, Error, Metadata,
+  BlockId, BlockSpan, Document, DocumentBlock, DocumentPatch, Error, Metadata,
   NonStructuralDocumentPatch, Result, Revision,
 };
 use crate::rule::{BlockFact, DocumentFacts, Finding, RuleSet};
@@ -43,6 +43,7 @@ struct LinkInput {
 struct BlockRecord {
   block: BlockInput,
   links: LinkInput,
+  position: usize,
 }
 
 #[salsa::input]
@@ -151,21 +152,6 @@ fn tracked_neighborhood_findings(
 }
 
 #[salsa::tracked(returns(clone))]
-fn tracked_record_findings(
-  db: &dyn DocumentDatabase,
-  block: BlockInput,
-  links: LinkInput,
-) -> Result<Arc<[Finding]>> {
-  let local = tracked_block_findings(db, block)?;
-  let neighborhood = tracked_neighborhood_findings(db, block, links)?;
-  let mut findings =
-    Vec::with_capacity(local.len().saturating_add(neighborhood.len()));
-  findings.extend(local.iter().cloned());
-  findings.extend(neighborhood.iter().cloned());
-  Ok(findings.into())
-}
-
-#[salsa::tracked(returns(clone))]
 fn tracked_document_facts(
   db: &dyn DocumentDatabase,
   document: DocumentInput,
@@ -197,8 +183,8 @@ fn tracked_document_findings(
 #[derive(Default)]
 struct FindingCache {
   initialized: bool,
-  by_position: BTreeMap<usize, Arc<[Finding]>>,
-  dirty_positions: BTreeSet<usize>,
+  by_position: Vec<(usize, Arc<[Finding]>)>,
+  dirty_positions: Vec<usize>,
   #[cfg(test)]
   refreshed_record_count: usize,
 }
@@ -233,36 +219,51 @@ impl FindingCache {
     records: &[BlockRecord],
   ) -> Result<Vec<Finding>> {
     if !self.initialized {
-      let mut by_position = BTreeMap::new();
+      let mut by_position = Vec::new();
       for (position, record) in records.iter().copied().enumerate() {
         #[cfg(test)]
         self.record_refresh();
         let findings = refresh_record(database, record)?;
         if !findings.is_empty() {
-          by_position.insert(position, findings);
+          by_position.push((position, findings));
         }
       }
       self.by_position = by_position;
       self.initialized = true;
       self.dirty_positions.clear();
     } else if !self.dirty_positions.is_empty() {
+      self.dirty_positions.sort_unstable();
+      self.dirty_positions.dedup();
       let mut refreshed = Vec::with_capacity(self.dirty_positions.len());
-      let dirty_positions =
-        self.dirty_positions.iter().copied().collect::<Vec<_>>();
-      for position in dirty_positions {
+      for position in self.dirty_positions.iter().copied() {
         let Some(record) = records.get(position).copied() else {
           self.invalidate_structure();
           return self.collect(database, records);
         };
-        #[cfg(test)]
-        self.record_refresh();
         refreshed.push((position, refresh_record(database, record)?));
       }
+      #[cfg(test)]
+      {
+        self.refreshed_record_count =
+          self.refreshed_record_count.saturating_add(refreshed.len());
+      }
       for (position, findings) in refreshed {
-        if findings.is_empty() {
-          self.by_position.remove(&position);
-        } else {
-          self.by_position.insert(position, findings);
+        match self
+          .by_position
+          .binary_search_by_key(&position, |(position, _)| *position)
+        {
+          Ok(index) if findings.is_empty() => {
+            self.by_position.remove(index);
+          }
+          Ok(index) => {
+            if let Some((_, cached)) = self.by_position.get_mut(index) {
+              *cached = findings;
+            }
+          }
+          Err(index) if !findings.is_empty() => {
+            self.by_position.insert(index, (position, findings));
+          }
+          Err(_) => {}
         }
       }
       self.dirty_positions.clear();
@@ -270,11 +271,11 @@ impl FindingCache {
 
     let finding_count = self
       .by_position
-      .values()
-      .map(|findings| findings.len())
+      .iter()
+      .map(|(_, findings)| findings.len())
       .sum();
     let mut findings = Vec::with_capacity(finding_count);
-    for block_findings in self.by_position.values() {
+    for (_, block_findings) in &self.by_position {
       findings.extend(block_findings.iter().cloned());
     }
     Ok(findings)
@@ -290,14 +291,20 @@ fn refresh_record(
   database: &Database,
   record: BlockRecord,
 ) -> Result<Arc<[Finding]>> {
-  tracked_record_findings(database, record.block, record.links)
+  let local = tracked_block_findings(database, record.block)?;
+  let neighborhood =
+    tracked_neighborhood_findings(database, record.block, record.links)?;
+  let mut findings =
+    Vec::with_capacity(local.len().saturating_add(neighborhood.len()));
+  findings.extend(local.iter().cloned());
+  findings.extend(neighborhood.iter().cloned());
+  Ok(findings.into())
 }
 
 pub struct IncrementalDocumentSession {
   database: Database,
   document_input: DocumentInput,
   records: BTreeMap<BlockId, BlockRecord>,
-  positions: BTreeMap<BlockId, usize>,
   finding_cache: RefCell<FindingCache>,
   allocated_record_count: usize,
   text_bytes: usize,
@@ -321,7 +328,6 @@ impl IncrementalDocumentSession {
     Self {
       database,
       document_input,
-      positions: block_positions(&document),
       records,
       finding_cache: RefCell::new(FindingCache::default()),
       allocated_record_count: document.blocks().len(),
@@ -343,6 +349,19 @@ impl IncrementalDocumentSession {
     &self.document
   }
 
+  /// Returns a block by identifier without scanning the document.
+  ///
+  /// The lookup follows both structural and non-structural patches applied to
+  /// this session.
+  #[must_use]
+  pub fn block(&self, block_id: &BlockId) -> Option<&DocumentBlock> {
+    self
+      .records
+      .get(block_id)
+      .and_then(|record| self.document.blocks().get(record.position))
+      .filter(|block| block.id() == block_id)
+  }
+
   pub fn analyze(&self) -> Result<AnalysisSnapshot> {
     let records = self.document_input.blocks(&self.database);
     let mut findings = self
@@ -356,8 +375,27 @@ impl IncrementalDocumentSession {
           .cloned(),
       );
     }
-    validate_findings_indexed(&self.document, &self.positions, &findings)?;
+    self.validate_findings(&findings)?;
     Ok(AnalysisSnapshot::new(self.revision, findings))
+  }
+
+  fn validate_findings(&self, findings: &[Finding]) -> Result<()> {
+    for finding in findings {
+      self.validate_span(finding.primary())?;
+      for span in finding.related() {
+        self.validate_span(span)?;
+      }
+    }
+    Ok(())
+  }
+
+  fn validate_span(&self, location: &BlockSpan) -> Result<()> {
+    let Some(block) = self.block(location.block_id()) else {
+      return Err(Error::UnknownBlock {
+        block_id: location.block_id().clone(),
+      });
+    };
+    validate_span_for_block(block, location)
   }
 
   pub fn apply_patch(&mut self, patch: &DocumentPatch) -> Result<Revision> {
@@ -367,10 +405,13 @@ impl IncrementalDocumentSession {
         actual: self.revision,
       });
     }
+    let position_of = |block_id: &BlockId| {
+      self.records.get(block_id).map(|record| record.position)
+    };
     let Some(prepared) = self.document.prepare_non_structural_patch(
       patch.changes(),
-      &self.positions,
       self.text_bytes,
+      &position_of,
     )?
     else {
       return self.apply_structural_patch(patch);
@@ -442,7 +483,6 @@ impl IncrementalDocumentSession {
     }
     let next_revision = self.revision.next()?;
     self.reconcile_inputs(&next_document);
-    self.positions = block_positions(&next_document);
     self.finding_cache.borrow_mut().invalidate_structure();
     self.text_bytes = next_document.text_bytes();
     self.document = next_document;
@@ -517,7 +557,11 @@ impl IncrementalDocumentSession {
         }
         None => LinkInput::new(&self.database, before, after),
       };
-      let record = BlockRecord { block, links };
+      let record = BlockRecord {
+        block,
+        links,
+        position,
+      };
       next_records.insert(id, record);
       ordered_records.push(record);
     }
@@ -567,15 +611,6 @@ impl IncrementalDocumentSession {
   }
 }
 
-fn block_positions(document: &Document) -> BTreeMap<BlockId, usize> {
-  document
-    .blocks()
-    .iter()
-    .enumerate()
-    .map(|(position, block)| (block.id().clone(), position))
-    .collect()
-}
-
 fn retired_record_limit(live_record_count: usize) -> usize {
   live_record_count.max(MIN_RETIRED_RECORD_LIMIT)
 }
@@ -602,7 +637,11 @@ fn create_records(
   for (position, block) in inputs.iter().copied().enumerate() {
     let (before, after) = neighborhood_inputs(&inputs, position, radius);
     let links = LinkInput::new(database, before, after);
-    let record = BlockRecord { block, links };
+    let record = BlockRecord {
+      block,
+      links,
+      position,
+    };
     records.insert(block.id(database), record);
     ordered.push(record);
   }
@@ -668,12 +707,17 @@ mod tests {
           vec![DocumentChange::insert_after(None, temporary)],
         ))
         .unwrap();
+      assert_eq!(
+        session.block(&temporary_id).map(DocumentBlock::text),
+        Some("temporary")
+      );
       session
         .apply_patch(&DocumentPatch::new(
           session.revision(),
-          vec![DocumentChange::remove(temporary_id)],
+          vec![DocumentChange::remove(temporary_id.clone())],
         ))
         .unwrap();
+      assert!(session.block(&temporary_id).is_none());
     }
 
     let live_count = session.document().blocks().len();
