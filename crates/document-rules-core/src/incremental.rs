@@ -775,6 +775,37 @@ mod tests {
   }
 
   #[test]
+  fn dense_patch_folds_twenty_thousand_distinct_updates_once_each() {
+    let engine = RuleEngine::new(RuleSet::new(Vec::new()).unwrap());
+    let ids = (0..20_000)
+      .map(|index| BlockId::new(format!("block-{index}")).unwrap())
+      .collect::<Vec<_>>();
+    let blocks = ids
+      .iter()
+      .cloned()
+      .map(|id| DocumentBlock::new(id, "original").unwrap())
+      .collect();
+    let mut session =
+      IncrementalDocumentSession::new(&engine, Document::new(blocks).unwrap());
+    let changes = ids
+      .iter()
+      .rev()
+      .cloned()
+      .map(|id| DocumentChange::replace_text(id, "changed"))
+      .collect();
+
+    session.reset_patch_and_refresh_counts();
+    session
+      .apply_patch(&DocumentPatch::new(session.revision(), changes))
+      .unwrap();
+
+    assert_eq!(session.patch_and_refresh_counts(), (20_000, 0));
+    for id in &ids {
+      assert_eq!(session.block(id).map(DocumentBlock::text), Some("changed"));
+    }
+  }
+
+  #[test]
   fn repeated_non_structural_changes_are_atomic_and_last_write_wins() {
     let engine = RuleEngine::new(RuleSet::new(Vec::new()).unwrap());
     let id = BlockId::new("stable").unwrap();

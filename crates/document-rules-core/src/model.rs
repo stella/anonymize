@@ -307,9 +307,9 @@ impl Document {
       return Ok(None);
     }
 
-    let mut pending = Vec::<PendingBlockUpdate>::new();
+    let mut pending = Vec::<PendingBlockMutation>::new();
     let mut document_metadata = None;
-    for change in changes {
+    for (sequence, change) in changes.iter().enumerate() {
       match change {
         DocumentChange::ReplaceText { block_id, text } => {
           let Some(position) = position_of(block_id) else {
@@ -317,12 +317,12 @@ impl Document {
               block_id: block_id.clone(),
             });
           };
-          replace_pending_value(
-            &mut pending,
-            block_id,
+          pending.push(PendingBlockMutation::new(
+            block_id.clone(),
             position,
+            sequence,
             PendingBlockValue::Text(Arc::clone(text)),
-          );
+          ));
         }
         DocumentChange::ReplaceBlockMetadata { block_id, metadata } => {
           let Some(position) = position_of(block_id) else {
@@ -330,12 +330,12 @@ impl Document {
               block_id: block_id.clone(),
             });
           };
-          replace_pending_value(
-            &mut pending,
-            block_id,
+          pending.push(PendingBlockMutation::new(
+            block_id.clone(),
             position,
+            sequence,
             PendingBlockValue::Metadata(metadata.clone()),
-          );
+          ));
         }
         DocumentChange::ReplaceDocumentMetadata { metadata } => {
           document_metadata = Some(metadata.clone());
@@ -346,9 +346,11 @@ impl Document {
       }
     }
 
+    let pending_updates = fold_pending_mutations(pending);
+
     let mut text_bytes = current_text_bytes;
-    let mut block_updates = Vec::with_capacity(pending.len());
-    for pending_update in pending {
+    let mut block_updates = Vec::with_capacity(pending_updates.len());
+    for pending_update in pending_updates {
       let position = pending_update.position;
       let Some(block) = self
         .blocks
@@ -571,22 +573,51 @@ enum PendingBlockValue {
 }
 
 #[cfg(feature = "incremental")]
-fn replace_pending_value(
-  pending: &mut Vec<PendingBlockUpdate>,
-  block_id: &BlockId,
+struct PendingBlockMutation {
+  block_id: BlockId,
   position: usize,
+  sequence: usize,
   value: PendingBlockValue,
-) {
-  if let Some(existing) = pending
-    .iter_mut()
-    .find(|update| update.position == position && &update.block_id == block_id)
-  {
-    existing.replace(value);
-    return;
+}
+
+#[cfg(feature = "incremental")]
+impl PendingBlockMutation {
+  const fn new(
+    block_id: BlockId,
+    position: usize,
+    sequence: usize,
+    value: PendingBlockValue,
+  ) -> Self {
+    Self {
+      block_id,
+      position,
+      sequence,
+      value,
+    }
   }
-  let mut update = PendingBlockUpdate::new(block_id.clone(), position);
-  update.replace(value);
-  pending.push(update);
+}
+
+#[cfg(feature = "incremental")]
+fn fold_pending_mutations(
+  mut pending: Vec<PendingBlockMutation>,
+) -> Vec<PendingBlockUpdate> {
+  pending
+    .sort_unstable_by_key(|mutation| (mutation.position, mutation.sequence));
+  let mut updates = Vec::<PendingBlockUpdate>::new();
+  for mutation in pending {
+    if let Some(update) = updates.last_mut().filter(|update| {
+      update.position == mutation.position
+        && update.block_id == mutation.block_id
+    }) {
+      update.replace(mutation.value);
+    } else {
+      let mut update =
+        PendingBlockUpdate::new(mutation.block_id, mutation.position);
+      update.replace(mutation.value);
+      updates.push(update);
+    }
+  }
+  updates
 }
 
 #[cfg(feature = "incremental")]
