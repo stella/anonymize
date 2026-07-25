@@ -352,9 +352,11 @@ if (hasMismatch) {
  * being omitted by a manually maintained release allowlist. */
 function inheritedWorkspacePackageNames() {
   const metadata = JSON.parse(
-    execFileSync("cargo", ["metadata", "--no-deps", "--format-version", "1"], {
-      encoding: "utf8",
-    }),
+    execFileSync(
+      "cargo",
+      ["metadata", "--no-deps", "--locked", "--format-version", "1"],
+      { encoding: "utf8" },
+    ),
   );
   const workspaceMembers = new Set(metadata.workspace_members);
   const packageNames = [];

@@ -389,9 +389,13 @@ function writeFixture() {
       `[workspace.package]\nversion = "${version}"\n`,
   );
   for (const name of inheritedCargoPackages) {
+    const versionDeclaration =
+      name === newlyAddedCargoPackage
+        ? "version = { workspace = true }"
+        : "version.workspace = true";
     writeText(
       join(cargoMemberDirectory(name), "Cargo.toml"),
-      `[package]\nname = "${name}"\nversion.workspace = true\nedition = "2024"\n`,
+      `[package]\nname = "${name}"\n${versionDeclaration}\nedition = "2024"\n`,
     );
     writeText(join(cargoMemberDirectory(name), "src/lib.rs"), "");
   }
@@ -460,9 +464,10 @@ function cargoMemberDirectory(name) {
 }
 
 function cargoPackageVersion(lockText, name) {
+  const normalizedLockText = lockText.replaceAll("\r\n", "\n");
   const match = new RegExp(
     `\\[\\[package\\]\\]\\nname = "${name}"\\nversion = "([^"]+)"`,
-  ).exec(lockText);
+  ).exec(normalizedLockText);
   return match?.[1];
 }
 
