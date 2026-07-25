@@ -247,25 +247,10 @@ impl FindingCache {
         self.refreshed_record_count =
           self.refreshed_record_count.saturating_add(refreshed.len());
       }
-      for (position, findings) in refreshed {
-        match self
-          .by_position
-          .binary_search_by_key(&position, |(position, _)| *position)
-        {
-          Ok(index) if findings.is_empty() => {
-            self.by_position.remove(index);
-          }
-          Ok(index) => {
-            if let Some((_, cached)) = self.by_position.get_mut(index) {
-              *cached = findings;
-            }
-          }
-          Err(index) if !findings.is_empty() => {
-            self.by_position.insert(index, (position, findings));
-          }
-          Err(_) => {}
-        }
-      }
+      self.by_position = merge_refreshed_findings(
+        std::mem::take(&mut self.by_position),
+        refreshed,
+      );
       self.dirty_positions.clear();
     }
 
@@ -285,6 +270,47 @@ impl FindingCache {
   const fn record_refresh(&mut self) {
     self.refreshed_record_count = self.refreshed_record_count.saturating_add(1);
   }
+}
+
+fn merge_refreshed_findings(
+  cached: Vec<(usize, Arc<[Finding]>)>,
+  refreshed: Vec<(usize, Arc<[Finding]>)>,
+) -> Vec<(usize, Arc<[Finding]>)> {
+  let mut merged =
+    Vec::with_capacity(cached.len().saturating_add(refreshed.len()));
+  let mut cached = cached.into_iter().peekable();
+  let mut refreshed = refreshed.into_iter().peekable();
+
+  while let (Some((cached_position, _)), Some((refreshed_position, _))) =
+    (cached.peek(), refreshed.peek())
+  {
+    match cached_position.cmp(refreshed_position) {
+      std::cmp::Ordering::Less => {
+        if let Some(entry) = cached.next() {
+          merged.push(entry);
+        }
+      }
+      std::cmp::Ordering::Equal => {
+        cached.next();
+        if let Some(entry) = refreshed.next()
+          && !entry.1.is_empty()
+        {
+          merged.push(entry);
+        }
+      }
+      std::cmp::Ordering::Greater => {
+        if let Some(entry) = refreshed.next()
+          && !entry.1.is_empty()
+        {
+          merged.push(entry);
+        }
+      }
+    }
+  }
+
+  merged.extend(cached);
+  merged.extend(refreshed.filter(|(_, findings)| !findings.is_empty()));
+  merged
 }
 
 fn refresh_record(
@@ -668,7 +694,51 @@ mod tests {
   #![allow(clippy::unwrap_used)]
 
   use super::*;
-  use crate::model::{BlockId, DocumentChange};
+  use crate::model::{BlockId, DocumentChange, TextSpan};
+  use crate::rule::{
+    DocumentRule, FindingDraft, FindingKind, FindingSink, RuleContext, RuleId,
+    RuleScope, RuleSpec,
+  };
+
+  struct MarkerRule {
+    spec: RuleSpec,
+  }
+
+  impl DocumentRule for MarkerRule {
+    fn spec(&self) -> &RuleSpec {
+      &self.spec
+    }
+
+    fn evaluate(
+      &self,
+      context: RuleContext<'_>,
+      findings: &mut FindingSink,
+    ) -> std::result::Result<(), String> {
+      let RuleContext::Block(context) = context else {
+        return Err(String::from("wrong context"));
+      };
+      if context.block().text() == "marker" {
+        findings.push(FindingDraft::new(
+          FindingKind::new("marker").map_err(|error| error.to_string())?,
+          BlockSpan::new(
+            context.block().id().clone(),
+            TextSpan::new(0, 0).map_err(|error| error.to_string())?,
+          ),
+          "marker",
+        ));
+      }
+      Ok(())
+    }
+  }
+
+  fn marker_engine() -> RuleEngine {
+    RuleEngine::new(
+      RuleSet::new(vec![Arc::new(MarkerRule {
+        spec: RuleSpec::new(RuleId::new("marker").unwrap(), RuleScope::Block),
+      })])
+      .unwrap(),
+    )
+  }
 
   fn assert_send<T: Send>() {}
 
@@ -803,6 +873,36 @@ mod tests {
     for id in &ids {
       assert_eq!(session.block(id).map(DocumentBlock::text), Some("changed"));
     }
+  }
+
+  #[test]
+  fn dense_patch_and_analysis_merge_twenty_thousand_cache_removals_once() {
+    let ids = (0..20_000)
+      .map(|index| BlockId::new(format!("block-{index}")).unwrap())
+      .collect::<Vec<_>>();
+    let blocks = ids
+      .iter()
+      .cloned()
+      .map(|id| DocumentBlock::new(id, "marker").unwrap())
+      .collect();
+    let mut session = IncrementalDocumentSession::new(
+      &marker_engine(),
+      Document::new(blocks).unwrap(),
+    );
+    assert_eq!(session.analyze().unwrap().findings().len(), ids.len());
+    let changes = ids
+      .iter()
+      .rev()
+      .cloned()
+      .map(|id| DocumentChange::replace_text(id, "clear"))
+      .collect();
+
+    session.reset_patch_and_refresh_counts();
+    session
+      .apply_patch(&DocumentPatch::new(session.revision(), changes))
+      .unwrap();
+    assert!(session.analyze().unwrap().findings().is_empty());
+    assert_eq!(session.patch_and_refresh_counts(), (20_000, 20_000));
   }
 
   #[test]
