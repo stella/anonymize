@@ -2,6 +2,11 @@ use std::ops::Range;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+#[cfg(feature = "incremental")]
+use std::collections::BTreeMap;
+
+#[cfg(feature = "incremental")]
+use crate::model::BlockId;
 use crate::model::{
   BlockSpan, Document, DocumentBlock, Error, Metadata, Result, Revision,
   TextSpan,
@@ -383,6 +388,39 @@ pub(crate) fn validate_findings(
   Ok(())
 }
 
+#[cfg(feature = "incremental")]
+pub(crate) fn validate_findings_indexed(
+  document: &Document,
+  positions: &BTreeMap<BlockId, usize>,
+  findings: &[Finding],
+) -> Result<()> {
+  for finding in findings {
+    validate_span_indexed(document, positions, finding.primary())?;
+    for span in finding.related() {
+      validate_span_indexed(document, positions, span)?;
+    }
+  }
+  Ok(())
+}
+
+#[cfg(feature = "incremental")]
+fn validate_span_indexed(
+  document: &Document,
+  positions: &BTreeMap<BlockId, usize>,
+  location: &BlockSpan,
+) -> Result<()> {
+  let Some(block) = positions
+    .get(location.block_id())
+    .and_then(|position| document.blocks().get(*position))
+    .filter(|block| block.id() == location.block_id())
+  else {
+    return Err(Error::UnknownBlock {
+      block_id: location.block_id().clone(),
+    });
+  };
+  validate_span_for_block(block, location)
+}
+
 fn validate_span(document: &Document, location: &BlockSpan) -> Result<()> {
   let Some(block) = document
     .blocks()
@@ -393,6 +431,13 @@ fn validate_span(document: &Document, location: &BlockSpan) -> Result<()> {
       block_id: location.block_id().clone(),
     });
   };
+  validate_span_for_block(block, location)
+}
+
+fn validate_span_for_block(
+  block: &DocumentBlock,
+  location: &BlockSpan,
+) -> Result<()> {
   let end = usize::try_from(location.span().end()).map_err(|_| {
     Error::FindingSpanOutOfBounds {
       block_id: location.block_id().clone(),

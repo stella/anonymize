@@ -292,6 +292,138 @@ impl Document {
   }
 
   #[cfg(feature = "incremental")]
+  pub(crate) fn text_bytes(&self) -> usize {
+    self.blocks.iter().map(|block| block.text.len()).sum()
+  }
+
+  #[cfg(feature = "incremental")]
+  pub(crate) fn prepare_non_structural_patch(
+    &self,
+    changes: &[DocumentChange],
+    positions: &BTreeMap<BlockId, usize>,
+    current_text_bytes: usize,
+  ) -> Result<Option<NonStructuralDocumentPatch>> {
+    if changes.iter().any(DocumentChange::changes_structure) {
+      return Ok(None);
+    }
+
+    let mut pending = BTreeMap::<usize, PendingBlockUpdate>::new();
+    let mut document_metadata = None;
+    for change in changes {
+      match change {
+        DocumentChange::ReplaceText { block_id, text } => {
+          let Some(position) = positions.get(block_id).copied() else {
+            return Err(Error::UnknownBlock {
+              block_id: block_id.clone(),
+            });
+          };
+          pending
+            .entry(position)
+            .or_insert_with(|| PendingBlockUpdate::new(block_id.clone()))
+            .text = Some(Arc::clone(text));
+        }
+        DocumentChange::ReplaceBlockMetadata { block_id, metadata } => {
+          let Some(position) = positions.get(block_id).copied() else {
+            return Err(Error::UnknownBlock {
+              block_id: block_id.clone(),
+            });
+          };
+          pending
+            .entry(position)
+            .or_insert_with(|| PendingBlockUpdate::new(block_id.clone()))
+            .metadata = Some(metadata.clone());
+        }
+        DocumentChange::ReplaceDocumentMetadata { metadata } => {
+          document_metadata = Some(metadata.clone());
+        }
+        DocumentChange::InsertAfter { .. } | DocumentChange::Remove { .. } => {
+          return Ok(None);
+        }
+      }
+    }
+
+    let mut text_bytes = current_text_bytes;
+    let mut block_updates = Vec::with_capacity(pending.len());
+    for (position, pending_update) in pending {
+      let Some(block) = self
+        .blocks
+        .get(position)
+        .filter(|block| block.id() == &pending_update.block_id)
+      else {
+        return Err(Error::UnknownBlock {
+          block_id: pending_update.block_id,
+        });
+      };
+      let text = pending_update
+        .text
+        .filter(|text| text.as_ref() != block.text());
+      if let Some(text) = &text {
+        validate_block_text(block.id(), text)?;
+        text_bytes = text_bytes
+          .checked_sub(block.text().len())
+          .and_then(|bytes| bytes.checked_add(text.len()))
+          .ok_or(Error::DocumentTooLarge)?;
+      }
+      let metadata = pending_update
+        .metadata
+        .filter(|metadata| metadata != block.metadata());
+      if text.is_some() || metadata.is_some() {
+        block_updates.push(NonStructuralBlockUpdate {
+          block_id: block.id().clone(),
+          position,
+          text,
+          metadata,
+        });
+      }
+    }
+    if text_bytes > MAX_DOCUMENT_BYTES {
+      return Err(Error::DocumentTooLarge);
+    }
+    let document_metadata =
+      document_metadata.filter(|metadata| metadata != &self.metadata);
+    Ok(Some(NonStructuralDocumentPatch {
+      block_updates,
+      document_metadata,
+      text_bytes,
+    }))
+  }
+
+  #[cfg(feature = "incremental")]
+  pub(crate) fn apply_non_structural_patch(
+    &mut self,
+    patch: &NonStructuralDocumentPatch,
+  ) -> Result<()> {
+    for update in &patch.block_updates {
+      let Some(_block) = self
+        .blocks
+        .get(update.position)
+        .filter(|block| block.id() == &update.block_id)
+      else {
+        return Err(Error::UnknownBlock {
+          block_id: update.block_id.clone(),
+        });
+      };
+    }
+    for update in &patch.block_updates {
+      let Some(block) = self.blocks.get_mut(update.position) else {
+        return Err(Error::UnknownBlock {
+          block_id: update.block_id.clone(),
+        });
+      };
+      if let Some(text) = &update.text {
+        block.replace_text(Arc::clone(text));
+      }
+      if let Some(metadata) = &update.metadata {
+        block.replace_metadata(metadata.clone());
+      }
+    }
+    if let Some(metadata) = &patch.document_metadata {
+      self.metadata = metadata.clone();
+    }
+    Ok(())
+  }
+
+  #[cfg(feature = "incremental")]
   pub(crate) fn apply_changes(
     &self,
     changes: &[DocumentChange],
@@ -378,13 +510,7 @@ fn validate_blocks(blocks: &[DocumentBlock]) -> Result<()> {
         block_id: block.id.clone(),
       });
     }
-    if block.text.len() > MAX_BLOCK_BYTES
-      || u32::try_from(block.text.len()).is_err()
-    {
-      return Err(Error::BlockTooLarge {
-        block_id: block.id.clone(),
-      });
-    }
+    validate_block_text(&block.id, &block.text)?;
     total_bytes = total_bytes
       .checked_add(block.text.len())
       .ok_or(Error::DocumentTooLarge)?;
@@ -393,6 +519,86 @@ fn validate_blocks(blocks: &[DocumentBlock]) -> Result<()> {
     }
   }
   Ok(())
+}
+
+fn validate_block_text(block_id: &BlockId, text: &str) -> Result<()> {
+  if text.len() > MAX_BLOCK_BYTES || u32::try_from(text.len()).is_err() {
+    return Err(Error::BlockTooLarge {
+      block_id: block_id.clone(),
+    });
+  }
+  Ok(())
+}
+
+#[cfg(feature = "incremental")]
+struct PendingBlockUpdate {
+  block_id: BlockId,
+  text: Option<Arc<str>>,
+  metadata: Option<Metadata>,
+}
+
+#[cfg(feature = "incremental")]
+impl PendingBlockUpdate {
+  const fn new(block_id: BlockId) -> Self {
+    Self {
+      block_id,
+      text: None,
+      metadata: None,
+    }
+  }
+}
+
+#[cfg(feature = "incremental")]
+pub(crate) struct NonStructuralDocumentPatch {
+  block_updates: Vec<NonStructuralBlockUpdate>,
+  document_metadata: Option<Metadata>,
+  text_bytes: usize,
+}
+
+#[cfg(feature = "incremental")]
+impl NonStructuralDocumentPatch {
+  pub(crate) fn block_updates(&self) -> &[NonStructuralBlockUpdate] {
+    &self.block_updates
+  }
+
+  pub(crate) const fn document_metadata(&self) -> Option<&Metadata> {
+    self.document_metadata.as_ref()
+  }
+
+  pub(crate) const fn is_empty(&self) -> bool {
+    self.block_updates.is_empty() && self.document_metadata.is_none()
+  }
+
+  pub(crate) const fn text_bytes(&self) -> usize {
+    self.text_bytes
+  }
+}
+
+#[cfg(feature = "incremental")]
+pub(crate) struct NonStructuralBlockUpdate {
+  block_id: BlockId,
+  position: usize,
+  text: Option<Arc<str>>,
+  metadata: Option<Metadata>,
+}
+
+#[cfg(feature = "incremental")]
+impl NonStructuralBlockUpdate {
+  pub(crate) const fn block_id(&self) -> &BlockId {
+    &self.block_id
+  }
+
+  pub(crate) const fn position(&self) -> usize {
+    self.position
+  }
+
+  pub(crate) const fn text(&self) -> Option<&Arc<str>> {
+    self.text.as_ref()
+  }
+
+  pub(crate) const fn metadata(&self) -> Option<&Metadata> {
+    self.metadata.as_ref()
+  }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -418,6 +624,11 @@ pub enum DocumentChange {
 }
 
 impl DocumentChange {
+  #[cfg(feature = "incremental")]
+  const fn changes_structure(&self) -> bool {
+    matches!(self, Self::InsertAfter { .. } | Self::Remove { .. })
+  }
+
   #[must_use]
   pub fn replace_text(block_id: BlockId, text: impl Into<Arc<str>>) -> Self {
     Self::ReplaceText {

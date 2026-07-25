@@ -1,4 +1,5 @@
-use std::collections::BTreeMap;
+use std::cell::RefCell;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use salsa::Setter as _;
@@ -6,23 +7,17 @@ use salsa::Setter as _;
 use crate::engine::{
   AnalysisSnapshot, BlockAnalysis, ExecutionCounters, RuleEngine,
   analyze_block, neighborhood_bounds, run_block_rules, run_document_rules,
-  run_neighborhood_rules, validate_findings,
+  run_neighborhood_rules, validate_findings_indexed,
 };
 use crate::model::{
-  BlockId, Document, DocumentBlock, DocumentChange, DocumentPatch, Error,
-  Metadata, Result, Revision,
+  BlockId, Document, DocumentBlock, DocumentPatch, Error, Metadata,
+  NonStructuralDocumentPatch, Result, Revision,
 };
 use crate::rule::{BlockFact, DocumentFacts, Finding, RuleSet};
 
 // Salsa input slots live for the database lifetime. Rotate the cache generation
 // before structural churn can retain more old records than this bounded budget.
 const MIN_RETIRED_RECORD_LIMIT: usize = 64;
-
-#[derive(Clone, Copy)]
-enum StructureChange {
-  Absent,
-  Present,
-}
 
 #[salsa::input]
 #[derive(Debug)]
@@ -156,6 +151,21 @@ fn tracked_neighborhood_findings(
 }
 
 #[salsa::tracked(returns(clone))]
+fn tracked_record_findings(
+  db: &dyn DocumentDatabase,
+  block: BlockInput,
+  links: LinkInput,
+) -> Result<Arc<[Finding]>> {
+  let local = tracked_block_findings(db, block)?;
+  let neighborhood = tracked_neighborhood_findings(db, block, links)?;
+  let mut findings =
+    Vec::with_capacity(local.len().saturating_add(neighborhood.len()));
+  findings.extend(local.iter().cloned());
+  findings.extend(neighborhood.iter().cloned());
+  Ok(findings.into())
+}
+
+#[salsa::tracked(returns(clone))]
 fn tracked_document_facts(
   db: &dyn DocumentDatabase,
   document: DocumentInput,
@@ -184,37 +194,123 @@ fn tracked_document_findings(
   Ok(run_document_rules(db.rules(), db.counters(), &facts)?.into())
 }
 
-#[salsa::tracked(returns(clone))]
-fn tracked_all_findings(
-  db: &dyn DocumentDatabase,
-  document: DocumentInput,
-) -> Result<Arc<[Finding]>> {
-  let records = document.blocks(db);
-  let mut findings = Vec::new();
-  for record in records.iter().copied() {
-    findings.extend(tracked_block_findings(db, record.block)?.iter().cloned());
-    findings.extend(
-      tracked_neighborhood_findings(db, record.block, record.links)?
-        .iter()
-        .cloned(),
-    );
+#[derive(Default)]
+struct FindingCache {
+  initialized: bool,
+  by_position: BTreeMap<usize, Arc<[Finding]>>,
+  dirty_positions: BTreeSet<usize>,
+  #[cfg(test)]
+  refreshed_record_count: usize,
+}
+
+impl FindingCache {
+  fn invalidate_structure(&mut self) {
+    self.initialized = false;
+    self.by_position.clear();
+    self.dirty_positions.clear();
   }
-  findings.extend(tracked_document_findings(db, document)?.iter().cloned());
-  Ok(findings.into())
+
+  fn invalidate_around(
+    &mut self,
+    position: usize,
+    block_count: usize,
+    radius: usize,
+  ) {
+    if !self.initialized {
+      return;
+    }
+    let start = position.saturating_sub(radius);
+    let end = position
+      .saturating_add(radius)
+      .saturating_add(1)
+      .min(block_count);
+    self.dirty_positions.extend(start..end);
+  }
+
+  fn collect(
+    &mut self,
+    database: &Database,
+    records: &[BlockRecord],
+  ) -> Result<Vec<Finding>> {
+    if !self.initialized {
+      let mut by_position = BTreeMap::new();
+      for (position, record) in records.iter().copied().enumerate() {
+        #[cfg(test)]
+        self.record_refresh();
+        let findings = refresh_record(database, record)?;
+        if !findings.is_empty() {
+          by_position.insert(position, findings);
+        }
+      }
+      self.by_position = by_position;
+      self.initialized = true;
+      self.dirty_positions.clear();
+    } else if !self.dirty_positions.is_empty() {
+      let mut refreshed = Vec::with_capacity(self.dirty_positions.len());
+      let dirty_positions =
+        self.dirty_positions.iter().copied().collect::<Vec<_>>();
+      for position in dirty_positions {
+        let Some(record) = records.get(position).copied() else {
+          self.invalidate_structure();
+          return self.collect(database, records);
+        };
+        #[cfg(test)]
+        self.record_refresh();
+        refreshed.push((position, refresh_record(database, record)?));
+      }
+      for (position, findings) in refreshed {
+        if findings.is_empty() {
+          self.by_position.remove(&position);
+        } else {
+          self.by_position.insert(position, findings);
+        }
+      }
+      self.dirty_positions.clear();
+    }
+
+    let finding_count = self
+      .by_position
+      .values()
+      .map(|findings| findings.len())
+      .sum();
+    let mut findings = Vec::with_capacity(finding_count);
+    for block_findings in self.by_position.values() {
+      findings.extend(block_findings.iter().cloned());
+    }
+    Ok(findings)
+  }
+
+  #[cfg(test)]
+  const fn record_refresh(&mut self) {
+    self.refreshed_record_count = self.refreshed_record_count.saturating_add(1);
+  }
+}
+
+fn refresh_record(
+  database: &Database,
+  record: BlockRecord,
+) -> Result<Arc<[Finding]>> {
+  tracked_record_findings(database, record.block, record.links)
 }
 
 pub struct IncrementalDocumentSession {
   database: Database,
   document_input: DocumentInput,
   records: BTreeMap<BlockId, BlockRecord>,
+  positions: BTreeMap<BlockId, usize>,
+  finding_cache: RefCell<FindingCache>,
   allocated_record_count: usize,
+  text_bytes: usize,
   document: Document,
   revision: Revision,
+  #[cfg(test)]
+  fast_patch_block_count: usize,
 }
 
 impl IncrementalDocumentSession {
   #[must_use]
   pub fn new(engine: &RuleEngine, document: Document) -> Self {
+    let text_bytes = document.text_bytes();
     let database = Database::new(engine);
     let (records, ordered) = create_records(&database, &document);
     let document_input = DocumentInput::new(
@@ -225,10 +321,15 @@ impl IncrementalDocumentSession {
     Self {
       database,
       document_input,
+      positions: block_positions(&document),
       records,
+      finding_cache: RefCell::new(FindingCache::default()),
       allocated_record_count: document.blocks().len(),
+      text_bytes,
       document,
       revision: Revision::initial(),
+      #[cfg(test)]
+      fast_patch_block_count: 0,
     }
   }
 
@@ -243,9 +344,20 @@ impl IncrementalDocumentSession {
   }
 
   pub fn analyze(&self) -> Result<AnalysisSnapshot> {
-    let findings = tracked_all_findings(&self.database, self.document_input)?;
-    validate_findings(&self.document, &findings)?;
-    Ok(AnalysisSnapshot::new(self.revision, findings.to_vec()))
+    let records = self.document_input.blocks(&self.database);
+    let mut findings = self
+      .finding_cache
+      .borrow_mut()
+      .collect(&self.database, &records)?;
+    if self.database.rules().has_document_rules() {
+      findings.extend(
+        tracked_document_findings(&self.database, self.document_input)?
+          .iter()
+          .cloned(),
+      );
+    }
+    validate_findings_indexed(&self.document, &self.positions, &findings)?;
+    Ok(AnalysisSnapshot::new(self.revision, findings))
   }
 
   pub fn apply_patch(&mut self, patch: &DocumentPatch) -> Result<Revision> {
@@ -255,40 +367,95 @@ impl IncrementalDocumentSession {
         actual: self.revision,
       });
     }
+    let Some(prepared) = self.document.prepare_non_structural_patch(
+      patch.changes(),
+      &self.positions,
+      self.text_bytes,
+    )?
+    else {
+      return self.apply_structural_patch(patch);
+    };
+    self.apply_non_structural_patch(&prepared)
+  }
+
+  fn apply_non_structural_patch(
+    &mut self,
+    patch: &NonStructuralDocumentPatch,
+  ) -> Result<Revision> {
+    if patch.is_empty() {
+      return Ok(self.revision);
+    }
+    let next_revision = self.revision.next()?;
+    let inputs = patch
+      .block_updates()
+      .iter()
+      .map(|update| {
+        self
+          .records
+          .get(update.block_id())
+          .map(|record| record.block)
+          .ok_or_else(|| Error::UnknownBlock {
+            block_id: update.block_id().clone(),
+          })
+      })
+      .collect::<Result<Vec<_>>>()?;
+
+    #[cfg(test)]
+    {
+      self.fast_patch_block_count = self
+        .fast_patch_block_count
+        .saturating_add(patch.block_updates().len());
+    }
+
+    self.document.apply_non_structural_patch(patch)?;
+    let block_count = self.document.blocks().len();
+    let radius = self.database.rules().max_neighborhood_radius();
+    let mut finding_cache = self.finding_cache.borrow_mut();
+    for (update, input) in patch.block_updates().iter().zip(inputs) {
+      if let Some(text) = update.text() {
+        input.set_text(&mut self.database).to(Arc::clone(text));
+      }
+      if let Some(metadata) = update.metadata() {
+        input.set_metadata(&mut self.database).to(metadata.clone());
+      }
+      finding_cache.invalidate_around(update.position(), block_count, radius);
+    }
+    if let Some(metadata) = patch.document_metadata() {
+      self
+        .document_input
+        .set_metadata(&mut self.database)
+        .to(metadata.clone());
+    }
+    drop(finding_cache);
+    self.text_bytes = patch.text_bytes();
+    self.revision = next_revision;
+    Ok(next_revision)
+  }
+
+  fn apply_structural_patch(
+    &mut self,
+    patch: &DocumentPatch,
+  ) -> Result<Revision> {
     let next_document = self.document.apply_changes(patch.changes())?;
     if next_document == self.document {
       return Ok(self.revision);
     }
     let next_revision = self.revision.next()?;
-    let structure_change = if patch.changes().iter().any(|change| {
-      matches!(
-        change,
-        DocumentChange::InsertAfter { .. } | DocumentChange::Remove { .. }
-      )
-    }) {
-      StructureChange::Present
-    } else {
-      StructureChange::Absent
-    };
-    self.reconcile_inputs(&next_document, structure_change);
+    self.reconcile_inputs(&next_document);
+    self.positions = block_positions(&next_document);
+    self.finding_cache.borrow_mut().invalidate_structure();
+    self.text_bytes = next_document.text_bytes();
     self.document = next_document;
     self.revision = next_revision;
     Ok(next_revision)
   }
 
-  fn reconcile_inputs(
-    &mut self,
-    document: &Document,
-    structure_change: StructureChange,
-  ) {
-    let inserted_count = match structure_change {
-      StructureChange::Absent => 0,
-      StructureChange::Present => document
-        .blocks()
-        .iter()
-        .filter(|block| !self.records.contains_key(block.id()))
-        .count(),
-    };
+  fn reconcile_inputs(&mut self, document: &Document) {
+    let inserted_count = document
+      .blocks()
+      .iter()
+      .filter(|block| !self.records.contains_key(block.id()))
+      .count();
     let projected_allocated =
       self.allocated_record_count.saturating_add(inserted_count);
     let projected_retired =
@@ -384,6 +551,29 @@ impl IncrementalDocumentSession {
     self.records = records;
     self.allocated_record_count = document.blocks().len();
   }
+
+  #[cfg(test)]
+  fn reset_patch_and_refresh_counts(&mut self) {
+    self.fast_patch_block_count = 0;
+    self.finding_cache.borrow_mut().refreshed_record_count = 0;
+  }
+
+  #[cfg(test)]
+  fn patch_and_refresh_counts(&self) -> (usize, usize) {
+    (
+      self.fast_patch_block_count,
+      self.finding_cache.borrow().refreshed_record_count,
+    )
+  }
+}
+
+fn block_positions(document: &Document) -> BTreeMap<BlockId, usize> {
+  document
+    .blocks()
+    .iter()
+    .enumerate()
+    .map(|(position, block)| (block.id().clone(), position))
+    .collect()
 }
 
 fn retired_record_limit(live_record_count: usize) -> usize {
@@ -439,7 +629,18 @@ mod tests {
   #![allow(clippy::unwrap_used)]
 
   use super::*;
-  use crate::model::BlockId;
+  use crate::model::{BlockId, DocumentChange};
+
+  fn assert_send<T: Send>() {}
+
+  fn assert_send_sync<T: Send + Sync>() {}
+
+  #[test]
+  fn public_threading_traits_match_the_database_contract() {
+    assert_send_sync::<RuleEngine>();
+    assert_send::<Database>();
+    assert_send::<IncrementalDocumentSession>();
+  }
 
   fn input_count(database: &Database, debug_name: &str) -> usize {
     <dyn salsa::Database>::memory_usage(database)
@@ -488,5 +689,120 @@ mod tests {
       session.allocated_record_count
     );
     assert_eq!(input_count(&session.database, "DocumentInput"), 1);
+  }
+
+  fn one_block_edit_patch_and_refresh_counts(
+    block_count: usize,
+  ) -> (usize, usize) {
+    let engine = RuleEngine::new(RuleSet::new(Vec::new()).unwrap());
+    let blocks = (0..block_count)
+      .map(|index| {
+        DocumentBlock::new(
+          BlockId::new(format!("block-{index}")).unwrap(),
+          "unchanged",
+        )
+        .unwrap()
+      })
+      .collect();
+    let document = Document::new(blocks).unwrap();
+    let target =
+      BlockId::new(format!("block-{}", block_count.div_ceil(2))).unwrap();
+    let mut session = IncrementalDocumentSession::new(&engine, document);
+    session.analyze().unwrap();
+    session.reset_patch_and_refresh_counts();
+
+    session
+      .apply_patch(&DocumentPatch::new(
+        session.revision(),
+        vec![DocumentChange::replace_text(target, "changed")],
+      ))
+      .unwrap();
+    session.analyze().unwrap();
+    session.patch_and_refresh_counts()
+  }
+
+  #[test]
+  fn one_block_edit_patches_and_refreshes_one_record_at_any_document_size() {
+    let small = one_block_edit_patch_and_refresh_counts(32);
+    let large = one_block_edit_patch_and_refresh_counts(20_000);
+
+    assert_eq!(small, (1, 1));
+    assert_eq!(large, small);
+  }
+
+  #[test]
+  fn repeated_non_structural_changes_are_atomic_and_last_write_wins() {
+    let engine = RuleEngine::new(RuleSet::new(Vec::new()).unwrap());
+    let id = BlockId::new("stable").unwrap();
+    let document =
+      Document::new(vec![DocumentBlock::new(id.clone(), "original").unwrap()])
+        .unwrap();
+    let mut session = IncrementalDocumentSession::new(&engine, document);
+
+    let unchanged = session
+      .apply_patch(&DocumentPatch::new(
+        Revision::initial(),
+        vec![
+          DocumentChange::replace_text(id.clone(), "temporary"),
+          DocumentChange::replace_text(id.clone(), "original"),
+        ],
+      ))
+      .unwrap();
+    assert_eq!(unchanged, Revision::initial());
+    assert_eq!(
+      session.document().blocks().first().unwrap().text(),
+      "original"
+    );
+
+    let unknown = session
+      .apply_patch(&DocumentPatch::new(
+        Revision::initial(),
+        vec![
+          DocumentChange::replace_text(id.clone(), "accepted"),
+          DocumentChange::replace_text(
+            BlockId::new("missing").unwrap(),
+            "unknown",
+          ),
+        ],
+      ))
+      .unwrap_err();
+    assert!(matches!(unknown, Error::UnknownBlock { .. }));
+    assert_eq!(session.revision(), Revision::initial());
+    assert_eq!(
+      session.document().blocks().first().unwrap().text(),
+      "original"
+    );
+
+    let oversized: Arc<str> = "x".repeat(0x0100_0001).into();
+    let changed = session
+      .apply_patch(&DocumentPatch::new(
+        Revision::initial(),
+        vec![
+          DocumentChange::replace_text(id.clone(), Arc::clone(&oversized)),
+          DocumentChange::replace_text(id.clone(), "accepted"),
+        ],
+      ))
+      .unwrap();
+    assert_eq!(changed.value(), 1);
+    assert_eq!(
+      session.document().blocks().first().unwrap().text(),
+      "accepted"
+    );
+
+    let error = session
+      .apply_patch(&DocumentPatch::new(
+        changed,
+        vec![
+          DocumentChange::replace_text(id.clone(), "temporary"),
+          DocumentChange::replace_text(id, oversized),
+        ],
+      ))
+      .unwrap_err();
+    assert!(matches!(error, Error::BlockTooLarge { .. }));
+    assert_eq!(session.revision(), changed);
+    assert_eq!(
+      session.document().blocks().first().unwrap().text(),
+      "accepted"
+    );
   }
 }
