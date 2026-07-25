@@ -1,3 +1,4 @@
+use std::ops::Range;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -333,11 +334,9 @@ pub(crate) fn run_all_rules(
   let radius = rules.max_neighborhood_radius();
   for (position, analysis) in analyses.iter().enumerate() {
     let local = run_block_rules(rules, counters, analysis)?;
-    let before_start = position.saturating_sub(radius);
-    let after_start = position.saturating_add(1).min(analyses.len());
-    let after_end = after_start.saturating_add(radius).min(analyses.len());
-    let before = analyses.get(before_start..position).unwrap_or_default();
-    let after = analyses.get(after_start..after_end).unwrap_or_default();
+    let bounds = neighborhood_bounds(analyses.len(), position, radius);
+    let before = analyses.get(bounds.before).unwrap_or_default();
+    let after = analyses.get(bounds.after).unwrap_or_default();
     let neighborhood =
       run_neighborhood_rules(rules, counters, before, analysis, after)?;
     block_facts.push(BlockFact::new(
@@ -350,6 +349,25 @@ pub(crate) fn run_all_rules(
   let facts = DocumentFacts::new(block_facts, metadata.clone());
   findings.extend(run_document_rules(rules, counters, &facts)?);
   Ok(findings)
+}
+
+pub(crate) struct NeighborhoodBounds {
+  pub(crate) before: Range<usize>,
+  pub(crate) after: Range<usize>,
+}
+
+pub(crate) fn neighborhood_bounds(
+  len: usize,
+  position: usize,
+  radius: usize,
+) -> NeighborhoodBounds {
+  let before_start = position.saturating_sub(radius);
+  let after_start = position.saturating_add(1).min(len);
+  let after_end = after_start.saturating_add(radius).min(len);
+  NeighborhoodBounds {
+    before: before_start..position,
+    after: after_start..after_end,
+  }
 }
 
 pub(crate) fn validate_findings(

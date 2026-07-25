@@ -34,6 +34,12 @@ that declared a dependency on the changed input. Deterministic counter tests
 enforce this bound, while parity tests require batch and incremental findings
 to remain exactly equal.
 
+Salsa 0.28 retains input slots for the lifetime of a database and does not
+provide input deletion. Stable block edits reuse their inputs. Repeated block
+insertions and removals use bounded cache generations: the session replaces its
+database before retired inputs exceed a limit proportional to the live
+document, reclaiming the old generation as a unit.
+
 The crate forbids unsafe code and checks on `wasm32-unknown-unknown`. Static
 Rust rule sets can therefore use the same direct or incremental kernels in a
 single-thread browser WebAssembly build.

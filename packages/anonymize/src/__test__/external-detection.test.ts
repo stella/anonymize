@@ -55,9 +55,8 @@ const fakeProviderBatch = (
 
 describe("ExternalDetectionBatch v1", () => {
   test("public TypeScript limits exactly match the Rust contract", () => {
-    const limitsJson = binding.externalDetectionLimitsJson?.();
-    expect(limitsJson).toBeDefined();
-    expect(JSON.parse(limitsJson ?? "null")).toEqual({
+    const limitsJson = binding.externalDetectionLimitsJson();
+    expect(JSON.parse(limitsJson)).toEqual({
       batchMaxBytes: EXTERNAL_DETECTION_BATCH_MAX_BYTES,
       documentMaxBytes: EXTERNAL_DETECTION_DOCUMENT_MAX_BYTES,
       maxDetections: EXTERNAL_DETECTION_MAX_DETECTIONS,
@@ -65,7 +64,7 @@ describe("ExternalDetectionBatch v1", () => {
       maxMetadataBytes: EXTERNAL_DETECTION_MAX_METADATA_BYTES,
       providerIdMaxBytes: EXTERNAL_DETECTION_PROVIDER_ID_MAX_BYTES,
     });
-    expect(JSON.parse(limitsJson ?? "null")).toEqual({
+    expect(JSON.parse(limitsJson)).toEqual({
       batchMaxBytes: 16_777_216,
       documentMaxBytes: 67_108_864,
       maxDetections: 100_000,

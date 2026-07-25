@@ -270,6 +270,5 @@ raw personal data or non-public fixtures. A CLA check runs on pull requests.
 
 ## License
 
-Apache-2.0. See [`LICENSE`](LICENSE). Third-party runtime attributions for the
-browser build are listed in
-[`packages/anonymize/wasm/README.md`](packages/anonymize/wasm/README.md).
+Apache-2.0. See [`LICENSE`](LICENSE). Third-party runtime attributions, including
+the browser build, are listed in [`ATTRIBUTION.md`](ATTRIBUTION.md).

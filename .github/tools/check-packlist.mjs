@@ -98,8 +98,7 @@ const PACKAGES = [
       // Runtime wasm binding + wasm-bindgen ESM glue the entry loads
       // from its own `native/` asset directory. Missing any of these means
       // build:wasm-assets did not run after tsdown wiped wasm/dist/native.
-      "dist/native/index.js",
-      "dist/native/index_bg.wasm",
+      ...WASM_RUNTIME_ARTIFACTS.map((artifact) => artifact.packagePath),
       // Bundled default package plus the per-language compressed packages
       // (cs, de, en) that loadDefaultPipeline(language) resolves to.
       "dist/native/native-pipeline.stlanonpkg",

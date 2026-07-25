@@ -8,7 +8,7 @@
 
 use std::{cell::RefCell, rc::Rc};
 
-use js_sys::{Array, Function, Uint8Array};
+use js_sys::{Function, Uint8Array};
 use stella_anonymize_adapter_contract::{
   external_detection_batch_to_utf16_caller_request,
   external_detection_limits_json as contract_external_detection_limits_json,
@@ -147,7 +147,7 @@ pub fn inspect_pdf_json(
 pub fn rewrite_pdf_raster_from_detections_json(
   document: &[u8],
   request_json: &str,
-  page_pixels: Array,
+  page_pixels: Vec<Uint8Array>,
 ) -> WasmResult<WasmPdfRasterResult> {
   if request_json.len() > PDF_RASTER_REQUEST_JSON_MAX_BYTES {
     return Err(JsError::new(
@@ -161,8 +161,7 @@ pub fn rewrite_pdf_raster_from_detections_json(
       ))
     })?;
   let pixels = page_pixels
-    .iter()
-    .map(|value| Uint8Array::new(&value))
+    .into_iter()
     .map(|bytes| bytes.to_vec())
     .collect::<Vec<_>>();
   let (document, certificate) =
@@ -678,7 +677,7 @@ impl WasmPreparedRedactionSession {
     let result_json = plan.result_json().to_owned();
     Ok(WasmPreparedSessionRedactionPlan {
       target: Rc::clone(&self.session),
-      plan: RefCell::new(Some(plan)),
+      plan: RefCell::new(plan),
       result_json,
     })
   }
@@ -713,7 +712,7 @@ impl WasmPreparedRedactionSession {
 #[wasm_bindgen]
 pub struct WasmPreparedSessionRedactionPlan {
   target: Rc<RefCell<RedactionSession>>,
-  plan: RefCell<Option<PreparedSessionPlan>>,
+  plan: RefCell<PreparedSessionPlan>,
   result_json: String,
 }
 
@@ -726,10 +725,11 @@ impl WasmPreparedSessionRedactionPlan {
   }
 
   pub fn commit(&self) -> WasmResult<()> {
-    let plan = self.plan.borrow_mut().take().ok_or_else(|| {
-      JsError::new("Redaction session plan is already committed")
-    })?;
-    plan.commit(&mut self.target.borrow_mut()).map_err(js_error)
+    self
+      .plan
+      .borrow_mut()
+      .commit(&mut self.target.borrow_mut())
+      .map_err(js_error)
   }
 }
 

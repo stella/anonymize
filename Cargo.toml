@@ -133,7 +133,7 @@ debug = "line-tables-only"
 [profile.wasm-release]
 inherits = "release"
 panic = "abort"
-strip = "none"
+strip = "symbols"
 
 # CI test profile: keep the dev safety checks (debug-assertions, and
 # overflow-checks so offset/span arithmetic traps instead of silently wrapping),

@@ -42,8 +42,22 @@ pub enum BindingFacadeError {
   Contract(#[from] ContractError),
   #[error(transparent)]
   Core(#[from] CoreError),
-  #[error("{0}")]
-  Observer(String),
+  #[error(
+    "Redaction session archive key must contain exactly {expected_bytes} bytes"
+  )]
+  InvalidSessionArchiveKeyLength {
+    actual_bytes: usize,
+    expected_bytes: usize,
+  },
+  #[error("Redaction session archive exceeds byte limit")]
+  SessionArchiveLimitExceeded {
+    actual_bytes: usize,
+    max_bytes: usize,
+  },
+  #[error("Redaction session changed after the plan was created")]
+  SessionPlanConflict,
+  #[error("Redaction session plan has already been committed")]
+  SessionPlanAlreadyCommitted,
   #[error(transparent)]
   Serialization(#[from] serde_json::Error),
 }
@@ -320,8 +334,9 @@ pub fn redact_diagnostics_stream_json(
   mut on_batch: impl FnMut(String) -> std::result::Result<(), String>,
 ) -> Result<String> {
   if !prepare_diagnostics.events.is_empty() {
-    on_batch(prepare_diagnostics_json(prepare_diagnostics)?)
-      .map_err(BindingFacadeError::Observer)?;
+    on_batch(prepare_diagnostics_json(prepare_diagnostics)?).map_err(
+      |error| BindingFacadeError::Core(diagnostics_observer_error(&error)),
+    )?;
   }
   let mut result = engine.redact_static_entities_with_diagnostics_observer(
     full_text,
@@ -365,7 +380,7 @@ pub struct SessionDeletion {
 /// Uncommitted atomic session redaction work.
 pub struct PreparedSessionPlan {
   base: RedactionSession,
-  planned: RedactionSession,
+  planned: Option<RedactionSession>,
   result_json: String,
 }
 
@@ -383,13 +398,18 @@ impl PreparedSessionPlan {
   }
 
   /// Applies the plan if the target still matches its base snapshot.
-  pub fn commit(self, target: &mut RedactionSession) -> Result<()> {
-    if *target != self.base {
-      return Err(BindingFacadeError::Observer(
-        "Redaction session changed after the plan was created".to_owned(),
-      ));
+  pub fn commit(&mut self, target: &mut RedactionSession) -> Result<()> {
+    if self.planned.is_none() {
+      return Err(BindingFacadeError::SessionPlanAlreadyCommitted);
     }
-    *target = self.planned;
+    if *target != self.base {
+      return Err(BindingFacadeError::SessionPlanConflict);
+    }
+    let planned = self
+      .planned
+      .take()
+      .ok_or(BindingFacadeError::SessionPlanAlreadyCommitted)?;
+    *target = planned;
     Ok(())
   }
 }
@@ -428,9 +448,10 @@ pub fn restore_encrypted_session(
   observed_at_epoch_seconds: Option<u32>,
 ) -> Result<RedactionSession> {
   if archive.len() > REDACTION_SESSION_ARCHIVE_MAX_BYTES {
-    return Err(BindingFacadeError::Observer(
-      "Redaction session archive exceeds byte limit".to_owned(),
-    ));
+    return Err(BindingFacadeError::SessionArchiveLimitExceeded {
+      actual_bytes: archive.len(),
+      max_bytes: REDACTION_SESSION_ARCHIVE_MAX_BYTES,
+    });
   }
   let key = session_archive_key(key)?;
   let expected_session_id = SessionId::new(expected_session_id)?;
@@ -575,7 +596,7 @@ pub fn plan_session_redactions(
   }
   Ok(PreparedSessionPlan {
     base,
-    planned,
+    planned: Some(planned),
     result_json: serde_json::to_string(&results)?,
   })
 }
@@ -609,11 +630,9 @@ fn prepend_prepare_diagnostics(
 
 fn session_archive_key(bytes: &[u8]) -> Result<SessionArchiveKey> {
   let key = <[u8; REDACTION_SESSION_ARCHIVE_KEY_BYTES]>::try_from(bytes)
-    .map_err(|_| {
-      BindingFacadeError::Observer(
-        "Redaction session archive key must contain exactly 32 bytes"
-          .to_owned(),
-      )
+    .map_err(|_| BindingFacadeError::InvalidSessionArchiveKeyLength {
+      actual_bytes: bytes.len(),
+      expected_bytes: REDACTION_SESSION_ARCHIVE_KEY_BYTES,
     })?;
   Ok(SessionArchiveKey::from_bytes(key))
 }
@@ -650,7 +669,8 @@ mod tests {
 
   #[test]
   fn archive_key_validation_is_runtime_neutral() {
-    let message = match session_archive_key(&[0_u8; 31]) {
+    let result = session_archive_key(&[0_u8; 31]);
+    let message = match &result {
       Ok(_) => String::new(),
       Err(error) => error.to_string(),
     };
@@ -658,5 +678,36 @@ mod tests {
       message,
       "Redaction session archive key must contain exactly 32 bytes"
     );
+    assert!(matches!(
+      result,
+      Err(BindingFacadeError::InvalidSessionArchiveKeyLength {
+        actual_bytes: 31,
+        expected_bytes: REDACTION_SESSION_ARCHIVE_KEY_BYTES,
+      })
+    ));
+  }
+
+  #[test]
+  fn failed_plan_commit_can_be_retried() -> Result<()> {
+    let base = create_session("base-session".to_owned())?;
+    let mut target = create_session("changed-session".to_owned())?;
+    let planned = create_session("planned-session".to_owned())?;
+    let mut plan = PreparedSessionPlan {
+      base: base.clone(),
+      planned: Some(planned),
+      result_json: "[]".to_owned(),
+    };
+
+    assert!(matches!(
+      plan.commit(&mut target),
+      Err(BindingFacadeError::SessionPlanConflict)
+    ));
+    target = base;
+    assert!(plan.commit(&mut target).is_ok());
+    assert!(matches!(
+      plan.commit(&mut target),
+      Err(BindingFacadeError::SessionPlanAlreadyCommitted)
+    ));
+    Ok(())
   }
 }

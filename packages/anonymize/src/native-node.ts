@@ -6,7 +6,7 @@ import process from "node:process";
 import {
   assertNativeBindingVersion,
   createNativePipelineFromPackage,
-  NATIVE_BINDING_PARITY_MEMBERS,
+  isNativeAnonymizeBinding,
   type NativeOperatorConfig,
   type NativeAnonymizeBinding,
   type NativeNormalizeOptions,
@@ -268,7 +268,7 @@ export const redact_text_stream_json = (
   onEvent: (eventJson: string) => void,
   operators?: NativeOperatorConfig,
   options: NativeSdkOptions = {},
-): string | null =>
+): string =>
   redactTextStreamJsonWithBinding({
     binding: resolveNativeSdkBinding(options),
     config,
@@ -282,7 +282,7 @@ export const diagnostics_json = (
   fullText: string,
   operators?: NativeOperatorConfig,
   options: NativeSdkOptions = {},
-): string | null =>
+): string =>
   diagnosticsJsonWithBinding({
     binding: resolveNativeSdkBinding(options),
     config,
@@ -296,7 +296,7 @@ export const diagnostics_stream_json = (
   onBatch: (diagnosticsJson: string) => void,
   operators?: NativeOperatorConfig,
   options: NativeSdkOptions = {},
-): string | null =>
+): string =>
   diagnosticsStreamJsonWithBinding({
     binding: resolveNativeSdkBinding(options),
     config,
@@ -310,7 +310,7 @@ export const summary_diagnostics_json = (
   fullText: string,
   operators?: NativeOperatorConfig,
   options: NativeSdkOptions = {},
-): string | null =>
+): string =>
   summaryDiagnosticsJsonWithBinding({
     binding: resolveNativeSdkBinding(options),
     config,
@@ -864,28 +864,6 @@ const toNativeAnonymizeBinding = (
       ? value["default"]
       : value;
   return isNativeAnonymizeBinding(candidate) ? candidate : null;
-};
-
-const isNativeAnonymizeBinding = (
-  candidate: unknown,
-): candidate is NativeAnonymizeBinding => {
-  if (!isPropertyBag(candidate)) {
-    return false;
-  }
-  if (
-    !NATIVE_BINDING_PARITY_MEMBERS.root.every(
-      (name) => typeof candidate[name] === "function",
-    )
-  ) {
-    return false;
-  }
-  const preparedSearch = candidate["NativePreparedSearch"];
-  if (!isPropertyBag(preparedSearch)) {
-    return false;
-  }
-  return NATIVE_BINDING_PARITY_MEMBERS.factories.every(
-    (name) => typeof preparedSearch[name] === "function",
-  );
 };
 
 const isPropertyBag = (value: unknown): value is Record<string, unknown> =>

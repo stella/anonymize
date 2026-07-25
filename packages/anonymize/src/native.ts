@@ -289,8 +289,7 @@ export type NativeAnonymizeBinding = {
   // Rust config assembler (replaces the retired TypeScript config-assembly
   // layer). Takes the pipeline config plus out-of-band dictionaries and
   // gazetteer JSON and returns either the assembled config JSON or ready
-  // package bytes. Optional so older bindings without the assembler still
-  // satisfy the type; native-node loads them from the same `.node`.
+  // package bytes. Every parity runtime must expose these required members.
   assembleStaticSearchConfigJson: (
     pipelineConfigJson: Uint8Array,
     dictionariesJson?: Uint8Array,
@@ -420,6 +419,34 @@ void [
   PLAN_PARITY_IS_EXHAUSTIVE,
 ];
 
+const isBindingPropertyBag = (
+  value: unknown,
+): value is Record<string, unknown> =>
+  (typeof value === "object" && value !== null) || typeof value === "function";
+
+/** Validate the complete runtime-neutral root and factory binding shape. */
+export const isNativeAnonymizeBinding = (
+  candidate: unknown,
+): candidate is NativeAnonymizeBinding => {
+  if (!isBindingPropertyBag(candidate)) {
+    return false;
+  }
+  if (
+    !NATIVE_BINDING_PARITY_MEMBERS.root.every(
+      (name) => typeof candidate[name] === "function",
+    )
+  ) {
+    return false;
+  }
+  const preparedSearch = candidate["NativePreparedSearch"];
+  return (
+    isBindingPropertyBag(preparedSearch) &&
+    NATIVE_BINDING_PARITY_MEMBERS.factories.every(
+      (name) => typeof preparedSearch[name] === "function",
+    )
+  );
+};
+
 export type NativeOperatorConfig = {
   operators?: Record<string, OperatorSelection>;
   redactString?: string;
@@ -482,13 +509,7 @@ export const convert_external_detection_batch = ({
   document,
   batch,
 }: ConvertExternalDetectionBatchOptions): NativeCallerDetection[] => {
-  const convert = binding.convertExternalDetectionBatch;
-  if (convert === undefined) {
-    throw new Error(
-      "Native anonymize binding does not support external detection batches",
-    );
-  }
-  return convert(
+  return binding.convertExternalDetectionBatch(
     document,
     typeof batch === "string" ? batch : JSON.stringify(batch),
   );
@@ -653,21 +674,9 @@ export class PreparedNativeRedactionSession {
 
   restoreText(fullText: string, observedAtEpochSeconds?: number): string {
     if (observedAtEpochSeconds === undefined) {
-      const restore = this.#session.restoreText;
-      if (!restore) {
-        throw new Error(
-          "Native anonymize binding does not support session restoration",
-        );
-      }
-      return restore.call(this.#session, fullText);
+      return this.#session.restoreText(fullText);
     }
-    const restore = this.#session.restoreTextAt;
-    if (!restore) {
-      throw new Error(
-        "Native anonymize binding does not support session restoration lifecycle controls",
-      );
-    }
-    return restore.call(this.#session, fullText, observedAtEpochSeconds);
+    return this.#session.restoreTextAt(fullText, observedAtEpochSeconds);
   }
 
   restore_text(fullText: string, observedAtEpochSeconds?: number): string {
@@ -683,13 +692,7 @@ export class PreparedNativeRedactionSession {
   }
 
   toPlaintextJsonAt(observedAtEpochSeconds: number): string {
-    const serialize = this.#session.toPlaintextJsonAt;
-    if (!serialize) {
-      throw new Error(
-        "Native anonymize binding does not support session lifecycle controls",
-      );
-    }
-    return serialize.call(this.#session, observedAtEpochSeconds);
+    return this.#session.toPlaintextJsonAt(observedAtEpochSeconds);
   }
 
   to_plaintext_json_at(observedAtEpochSeconds: number): string {
@@ -697,13 +700,7 @@ export class PreparedNativeRedactionSession {
   }
 
   toEncryptedArchive(key: Uint8Array): Uint8Array {
-    const serialize = this.#session.toEncryptedArchive;
-    if (!serialize) {
-      throw new Error(
-        "Native anonymize binding does not support encrypted session archives",
-      );
-    }
-    return serialize.call(this.#session, key);
+    return this.#session.toEncryptedArchive(key);
   }
 
   to_encrypted_archive(key: Uint8Array): Uint8Array {
@@ -714,13 +711,7 @@ export class PreparedNativeRedactionSession {
     key: Uint8Array,
     observedAtEpochSeconds: number,
   ): Uint8Array {
-    const serialize = this.#session.toEncryptedArchiveAt;
-    if (!serialize) {
-      throw new Error(
-        "Native anonymize binding does not support encrypted session archives",
-      );
-    }
-    return serialize.call(this.#session, key, observedAtEpochSeconds);
+    return this.#session.toEncryptedArchiveAt(key, observedAtEpochSeconds);
   }
 
   to_encrypted_archive_at(
@@ -731,14 +722,8 @@ export class PreparedNativeRedactionSession {
   }
 
   inspect(observedAtEpochSeconds?: number): NativeSessionMetadata {
-    const inspect = this.#session.inspectJson;
-    if (!inspect) {
-      throw new Error(
-        "Native anonymize binding does not support session lifecycle controls",
-      );
-    }
     const metadata: CanonicalSessionMetadata = JSON.parse(
-      inspect.call(this.#session, observedAtEpochSeconds),
+      this.#session.inspectJson(observedAtEpochSeconds),
     );
     return {
       sessionId: metadata.session_id,
@@ -750,14 +735,8 @@ export class PreparedNativeRedactionSession {
   }
 
   delete(): NativeSessionDeletionSummary {
-    const deleteSession = this.#session.deleteJson;
-    if (!deleteSession) {
-      throw new Error(
-        "Native anonymize binding does not support session lifecycle controls",
-      );
-    }
     const summary: CanonicalSessionDeletionSummary = JSON.parse(
-      deleteSession.call(this.#session),
+      this.#session.deleteJson(),
     );
     return {
       sessionId: summary.session_id,
@@ -832,14 +811,7 @@ export class PreparedNativeRedactionSession {
     observedAtEpochSeconds,
     operators,
   }: NativeSessionRedactionAtOptions): string {
-    const redact = this.#session.redactStaticEntitiesJsonAt;
-    if (!redact) {
-      throw new Error(
-        "Native anonymize binding does not support session lifecycle controls",
-      );
-    }
-    return redact.call(
-      this.#session,
+    return this.#session.redactStaticEntitiesJsonAt(
       fullText,
       observedAtEpochSeconds,
       toBindingOperatorConfig(operators),
@@ -855,14 +827,8 @@ export class PreparedNativeRedactionSession {
     operators,
     observedAtEpochSeconds,
   }: NativeSessionCallerRedactionPlanOptions): PreparedNativeSessionRedactionPlan {
-    const plan = this.#session.planStaticEntitiesWithCallerDetections;
-    if (!plan) {
-      throw new Error(
-        "Native anonymize binding does not support transactional caller-detection session plans",
-      );
-    }
     const bindingOperators = toBindingOperatorConfig(operators);
-    const bindingPlan = plan.call(this.#session, {
+    const bindingPlan = this.#session.planStaticEntitiesWithCallerDetections({
       inputs: inputs.map(({ detections, fullText }) => ({
         fullText,
         requestJson: callerDetectionRequestJson(detections),
@@ -908,11 +874,11 @@ export class PreparedNativeAnonymizer {
     this.#prepared = prepared;
   }
 
-  prepareDiagnosticsJson(): string | null {
-    return this.#prepared.prepareDiagnosticsJson?.() ?? null;
+  prepareDiagnosticsJson(): string {
+    return this.#prepared.prepareDiagnosticsJson();
   }
 
-  prepare_diagnostics_json(): string | null {
+  prepare_diagnostics_json(): string {
     return this.prepareDiagnosticsJson();
   }
 
@@ -924,23 +890,17 @@ export class PreparedNativeAnonymizer {
     this.warmLazyRegex();
   }
 
-  warmLazyRegexDiagnosticsJson(): string | null {
+  warmLazyRegexDiagnosticsJson(): string {
     return this.#prepared.warmLazyRegexDiagnosticsJson();
   }
 
-  warm_lazy_regex_diagnostics_json(): string | null {
+  warm_lazy_regex_diagnostics_json(): string {
     return this.warmLazyRegexDiagnosticsJson();
   }
 
   createRedactionSession(sessionId: string): PreparedNativeRedactionSession {
-    const create = this.#prepared.createRedactionSession;
-    if (!create) {
-      throw new Error(
-        "Native anonymize binding does not support redaction sessions",
-      );
-    }
     return new PreparedNativeRedactionSession(
-      create.call(this.#prepared, sessionId),
+      this.#prepared.createRedactionSession(sessionId),
     );
   }
 
@@ -953,15 +913,8 @@ export class PreparedNativeAnonymizer {
     createdAtEpochSeconds,
     expiresAtEpochSeconds,
   }: NativeCreateSessionWithLifecycleOptions): PreparedNativeRedactionSession {
-    const create = this.#prepared.createRedactionSessionWithLifecycle;
-    if (!create) {
-      throw new Error(
-        "Native anonymize binding does not support session lifecycle controls",
-      );
-    }
     return new PreparedNativeRedactionSession(
-      create.call(
-        this.#prepared,
+      this.#prepared.createRedactionSessionWithLifecycle(
         sessionId,
         createdAtEpochSeconds,
         expiresAtEpochSeconds,
@@ -978,14 +931,8 @@ export class PreparedNativeAnonymizer {
   restoreRedactionSession(
     plaintextJson: string,
   ): PreparedNativeRedactionSession {
-    const restore = this.#prepared.restoreRedactionSession;
-    if (!restore) {
-      throw new Error(
-        "Native anonymize binding does not support redaction sessions",
-      );
-    }
     return new PreparedNativeRedactionSession(
-      restore.call(this.#prepared, plaintextJson),
+      this.#prepared.restoreRedactionSession(plaintextJson),
     );
   }
 
@@ -1001,14 +948,8 @@ export class PreparedNativeAnonymizer {
     expectedSessionId,
     observedAtEpochSeconds,
   }: NativeOpenSessionArchiveOptions): PreparedNativeRedactionSession {
-    const restore = this.#prepared.restoreEncryptedRedactionSession;
-    if (!restore) {
-      throw new Error(
-        "Native anonymize binding does not support encrypted session archives",
-      );
-    }
     return new PreparedNativeRedactionSession(
-      restore.call(this.#prepared, {
+      this.#prepared.restoreEncryptedRedactionSession({
         archive,
         key,
         expectedSessionId,
@@ -1046,30 +987,13 @@ export class PreparedNativeAnonymizer {
 
   redact_text_json(fullText: string, operators?: NativeOperatorConfig): string {
     const bindingOperators = toBindingOperatorConfig(operators);
-    if (this.#prepared.redactStaticEntitiesJson) {
-      return this.#prepared.redactStaticEntitiesJson(
-        fullText,
-        bindingOperators,
-      );
-    }
-    return JSON.stringify(
-      toBindingStaticRedactionResult(
-        toNativeStaticRedactionResult(
-          this.#prepared.redactStaticEntities(fullText, bindingOperators),
-        ),
-      ),
-    );
+    return this.#prepared.redactStaticEntitiesJson(fullText, bindingOperators);
   }
 
   redactStaticEntitiesWithCallerDetections(
     fullText: string,
     options: NativeCallerRedactionOptions,
   ): NativeStaticRedactionResult {
-    if (!this.#prepared.redactStaticEntitiesWithCallerDetectionsJson) {
-      throw new Error(
-        "Native anonymize binding does not support caller detections",
-      );
-    }
     const requestJson = callerDetectionRequestJson(options.detections);
     const operators = toBindingOperatorConfig(options.operators);
     const result: CanonicalStaticRedactionResult = JSON.parse(
@@ -1091,24 +1015,22 @@ export class PreparedNativeAnonymizer {
   redactStaticEntitiesWithCallerDetectionsDiagnosticsJson(
     fullText: string,
     options: NativeCallerRedactionOptions,
-  ): string | null {
-    const redact =
-      this.#prepared.redactStaticEntitiesWithCallerDetectionsDiagnosticsJson;
-    if (!redact) {
-      return null;
-    }
+  ): string {
     const requestJson = callerDetectionRequestJson(options.detections);
     const operators = toBindingOperatorConfig(options.operators);
-    return redact.call(this.#prepared, fullText, {
-      requestJson,
-      ...(operators ? { operators } : {}),
-    });
+    return this.#prepared.redactStaticEntitiesWithCallerDetectionsDiagnosticsJson(
+      fullText,
+      {
+        requestJson,
+        ...(operators ? { operators } : {}),
+      },
+    );
   }
 
   redact_static_entities_with_caller_detections_diagnostics_json(
     fullText: string,
     options: NativeCallerRedactionOptions,
-  ): string | null {
+  ): string {
     return this.redactStaticEntitiesWithCallerDetectionsDiagnosticsJson(
       fullText,
       options,
@@ -1123,10 +1045,7 @@ export class PreparedNativeAnonymizer {
     fullText: string,
     onEvent: NativeResultEventCallback,
     operators?: NativeOperatorConfig,
-  ): string | null {
-    if (!this.#prepared.redactStaticEntitiesResultStreamJson) {
-      return null;
-    }
+  ): string {
     return this.#prepared.redactStaticEntitiesResultStreamJson(
       fullText,
       toBindingOperatorConfig(operators),
@@ -1138,27 +1057,21 @@ export class PreparedNativeAnonymizer {
     fullText: string,
     onEvent: NativeResultEventCallback,
     operators?: NativeOperatorConfig,
-  ): string | null {
+  ): string {
     return this.redactTextStreamJson(fullText, onEvent, operators);
   }
 
   redactStaticEntitiesDiagnosticsJson(
     fullText: string,
     operators?: NativeOperatorConfig,
-  ): string | null {
-    if (!this.#prepared.redactStaticEntitiesDiagnosticsJson) {
-      return null;
-    }
+  ): string {
     return this.#prepared.redactStaticEntitiesDiagnosticsJson(
       fullText,
       toBindingOperatorConfig(operators),
     );
   }
 
-  diagnostics_json(
-    fullText: string,
-    operators?: NativeOperatorConfig,
-  ): string | null {
+  diagnostics_json(fullText: string, operators?: NativeOperatorConfig): string {
     return this.redactStaticEntitiesDiagnosticsJson(fullText, operators);
   }
 
@@ -1166,10 +1079,7 @@ export class PreparedNativeAnonymizer {
     fullText: string,
     onBatch: NativeDiagnosticsBatchCallback,
     operators?: NativeOperatorConfig,
-  ): string | null {
-    if (!this.#prepared.redactStaticEntitiesDiagnosticsStreamJson) {
-      return null;
-    }
+  ): string {
     return this.#prepared.redactStaticEntitiesDiagnosticsStreamJson(
       fullText,
       toBindingOperatorConfig(operators),
@@ -1181,17 +1091,14 @@ export class PreparedNativeAnonymizer {
     fullText: string,
     onBatch: NativeDiagnosticsBatchCallback,
     operators?: NativeOperatorConfig,
-  ): string | null {
+  ): string {
     return this.diagnosticsStreamJson(fullText, onBatch, operators);
   }
 
   redactStaticEntitiesSummaryDiagnosticsJson(
     fullText: string,
     operators?: NativeOperatorConfig,
-  ): string | null {
-    if (!this.#prepared.redactStaticEntitiesSummaryDiagnosticsJson) {
-      return null;
-    }
+  ): string {
     return this.#prepared.redactStaticEntitiesSummaryDiagnosticsJson(
       fullText,
       toBindingOperatorConfig(operators),
@@ -1201,7 +1108,7 @@ export class PreparedNativeAnonymizer {
   summary_diagnostics_json(
     fullText: string,
     operators?: NativeOperatorConfig,
-  ): string | null {
+  ): string {
     return this.redactStaticEntitiesSummaryDiagnosticsJson(fullText, operators);
   }
 }
@@ -1213,11 +1120,11 @@ export class PreparedNativePipeline {
     this.#anonymizer = anonymizer;
   }
 
-  prepareDiagnosticsJson(): string | null {
+  prepareDiagnosticsJson(): string {
     return this.#anonymizer.prepareDiagnosticsJson();
   }
 
-  prepare_diagnostics_json(): string | null {
+  prepare_diagnostics_json(): string {
     return this.prepareDiagnosticsJson();
   }
 
@@ -1229,11 +1136,11 @@ export class PreparedNativePipeline {
     this.warmLazyRegex();
   }
 
-  warmLazyRegexDiagnosticsJson(): string | null {
+  warmLazyRegexDiagnosticsJson(): string {
     return this.#anonymizer.warmLazyRegexDiagnosticsJson();
   }
 
-  warm_lazy_regex_diagnostics_json(): string | null {
+  warm_lazy_regex_diagnostics_json(): string {
     return this.warmLazyRegexDiagnosticsJson();
   }
 
@@ -1319,7 +1226,7 @@ export class PreparedNativePipeline {
   redactTextWithCallerDetectionsDiagnosticsJson(
     fullText: string,
     options: NativeCallerRedactionOptions,
-  ): string | null {
+  ): string {
     return this.#anonymizer.redactStaticEntitiesWithCallerDetectionsDiagnosticsJson(
       fullText,
       options,
@@ -1329,7 +1236,7 @@ export class PreparedNativePipeline {
   redact_text_with_caller_detections_diagnostics_json(
     fullText: string,
     options: NativeCallerRedactionOptions,
-  ): string | null {
+  ): string {
     return this.redactTextWithCallerDetectionsDiagnosticsJson(
       fullText,
       options,
@@ -1344,7 +1251,7 @@ export class PreparedNativePipeline {
     fullText: string,
     onEvent: NativeResultEventCallback,
     operators?: NativeOperatorConfig,
-  ): string | null {
+  ): string {
     return this.#anonymizer.redactTextStreamJson(fullText, onEvent, operators);
   }
 
@@ -1352,24 +1259,21 @@ export class PreparedNativePipeline {
     fullText: string,
     onEvent: NativeResultEventCallback,
     operators?: NativeOperatorConfig,
-  ): string | null {
+  ): string {
     return this.redactTextStreamJson(fullText, onEvent, operators);
   }
 
   redactTextDiagnosticsJson(
     fullText: string,
     operators?: NativeOperatorConfig,
-  ): string | null {
+  ): string {
     return this.#anonymizer.redactStaticEntitiesDiagnosticsJson(
       fullText,
       operators,
     );
   }
 
-  diagnostics_json(
-    fullText: string,
-    operators?: NativeOperatorConfig,
-  ): string | null {
+  diagnostics_json(fullText: string, operators?: NativeOperatorConfig): string {
     return this.redactTextDiagnosticsJson(fullText, operators);
   }
 
@@ -1377,7 +1281,7 @@ export class PreparedNativePipeline {
     fullText: string,
     onBatch: NativeDiagnosticsBatchCallback,
     operators?: NativeOperatorConfig,
-  ): string | null {
+  ): string {
     return this.#anonymizer.diagnosticsStreamJson(fullText, onBatch, operators);
   }
 
@@ -1385,14 +1289,14 @@ export class PreparedNativePipeline {
     fullText: string,
     onBatch: NativeDiagnosticsBatchCallback,
     operators?: NativeOperatorConfig,
-  ): string | null {
+  ): string {
     return this.diagnosticsStreamJson(fullText, onBatch, operators);
   }
 
   redactTextSummaryDiagnosticsJson(
     fullText: string,
     operators?: NativeOperatorConfig,
-  ): string | null {
+  ): string {
     return this.#anonymizer.redactStaticEntitiesSummaryDiagnosticsJson(
       fullText,
       operators,
@@ -1402,7 +1306,7 @@ export class PreparedNativePipeline {
   summary_diagnostics_json(
     fullText: string,
     operators?: NativeOperatorConfig,
-  ): string | null {
+  ): string {
     return this.redactTextSummaryDiagnosticsJson(fullText, operators);
   }
 }
@@ -1522,7 +1426,7 @@ export const redact_text_stream_json = ({
   fullText,
   operators,
   onEvent,
-}: SharedNativeRedactTextStreamJsonOptions): string | null =>
+}: SharedNativeRedactTextStreamJsonOptions): string =>
   new PreparedNativeAnonymizer(
     binding.NativePreparedSearch.fromConfigJsonBytes(
       encodeNativeSearchConfigInput(config),
@@ -1534,7 +1438,7 @@ export const diagnostics_json = ({
   config,
   fullText,
   operators,
-}: SharedNativeDiagnosticsJsonOptions): string | null =>
+}: SharedNativeDiagnosticsJsonOptions): string =>
   new PreparedNativeAnonymizer(
     binding.NativePreparedSearch.fromConfigJsonBytes(
       encodeNativeSearchConfigInput(config),
@@ -1547,7 +1451,7 @@ export const diagnostics_stream_json = ({
   fullText,
   operators,
   onBatch,
-}: SharedNativeDiagnosticsStreamJsonOptions): string | null =>
+}: SharedNativeDiagnosticsStreamJsonOptions): string =>
   new PreparedNativeAnonymizer(
     binding.NativePreparedSearch.fromConfigJsonBytes(
       encodeNativeSearchConfigInput(config),
@@ -1559,7 +1463,7 @@ export const summary_diagnostics_json = ({
   config,
   fullText,
   operators,
-}: SharedNativeDiagnosticsJsonOptions): string | null =>
+}: SharedNativeDiagnosticsJsonOptions): string =>
   new PreparedNativeAnonymizer(
     binding.NativePreparedSearch.fromConfigJsonBytes(
       encodeNativeSearchConfigInput(config),
@@ -1621,22 +1525,6 @@ const fromCanonicalStaticRedactionResult = (
   },
 });
 
-const toBindingStaticRedactionResult = (
-  result: NativeStaticRedactionResult,
-): CanonicalStaticRedactionResult => ({
-  resolved_entities: result.resolvedEntities.map(toBindingPipelineEntity),
-  redaction: {
-    redacted_text: result.redaction.redactedText,
-    redaction_map: [...result.redaction.redactionMap.entries()].map(
-      ([placeholder, original]) => ({ placeholder, original }),
-    ),
-    operator_map: [...result.redaction.operatorMap.entries()].map(
-      ([placeholder, operator]) => ({ placeholder, operator }),
-    ),
-    entity_count: result.redaction.entityCount,
-  },
-});
-
 const toNativePipelineEntity = (
   entity: NativeBindingPipelineEntity,
 ): NativePipelineEntity => ({
@@ -1649,18 +1537,6 @@ const toNativePipelineEntity = (
   ...(entity.sourceDetail ? { sourceDetail: entity.sourceDetail } : {}),
   ...(entity.providerId ? { providerId: entity.providerId } : {}),
   ...(entity.detectionId ? { detectionId: entity.detectionId } : {}),
-});
-
-const toBindingPipelineEntity = ({
-  sourceDetail,
-  providerId,
-  detectionId,
-  ...entity
-}: NativePipelineEntity): CanonicalPipelineEntity => ({
-  ...entity,
-  source_detail: sourceDetail ?? null,
-  provider_id: providerId ?? null,
-  detection_id: detectionId ?? null,
 });
 
 const toNativeRedactionResult = (

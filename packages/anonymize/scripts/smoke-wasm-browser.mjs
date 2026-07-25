@@ -171,6 +171,20 @@ const runInPage = async ({ sample, externalDetectionDocument, pdfBase64 }) => {
       }
     },
   });
+  const rawModule = await import("/native/index.js");
+  const initialized = await rawModule.default({
+    module_or_path: new URL("/native/index_bg.wasm", location.href),
+  });
+  const SharedBuffer = globalThis.SharedArrayBuffer;
+  const memoryBuffer = initialized.memory.buffer;
+  const sharedMemory =
+    (typeof SharedBuffer === "function" &&
+      memoryBuffer instanceof SharedBuffer) ||
+    Object.prototype.toString.call(memoryBuffer) ===
+      "[object SharedArrayBuffer]";
+  if (sharedMemory) {
+    throw new Error("browser binding uses shared WebAssembly memory");
+  }
   const module = await import("/wasm.mjs");
   const expectedExternalLimits = {
     batchMaxBytes: 16_777_216,
@@ -275,6 +289,7 @@ const runInPage = async ({ sample, externalDetectionDocument, pdfBase64 }) => {
     pdfError = String(error?.message ?? error);
   }
   return {
+    singleThread: !sharedMemory,
     entities: result.resolvedEntities.map(({ start, end, text, label }) => ({
       start,
       end,
@@ -294,6 +309,7 @@ const runInPage = async ({ sample, externalDetectionDocument, pdfBase64 }) => {
 
 const validate = (result, expectedPdfJson, expectedPdfError) => {
   const {
+    singleThread,
     entities,
     redactedText,
     archiveByteLength,
@@ -304,6 +320,9 @@ const validate = (result, expectedPdfJson, expectedPdfError) => {
     pdfInspectionJson,
     pdfError,
   } = result;
+  if (singleThread !== true) {
+    throw new Error("browser binding did not prove single-thread memory");
+  }
   const expectedExternalDetection = [
     {
       start: 2,
@@ -435,7 +454,7 @@ const main = async () => {
         ok: true,
         chrome: executablePath,
         crossOriginIsolated: false,
-        singleThread: true,
+        singleThread: result.singleThread,
         entityCount: result.entities.length,
         encryptedSessionArchive: true,
         pdfInspectionParity: true,

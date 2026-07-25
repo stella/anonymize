@@ -130,7 +130,7 @@ export type RawWasmModule = {
   rewritePdfRasterFromDetectionsJson: (
     document: Uint8Array,
     requestJson: string,
-    pagePixels: readonly Uint8Array[],
+    pagePixels: Uint8Array[],
   ) => RawPdfRasterResult;
   prepareStaticSearchPackageBytes: (configJson: Uint8Array) => Uint8Array;
   prepareStaticSearchCompressedPackageBytes: (
@@ -158,6 +158,76 @@ export type RawWasmModule = {
       packageBytes: Uint8Array,
     ) => RawPreparedSearch;
   };
+};
+
+type FunctionMemberNames<T> = {
+  [Key in keyof T]-?: T[Key] extends (...args: never[]) => unknown
+    ? Key
+    : never;
+}[keyof T];
+
+export const RAW_WASM_MODULE_FUNCTION_MEMBERS = [
+  "default",
+  "normalizeForSearch",
+  "nativePackageVersion",
+  "externalDetectionLimitsJson",
+  "convertExternalDetectionBatchJson",
+  "extractDocxTextJson",
+  "rewriteDocxTextNative",
+  "planDocxRestorationJson",
+  "inspectPdfJson",
+  "rewritePdfRasterFromDetectionsJson",
+  "prepareStaticSearchPackageBytes",
+  "prepareStaticSearchCompressedPackageBytes",
+  "assembleStaticSearchConfigJson",
+  "assembleStaticSearchPackageBytes",
+  "assembleStaticSearchCompressedPackageBytes",
+] as const satisfies readonly FunctionMemberNames<RawWasmModule>[];
+
+export const RAW_WASM_PREPARED_SEARCH_FACTORY_MEMBERS = [
+  "fromConfigJsonBytes",
+  "fromPreparedPackageBytes",
+  "fromTrustedPreparedPackageBytes",
+] as const satisfies readonly FunctionMemberNames<
+  RawWasmModule["WasmPreparedSearch"]
+>[];
+
+const RAW_ROOT_EXPORTS_ARE_EXHAUSTIVE: Exclude<
+  FunctionMemberNames<RawWasmModule>,
+  (typeof RAW_WASM_MODULE_FUNCTION_MEMBERS)[number]
+> extends never
+  ? true
+  : never = true;
+const RAW_FACTORY_EXPORTS_ARE_EXHAUSTIVE: Exclude<
+  FunctionMemberNames<RawWasmModule["WasmPreparedSearch"]>,
+  (typeof RAW_WASM_PREPARED_SEARCH_FACTORY_MEMBERS)[number]
+> extends never
+  ? true
+  : never = true;
+void [RAW_ROOT_EXPORTS_ARE_EXHAUSTIVE, RAW_FACTORY_EXPORTS_ARE_EXHAUSTIVE];
+
+const isPropertyBag = (value: unknown): value is Record<string, unknown> =>
+  (typeof value === "object" && value !== null) || typeof value === "function";
+
+/** Validate every raw export consumed by the runtime adapter. */
+export const isRawWasmModule = (value: unknown): value is RawWasmModule => {
+  if (
+    !isPropertyBag(value) ||
+    !RAW_WASM_MODULE_FUNCTION_MEMBERS.every(
+      (name) => typeof value[name] === "function",
+    )
+  ) {
+    return false;
+  }
+  const preparedSearch = value["WasmPreparedSearch"];
+  return (
+    isPropertyBag(preparedSearch) &&
+    typeof preparedSearch === "function" &&
+    isPropertyBag(preparedSearch["prototype"]) &&
+    RAW_WASM_PREPARED_SEARCH_FACTORY_MEMBERS.every(
+      (name) => typeof preparedSearch[name] === "function",
+    )
+  );
 };
 
 export const createWasmBinding = (
@@ -188,10 +258,11 @@ export const createWasmBinding = (
   extractDocxTextJson: raw.extractDocxTextJson,
   inspectPdfJson: raw.inspectPdfJson,
   rewritePdfRasterFromDetectionsJson: (document, requestJson, pagePixels) => {
+    assertPdfPixelPages(pagePixels);
     const result = raw.rewritePdfRasterFromDetectionsJson(
       document,
       requestJson,
-      pagePixels,
+      [...pagePixels],
     );
     return {
       document: result.document,
@@ -387,9 +458,29 @@ const canonicalResult = (result: CanonicalResult): BindingResult => ({
     operatorMap: result.redaction.operator_map.map(
       ({ placeholder, operator }) => ({
         placeholder,
-        operator: operator as OperatorType,
+        operator: parseOperatorType(operator),
       }),
     ),
     entityCount: result.redaction.entity_count,
   },
 });
+
+const parseOperatorType = (operator: string): OperatorType => {
+  switch (operator) {
+    case "keep":
+    case "mask":
+    case "redact":
+    case "replace":
+      return operator;
+    default:
+      throw new TypeError(`Unknown redaction operator: ${operator}`);
+  }
+};
+
+const assertPdfPixelPages = (pagePixels: readonly Uint8Array[]): void => {
+  for (const [index, page] of pagePixels.entries()) {
+    if (!(page instanceof Uint8Array)) {
+      throw new TypeError(`PDF pagePixels[${index}] must be a Uint8Array`);
+    }
+  }
+};

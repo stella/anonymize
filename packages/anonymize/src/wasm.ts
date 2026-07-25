@@ -23,7 +23,7 @@
 import {
   createNativeAnonymizerFromPackage,
   createNativePipelineFromPackage,
-  NATIVE_BINDING_PARITY_MEMBERS,
+  isNativeAnonymizeBinding,
   convert_external_detection_batch as convertExternalDetectionBatchWithBinding,
   diagnostics_json as diagnosticsJsonWithBinding,
   diagnostics_stream_json as diagnosticsStreamJsonWithBinding,
@@ -45,7 +45,7 @@ import {
   redact_text_stream_json as redactTextStreamJsonWithBinding,
   summary_diagnostics_json as summaryDiagnosticsJsonWithBinding,
 } from "./native";
-import { createWasmBinding, type RawWasmModule } from "./wasm-binding";
+import { createWasmBinding, isRawWasmModule } from "./wasm-binding";
 
 export * from "./native";
 export { deanonymise, exportRedactionKey } from "./redact";
@@ -434,7 +434,7 @@ export const redact_text_stream_json = async (
   onEvent: NativeResultEventCallback,
   operators?: NativeOperatorConfig,
   options?: WasmBindingOptions,
-): Promise<string | null> =>
+): Promise<string> =>
   redactTextStreamJsonWithBinding({
     binding: await resolveBinding(options),
     config,
@@ -448,7 +448,7 @@ export const diagnostics_json = async (
   fullText: string,
   operators?: NativeOperatorConfig,
   options?: WasmBindingOptions,
-): Promise<string | null> =>
+): Promise<string> =>
   diagnosticsJsonWithBinding({
     binding: await resolveBinding(options),
     config,
@@ -462,7 +462,7 @@ export const diagnostics_stream_json = async (
   onBatch: NativeDiagnosticsBatchCallback,
   operators?: NativeOperatorConfig,
   options?: WasmBindingOptions,
-): Promise<string | null> =>
+): Promise<string> =>
   diagnosticsStreamJsonWithBinding({
     binding: await resolveBinding(options),
     config,
@@ -476,7 +476,7 @@ export const summary_diagnostics_json = async (
   fullText: string,
   operators?: NativeOperatorConfig,
   options?: WasmBindingOptions,
-): Promise<string | null> =>
+): Promise<string> =>
   summaryDiagnosticsJsonWithBinding({
     binding: await resolveBinding(options),
     config,
@@ -490,13 +490,8 @@ export const inspect_pdf_json = async (
   document: Uint8Array,
   observationsJson?: string,
   options?: WasmBindingOptions,
-): Promise<string> => {
-  const inspect = (await resolveBinding(options)).inspectPdfJson;
-  if (inspect === undefined) {
-    throw new Error("wasm binding is stale: inspectPdfJson is missing");
-  }
-  return inspect(document, observationsJson);
-};
+): Promise<string> =>
+  (await resolveBinding(options)).inspectPdfJson(document, observationsJson);
 
 // --- Binding extraction ------------------------------------------------------
 
@@ -517,37 +512,8 @@ const pickBindingCandidate = (loaded: unknown): unknown => {
   return loaded;
 };
 
-const isNativeAnonymizeBinding = (
-  value: unknown,
-): value is NativeAnonymizeBinding => {
-  if (!isRecord(value)) {
-    return false;
-  }
-  if (
-    !NATIVE_BINDING_PARITY_MEMBERS.root.every(
-      (name) => typeof value[name] === "function",
-    )
-  ) {
-    return false;
-  }
-  const preparedSearch = value["NativePreparedSearch"];
-  if (!isRecord(preparedSearch)) {
-    return false;
-  }
-  return NATIVE_BINDING_PARITY_MEMBERS.factories.every(
-    (name) => typeof preparedSearch[name] === "function",
-  );
-};
-
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   (typeof value === "object" && value !== null) || typeof value === "function";
-
-const isRawWasmModule = (value: unknown): value is RawWasmModule =>
-  isRecord(value) &&
-  typeof value["default"] === "function" &&
-  typeof value["nativePackageVersion"] === "function" &&
-  typeof value["normalizeForSearch"] === "function" &&
-  typeof value["WasmPreparedSearch"] === "function";
 
 const normalizeLanguage = (language: string): string => {
   const normalized = language.trim().toLowerCase();

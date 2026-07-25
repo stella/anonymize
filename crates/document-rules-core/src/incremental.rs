@@ -5,14 +5,24 @@ use salsa::Setter as _;
 
 use crate::engine::{
   AnalysisSnapshot, BlockAnalysis, ExecutionCounters, RuleEngine,
-  analyze_block, run_block_rules, run_document_rules, run_neighborhood_rules,
-  validate_findings,
+  analyze_block, neighborhood_bounds, run_block_rules, run_document_rules,
+  run_neighborhood_rules, validate_findings,
 };
 use crate::model::{
-  BlockId, Document, DocumentBlock, DocumentPatch, Error, Metadata, Result,
-  Revision,
+  BlockId, Document, DocumentBlock, DocumentChange, DocumentPatch, Error,
+  Metadata, Result, Revision,
 };
 use crate::rule::{BlockFact, DocumentFacts, Finding, RuleSet};
+
+// Salsa input slots live for the database lifetime. Rotate the cache generation
+// before structural churn can retain more old records than this bounded budget.
+const MIN_RETIRED_RECORD_LIMIT: usize = 64;
+
+#[derive(Clone, Copy)]
+enum StructureChange {
+  Absent,
+  Present,
+}
 
 #[salsa::input]
 #[derive(Debug)]
@@ -68,6 +78,14 @@ impl Database {
       storage: salsa::Storage::new(None),
       rules: Arc::clone(&engine.rules),
       counters: Arc::clone(&engine.counters),
+    }
+  }
+
+  fn fresh(&self) -> Self {
+    Self {
+      storage: salsa::Storage::new(None),
+      rules: Arc::clone(&self.rules),
+      counters: Arc::clone(&self.counters),
     }
   }
 }
@@ -189,6 +207,7 @@ pub struct IncrementalDocumentSession {
   database: Database,
   document_input: DocumentInput,
   records: BTreeMap<BlockId, BlockRecord>,
+  allocated_record_count: usize,
   document: Document,
   revision: Revision,
 }
@@ -207,6 +226,7 @@ impl IncrementalDocumentSession {
       database,
       document_input,
       records,
+      allocated_record_count: document.blocks().len(),
       document,
       revision: Revision::initial(),
     }
@@ -240,13 +260,44 @@ impl IncrementalDocumentSession {
       return Ok(self.revision);
     }
     let next_revision = self.revision.next()?;
-    self.reconcile_inputs(&next_document);
+    let structure_change = if patch.changes().iter().any(|change| {
+      matches!(
+        change,
+        DocumentChange::InsertAfter { .. } | DocumentChange::Remove { .. }
+      )
+    }) {
+      StructureChange::Present
+    } else {
+      StructureChange::Absent
+    };
+    self.reconcile_inputs(&next_document, structure_change);
     self.document = next_document;
     self.revision = next_revision;
     Ok(next_revision)
   }
 
-  fn reconcile_inputs(&mut self, document: &Document) {
+  fn reconcile_inputs(
+    &mut self,
+    document: &Document,
+    structure_change: StructureChange,
+  ) {
+    let inserted_count = match structure_change {
+      StructureChange::Absent => 0,
+      StructureChange::Present => document
+        .blocks()
+        .iter()
+        .filter(|block| !self.records.contains_key(block.id()))
+        .count(),
+    };
+    let projected_allocated =
+      self.allocated_record_count.saturating_add(inserted_count);
+    let projected_retired =
+      projected_allocated.saturating_sub(document.blocks().len());
+    if projected_retired > retired_record_limit(document.blocks().len()) {
+      self.rebuild_database(document);
+      return;
+    }
+
     let mut inputs = BTreeMap::<BlockId, BlockInput>::new();
     for block in document.blocks() {
       let input = match self.records.get(block.id()) {
@@ -317,7 +368,26 @@ impl IncrementalDocumentSession {
         .to(document.metadata().clone());
     }
     self.records = next_records;
+    self.allocated_record_count = projected_allocated;
   }
+
+  fn rebuild_database(&mut self, document: &Document) {
+    let database = self.database.fresh();
+    let (records, ordered) = create_records(&database, document);
+    let document_input = DocumentInput::new(
+      &database,
+      ordered.into(),
+      document.metadata().clone(),
+    );
+    self.database = database;
+    self.document_input = document_input;
+    self.records = records;
+    self.allocated_record_count = document.blocks().len();
+  }
+}
+
+fn retired_record_limit(live_record_count: usize) -> usize {
+  live_record_count.max(MIN_RETIRED_RECORD_LIMIT)
 }
 
 fn create_records(
@@ -354,18 +424,69 @@ fn neighborhood_inputs(
   position: usize,
   radius: usize,
 ) -> (Arc<[BlockInput]>, Arc<[BlockInput]>) {
-  let before_start = position.saturating_sub(radius);
-  let after_start = position.saturating_add(1).min(inputs.len());
-  let after_end = after_start.saturating_add(radius).min(inputs.len());
+  let bounds = neighborhood_bounds(inputs.len(), position, radius);
   let before = inputs
-    .get(before_start..position)
+    .get(bounds.before)
     .unwrap_or_default()
     .to_vec()
     .into();
-  let after = inputs
-    .get(after_start..after_end)
-    .unwrap_or_default()
-    .to_vec()
-    .into();
+  let after = inputs.get(bounds.after).unwrap_or_default().to_vec().into();
   (before, after)
+}
+
+#[cfg(test)]
+mod tests {
+  #![allow(clippy::unwrap_used)]
+
+  use super::*;
+  use crate::model::BlockId;
+
+  fn input_count(database: &Database, debug_name: &str) -> usize {
+    <dyn salsa::Database>::memory_usage(database)
+      .structs
+      .iter()
+      .find(|ingredient| ingredient.debug_name() == debug_name)
+      .map_or(0, salsa::IngredientInfo::count)
+  }
+
+  #[test]
+  fn structural_churn_keeps_salsa_inputs_bounded() {
+    let engine = RuleEngine::new(RuleSet::new(Vec::new()).unwrap());
+    let stable =
+      DocumentBlock::new(BlockId::new("stable").unwrap(), "text").unwrap();
+    let document = Document::new(vec![stable]).unwrap();
+    let mut session = IncrementalDocumentSession::new(&engine, document);
+
+    for index in 0..256 {
+      let temporary_id = BlockId::new(format!("temporary-{index}")).unwrap();
+      let temporary =
+        DocumentBlock::new(temporary_id.clone(), "temporary").unwrap();
+      session
+        .apply_patch(&DocumentPatch::new(
+          session.revision(),
+          vec![DocumentChange::insert_after(None, temporary)],
+        ))
+        .unwrap();
+      session
+        .apply_patch(&DocumentPatch::new(
+          session.revision(),
+          vec![DocumentChange::remove(temporary_id)],
+        ))
+        .unwrap();
+    }
+
+    let live_count = session.document().blocks().len();
+    let retained_limit =
+      live_count.saturating_add(retired_record_limit(live_count));
+    assert!(session.allocated_record_count <= retained_limit);
+    assert_eq!(
+      input_count(&session.database, "BlockInput"),
+      session.allocated_record_count
+    );
+    assert_eq!(
+      input_count(&session.database, "LinkInput"),
+      session.allocated_record_count
+    );
+    assert_eq!(input_count(&session.database, "DocumentInput"), 1);
+  }
 }

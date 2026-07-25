@@ -4,11 +4,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import type {
-  NativeAnonymizeBinding,
-  NativeDiagnosticsBatchCallback,
-  NativePreparedRedactionSessionBinding,
-  NativePreparedSearchBinding,
+import {
+  NATIVE_BINDING_PARITY_MEMBERS,
+  type NativeAnonymizeBinding,
+  type NativeDiagnosticsBatchCallback,
+  type NativePreparedRedactionSessionBinding,
+  type NativePreparedSearchBinding,
 } from "../native";
 import {
   available_default_native_pipeline_languages,
@@ -86,24 +87,53 @@ describe("native node loader", () => {
     expect(calls).toEqual(["../index.cjs"]);
   });
 
-  test("rejects a binding with a missing parity member", () => {
-    const binding = fakeNativeBinding(PACKAGE_VERSION);
-    const incomplete = { ...binding, convertExternalDetectionBatch: undefined };
-    expect(() =>
-      loadNativeAnonymizeBinding({
-        expectedVersion: PACKAGE_VERSION,
-        platform: "darwin",
-        arch: "arm64",
-        env: {},
-        requireModule: (specifier) => {
-          if (specifier === "../index.cjs") {
-            return incomplete;
-          }
-          throw new Error("not found");
+  for (const member of NATIVE_BINDING_PARITY_MEMBERS.root) {
+    test(`rejects a binding missing root parity member: ${member}`, () => {
+      const binding = fakeNativeBinding(PACKAGE_VERSION);
+      const incomplete = { ...binding, [member]: undefined };
+      expect(() =>
+        loadNativeAnonymizeBinding({
+          expectedVersion: PACKAGE_VERSION,
+          platform: "darwin",
+          arch: "arm64",
+          env: {},
+          requireModule: (specifier) => {
+            if (specifier === "../index.cjs") {
+              return incomplete;
+            }
+            throw new Error("not found");
+          },
+        }),
+      ).toThrow("does not match native binding shape");
+    });
+  }
+
+  for (const member of NATIVE_BINDING_PARITY_MEMBERS.factories) {
+    test(`rejects a binding missing prepared factory: ${member}`, () => {
+      const binding = fakeNativeBinding(PACKAGE_VERSION);
+      const incomplete = {
+        ...binding,
+        NativePreparedSearch: {
+          ...binding.NativePreparedSearch,
+          [member]: undefined,
         },
-      }),
-    ).toThrow("does not match native binding shape");
-  });
+      };
+      expect(() =>
+        loadNativeAnonymizeBinding({
+          expectedVersion: PACKAGE_VERSION,
+          platform: "darwin",
+          arch: "arm64",
+          env: {},
+          requireModule: (specifier) => {
+            if (specifier === "../index.cjs") {
+              return incomplete;
+            }
+            throw new Error("not found");
+          },
+        }),
+      ).toThrow("does not match native binding shape");
+    });
+  }
 
   test("falls back to the platform native package", () => {
     const calls: string[] = [];
@@ -705,9 +735,7 @@ describe("native node loader", () => {
     const prepared = load_prepared_package(packageBytes, { binding });
     expect(capturedBytes).toEqual([[21, 22, 23]]);
     expect(prepared.redact_text("x").redaction.redactedText).toBe("");
-    expect(
-      JSON.parse(prepared.warm_lazy_regex_diagnostics_json() ?? "{}"),
-    ).toEqual({
+    expect(JSON.parse(prepared.warm_lazy_regex_diagnostics_json())).toEqual({
       events: [],
     });
     expect(redact_text("{}", "x", undefined, { binding }).redaction).toEqual({
@@ -730,7 +758,7 @@ describe("native node loader", () => {
       JSON.parse(redact_text_json("{}", "x", undefined, { binding })),
     ).toEqual(expectedJson);
     expect(
-      JSON.parse(diagnostics_json("{}", "x", undefined, { binding }) ?? "{}"),
+      JSON.parse(diagnostics_json("{}", "x", undefined, { binding })),
     ).toEqual({
       diagnostics: { events: [] },
       result: expectedJson,
@@ -746,7 +774,7 @@ describe("native node loader", () => {
           },
           undefined,
           { binding },
-        ) ?? "{}",
+        ),
       ),
     ).toEqual({
       diagnostics: { events: [] },
@@ -754,9 +782,7 @@ describe("native node loader", () => {
     });
     expect(streamedBatches).toEqual([{ events: [{ stage: "detect-total" }] }]);
     expect(
-      JSON.parse(
-        summary_diagnostics_json("{}", "x", undefined, { binding }) ?? "{}",
-      ),
+      JSON.parse(summary_diagnostics_json("{}", "x", undefined, { binding })),
     ).toEqual({
       diagnostics: { events: [] },
       result: expectedJson,

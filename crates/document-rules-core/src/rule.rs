@@ -2,7 +2,9 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use crate::engine::BlockAnalysis;
-use crate::model::{BlockId, BlockSpan, Error, Metadata, Result};
+use crate::model::{
+  BlockId, BlockSpan, Error, MAX_IDENTIFIER_BYTES, Metadata, Result,
+};
 
 const MAX_NEIGHBORHOOD_RADIUS: u8 = 16;
 
@@ -12,7 +14,7 @@ pub struct RuleId(Arc<str>);
 impl RuleId {
   pub fn new(value: impl Into<Arc<str>>) -> Result<Self> {
     let value = value.into();
-    if value.trim().is_empty() || value.len() > 128 {
+    if value.trim().is_empty() || value.len() > MAX_IDENTIFIER_BYTES {
       return Err(Error::InvalidRuleId);
     }
     Ok(Self(value))
@@ -30,7 +32,7 @@ pub struct FindingKind(Arc<str>);
 impl FindingKind {
   pub fn new(value: impl Into<Arc<str>>) -> Result<Self> {
     let value = value.into();
-    if value.trim().is_empty() || value.len() > 128 {
+    if value.trim().is_empty() || value.len() > MAX_IDENTIFIER_BYTES {
       return Err(Error::InvalidFindingKind);
     }
     Ok(Self(value))

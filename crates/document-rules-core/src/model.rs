@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use thiserror::Error;
 
-const MAX_BLOCK_ID_BYTES: usize = 128;
+pub(crate) const MAX_IDENTIFIER_BYTES: usize = 128;
 const MAX_BLOCKS: usize = 100_000;
 const MAX_BLOCK_BYTES: usize = 0x0100_0000;
 const MAX_DOCUMENT_BYTES: usize = 0x0400_0000;
@@ -15,7 +15,9 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Clone, Debug, Eq, Error, PartialEq)]
 pub enum Error {
-  #[error("block id must be non-blank and at most {MAX_BLOCK_ID_BYTES} bytes")]
+  #[error(
+    "block id must be non-blank and at most {MAX_IDENTIFIER_BYTES} bytes"
+  )]
   InvalidBlockId,
   #[error("document contains duplicate block id '{block_id}'")]
   DuplicateBlockId { block_id: BlockId },
@@ -33,10 +35,10 @@ pub enum Error {
   InvalidTextSpan { start: u32, end: u32 },
   #[error("finding span for block '{block_id}' exceeds its text")]
   FindingSpanOutOfBounds { block_id: BlockId },
-  #[error("rule id must be non-blank and at most {MAX_BLOCK_ID_BYTES} bytes")]
+  #[error("rule id must be non-blank and at most {MAX_IDENTIFIER_BYTES} bytes")]
   InvalidRuleId,
   #[error(
-    "finding kind must be non-blank and at most {MAX_BLOCK_ID_BYTES} bytes"
+    "finding kind must be non-blank and at most {MAX_IDENTIFIER_BYTES} bytes"
   )]
   InvalidFindingKind,
   #[error(
@@ -70,7 +72,7 @@ pub struct BlockId(Arc<str>);
 impl BlockId {
   pub fn new(value: impl Into<Arc<str>>) -> Result<Self> {
     let value = value.into();
-    if value.trim().is_empty() || value.len() > MAX_BLOCK_ID_BYTES {
+    if value.trim().is_empty() || value.len() > MAX_IDENTIFIER_BYTES {
       return Err(Error::InvalidBlockId);
     }
     Ok(Self(value))
