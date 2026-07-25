@@ -72,9 +72,6 @@
     "packages/anonymize/wasm": {
       "name": "@stll/anonymize-wasm",
       "version": "2.5.0",
-      "dependencies": {
-        "@napi-rs/wasm-runtime": "^1.1.6",
-      },
       "peerDependencies": {
         "vite": ">=5 <10",
       },

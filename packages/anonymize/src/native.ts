@@ -157,27 +157,27 @@ export type NativeOpenSessionArchiveOptions = {
 export type NativePreparedRedactionSessionBinding = {
   sessionId: () => string;
   mappingCount: () => number;
-  restoreText?: (fullText: string) => string;
-  restoreTextAt?: (fullText: string, observedAtEpochSeconds: number) => string;
+  restoreText: (fullText: string) => string;
+  restoreTextAt: (fullText: string, observedAtEpochSeconds: number) => string;
   toPlaintextJson: () => string;
-  toPlaintextJsonAt?: (observedAtEpochSeconds: number) => string;
-  toEncryptedArchive?: (key: Uint8Array) => Uint8Array;
-  toEncryptedArchiveAt?: (
+  toPlaintextJsonAt: (observedAtEpochSeconds: number) => string;
+  toEncryptedArchive: (key: Uint8Array) => Uint8Array;
+  toEncryptedArchiveAt: (
     key: Uint8Array,
     observedAtEpochSeconds: number,
   ) => Uint8Array;
-  inspectJson?: (observedAtEpochSeconds?: number) => string;
-  deleteJson?: () => string;
+  inspectJson: (observedAtEpochSeconds?: number) => string;
+  deleteJson: () => string;
   redactStaticEntitiesJson: (
     fullText: string,
     operators?: NativeBindingOperatorConfig,
   ) => string;
-  redactStaticEntitiesJsonAt?: (
+  redactStaticEntitiesJsonAt: (
     fullText: string,
     observedAtEpochSeconds: number,
     operators?: NativeBindingOperatorConfig,
   ) => string;
-  planStaticEntitiesWithCallerDetections?: (
+  planStaticEntitiesWithCallerDetections: (
     options: NativeBindingSessionCallerRedactionPlanOptions,
   ) => NativePreparedSessionRedactionPlanBinding;
 };
@@ -188,75 +188,73 @@ export type NativePreparedSessionRedactionPlanBinding = {
 };
 
 export type NativePreparedSearchBinding = {
-  prepareDiagnosticsJson?: () => string;
-  warmLazyRegex?: () => void;
-  warm_lazy_regex?: () => void;
-  warmLazyRegexDiagnosticsJson?: () => string;
-  warm_lazy_regex_diagnostics_json?: () => string;
-  createRedactionSession?: (
+  prepareDiagnosticsJson: () => string;
+  warmLazyRegex: () => void;
+  warmLazyRegexDiagnosticsJson: () => string;
+  createRedactionSession: (
     sessionId: string,
   ) => NativePreparedRedactionSessionBinding;
-  createRedactionSessionWithLifecycle?: (
+  createRedactionSessionWithLifecycle: (
     sessionId: string,
     createdAtEpochSeconds: number,
     expiresAtEpochSeconds?: number,
   ) => NativePreparedRedactionSessionBinding;
-  restoreRedactionSession?: (
+  restoreRedactionSession: (
     plaintextJson: string,
   ) => NativePreparedRedactionSessionBinding;
-  restoreEncryptedRedactionSession?: (
+  restoreEncryptedRedactionSession: (
     options: NativeBindingOpenSessionArchiveOptions,
   ) => NativePreparedRedactionSessionBinding;
   redactStaticEntities: (
     fullText: string,
     operators?: NativeBindingOperatorConfig,
   ) => NativeBindingStaticRedactionResult;
-  redactStaticEntitiesJson?: (
+  redactStaticEntitiesJson: (
     fullText: string,
     operators?: NativeBindingOperatorConfig,
   ) => string;
-  redactStaticEntitiesWithCallerDetectionsJson?: (
+  redactStaticEntitiesWithCallerDetectionsJson: (
     fullText: string,
     options: NativeBindingCallerRedactionOptions,
   ) => string;
-  redactStaticEntitiesWithCallerDetectionsDiagnosticsJson?: (
+  redactStaticEntitiesWithCallerDetectionsDiagnosticsJson: (
     fullText: string,
     options: NativeBindingCallerRedactionOptions,
   ) => string;
-  redactStaticEntitiesResultStreamJson?: (
+  redactStaticEntitiesResultStreamJson: (
     fullText: string,
     operators: NativeBindingOperatorConfig | undefined,
     onEvent: NativeResultEventCallback,
   ) => string;
-  redactStaticEntitiesDiagnosticsJson?: (
+  redactStaticEntitiesDiagnosticsJson: (
     fullText: string,
     operators?: NativeBindingOperatorConfig,
   ) => string;
-  redactStaticEntitiesDiagnosticsStreamJson?: (
+  redactStaticEntitiesDiagnosticsStreamJson: (
     fullText: string,
     operators: NativeBindingOperatorConfig | undefined,
     onBatch: NativeDiagnosticsBatchCallback,
   ) => string;
-  redactStaticEntitiesSummaryDiagnosticsJson?: (
+  redactStaticEntitiesSummaryDiagnosticsJson: (
     fullText: string,
     operators?: NativeBindingOperatorConfig,
   ) => string;
 };
 
 export type NativeAnonymizeBinding = {
-  convertExternalDetectionBatch?: (
+  convertExternalDetectionBatch: (
     document: Uint8Array,
     batchJson: string,
   ) => NativeCallerDetection[];
-  externalDetectionLimitsJson?: () => string;
-  extractDocxTextJson?: (document: Uint8Array) => string;
-  inspectPdfJson?: (document: Uint8Array, observationsJson?: string) => string;
-  rewritePdfRasterFromDetectionsJson?: (
+  externalDetectionLimitsJson: () => string;
+  extractDocxTextJson: (document: Uint8Array) => string;
+  inspectPdfJson: (document: Uint8Array, observationsJson?: string) => string;
+  rewritePdfRasterFromDetectionsJson: (
     document: Uint8Array,
     requestJson: string,
     pagePixels: readonly Uint8Array[],
   ) => { document: Uint8Array; certificateJson: string };
-  rewriteDocxTextNative?: (
+  rewriteDocxTextNative: (
     document: Uint8Array,
     rewritesJson: string,
   ) => {
@@ -264,7 +262,7 @@ export type NativeAnonymizeBinding = {
     rewrittenBlockCount: number;
     appliedReplacementCount: number;
   };
-  planDocxRestorationJson?: (document: Uint8Array, sessionId: string) => string;
+  planDocxRestorationJson: (document: Uint8Array, sessionId: string) => string;
   normalizeForSearch: (text: string) => string;
   nativePackageVersion: () => string;
   NativePreparedSearch: {
@@ -274,13 +272,13 @@ export type NativeAnonymizeBinding = {
     fromPreparedPackageBytes: (
       packageBytes: Uint8Array,
     ) => NativePreparedSearchBinding;
-    fromPreparedPackageBytesWithoutCache?: (
+    fromPreparedPackageBytesWithoutCache: (
       packageBytes: Uint8Array,
     ) => NativePreparedSearchBinding;
-    fromTrustedPreparedPackageBytes?: (
+    fromTrustedPreparedPackageBytes: (
       packageBytes: Uint8Array,
     ) => NativePreparedSearchBinding;
-    fromTrustedPreparedPackageBytesWithoutCache?: (
+    fromTrustedPreparedPackageBytesWithoutCache: (
       packageBytes: Uint8Array,
     ) => NativePreparedSearchBinding;
   };
@@ -293,22 +291,134 @@ export type NativeAnonymizeBinding = {
   // gazetteer JSON and returns either the assembled config JSON or ready
   // package bytes. Optional so older bindings without the assembler still
   // satisfy the type; native-node loads them from the same `.node`.
-  assembleStaticSearchConfigJson?: (
+  assembleStaticSearchConfigJson: (
     pipelineConfigJson: Uint8Array,
     dictionariesJson?: Uint8Array,
     gazetteerJson?: Uint8Array,
   ) => Uint8Array;
-  assembleStaticSearchPackageBytes?: (
+  assembleStaticSearchPackageBytes: (
     pipelineConfigJson: Uint8Array,
     dictionariesJson?: Uint8Array,
     gazetteerJson?: Uint8Array,
   ) => Uint8Array;
-  assembleStaticSearchCompressedPackageBytes?: (
+  assembleStaticSearchCompressedPackageBytes: (
     pipelineConfigJson: Uint8Array,
     dictionariesJson?: Uint8Array,
     gazetteerJson?: Uint8Array,
   ) => Uint8Array;
 };
+
+type FunctionMemberNames<T> = {
+  [Key in keyof T]-?: T[Key] extends (...args: never[]) => unknown
+    ? Key
+    : never;
+}[keyof T];
+
+/** Exhaustive runtime-member contract shared by loaders and parity gates. */
+export const NATIVE_BINDING_PARITY_MEMBERS = {
+  root: [
+    "convertExternalDetectionBatch",
+    "externalDetectionLimitsJson",
+    "extractDocxTextJson",
+    "inspectPdfJson",
+    "rewritePdfRasterFromDetectionsJson",
+    "rewriteDocxTextNative",
+    "planDocxRestorationJson",
+    "normalizeForSearch",
+    "nativePackageVersion",
+    "prepareStaticSearchPackageBytes",
+    "prepareStaticSearchCompressedPackageBytes",
+    "assembleStaticSearchConfigJson",
+    "assembleStaticSearchPackageBytes",
+    "assembleStaticSearchCompressedPackageBytes",
+  ],
+  factories: [
+    "fromConfigJsonBytes",
+    "fromPreparedPackageBytes",
+    "fromPreparedPackageBytesWithoutCache",
+    "fromTrustedPreparedPackageBytes",
+    "fromTrustedPreparedPackageBytesWithoutCache",
+  ],
+  prepared: [
+    "prepareDiagnosticsJson",
+    "warmLazyRegex",
+    "warmLazyRegexDiagnosticsJson",
+    "createRedactionSession",
+    "createRedactionSessionWithLifecycle",
+    "restoreRedactionSession",
+    "restoreEncryptedRedactionSession",
+    "redactStaticEntities",
+    "redactStaticEntitiesJson",
+    "redactStaticEntitiesWithCallerDetectionsJson",
+    "redactStaticEntitiesWithCallerDetectionsDiagnosticsJson",
+    "redactStaticEntitiesResultStreamJson",
+    "redactStaticEntitiesDiagnosticsJson",
+    "redactStaticEntitiesDiagnosticsStreamJson",
+    "redactStaticEntitiesSummaryDiagnosticsJson",
+  ],
+  session: [
+    "sessionId",
+    "mappingCount",
+    "restoreText",
+    "restoreTextAt",
+    "toPlaintextJson",
+    "toPlaintextJsonAt",
+    "toEncryptedArchive",
+    "toEncryptedArchiveAt",
+    "inspectJson",
+    "deleteJson",
+    "redactStaticEntitiesJson",
+    "redactStaticEntitiesJsonAt",
+    "planStaticEntitiesWithCallerDetections",
+  ],
+  plan: ["resultJson", "commit"],
+} as const satisfies {
+  root: readonly FunctionMemberNames<NativeAnonymizeBinding>[];
+  factories: readonly FunctionMemberNames<
+    NativeAnonymizeBinding["NativePreparedSearch"]
+  >[];
+  prepared: readonly FunctionMemberNames<NativePreparedSearchBinding>[];
+  session: readonly FunctionMemberNames<NativePreparedRedactionSessionBinding>[];
+  plan: readonly FunctionMemberNames<NativePreparedSessionRedactionPlanBinding>[];
+};
+
+const ROOT_PARITY_IS_EXHAUSTIVE: Exclude<
+  FunctionMemberNames<NativeAnonymizeBinding>,
+  (typeof NATIVE_BINDING_PARITY_MEMBERS.root)[number]
+> extends never
+  ? true
+  : never = true;
+const FACTORY_PARITY_IS_EXHAUSTIVE: Exclude<
+  FunctionMemberNames<NativeAnonymizeBinding["NativePreparedSearch"]>,
+  (typeof NATIVE_BINDING_PARITY_MEMBERS.factories)[number]
+> extends never
+  ? true
+  : never = true;
+const PREPARED_PARITY_IS_EXHAUSTIVE: Exclude<
+  FunctionMemberNames<NativePreparedSearchBinding>,
+  (typeof NATIVE_BINDING_PARITY_MEMBERS.prepared)[number]
+> extends never
+  ? true
+  : never = true;
+const SESSION_PARITY_IS_EXHAUSTIVE: Exclude<
+  FunctionMemberNames<NativePreparedRedactionSessionBinding>,
+  (typeof NATIVE_BINDING_PARITY_MEMBERS.session)[number]
+> extends never
+  ? true
+  : never = true;
+const PLAN_PARITY_IS_EXHAUSTIVE: Exclude<
+  FunctionMemberNames<NativePreparedSessionRedactionPlanBinding>,
+  (typeof NATIVE_BINDING_PARITY_MEMBERS.plan)[number]
+> extends never
+  ? true
+  : never = true;
+void [
+  ROOT_PARITY_IS_EXHAUSTIVE,
+  FACTORY_PARITY_IS_EXHAUSTIVE,
+  PREPARED_PARITY_IS_EXHAUSTIVE,
+  SESSION_PARITY_IS_EXHAUSTIVE,
+  PLAN_PARITY_IS_EXHAUSTIVE,
+];
 
 export type NativeOperatorConfig = {
   operators?: Record<string, OperatorSelection>;
@@ -807,11 +917,7 @@ export class PreparedNativeAnonymizer {
   }
 
   warmLazyRegex(): void {
-    if (this.#prepared.warmLazyRegex) {
-      this.#prepared.warmLazyRegex();
-      return;
-    }
-    this.#prepared.warm_lazy_regex?.();
+    this.#prepared.warmLazyRegex();
   }
 
   warm_lazy_regex(): void {
@@ -819,10 +925,7 @@ export class PreparedNativeAnonymizer {
   }
 
   warmLazyRegexDiagnosticsJson(): string | null {
-    if (this.#prepared.warmLazyRegexDiagnosticsJson) {
-      return this.#prepared.warmLazyRegexDiagnosticsJson();
-    }
-    return this.#prepared.warm_lazy_regex_diagnostics_json?.() ?? null;
+    return this.#prepared.warmLazyRegexDiagnosticsJson();
   }
 
   warm_lazy_regex_diagnostics_json(): string | null {

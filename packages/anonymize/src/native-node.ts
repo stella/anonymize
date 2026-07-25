@@ -6,6 +6,7 @@ import process from "node:process";
 import {
   assertNativeBindingVersion,
   createNativePipelineFromPackage,
+  NATIVE_BINDING_PARITY_MEMBERS,
   type NativeOperatorConfig,
   type NativeAnonymizeBinding,
   type NativeNormalizeOptions,
@@ -583,16 +584,9 @@ const createNativePipelineFromTrustedDefaultPackage = (
 ): PreparedNativePipeline =>
   new PreparedNativePipeline(
     new PreparedNativeAnonymizer(
-      binding.NativePreparedSearch.fromTrustedPreparedPackageBytesWithoutCache?.(
+      binding.NativePreparedSearch.fromTrustedPreparedPackageBytesWithoutCache(
         packageBytes,
-      ) ??
-        binding.NativePreparedSearch.fromTrustedPreparedPackageBytes?.(
-          packageBytes,
-        ) ??
-        binding.NativePreparedSearch.fromPreparedPackageBytesWithoutCache?.(
-          packageBytes,
-        ) ??
-        binding.NativePreparedSearch.fromPreparedPackageBytes(packageBytes),
+      ),
     ),
   );
 
@@ -878,17 +872,10 @@ const isNativeAnonymizeBinding = (
   if (!isPropertyBag(candidate)) {
     return false;
   }
-  if (typeof candidate["nativePackageVersion"] !== "function") {
-    return false;
-  }
-  if (typeof candidate["normalizeForSearch"] !== "function") {
-    return false;
-  }
-  if (typeof candidate["prepareStaticSearchPackageBytes"] !== "function") {
-    return false;
-  }
   if (
-    typeof candidate["prepareStaticSearchCompressedPackageBytes"] !== "function"
+    !NATIVE_BINDING_PARITY_MEMBERS.root.every(
+      (name) => typeof candidate[name] === "function",
+    )
   ) {
     return false;
   }
@@ -896,13 +883,9 @@ const isNativeAnonymizeBinding = (
   if (!isPropertyBag(preparedSearch)) {
     return false;
   }
-  if (typeof preparedSearch["fromConfigJsonBytes"] !== "function") {
-    return false;
-  }
-  if (typeof preparedSearch["fromPreparedPackageBytes"] !== "function") {
-    return false;
-  }
-  return true;
+  return NATIVE_BINDING_PARITY_MEMBERS.factories.every(
+    (name) => typeof preparedSearch[name] === "function",
+  );
 };
 
 const isPropertyBag = (value: unknown): value is Record<string, unknown> =>

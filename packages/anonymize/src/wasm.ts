@@ -1,8 +1,8 @@
 /* @stll/anonymize-wasm — browser / WebAssembly entry.
  *
  * Exposes the same native-SDK surface as `@stll/anonymize/native` (the
- * runtime-agnostic layer in `native.ts`), backed by the napi-rs
- * wasm32-wasip1-threads binding instead of the `.node` sidecars. The old
+ * runtime-agnostic layer in `native.ts`), backed by a browser-native,
+ * single-thread wasm-bindgen module instead of the `.node` sidecars. The old
  * TS-pipeline surface (`runPipeline` and friends) is intentionally gone here:
  * this package now redacts entirely through the wasm binding and PREBUILT
  * prepared packages.
@@ -15,14 +15,15 @@
  * / `prepareNativePipelinePackage` work here too.
  *
  * No module-level side effects: the wasm binding is instantiated lazily on
- * first use via `getBinding()`. The napi-generated glue is loaded from the
- * package's own `native/` asset directory — `index.wasi.cjs` under Node's WASI
- * runtime, `index.wasi-browser.js` (fetch + Worker) in browsers.
+ * first use via `getBinding()`. The wasm-bindgen glue is loaded from the
+ * package's own `native/` asset directory. It has no WASI, shared-memory, or
+ * worker dependency.
  */
 
 import {
   createNativeAnonymizerFromPackage,
   createNativePipelineFromPackage,
+  NATIVE_BINDING_PARITY_MEMBERS,
   convert_external_detection_batch as convertExternalDetectionBatchWithBinding,
   diagnostics_json as diagnosticsJsonWithBinding,
   diagnostics_stream_json as diagnosticsStreamJsonWithBinding,
@@ -44,6 +45,7 @@ import {
   redact_text_stream_json as redactTextStreamJsonWithBinding,
   summary_diagnostics_json as summaryDiagnosticsJsonWithBinding,
 } from "./native";
+import { createWasmBinding, type RawWasmModule } from "./wasm-binding";
 
 export * from "./native";
 export { deanonymise, exportRedactionKey } from "./redact";
@@ -119,8 +121,8 @@ export type WasmBindingOptions = {
   binding?: NativeAnonymizeBinding;
 };
 
-const NODE_GLUE_MODULE = "index.wasi.cjs";
-const BROWSER_GLUE_MODULE = "index.wasi-browser.js";
+const GLUE_MODULE = "index.js";
+const WASM_MODULE = "index_bg.wasm";
 const NODE_FS_MODULE = "node:fs/promises";
 const NATIVE_ASSET_DIR = "native";
 const DEFAULT_PACKAGE_FILE = "native-pipeline.stlanonpkg";
@@ -144,14 +146,17 @@ export const getBinding = (): Promise<NativeAnonymizeBinding> => {
 };
 
 const loadWasmBinding = async (): Promise<NativeAnonymizeBinding> => {
-  const glueModule = isNodeRuntime() ? NODE_GLUE_MODULE : BROWSER_GLUE_MODULE;
-  const glueUrl = assetUrl(glueModule);
-  // The specifier is deliberately a runtime asset URL (resolved against the
-  // package's own `native/` directory), not a module the bundler should follow:
-  // the napi-rs glue lives outside src and is copied in at build time.
+  const glueUrl = assetUrl(GLUE_MODULE);
   // eslint-disable-next-line stll/no-dynamic-import-specifier
   const loaded: unknown = await import(/* @vite-ignore */ glueUrl.href);
-  return toNativeAnonymizeBinding(loaded);
+  if (!isRawWasmModule(loaded)) {
+    throw new Error("wasm module does not expose the expected binding surface");
+  }
+  const moduleInput = isNodeRuntime()
+    ? await readFileUrlBytes(assetUrl(WASM_MODULE).href)
+    : assetUrl(WASM_MODULE);
+  await loaded.default({ module_or_path: moduleInput });
+  return createWasmBinding(loaded);
 };
 
 type RuntimeGlobals = {
@@ -518,20 +523,10 @@ const isNativeAnonymizeBinding = (
   if (!isRecord(value)) {
     return false;
   }
-  if (typeof value["nativePackageVersion"] !== "function") {
-    return false;
-  }
-  if (typeof value["normalizeForSearch"] !== "function") {
-    return false;
-  }
-  if (typeof value["prepareStaticSearchPackageBytes"] !== "function") {
-    return false;
-  }
-  if (typeof value["inspectPdfJson"] !== "function") {
-    return false;
-  }
   if (
-    typeof value["prepareStaticSearchCompressedPackageBytes"] !== "function"
+    !NATIVE_BINDING_PARITY_MEMBERS.root.every(
+      (name) => typeof value[name] === "function",
+    )
   ) {
     return false;
   }
@@ -539,14 +534,20 @@ const isNativeAnonymizeBinding = (
   if (!isRecord(preparedSearch)) {
     return false;
   }
-  if (typeof preparedSearch["fromConfigJsonBytes"] !== "function") {
-    return false;
-  }
-  return typeof preparedSearch["fromPreparedPackageBytes"] === "function";
+  return NATIVE_BINDING_PARITY_MEMBERS.factories.every(
+    (name) => typeof preparedSearch[name] === "function",
+  );
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   (typeof value === "object" && value !== null) || typeof value === "function";
+
+const isRawWasmModule = (value: unknown): value is RawWasmModule =>
+  isRecord(value) &&
+  typeof value["default"] === "function" &&
+  typeof value["nativePackageVersion"] === "function" &&
+  typeof value["normalizeForSearch"] === "function" &&
+  typeof value["WasmPreparedSearch"] === "function";
 
 const normalizeLanguage = (language: string): string => {
   const normalized = language.trim().toLowerCase();

@@ -119,7 +119,7 @@ describe("ExternalDetectionBatch v1", () => {
     ).toThrow("unknown field");
   });
 
-  test("keeps a missing converter feature-scoped in injected WASM bindings", async () => {
+  test("rejects an injected binding with a missing parity member", async () => {
     const staleBinding = new Proxy(binding, {
       get: (target, property, receiver) =>
         property === "convertExternalDetectionBatch"
@@ -133,7 +133,7 @@ describe("ExternalDetectionBatch v1", () => {
         binding: staleBinding,
       }),
     ).rejects.toThrow(
-      "Native anonymize binding does not support external detection batches",
+      "wasm binding module does not expose the native anonymize surface",
     );
   });
 

@@ -8,6 +8,7 @@ import type {
   NativeAnonymizeBinding,
   NativeDiagnosticsBatchCallback,
   NativePreparedRedactionSessionBinding,
+  NativePreparedSearchBinding,
 } from "../native";
 import {
   available_default_native_pipeline_languages,
@@ -85,25 +86,23 @@ describe("native node loader", () => {
     expect(calls).toEqual(["../index.cjs"]);
   });
 
-  test("keeps an unavailable optional external converter feature-scoped", () => {
+  test("rejects a binding with a missing parity member", () => {
     const binding = fakeNativeBinding(PACKAGE_VERSION);
-    delete binding.convertExternalDetectionBatch;
-    const loaded = loadNativeAnonymizeBinding({
-      expectedVersion: PACKAGE_VERSION,
-      platform: "darwin",
-      arch: "arm64",
-      env: {},
-      requireModule: (specifier) => {
-        if (specifier === "../index.cjs") {
-          return binding;
-        }
-        throw new Error("not found");
-      },
-    });
-
-    expect(loaded).toBe(binding);
-    expect(loaded.normalizeForSearch("Alice")).toBe("Alice");
-    expect(loaded.convertExternalDetectionBatch).toBeUndefined();
+    const incomplete = { ...binding, convertExternalDetectionBatch: undefined };
+    expect(() =>
+      loadNativeAnonymizeBinding({
+        expectedVersion: PACKAGE_VERSION,
+        platform: "darwin",
+        arch: "arm64",
+        env: {},
+        requireModule: (specifier) => {
+          if (specifier === "../index.cjs") {
+            return incomplete;
+          }
+          throw new Error("not found");
+        },
+      }),
+    ).toThrow("does not match native binding shape");
   });
 
   test("falls back to the platform native package", () => {
@@ -310,7 +309,7 @@ describe("native node loader", () => {
     try {
       writeFileSync(packagePath, Uint8Array.of(10, 11, 12));
       const binding = fakeNativeBinding(PACKAGE_VERSION, {
-        onPreparedPackageBytesWithoutCache: (bytes) => {
+        onTrustedPreparedPackageBytesWithoutCache: (bytes) => {
           capturedBytes.push([...bytes]);
         },
       });
@@ -371,7 +370,7 @@ describe("native node loader", () => {
       writeFileSync(packagePath, Uint8Array.of(13, 14, 15));
       let warmCount = 0;
       const binding = fakeNativeBinding(PACKAGE_VERSION, {
-        onPreparedPackageBytesWithoutCache: (bytes) => {
+        onTrustedPreparedPackageBytesWithoutCache: (bytes) => {
           capturedBytes.push([...bytes]);
         },
         onWarmLazyRegex: () => {
@@ -452,7 +451,7 @@ describe("native node loader", () => {
       writeFileSync(packagePath, Uint8Array.of(16, 17, 18));
       let warmCount = 0;
       const binding = fakeNativeBinding(PACKAGE_VERSION, {
-        onPreparedPackageBytesWithoutCache: (bytes) => {
+        onTrustedPreparedPackageBytesWithoutCache: (bytes) => {
           capturedBytes.push([...bytes]);
         },
         onWarmLazyRegex: () => {
@@ -496,7 +495,7 @@ describe("native node loader", () => {
     try {
       writeFileSync(packagePath, Uint8Array.of(31, 32, 33));
       const binding = fakeNativeBinding(PACKAGE_VERSION, {
-        onPreparedPackageBytesWithoutCache: (bytes) => {
+        onTrustedPreparedPackageBytesWithoutCache: (bytes) => {
           capturedBytes.push([...bytes]);
         },
       });
@@ -529,7 +528,7 @@ describe("native node loader", () => {
     try {
       writeFileSync(packagePath, Uint8Array.of(34, 35, 36));
       const binding = fakeNativeBinding(PACKAGE_VERSION, {
-        onPreparedPackageBytesWithoutCache: (bytes) => {
+        onTrustedPreparedPackageBytesWithoutCache: (bytes) => {
           capturedBytes.push([...bytes]);
         },
       });
@@ -581,7 +580,7 @@ describe("native node loader", () => {
       writeFileSync(packagePath, Uint8Array.of(44, 45, 46));
       let warmCount = 0;
       const binding = fakeNativeBinding(PACKAGE_VERSION, {
-        onPreparedPackageBytesWithoutCache: (bytes) => {
+        onTrustedPreparedPackageBytesWithoutCache: (bytes) => {
           capturedBytes.push([...bytes]);
         },
         onWarmLazyRegex: () => {
@@ -864,6 +863,17 @@ const emptyStaticRedactionBindingResult = () => ({
   },
 });
 
+const emptyStaticRedactionJson = (): string =>
+  JSON.stringify({
+    resolved_entities: [],
+    redaction: {
+      redacted_text: "",
+      redaction_map: [],
+      operator_map: [],
+      entity_count: 0,
+    },
+  });
+
 const emptyStaticRedactionDiagnosticJson = (): string =>
   JSON.stringify({
     diagnostics: { events: [] },
@@ -916,22 +926,14 @@ const fakeNativeBinding = (
       options.onPreparedPackageBytesWithoutCache?.(bytes);
       return fakePreparedSearch(preparedOptions());
     },
-    ...(options.onTrustedPreparedPackageBytesWithoutCache === undefined
-      ? {}
-      : {
-          fromTrustedPreparedPackageBytesWithoutCache: (bytes: Uint8Array) => {
-            options.onTrustedPreparedPackageBytesWithoutCache?.(bytes);
-            return fakePreparedSearch(preparedOptions());
-          },
-        }),
-    ...(options.onTrustedPreparedPackageBytes === undefined
-      ? {}
-      : {
-          fromTrustedPreparedPackageBytes: (bytes: Uint8Array) => {
-            options.onTrustedPreparedPackageBytes?.(bytes);
-            return fakePreparedSearch(preparedOptions());
-          },
-        }),
+    fromTrustedPreparedPackageBytesWithoutCache: (bytes: Uint8Array) => {
+      options.onTrustedPreparedPackageBytesWithoutCache?.(bytes);
+      return fakePreparedSearch(preparedOptions());
+    },
+    fromTrustedPreparedPackageBytes: (bytes: Uint8Array) => {
+      options.onTrustedPreparedPackageBytes?.(bytes);
+      return fakePreparedSearch(preparedOptions());
+    },
   };
   const NativePreparedSearch = options.preparedSearchAsConstructor
     ? Object.assign(
@@ -943,6 +945,19 @@ const fakeNativeBinding = (
 
   return {
     convertExternalDetectionBatch: () => [],
+    externalDetectionLimitsJson: () => "{}",
+    extractDocxTextJson: () => "{}",
+    inspectPdfJson: () => "{}",
+    rewritePdfRasterFromDetectionsJson: () => ({
+      document: new Uint8Array(),
+      certificateJson: "{}",
+    }),
+    rewriteDocxTextNative: () => ({
+      document: new Uint8Array(),
+      rewrittenBlockCount: 0,
+      appliedReplacementCount: 0,
+    }),
+    planDocxRestorationJson: () => "{}",
     normalizeForSearch: (text: string) => text,
     nativePackageVersion: () => version,
     NativePreparedSearch,
@@ -950,6 +965,9 @@ const fakeNativeBinding = (
       options.packageBytes ?? new Uint8Array(),
     prepareStaticSearchCompressedPackageBytes: () =>
       options.compressedPackageBytes ?? new Uint8Array(),
+    assembleStaticSearchConfigJson: () => new Uint8Array(),
+    assembleStaticSearchPackageBytes: () => new Uint8Array(),
+    assembleStaticSearchCompressedPackageBytes: () => new Uint8Array(),
   };
 };
 
@@ -963,7 +981,7 @@ const fakePreparedSearch = ({
   onRedactStaticEntitiesJson,
   onDiagnosticsStreamJson,
   onWarmLazyRegex,
-}: FakePreparedSearchOptions) => ({
+}: FakePreparedSearchOptions): NativePreparedSearchBinding => ({
   prepareDiagnosticsJson: () => JSON.stringify({ events: [] }),
   warmLazyRegex: () => {
     onWarmLazyRegex?.();
@@ -1003,10 +1021,22 @@ const fakePreparedSearch = ({
           : null,
     });
   },
+  restoreEncryptedRedactionSession: ({ expectedSessionId }) =>
+    fakePreparedRedactionSession(expectedSessionId),
   redactStaticEntities: emptyStaticRedactionBindingResult,
-  ...(onRedactStaticEntitiesJson === undefined
-    ? {}
-    : { redactStaticEntitiesJson: onRedactStaticEntitiesJson }),
+  redactStaticEntitiesJson:
+    onRedactStaticEntitiesJson ?? emptyStaticRedactionJson,
+  redactStaticEntitiesWithCallerDetectionsJson: emptyStaticRedactionJson,
+  redactStaticEntitiesWithCallerDetectionsDiagnosticsJson:
+    emptyStaticRedactionDiagnosticJson,
+  redactStaticEntitiesResultStreamJson: (
+    _fullText: string,
+    _operators: unknown,
+    onEvent: (eventJson: string) => void,
+  ) => {
+    onEvent(JSON.stringify({ type: "redacted", redaction: {} }));
+    return emptyStaticRedactionJson();
+  },
   redactStaticEntitiesDiagnosticsStreamJson: (
     _fullText: string,
     _operators: unknown,
@@ -1078,8 +1108,12 @@ const fakePreparedRedactionSession = (
   return {
     sessionId: () => sessionId,
     mappingCount: () => 0,
+    restoreText: (fullText) => fullText,
+    restoreTextAt: (fullText) => fullText,
     toPlaintextJson: plaintextJson,
     toPlaintextJsonAt: plaintextJson,
+    toEncryptedArchive: () => new Uint8Array(),
+    toEncryptedArchiveAt: () => new Uint8Array(),
     inspectJson: (observedAtEpochSeconds?: number) =>
       JSON.stringify({
         session_id: sessionId,
@@ -1097,5 +1131,9 @@ const fakePreparedRedactionSession = (
     },
     redactStaticEntitiesJson: () => redactionJson,
     redactStaticEntitiesJsonAt: () => redactionJson,
+    planStaticEntitiesWithCallerDetections: () => ({
+      resultJson: () => "[]",
+      commit: () => {},
+    }),
   };
 };
