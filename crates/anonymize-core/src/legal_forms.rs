@@ -678,13 +678,47 @@ fn single_token_name_soft_wrap(
     .map_or(0, |index| index.saturating_add(1));
   if !previous_line_is_blank(
     before_newline.get(..line_start).unwrap_or_default(),
-  ) || !previous_nonempty_line_has_organization_cue(
-    before_newline.get(..line_start).unwrap_or_default(),
-    data,
   ) {
     return false;
   }
+  let has_organization_context =
+    previous_nonempty_line_has_organization_cue(
+      before_newline.get(..line_start).unwrap_or_default(),
+      data,
+    ) || uppercase_tokens_surround_soft_wrap(text, newline_start);
+  if !has_organization_context {
+    return false;
+  }
   single_token_name_soft_wrap_shape(text, newline_start, data)
+}
+
+fn uppercase_tokens_surround_soft_wrap(
+  text: &str,
+  newline_start: usize,
+) -> bool {
+  let before = text
+    .get(..newline_start)
+    .unwrap_or_default()
+    .lines()
+    .next_back()
+    .unwrap_or_default()
+    .trim();
+  let after = text
+    .get(newline_start.saturating_add(1)..)
+    .unwrap_or_default()
+    .split_whitespace()
+    .next()
+    .unwrap_or_default()
+    .trim_end_matches([',', ';', '.', ':']);
+  let before_letters = before.chars().filter(|ch| ch.is_alphabetic()).count();
+  before.split_whitespace().count() == 1
+    && (2..=5).contains(&before_letters)
+    && [before, after].into_iter().all(|token| {
+      token.chars().any(char::is_alphabetic)
+        && token
+          .chars()
+          .all(|ch| !ch.is_alphabetic() || ch.is_uppercase())
+    })
 }
 
 fn previous_nonempty_line_has_organization_cue(
@@ -4073,38 +4107,47 @@ mod tests {
   }
 
   #[test]
-  fn single_token_title_case_soft_wrap_keeps_issuer_name() {
+  fn single_token_soft_wrap_keeps_evidenced_issuer_names() {
     // Sidus Space employment agreement (2026-07-24): notice-block issuer
     // wrapped mid-name without a comma (`Sidus\nSpace, Inc.`).
-    let text = "If to the Company:\n\nSidus\nSpace, Inc.\n\n150 N Sykes";
     let data = PreparedLegalFormData::new(LegalFormData {
       suffixes: vec![String::from("Inc.")],
       company_suffix_words: vec![String::from("Company")],
       ..LegalFormData::default()
     });
-    let suffix = "Inc.";
-    let suffix_start = text.find(suffix).unwrap();
-    let found = SearchMatch::Literal {
-      pattern: 0,
-      start: u32::try_from(suffix_start).unwrap(),
-      end: u32::try_from(suffix_start + suffix.len()).unwrap(),
-    };
-    let texts: Vec<String> = process_legal_form_matches(
-      &[found],
-      PatternSlice { start: 0, end: 1 },
-      text,
-      &data,
-    )
-    .unwrap()
-    .into_iter()
-    .map(|entity| entity.text.replace('\n', " "))
-    .collect();
-    assert!(
-      texts
-        .iter()
-        .any(|candidate| candidate == "Sidus Space, Inc."),
-      "expected soft-wrapped issuer span, got {texts:?}"
-    );
+    for (text, suffix, expected) in [
+      (
+        "If to the Company:\n\nSidus\nSpace, Inc.\n\n150 N Sykes",
+        "Inc.",
+        "Sidus Space, Inc.",
+      ),
+      (
+        "Authorized signatories\n\nGT\nBIOPHARMA, INC.",
+        "INC.",
+        "GT BIOPHARMA, INC.",
+      ),
+    ] {
+      let suffix_start = text.find(suffix).unwrap();
+      let found = SearchMatch::Literal {
+        pattern: 0,
+        start: u32::try_from(suffix_start).unwrap(),
+        end: u32::try_from(suffix_start + suffix.len()).unwrap(),
+      };
+      let texts: Vec<String> = process_legal_form_matches(
+        &[found],
+        PatternSlice { start: 0, end: 1 },
+        text,
+        &data,
+      )
+      .unwrap()
+      .into_iter()
+      .map(|entity| entity.text.replace('\n', " "))
+      .collect();
+      assert!(
+        texts.iter().any(|candidate| candidate == expected),
+        "expected {expected:?}, got {texts:?}"
+      );
+    }
   }
 
   #[test]

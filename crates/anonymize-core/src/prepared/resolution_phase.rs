@@ -290,9 +290,7 @@ impl PreparedEngine {
     filters: Option<&DenyListFilterData>,
   ) -> Result<Vec<PipelineEntity>> {
     let filtered = filter_entity_false_positives(entities, document, filters)?;
-    let reclassified =
-      self.reclassify_soft_wrapped_city_people(filtered, document)?;
-    Ok(merge_and_dedup(&reclassified))
+    self.reclassify_soft_wrapped_city_people(filtered, document)
   }
 
   fn reclassify_soft_wrapped_city_people(
@@ -302,6 +300,7 @@ impl PreparedEngine {
   ) -> Result<Vec<PipelineEntity>> {
     let offsets = document.offsets();
     let mut resolved = Vec::with_capacity(entities.len());
+    let mut expanded = Vec::new();
     for mut entity in entities {
       let Some(candidate) =
         soft_wrapped_city_person_candidate(&entity, document.text(), &offsets)?
@@ -317,8 +316,18 @@ impl PreparedEngine {
       entity.end = candidate.end;
       entity.text = offsets.slice(entity.start, candidate.end)?;
       entity.score = entity.score.max(0.9);
-      resolved.push(entity);
+      expanded.push(entity);
     }
+    if expanded.is_empty() {
+      return Ok(resolved);
+    }
+    resolved.retain(|entity| {
+      expanded
+        .iter()
+        .all(|expanded| !entity_spans_overlap(entity, expanded))
+    });
+    resolved.extend(expanded);
+    resolved.sort_by_key(|entity| (entity.start, entity.end));
     Ok(resolved)
   }
 
@@ -353,4 +362,11 @@ impl PreparedEngine {
       .anchored
       .extend_monetary_entities(full_text, entities)
   }
+}
+
+const fn entity_spans_overlap(
+  left: &PipelineEntity,
+  right: &PipelineEntity,
+) -> bool {
+  left.start < right.end && right.start < left.end
 }
