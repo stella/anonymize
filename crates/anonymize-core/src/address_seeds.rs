@@ -2305,7 +2305,10 @@ mod tests {
   #[ignore = "release-mode postal context scaling regression check"]
   fn postal_context_collection_scales_for_dynamic_states_and_zip_plus_four()
   -> Result<()> {
-    let data = PreparedAddressSeedData::new(AddressSeedData::default())?;
+    let data = PreparedAddressSeedData::new_with_state_abbreviations(
+      AddressSeedData::default(),
+      vec![String::from("MA")],
+    )?;
     assert_postal_collection_scales(&data, PostalScalingCase::StateBacked);
     assert_postal_collection_scales(
       &data,
