@@ -2127,7 +2127,7 @@ mod tests {
       ]),
       ..DenyListFilterData::default()
     };
-    let text = "Strana 7 (celkem 7)\nStrany 4 (celkem 9)\nStran celkem 9\nStrana 8\nStrona 4 (łącznie 9)\nOldal 1 / 2\nOldal: 1 (összesen: 7)\nStudio 54 (Group 100)\nAcme Industries";
+    let text = "Strana 7 (celkem 7)\rStrany 4 (celkem 9)\r\nStran celkem 9\nStrana 8\nStrona 4 (łącznie 9)\nOldal 1 / 2\nOldal: 1 (összesen: 7)\nStudio 54 (Group 100)\nAcme Industries";
     let entities = filter_entity_false_positives(
       vec![
         entity(

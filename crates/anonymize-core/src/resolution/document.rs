@@ -55,21 +55,45 @@ impl<'a> ResolutionDocument<'a> {
     }
     let starts = self.line_starts.get_or_init(|| {
       let mut starts = vec![0];
-      starts.extend(
-        self
-          .text
-          .match_indices('\n')
-          .map(|(index, _)| index.saturating_add('\n'.len_utf8())),
-      );
+      let bytes = self.text.as_bytes();
+      let mut index = 0_usize;
+      while let Some(byte) = bytes.get(index) {
+        let delimiter_len = match byte {
+          b'\r'
+            if bytes.get(index.saturating_add(1)).copied() == Some(b'\n') =>
+          {
+            2
+          }
+          b'\r' | b'\n' => 1,
+          _ => {
+            index = index.saturating_add(1);
+            continue;
+          }
+        };
+        index = index.saturating_add(delimiter_len);
+        starts.push(index);
+      }
       starts
     });
     let line_index = starts
       .partition_point(|line_start| *line_start <= start)
       .checked_sub(1)?;
     let line_start = *starts.get(line_index)?;
-    let line_end = starts
-      .get(line_index.saturating_add(1))
-      .map_or(self.text.len(), |next_start| next_start.saturating_sub(1));
+    let line_end = starts.get(line_index.saturating_add(1)).map_or(
+      self.text.len(),
+      |next_start| {
+        let delimiter_len =
+          if next_start.checked_sub(2).and_then(|delimiter_start| {
+            self.text.as_bytes().get(delimiter_start..*next_start)
+          }) == Some(b"\r\n".as_slice())
+          {
+            2
+          } else {
+            1
+          };
+        next_start.saturating_sub(delimiter_len)
+      },
+    );
     (end <= line_end).then_some(line_start..line_end)
   }
 
@@ -191,5 +215,17 @@ mod tests {
     assert!(first.is_some());
     assert_eq!(document.line_range(0, 5), Some(0..5));
     assert_eq!(first, document.line_starts.get().map(Vec::as_ptr));
+  }
+
+  #[test]
+  fn line_ranges_support_all_line_endings() {
+    for (text, range) in [
+      ("first\nsecond", 6..12),
+      ("first\r\nsecond", 7..13),
+      ("first\rsecond", 6..12),
+    ] {
+      let document = ResolutionDocument::new(text);
+      assert_eq!(document.line_range(range.start, range.end), Some(range));
+    }
   }
 }
