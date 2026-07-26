@@ -639,9 +639,9 @@ struct DenyBuildContext<'a> {
   config: &'a PipelineConfig,
   dictionaries: Option<&'a Dictionaries>,
   use_scoped_name_corpus: bool,
-  deny_list_countries: Option<&'a [String]>,
   corpus: &'a NameCorpus,
   common_words: &'a HashSet<String>,
+  city_head_words: &'a HashSet<String>,
   month_names: &'a HashSet<String>,
   common_word_exemptions: &'a HashSet<String>,
 }
@@ -663,13 +663,19 @@ pub(super) fn build_deny_list(
 ) -> Result<Option<DenyListData>, AssembleError> {
   let month_names = load_month_names()?;
   let common_word_exemptions = load_common_word_exemptions()?;
+  let allowed_countries = resolve_countries(
+    ctx.config.deny_list_regions.as_deref(),
+    ctx.deny_list_countries,
+  );
+  let city_list = city_entries(ctx.dictionaries, allowed_countries.as_deref());
+  let city_head_words = city_head_words(&city_list);
   let dctx = DenyBuildContext {
     config: ctx.config,
     dictionaries: ctx.dictionaries,
     use_scoped_name_corpus: ctx.name_corpus_languages.is_some(),
-    deny_list_countries: ctx.deny_list_countries,
     corpus: ctx.corpus,
     common_words: &ctx.corpus.common_words_set,
+    city_head_words: &city_head_words,
     month_names: &month_names,
     common_word_exemptions: &common_word_exemptions,
   };
@@ -682,11 +688,6 @@ pub(super) fn build_deny_list(
     .custom_deny_list
     .as_ref()
     .is_some_and(|list| !list.is_empty());
-  let allowed_countries = resolve_countries(
-    dctx.config.deny_list_regions.as_deref(),
-    dctx.deny_list_countries,
-  );
-  let city_list = city_entries(dictionaries, allowed_countries.as_deref());
   let has_cities = !city_list.is_empty();
 
   if !has_deny_list && !has_cities && !has_custom_deny_list {
@@ -829,10 +830,13 @@ fn add_deny_list_entry(
   }
   let lower = js_lowercase(&normalized);
   if source != "custom-deny-list" {
+    let is_loaded_city_head_name =
+      source == "name-dictionary" && dctx.city_head_words.contains(&lower);
     if label != "address" {
       if is_single_word(&normalized)
         && dctx.common_words.contains(&lower)
         && !dctx.common_word_exemptions.contains(&lower)
+        && !is_loaded_city_head_name
       {
         return;
       }
@@ -848,6 +852,17 @@ fn add_deny_list_entry(
   } else {
     builder.push_new(normalized, lower, label, source);
   }
+}
+
+fn city_head_words(cities: &[String]) -> HashSet<String> {
+  let mut result = HashSet::new();
+  for city in cities {
+    let normalized = normalize_for_search(city);
+    if let Some(head) = normalized.split_whitespace().next() {
+      result.insert(js_lowercase(head));
+    }
+  }
+  result
 }
 
 fn append_name_corpus_entries(
@@ -1210,15 +1225,16 @@ mod tests {
     let config = test_pipeline_config();
     let corpus = test_corpus();
     let common_words = HashSet::from([String::from("citizens")]);
+    let city_head_words = HashSet::new();
     let month_names = HashSet::new();
     let common_word_exemptions = HashSet::from([String::from("citizens")]);
     let dctx = DenyBuildContext {
       config: &config,
       dictionaries: None,
       use_scoped_name_corpus: false,
-      deny_list_countries: None,
       corpus: &corpus,
       common_words: &common_words,
+      city_head_words: &city_head_words,
       month_names: &month_names,
       common_word_exemptions: &common_word_exemptions,
     };
@@ -1245,15 +1261,16 @@ mod tests {
     let config = test_pipeline_config();
     let corpus = test_corpus();
     let common_words = HashSet::from([String::from("agreement")]);
+    let city_head_words = HashSet::new();
     let month_names = HashSet::new();
     let common_word_exemptions = HashSet::new();
     let dctx = DenyBuildContext {
       config: &config,
       dictionaries: None,
       use_scoped_name_corpus: false,
-      deny_list_countries: None,
       corpus: &corpus,
       common_words: &common_words,
+      city_head_words: &city_head_words,
       month_names: &month_names,
       common_word_exemptions: &common_word_exemptions,
     };
@@ -1273,28 +1290,24 @@ mod tests {
     );
   }
 
-  /// Names-category dictionary entries (the injected per-language
-  /// first-name/surname lists plus the mixed `names/global` fallback) must
-  /// be tagged with a person-name source, not the generic `deny-list`
-  /// source, so match-time `has_person_name_source` recognizes them the
-  /// same way it recognizes the scoped name-corpus expansion. Without this,
-  /// a global-only name (present only via the injected dictionary, not the
-  /// scoped `first-name`/`surname` corpus expansion) is silently discarded
-  /// downstream in `append_person_name_hits`.
+  /// A global fallback name that is also a common word must survive when it
+  /// heads a loaded city. It stays tagged as a person-name source so runtime
+  /// city-tail evidence can reclassify it before generic person filtering.
   #[test]
-  fn names_category_dictionary_entries_get_name_dictionary_source() {
+  fn common_word_city_head_keeps_name_dictionary_source() {
     let config = PipelineConfig {
       enable_name_corpus: true,
       ..test_pipeline_config()
     };
     let corpus = test_corpus();
-    let common_words = HashSet::new();
+    let common_words = HashSet::from([String::from("fair")]);
+    let city_head_words = HashSet::from([String::from("fair")]);
     let month_names = HashSet::new();
     let common_word_exemptions = HashSet::new();
     let dictionaries = Dictionaries {
       deny_list: Some(OrderedMap(vec![(
         String::from("names/global"),
-        vec![String::from("Aabidah")],
+        vec![String::from("Fair")],
       )])),
       deny_list_meta: Some(OrderedMap(vec![(
         String::from("names/global"),
@@ -1310,9 +1323,9 @@ mod tests {
       config: &config,
       dictionaries: Some(&dictionaries),
       use_scoped_name_corpus: false,
-      deny_list_countries: None,
       corpus: &corpus,
       common_words: &common_words,
+      city_head_words: &city_head_words,
       month_names: &month_names,
       common_word_exemptions: &common_word_exemptions,
     };
@@ -1322,9 +1335,9 @@ mod tests {
 
     let index = builder
       .pattern_index
-      .get("aabidah")
+      .get("fair")
       .copied()
-      .expect("global-only name should be registered");
+      .expect("loaded city head should be registered");
     assert_eq!(
       builder.source_list.get(index),
       Some(&vec![String::from("name-dictionary")])

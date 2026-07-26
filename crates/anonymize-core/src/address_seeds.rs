@@ -17,11 +17,11 @@ const BR_CEP_CONTEXT_WINDOW: usize = 200;
 const PLAIN_POSTAL_CONTEXT_WINDOW: usize = 120;
 const US_ZIP_CONTEXT_WINDOW: usize = 120;
 const US_STATE_ABBREVIATIONS: &[&str] = &[
-  "AK", "AL", "AR", "AZ", "CA", "CO", "CT", "DC", "DE", "FL", "GA", "GU", "HI",
-  "IA", "ID", "IL", "IN", "KS", "KY", "LA", "MA", "MD", "ME", "MI", "MN", "MO",
-  "MS", "MT", "NC", "ND", "NE", "NH", "NJ", "NM", "NV", "NY", "OH", "OK", "OR",
-  "PA", "PR", "RI", "SC", "SD", "TN", "TX", "UT", "VA", "VI", "VT", "WA", "WI",
-  "WV", "WY",
+  "AK", "AL", "AR", "AS", "AZ", "CA", "CO", "CT", "DC", "DE", "FL", "GA", "GU",
+  "HI", "IA", "ID", "IL", "IN", "KS", "KY", "LA", "MA", "MD", "ME", "MI", "MN",
+  "MO", "MP", "MS", "MT", "NC", "ND", "NE", "NH", "NJ", "NM", "NV", "NY", "OH",
+  "OK", "OR", "PA", "PR", "RI", "SC", "SD", "TN", "TX", "UT", "VA", "VI", "VT",
+  "WA", "WI", "WV", "WY",
 ];
 
 pub(crate) fn us_state_zip_prefix_len(text: &str) -> Option<usize> {
@@ -73,17 +73,23 @@ pub(crate) fn us_state_zip_prefix_len(text: &str) -> Option<usize> {
   if let Some(separator) =
     text.get(cursor..)?.chars().next().filter(|ch| is_dash(*ch))
   {
-    cursor = cursor.saturating_add(separator.len_utf8());
+    let extension_start = cursor.saturating_add(separator.len_utf8());
     let extension_len = text
-      .get(cursor..)?
+      .get(extension_start..)?
       .chars()
       .take_while(char::is_ascii_digit)
       .map(char::len_utf8)
       .sum::<usize>();
-    if extension_len != 4 {
-      return None;
+    let extension_end = extension_start.saturating_add(extension_len);
+    let has_complete_extension = extension_len == 4
+      && text
+        .get(extension_end..)?
+        .chars()
+        .next()
+        .is_none_or(|ch| !ch.is_ascii_alphanumeric());
+    if has_complete_extension {
+      cursor = extension_end;
     }
-    cursor = cursor.saturating_add(extension_len);
   }
   if text
     .get(cursor..)?
@@ -94,6 +100,79 @@ pub(crate) fn us_state_zip_prefix_len(text: &str) -> Option<usize> {
     return None;
   }
   Some(cursor)
+}
+
+pub(crate) fn soft_wrapped_us_city_tail(after: &str) -> Option<(usize, &str)> {
+  let mut byte = 0_usize;
+  let mut line_breaks = 0_usize;
+  let mut whitespace = 0_usize;
+  let mut previous_was_carriage_return = false;
+  for ch in after.chars() {
+    if !ch.is_whitespace() {
+      break;
+    }
+    if ch == '\u{2029}' {
+      return None;
+    }
+    match ch {
+      '\r' => {
+        line_breaks = line_breaks.saturating_add(1);
+        previous_was_carriage_return = true;
+      }
+      '\n' if previous_was_carriage_return => {
+        previous_was_carriage_return = false;
+      }
+      '\n' | '\u{2028}' => {
+        line_breaks = line_breaks.saturating_add(1);
+        previous_was_carriage_return = false;
+      }
+      _ => {
+        previous_was_carriage_return = false;
+      }
+    }
+    whitespace = whitespace.saturating_add(1);
+    byte = byte.saturating_add(ch.len_utf8());
+    if whitespace == 4 {
+      break;
+    }
+  }
+  if line_breaks != 1 || !(1..=4).contains(&whitespace) {
+    return None;
+  }
+  let rest = after.get(byte..)?;
+  let mut cursor = 0_usize;
+  let mut words = 0_usize;
+  let city_end = loop {
+    let token_source = rest.get(cursor..)?;
+    let token = token_source
+      .chars()
+      .take_while(|ch| ch.is_alphabetic() || matches!(*ch, '-' | '\'' | '’'))
+      .collect::<String>();
+    if token.is_empty() || !token.chars().next().is_some_and(char::is_uppercase)
+    {
+      return None;
+    }
+    words = words.saturating_add(1);
+    if words > 4 {
+      return None;
+    }
+    cursor = cursor.saturating_add(token.len());
+    let after_token = rest.get(cursor..)?;
+    if after_token.starts_with(',') {
+      let city_end = cursor;
+      cursor = cursor.saturating_add(','.len_utf8());
+      break city_end;
+    }
+    let ch = after_token.chars().next()?;
+    if ch == ' ' || ch == '\t' {
+      cursor = cursor.saturating_add(ch.len_utf8());
+      continue;
+    }
+    return None;
+  };
+  let city_tail = rest.get(..city_end)?;
+  cursor = cursor.saturating_add(us_state_zip_prefix_len(rest.get(cursor..)?)?);
+  Some((byte.saturating_add(cursor), city_tail))
 }
 
 fn is_us_state_abbreviation(text: &str) -> bool {
@@ -1877,7 +1956,10 @@ mod tests {
     assert_eq!(us_state_zip_prefix_len(", FL 32953"), Some(10));
     assert_eq!(us_state_zip_prefix_len(", FL 32953-1234"), Some(15));
     assert_eq!(us_state_zip_prefix_len(", FL 32953‑1234"), Some(17));
-    assert_eq!(us_state_zip_prefix_len(", FL 32953-123"), None);
+    assert_eq!(us_state_zip_prefix_len(", FL 32953-123"), Some(10));
+    assert_eq!(us_state_zip_prefix_len(", FL 32953—Attention:"), Some(10));
+    assert_eq!(us_state_zip_prefix_len(", AS 96799"), Some(10));
+    assert_eq!(us_state_zip_prefix_len(", MP 96950"), Some(10));
   }
 
   proptest! {

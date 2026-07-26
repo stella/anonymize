@@ -659,25 +659,45 @@ Island, FL 32953`;
     ).toBe(true);
   });
 
-  test("soft-wrapped US city redaction consumes ZIP+4", async () => {
+  test("soft-wrapped US city address variants resolve as one span", async () => {
     const dictionaries = await loadTestDictionaries({
-      denyListCountries: ["US"],
-      nameCorpusLanguages: ["en"],
+      denyListCountries: ["AS", "US"],
+      nameCorpusLanguages: [],
     });
     const texts = ["\n", "\r", "\r\n", "\u2028"].map(
       (separator) => `Merritt${separator}Island, FL 32953-1234`,
     );
     texts.push(`Bonita
 Springs, CO 80903`);
+    texts.push(`Fair
+Oaks, CA 95628`);
+    texts.push(`Pago
+Pago, AS 96799`);
+    texts.push(`Merritt
+Island, FL 32953—Attention:`);
+    const unscopedConfig = { ...baseConfig };
+    delete unscopedConfig.languages;
+    delete unscopedConfig.nameCorpusLanguages;
     for (const text of texts) {
+      const expectedEnd = text.indexOf("—");
       const { redaction, resolvedEntities } = await redactNative(
-        { ...baseConfig, dictionaries, labels: ["address"] },
+        {
+          ...unscopedConfig,
+          dictionaries,
+          denyListCountries: ["AS", "US"],
+          labels: ["address"],
+          threshold: 0.7,
+        },
         text,
       );
-      expect(redaction.redactedText).toBe("[ADDRESS_1]");
+      expect(redaction.redactedText).toBe(
+        expectedEnd === -1 ? "[ADDRESS_1]" : "[ADDRESS_1]—Attention:",
+      );
       expect(resolvedEntities).toHaveLength(1);
       expect(resolvedEntities[0]?.start).toBe(0);
-      expect(resolvedEntities[0]?.end).toBe(text.length);
+      expect(resolvedEntities[0]?.end).toBe(
+        expectedEnd === -1 ? text.length : expectedEnd,
+      );
     }
   });
 

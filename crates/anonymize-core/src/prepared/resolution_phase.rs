@@ -46,6 +46,8 @@ impl PreparedEngine {
       full_text,
       diagnostics.as_deref_mut(),
     )?;
+    let pre_threshold_entities = self
+      .reclassify_soft_wrapped_city_people(pre_threshold_entities, &document)?;
     observe_diagnostic_stream(diagnostics, event_stream)?;
     let mut raw_entities = filter_entities_for_redaction(
       pre_threshold_entities,
@@ -106,7 +108,7 @@ impl PreparedEngine {
           .and_then(|data| data.filters.as_ref())
       });
     let mut resolved_entities = filter_entities_for_config(
-      self.filter_false_positives(
+      Self::filter_false_positives(
         sanitized_entities,
         &document,
         false_positive_filters,
@@ -276,7 +278,7 @@ impl PreparedEngine {
       self.person_span_terminators(),
     )?;
     let sanitized = sanitize_entities_with_document(consistent, document)?;
-    let filtered = self.filter_false_positives(
+    let filtered = Self::filter_false_positives(
       sanitized,
       document,
       false_positive_filters,
@@ -288,13 +290,11 @@ impl PreparedEngine {
   }
 
   fn filter_false_positives(
-    &self,
     entities: Vec<PipelineEntity>,
     document: &ResolutionDocument<'_>,
     filters: Option<&DenyListFilterData>,
   ) -> Result<Vec<PipelineEntity>> {
-    let filtered = filter_entity_false_positives(entities, document, filters)?;
-    self.reclassify_soft_wrapped_city_people(filtered, document)
+    filter_entity_false_positives(entities, document, filters)
   }
 
   fn reclassify_soft_wrapped_city_people(
@@ -303,36 +303,25 @@ impl PreparedEngine {
     document: &ResolutionDocument<'_>,
   ) -> Result<Vec<PipelineEntity>> {
     let offsets = document.offsets();
-    let mut resolved = Vec::with_capacity(entities.len());
-    let mut expanded = Vec::new();
+    let mut reclassified = Vec::with_capacity(entities.len());
     for mut entity in entities {
       let Some(candidate) =
         soft_wrapped_city_person_candidate(&entity, document.text(), &offsets)?
       else {
-        resolved.push(entity);
+        reclassified.push(entity);
         continue;
       };
       if !self.deny_list_contains_city(&candidate.city_name)? {
-        resolved.push(entity);
+        reclassified.push(entity);
         continue;
       }
       entity.label = String::from(ADDRESS_LABEL);
       entity.end = candidate.end;
       entity.text = offsets.slice(entity.start, candidate.end)?;
       entity.score = entity.score.max(0.9);
-      expanded.push(entity);
+      reclassified.push(entity);
     }
-    if expanded.is_empty() {
-      return Ok(resolved);
-    }
-    resolved.retain(|entity| {
-      expanded
-        .iter()
-        .all(|expanded| !entity_spans_overlap(entity, expanded))
-    });
-    resolved.extend(expanded);
-    resolved.sort_by_key(|entity| (entity.start, entity.end));
-    Ok(resolved)
+    Ok(reclassified)
   }
 
   fn deny_list_contains_city(&self, city_name: &str) -> Result<bool> {
@@ -366,11 +355,4 @@ impl PreparedEngine {
       .anchored
       .extend_monetary_entities(full_text, entities)
   }
-}
-
-const fn entity_spans_overlap(
-  left: &PipelineEntity,
-  right: &PipelineEntity,
-) -> bool {
-  left.start < right.end && right.start < left.end
 }

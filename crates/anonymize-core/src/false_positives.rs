@@ -4,7 +4,7 @@ use std::sync::LazyLock;
 
 use regex::Regex;
 
-use crate::address_seeds::us_state_zip_prefix_len;
+use crate::address_seeds::soft_wrapped_us_city_tail;
 use crate::byte_offsets::ByteOffsets;
 use crate::processors::DenyListFilterData;
 use crate::resolution::{
@@ -208,8 +208,7 @@ pub(crate) fn soft_wrapped_city_person_candidate(
   }
   let after_byte = offsets.validate_offset(entity.end)?;
   let after = full_text.get(after_byte..).unwrap_or_default();
-  let Some((tail_len, city_tail)) = match_soft_wrapped_us_city_tail(after)
-  else {
+  let Some((tail_len, city_tail)) = soft_wrapped_us_city_tail(after) else {
     return Ok(None);
   };
   let Ok(tail_units) = u32::try_from(tail_len) else {
@@ -227,81 +226,6 @@ pub(crate) fn soft_wrapped_city_person_candidate(
     city_name,
     end: entity.end.saturating_add(tail_units),
   }))
-}
-
-fn match_soft_wrapped_us_city_tail(after: &str) -> Option<(usize, &str)> {
-  let mut byte = 0_usize;
-  let mut line_breaks = 0_usize;
-  let mut whitespace = 0_usize;
-  let mut previous_was_carriage_return = false;
-  for ch in after.chars() {
-    if !ch.is_whitespace() {
-      break;
-    }
-    if ch == '\u{2029}' {
-      return None;
-    }
-    match ch {
-      '\r' => {
-        line_breaks = line_breaks.saturating_add(1);
-        previous_was_carriage_return = true;
-      }
-      '\n' if previous_was_carriage_return => {
-        previous_was_carriage_return = false;
-      }
-      '\n' | '\u{2028}' => {
-        line_breaks = line_breaks.saturating_add(1);
-        previous_was_carriage_return = false;
-      }
-      _ => {
-        previous_was_carriage_return = false;
-      }
-    }
-    whitespace = whitespace.saturating_add(1);
-    byte = byte.saturating_add(ch.len_utf8());
-    if whitespace == 4 {
-      break;
-    }
-  }
-  if line_breaks != 1 || !(1..=4).contains(&whitespace) {
-    return None;
-  }
-  let rest = after.get(byte..)?;
-  let mut cursor = 0_usize;
-  let mut words = 0_usize;
-  let city_end = loop {
-    let token_source = rest.get(cursor..)?;
-    let token = token_source
-      .chars()
-      .take_while(|ch| ch.is_alphabetic() || matches!(*ch, '-' | '\'' | '’'))
-      .collect::<String>();
-    if token.is_empty() {
-      return None;
-    }
-    if !token.chars().next().is_some_and(char::is_uppercase) {
-      return None;
-    }
-    words = words.saturating_add(1);
-    if words > 4 {
-      return None;
-    }
-    cursor = cursor.saturating_add(token.len());
-    let after_token = rest.get(cursor..)?;
-    if after_token.starts_with(',') {
-      let city_end = cursor;
-      cursor = cursor.saturating_add(','.len_utf8());
-      break city_end;
-    }
-    let ch = after_token.chars().next()?;
-    if ch == ' ' || ch == '\t' {
-      cursor = cursor.saturating_add(ch.len_utf8());
-      continue;
-    }
-    return None;
-  };
-  let city_tail = rest.get(..city_end)?;
-  cursor = cursor.saturating_add(us_state_zip_prefix_len(rest.get(cursor..)?)?);
-  Some((byte.saturating_add(cursor), city_tail))
 }
 
 fn should_reject_entity(

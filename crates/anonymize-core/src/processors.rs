@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, BTreeSet, btree_map::Entry};
 
 use smallvec::SmallVec;
 
+use crate::address_seeds::soft_wrapped_us_city_tail;
 use crate::byte_offsets::ByteOffsets;
 use crate::resolution::{DetectionSource, PipelineEntity, SourceDetail};
 use crate::types::{Error, Result, SearchMatch};
@@ -1059,9 +1060,11 @@ fn curated_labels_for_match(
   let acronym_matches_acronym =
     !args.pattern_meta.short_upper_acronym || all_upper(args.match_text);
   let source_char = char_at(args.full_text, args.offsets, args.start)?;
+  let common_word = args.filters.stopwords.contains(args.keyword)
+    || args.filters.allow_list.contains(args.keyword);
+  let city_head_candidate = common_word && has_soft_wrapped_us_city_tail(args)?;
   let passes_filters = source_char.is_some_and(char::is_uppercase)
-    && !args.filters.stopwords.contains(args.keyword)
-    && !args.filters.allow_list.contains(args.keyword)
+    && (!common_word || city_head_candidate)
     && acronym_matches_acronym
     && !all_upper(args.match_text);
 
@@ -1112,6 +1115,20 @@ fn curated_labels_for_match(
       })
       .map(String::from)
       .collect(),
+  )
+}
+
+fn has_soft_wrapped_us_city_tail(
+  args: &CuratedDenyListMatch<'_>,
+) -> Result<bool> {
+  let end = args.start.saturating_add(byte_len(args.match_text));
+  let end_byte = args.offsets.validate_offset(end)?;
+  Ok(
+    args
+      .full_text
+      .get(end_byte..)
+      .and_then(soft_wrapped_us_city_tail)
+      .is_some(),
   )
 }
 
@@ -1824,7 +1841,7 @@ fn street_type_matches(window: &str, street_type: &str) -> bool {
 fn person_chain_breaks(previous_text: &str, gap: &str) -> bool {
   byte_len(gap) > 4
     || gap.is_empty()
-    || gap.contains('\n')
+    || gap.chars().any(is_line_break)
     || gap.contains('\t')
     || gap
       .chars()
@@ -1884,7 +1901,7 @@ fn consume_horizontal_space(
   let mut consumed = 0_usize;
   let mut byte = 0_usize;
   for ch in text.chars() {
-    if ch == '\n' || !ch.is_whitespace() || consumed == max {
+    if is_line_break(ch) || !ch.is_whitespace() || consumed == max {
       break;
     }
     consumed = consumed.saturating_add(1);
@@ -2059,7 +2076,7 @@ fn extend_person_name(
     else {
       break;
     };
-    let wraps = separator.chars().any(is_person_name_line_break);
+    let wraps = separator.chars().any(is_line_break);
     if wraps {
       if soft_wrap_context == PersonSoftWrapContext::None {
         break;
@@ -2168,7 +2185,7 @@ fn take_person_name_extension_separator(tail: &str) -> Option<(&str, &str)> {
   Some((tail.get(..byte)?, tail.get(byte..)?))
 }
 
-const fn is_person_name_line_break(ch: char) -> bool {
+const fn is_line_break(ch: char) -> bool {
   matches!(ch, '\r' | '\n' | '\u{2028}' | '\u{2029}')
 }
 
@@ -2729,7 +2746,7 @@ fn consume_whitespace_no_newline(
   let mut consumed = 0_usize;
   let mut byte = 0_usize;
   for ch in text.chars() {
-    if ch == '\n' || !ch.is_whitespace() || consumed == max {
+    if is_line_break(ch) || !ch.is_whitespace() || consumed == max {
       break;
     }
     consumed = consumed.saturating_add(1);
@@ -3025,6 +3042,40 @@ mod tests {
     assert_eq!(entities.len(), 1);
     assert_eq!(entities[0].label, "person");
     assert_eq!(entities[0].text, "Aabidah Rahman");
+  }
+
+  #[test]
+  fn deny_list_keeps_allow_list_name_at_soft_wrapped_city_head() {
+    let matches = vec![SearchMatch::Literal {
+      pattern: 0,
+      start: 0,
+      end: 4,
+    }];
+    let mut allow_list = BTreeSet::new();
+    allow_list.insert(String::from("fair"));
+    let data = DenyListMatchData {
+      labels: vec![vec![String::from("person")]].into(),
+      custom_labels: vec![vec![]].into(),
+      originals: vec![String::from("Fair")],
+      pattern_meta: DenyListPatternMetaSet::default(),
+      sources: vec![vec![String::from("name-dictionary")]].into(),
+      filters: Some(DenyListFilterData {
+        allow_list,
+        ..DenyListFilterData::default()
+      }),
+    };
+
+    let entities = process_deny_list_matches(
+      &matches,
+      PatternSlice { start: 0, end: 1 },
+      "Fair\nOaks, CA 95628",
+      &data,
+    )
+    .unwrap();
+
+    assert_eq!(entities.len(), 1);
+    assert_eq!(entities[0].label, "person");
+    assert_eq!(entities[0].text, "Fair");
   }
 
   #[test]
