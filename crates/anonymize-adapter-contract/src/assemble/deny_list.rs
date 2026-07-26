@@ -26,6 +26,8 @@ use crate::{
   BindingSigningPlaceGuardData,
 };
 
+const CITY_HEAD_NAME_SOURCE: &str = "city-head-name";
+
 // ── shared word-collection helpers ──────────────────────────────────────────
 
 /// Mirrors `collectLanguageWordValues`: gather every non-empty string from the
@@ -829,6 +831,7 @@ fn add_deny_list_entry(
     return;
   }
   let lower = js_lowercase(&normalized);
+  let mut effective_source = source;
   if source != "custom-deny-list" {
     let is_loaded_city_head_name =
       source == "name-dictionary" && dctx.city_head_words.contains(&lower);
@@ -846,11 +849,17 @@ fn add_deny_list_entry(
     } else if dctx.month_names.contains(&lower) {
       return;
     }
+    if is_loaded_city_head_name
+      && dctx.common_words.contains(&lower)
+      && !dctx.common_word_exemptions.contains(&lower)
+    {
+      effective_source = CITY_HEAD_NAME_SOURCE;
+    }
   }
   if let Some(&existing) = builder.pattern_index.get(&lower) {
-    builder.merge_existing(existing, label, source);
+    builder.merge_existing(existing, label, effective_source);
   } else {
-    builder.push_new(normalized, lower, label, source);
+    builder.push_new(normalized, lower, label, effective_source);
   }
 }
 
@@ -1294,7 +1303,7 @@ mod tests {
   /// heads a loaded city. It stays tagged as a person-name source so runtime
   /// city-tail evidence can reclassify it before generic person filtering.
   #[test]
-  fn common_word_city_head_keeps_name_dictionary_source() {
+  fn common_word_city_head_gets_conditional_source() {
     let config = PipelineConfig {
       enable_name_corpus: true,
       ..test_pipeline_config()
@@ -1340,7 +1349,7 @@ mod tests {
       .expect("loaded city head should be registered");
     assert_eq!(
       builder.source_list.get(index),
-      Some(&vec![String::from("name-dictionary")])
+      Some(&vec![String::from(CITY_HEAD_NAME_SOURCE)])
     );
   }
 

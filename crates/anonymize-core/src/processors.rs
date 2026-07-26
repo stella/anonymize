@@ -18,6 +18,7 @@ const DENY_LIST_SOURCE: &str = "deny-list";
 const CITY_SOURCE: &str = "city";
 const FIRST_NAME_SOURCE: &str = "first-name";
 const SURNAME_SOURCE: &str = "surname";
+const CITY_HEAD_NAME_SOURCE: &str = "city-head-name";
 const CZECH_FEMININE_SURNAME_SUFFIX: &str = "ová";
 const TITLE_SOURCE: &str = "title";
 /// A deny-list entry sourced from an injected Names-category dictionary
@@ -1001,6 +1002,13 @@ fn collect_deny_list_matches(
 
     let has_surname_source =
       sources.iter().any(|source| source == SURNAME_SOURCE);
+    let city_head_name_requires_tail =
+      sources.iter().any(|source| source == CITY_HEAD_NAME_SOURCE)
+        && !sources.iter().any(|source| {
+          source == FIRST_NAME_SOURCE
+            || source == SURNAME_SOURCE
+            || source == NAME_DICTIONARY_SOURCE
+        });
     let mut keep_surname_evidence = false;
     let curated_labels = if has_curated_source(sources) {
       let filters = data.filters.as_ref().ok_or(Error::MissingStaticData {
@@ -1016,6 +1024,7 @@ fn collect_deny_list_matches(
         labels,
         custom_pattern_labels: &custom_pattern_labels,
         custom_edges_are_valid,
+        city_head_name_requires_tail,
         filters,
       };
       keep_surname_evidence = has_surname_source
@@ -1042,6 +1051,7 @@ fn collect_deny_list_matches(
         source == FIRST_NAME_SOURCE
           || source == SURNAME_SOURCE
           || source == NAME_DICTIONARY_SOURCE
+          || source == CITY_HEAD_NAME_SOURCE
       }),
       has_surname_evidence: keep_surname_evidence,
       text: match_text,
@@ -1068,6 +1078,7 @@ struct CuratedDenyListMatch<'a> {
   labels: StringGroup<'a>,
   custom_pattern_labels: &'a [String],
   custom_edges_are_valid: bool,
+  city_head_name_requires_tail: bool,
   filters: &'a DenyListFilterData,
 }
 
@@ -1079,7 +1090,8 @@ fn curated_labels_for_match(
   let source_char = char_at(args.full_text, args.offsets, args.start)?;
   let common_word = args.filters.stopwords.contains(args.keyword)
     || args.filters.allow_list.contains(args.keyword);
-  let city_head_candidate = common_word && has_soft_wrapped_us_city_tail(args)?;
+  let has_city_tail = has_soft_wrapped_us_city_tail(args)?;
+  let city_head_candidate = common_word && has_city_tail;
   let passes_filters = source_char.is_some_and(char::is_uppercase)
     && (!common_word || city_head_candidate)
     && acronym_matches_acronym
@@ -1128,7 +1140,13 @@ fn curated_labels_for_match(
         let is_hyphenated_person = has_hyphen_edge
           && !supported_hyphenated_person
           && *label == PERSON_LABEL;
-        !is_custom_duplicate && !is_hyphenated_person
+        let is_city_head_person_without_tail = args
+          .city_head_name_requires_tail
+          && !has_city_tail
+          && *label == PERSON_LABEL;
+        !is_custom_duplicate
+          && !is_hyphenated_person
+          && !is_city_head_person_without_tail
       })
       .map(String::from)
       .collect(),
@@ -1584,6 +1602,7 @@ fn validate_deny_list_sources(sources: StringGroup<'_>) -> Result<()> {
       | FIRST_NAME_SOURCE
       | SURNAME_SOURCE
       | TITLE_SOURCE
+      | CITY_HEAD_NAME_SOURCE
       | NAME_DICTIONARY_SOURCE => {}
       _ => {
         return Err(Error::UnsupportedDenyListSource {
