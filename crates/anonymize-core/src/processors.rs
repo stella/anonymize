@@ -1098,15 +1098,6 @@ fn curated_labels_for_match(
   let common_word = args.filters.stopwords.contains(args.keyword)
     || args.filters.allow_list.contains(args.keyword);
   let has_city_tail = has_soft_wrapped_us_city_tail(args)?;
-  let has_address_format = if args.city_head_name_requires_tail {
-    has_adjacent_address_format(
-      args.full_text,
-      args.start,
-      args.start.saturating_add(byte_len(args.match_text)),
-    )?
-  } else {
-    false
-  };
   let city_head_candidate = common_word && has_city_tail;
   let passes_filters = source_char.is_some_and(char::is_uppercase)
     && (!common_word || city_head_candidate)
@@ -1159,7 +1150,6 @@ fn curated_labels_for_match(
         let is_city_head_person_without_evidence = args
           .city_head_name_requires_tail
           && !has_city_tail
-          && !has_address_format
           && *label == PERSON_LABEL;
         !is_custom_duplicate
           && !is_hyphenated_person
@@ -1787,16 +1777,6 @@ fn has_adjacent_address_evidence(
 ) -> Result<bool> {
   let window = adjacent_text_window(full_text, start, end)?;
   Ok(has_address_format(&window) || has_street_type(&window, filters))
-}
-
-fn has_adjacent_address_format(
-  full_text: &str,
-  start: u32,
-  end: u32,
-) -> Result<bool> {
-  Ok(has_address_format(&adjacent_text_window(
-    full_text, start, end,
-  )?))
 }
 
 fn adjacent_text_window(
