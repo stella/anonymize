@@ -1597,8 +1597,19 @@ fn has_cluster_barrier(
 ) -> bool {
   full_text
     .get(gap_start..gap_end)
-    .is_some_and(has_paragraph_break)
+    .is_some_and(|gap| has_paragraph_break(gap) || has_prose_line_break(gap))
     || entity_index.has_barrier(gap_start, gap_end)
+}
+
+fn has_prose_line_break(text: &str) -> bool {
+  if !text.contains('\n') {
+    return false;
+  }
+  text
+    .split(|ch: char| !ch.is_alphabetic())
+    .filter(|word| !word.is_empty())
+    .nth(4)
+    .is_some()
 }
 
 fn has_paragraph_break(text: &str) -> bool {
