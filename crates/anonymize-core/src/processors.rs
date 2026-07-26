@@ -2132,15 +2132,48 @@ fn person_soft_wrap_context(
   let before = full_text
     .get(..start_byte)
     .ok_or(Error::ByteOffsetOutOfBounds { offset: start })?;
-  let mut lines = before.rsplit('\n');
-  if lines.next().unwrap_or_default().trim() == "/s/" {
+  let (current_line, previous_line) = trailing_logical_lines(before);
+  if current_line.trim() == "/s/" {
     return Ok(PersonSoftWrapContext::Signature);
   }
-  let label = lines.next().unwrap_or_default().trim();
+  let label = previous_line.unwrap_or_default().trim();
   if label.ends_with(':') && label.split_whitespace().count() == 1 {
     return Ok(PersonSoftWrapContext::FieldLabel);
   }
   Ok(PersonSoftWrapContext::None)
+}
+
+fn trailing_logical_lines(text: &str) -> (&str, Option<&str>) {
+  let Some((separator_start, separator_end, separator)) =
+    last_line_separator(text)
+  else {
+    return (text, None);
+  };
+  let current = text.get(separator_end..).unwrap_or_default();
+  if separator == '\u{2029}' {
+    return (current, None);
+  }
+  let previous_end = separator_start;
+  let previous_start = text
+    .get(..previous_end)
+    .and_then(last_line_separator)
+    .map_or(0, |(_, end, _)| end);
+  (current, text.get(previous_start..previous_end))
+}
+
+fn last_line_separator(text: &str) -> Option<(usize, usize, char)> {
+  let (mut start, separator) = text
+    .char_indices()
+    .rev()
+    .find(|(_, ch)| is_line_break(*ch))?;
+  let end = start.saturating_add(separator.len_utf8());
+  if separator == '\n'
+    && let Some((carriage_return_start, '\r')) =
+      text.get(..start)?.char_indices().next_back()
+  {
+    start = carriage_return_start;
+  }
+  Some((start, end, separator))
 }
 
 /// Separator before an extended person-name token: one to four whitespace
@@ -2151,7 +2184,7 @@ fn take_person_name_extension_separator(tail: &str) -> Option<(&str, &str)> {
   let mut byte = 0_usize;
   let mut previous_was_carriage_return = false;
   for ch in tail.chars() {
-    if !ch.is_whitespace() {
+    if !is_supported_name_separator(ch) {
       break;
     }
     if ch == '\u{2029}' {
@@ -2187,6 +2220,10 @@ fn take_person_name_extension_separator(tail: &str) -> Option<(&str, &str)> {
 
 const fn is_line_break(ch: char) -> bool {
   matches!(ch, '\r' | '\n' | '\u{2028}' | '\u{2029}')
+}
+
+fn is_supported_name_separator(ch: char) -> bool {
+  is_line_break(ch) || ch == '\t' || (ch.is_whitespace() && !ch.is_control())
 }
 
 fn is_middle_initial_token(word: &str) -> bool {
@@ -3106,6 +3143,8 @@ mod tests {
         "Alan\u{2028}Khalili",
       ),
       ("/s/ Alan\u{2029}Khalili", "Alan"),
+      ("/s/ Alan\u{000b}Khalili", "Alan"),
+      ("/s/ Alan\u{000c}Khalili", "Alan"),
       ("/s/ Alan Joseph\nKhalili", "Alan Joseph\nKhalili"),
     ] {
       let entities = process_deny_list_matches(
@@ -3126,7 +3165,11 @@ mod tests {
   fn person_soft_wrap_field_label_must_be_adjacent() {
     for (text, expected) in [
       ("Name:\nAlice", PersonSoftWrapContext::FieldLabel),
+      ("Name:\rAlice", PersonSoftWrapContext::FieldLabel),
+      ("Name:\r\nAlice", PersonSoftWrapContext::FieldLabel),
+      ("Name:\u{2028}Alice", PersonSoftWrapContext::FieldLabel),
       ("Name:\n\n\nAlice", PersonSoftWrapContext::None),
+      ("Name:\u{2029}Alice", PersonSoftWrapContext::None),
     ] {
       let start = u32::try_from(text.find("Alice").unwrap()).unwrap();
       assert_eq!(

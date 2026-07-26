@@ -49,12 +49,15 @@ const baseConfig: Omit<PipelineConfig, "dictionaries"> = {
   nameCorpusLanguages: ["en"],
 };
 
-const detect = async (text: string): Promise<NativePipelineEntity[]> => {
+const detect = async (
+  text: string,
+  overrides: Partial<Omit<PipelineConfig, "dictionaries">> = {},
+): Promise<NativePipelineEntity[]> => {
   const dictionaries = await loadTestDictionaries({
     denyListCountries: ["US"],
     nameCorpusLanguages: ["en"],
   });
-  return detectNative({ ...baseConfig, dictionaries }, text);
+  return detectNative({ ...baseConfig, ...overrides, dictionaries }, text);
 };
 
 describe("EDGAR notice-block and securities-clause regressions", () => {
@@ -624,20 +627,26 @@ Space, Inc.
   });
 
   test("field label is not absorbed into a wrapped organization", async () => {
-    const entities = await detect(`Attention
-Acme Inc.`);
-    expect(
-      entities.some(
-        (entity) =>
-          entity.label === "organization" && entity.text === "Acme Inc.",
-      ),
-    ).toBe(true);
-    expect(
-      entities.some(
-        (entity) =>
-          entity.label === "organization" && entity.text.includes("Attention"),
-      ),
-    ).toBe(false);
+    for (const enableTriggerPhrases of [true, false]) {
+      const entities = await detect(
+        `Attention
+Acme Inc.`,
+        { enableTriggerPhrases },
+      );
+      expect(
+        entities.some(
+          (entity) =>
+            entity.label === "organization" && entity.text === "Acme Inc.",
+        ),
+      ).toBe(true);
+      expect(
+        entities.some(
+          (entity) =>
+            entity.label === "organization" &&
+            entity.text.includes("Attention"),
+        ),
+      ).toBe(false);
+    }
   });
 
   test("soft-wrapped US city headword is an address not a person", async () => {

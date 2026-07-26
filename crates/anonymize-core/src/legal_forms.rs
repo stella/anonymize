@@ -784,6 +784,9 @@ fn single_token_name_soft_wrap_shape(
   if !is_name_shaped_org_token(token) {
     return false;
   }
+  if data.soft_wrap_boundary_labels.is_empty() {
+    return false;
+  }
   let lower = lowercase_lookup(token);
   if data.role_heads.contains(lower.as_ref())
     || data.soft_wrap_boundary_labels.contains(lower.as_ref())
@@ -4132,12 +4135,15 @@ mod tests {
   fn single_token_soft_wrap_keeps_evidenced_issuer_names() {
     // Sidus Space employment agreement (2026-07-24): notice-block issuer
     // wrapped mid-name without a comma (`Sidus\nSpace, Inc.`).
-    let data = PreparedLegalFormData::new(LegalFormData {
-      suffixes: vec![String::from("Inc.")],
-      role_heads: vec![String::from("donneur d'ordre")],
-      company_suffix_words: vec![String::from("Company")],
-      ..LegalFormData::default()
-    });
+    let data = PreparedLegalFormData::new_with_soft_wrap_boundary_labels(
+      LegalFormData {
+        suffixes: vec![String::from("Inc.")],
+        role_heads: vec![String::from("donneur d'ordre")],
+        company_suffix_words: vec![String::from("Company")],
+        ..LegalFormData::default()
+      },
+      vec![String::from("attention")],
+    );
     assert!(previous_nonempty_line_has_organization_cue(
       "Si au donneur d'ordre:\n\n",
       &data,

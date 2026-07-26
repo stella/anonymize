@@ -80,10 +80,14 @@ pub(super) fn prepare_support_data(
   input: SupportDataInput,
   diagnostics: &mut Option<&mut StaticRedactionDiagnostics>,
 ) -> Result<PreparedSupportData> {
+  // The address boundary vocabulary is detector-independent support. Reuse
+  // it for legal-form soft wraps even when trigger detection is disabled.
+  // If address support is absent, the optional wrap path fails closed.
   let legal_form_soft_wrap_boundary_labels = input
-    .triggers
+    .address_seed
     .as_ref()
-    .map_or_else(Vec::new, |data| data.address_stop_keywords.clone());
+    .map(|data| data.boundary_words.clone())
+    .unwrap_or_default();
   let prepared = crate::exec::scope(|scope| {
     let hotwords = scope.spawn(|| prepare_timed_hotword_data(input.hotwords));
     let triggers = scope.spawn(|| prepare_timed_trigger_data(input.triggers));
