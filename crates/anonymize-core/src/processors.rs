@@ -2040,13 +2040,11 @@ fn extend_person_name(
   filters: &DenyListFilterData,
 ) -> Result<ExtendedName> {
   let mut new_end = end;
-  let soft_wrap_context =
+  let mut soft_wrap_available =
     has_soft_wrapped_signature_name_context(full_text, offsets, start)?;
   // EDGAR HTML often soft-wraps the surname onto the next line after a
   // given name (`/s/ Alan\nKhalili`). Only signature markers and compact
   // field-label layouts may cross one line break.
-  let mut crossed_soft_wrap = false;
-
   loop {
     let tail = slice_from(full_text, offsets, new_end)?;
     let Some((separator, after_separator)) =
@@ -2056,10 +2054,10 @@ fn extend_person_name(
     };
     let wraps = separator.contains(['\r', '\n']);
     if wraps {
-      if crossed_soft_wrap || !soft_wrap_context {
+      if !soft_wrap_available {
         break;
       }
-      crossed_soft_wrap = true;
+      soft_wrap_available = false;
     }
     let word_start = new_end.saturating_add(byte_len(separator));
     let Some(first) = after_separator.chars().next() else {
@@ -2090,6 +2088,7 @@ fn extend_person_name(
     }
 
     new_end = word_start.saturating_add(byte_len(stripped));
+    soft_wrap_available = false;
   }
 
   Ok(ExtendedName {

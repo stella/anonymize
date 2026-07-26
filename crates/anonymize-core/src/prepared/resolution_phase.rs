@@ -1,9 +1,11 @@
+use std::borrow::Cow;
+
 use crate::diagnostics::{DiagnosticStage, StaticRedactionDiagnostics};
 use crate::false_positives::{
   filter_entity_false_positives, soft_wrapped_city_person_candidate,
 };
 use crate::hotwords::apply_hotword_rules;
-use crate::labels::ADDRESS_LABEL;
+use crate::labels::{ADDRESS_LABEL, PERSON_LABEL};
 use crate::normalize::normalize_for_search;
 use crate::processors::DenyListFilterData;
 use crate::resolution::{
@@ -36,6 +38,7 @@ impl PreparedEngine {
     event_stream: &mut DiagnosticEventStream<'_>,
   ) -> Result<Vec<PipelineEntity>> {
     let document = ResolutionDocument::new(full_text);
+    let resolution_labels = self.resolution_labels();
     let pre_threshold_entities = self.prepare_pre_threshold_entities(
       detections,
       caller_entities,
@@ -48,7 +51,7 @@ impl PreparedEngine {
       full_text,
       self.policy.threshold,
       self.policy.confidence_boost,
-      &self.policy.allowed_labels,
+      resolution_labels.as_ref(),
     )?;
     let address_context_timer = PhaseTimer::start();
     let address_context_entities =
@@ -135,6 +138,19 @@ impl PreparedEngine {
       .unwrap_or_default()
   }
 
+  fn resolution_labels(&self) -> Cow<'_, [String]> {
+    let labels = &self.policy.allowed_labels;
+    if labels.is_empty()
+      || !label_is_allowed(ADDRESS_LABEL, labels)
+      || label_is_allowed(PERSON_LABEL, labels)
+    {
+      return Cow::Borrowed(labels);
+    }
+    let mut expanded = labels.clone();
+    expanded.push(String::from(PERSON_LABEL));
+    Cow::Owned(expanded)
+  }
+
   fn prepare_pre_threshold_entities(
     &self,
     detections: &StaticDetectionResult,
@@ -168,11 +184,12 @@ impl PreparedEngine {
       return Ok(entities);
     };
     let timer = PhaseTimer::start();
+    let resolution_labels = self.resolution_labels();
     let adjusted = apply_hotword_rules(
       entities,
       full_text,
       data,
-      &self.policy.allowed_labels,
+      resolution_labels.as_ref(),
     )?;
     record_count_stage(
       &mut diagnostics,
@@ -273,9 +290,17 @@ impl PreparedEngine {
     filters: Option<&DenyListFilterData>,
   ) -> Result<Vec<PipelineEntity>> {
     let filtered = filter_entity_false_positives(entities, document, filters)?;
+    self.reclassify_soft_wrapped_city_people(filtered, document)
+  }
+
+  fn reclassify_soft_wrapped_city_people(
+    &self,
+    entities: Vec<PipelineEntity>,
+    document: &ResolutionDocument<'_>,
+  ) -> Result<Vec<PipelineEntity>> {
     let offsets = document.offsets();
-    let mut resolved = Vec::with_capacity(filtered.len());
-    for mut entity in filtered {
+    let mut resolved = Vec::with_capacity(entities.len());
+    for mut entity in entities {
       let Some(candidate) =
         soft_wrapped_city_person_candidate(&entity, document.text(), &offsets)?
       else {

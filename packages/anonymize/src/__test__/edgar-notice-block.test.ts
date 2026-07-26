@@ -665,27 +665,46 @@ Island, FL 32953`;
       nameCorpusLanguages: ["en"],
     });
     const { redaction } = await redactNative(
-      { ...baseConfig, dictionaries },
+      { ...baseConfig, dictionaries, labels: ["address"] },
       `Merritt
 Island, FL 32953-1234`,
     );
     expect(redaction.redactedText).toBe("[ADDRESS_1]");
   });
 
-  test("person before an unrelated city survives person-only selection", async () => {
+  test("person boundaries survive person-only selection", async () => {
     const dictionaries = await loadTestDictionaries({
       denyListCountries: ["US"],
       nameCorpusLanguages: ["en"],
     });
-    const entities = await detectNative(
-      { ...baseConfig, dictionaries, labels: ["person"] },
-      `Alice
+    for (const [text, expected] of [
+      [
+        `Alice
 Boston, MA 02110`,
-    );
-    expect(
-      entities.some(
-        (entity) => entity.label === "person" && entity.text === "Alice",
-      ),
-    ).toBe(true);
+        "Alice",
+      ],
+      [
+        `Name:
+Alice Smith
+Boston, MA 02110`,
+        "Alice Smith",
+      ],
+    ]) {
+      const entities = await detectNative(
+        { ...baseConfig, dictionaries, labels: ["person"] },
+        text,
+      );
+      expect(
+        entities.some(
+          (entity) => entity.label === "person" && entity.text === expected,
+        ),
+      ).toBe(true);
+      expect(
+        entities.some(
+          (entity) =>
+            entity.label === "person" && entity.text.includes("Boston"),
+        ),
+      ).toBe(false);
+    }
   });
 });

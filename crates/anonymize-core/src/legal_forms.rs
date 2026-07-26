@@ -678,10 +678,34 @@ fn single_token_name_soft_wrap(
     .map_or(0, |index| index.saturating_add(1));
   if !previous_line_is_blank(
     before_newline.get(..line_start).unwrap_or_default(),
+  ) || !previous_nonempty_line_has_organization_cue(
+    before_newline.get(..line_start).unwrap_or_default(),
+    data,
   ) {
     return false;
   }
   single_token_name_soft_wrap_shape(text, newline_start, data)
+}
+
+fn previous_nonempty_line_has_organization_cue(
+  before_current_line: &str,
+  data: &PreparedLegalFormData,
+) -> bool {
+  let Some(line) = before_current_line
+    .lines()
+    .rev()
+    .find(|line| !line.trim().is_empty())
+  else {
+    return false;
+  };
+  line
+    .split_whitespace()
+    .map(|token| token.trim_matches(|ch: char| !ch.is_alphabetic()))
+    .map(lowercase_lookup)
+    .any(|token| {
+      data.role_heads.contains(token.as_ref())
+        || data.company_suffix_words.contains(token.as_ref())
+    })
 }
 
 fn single_token_name_soft_wrap_shape(
@@ -4055,6 +4079,7 @@ mod tests {
     let text = "If to the Company:\n\nSidus\nSpace, Inc.\n\n150 N Sykes";
     let data = PreparedLegalFormData::new(LegalFormData {
       suffixes: vec![String::from("Inc.")],
+      company_suffix_words: vec![String::from("Company")],
       ..LegalFormData::default()
     });
     let suffix = "Inc.";
@@ -4088,8 +4113,13 @@ mod tests {
       suffixes: vec![String::from("Inc.")],
       ..LegalFormData::default()
     });
-    for header in ["THE COMPANY", "COMPANY", "Attention", "Confidential"] {
-      let text = format!("{header}\nAcme Inc.");
+    for text in [
+      String::from("THE COMPANY\nAcme Inc."),
+      String::from("COMPANY\nAcme Inc."),
+      String::from("Attention\nAcme Inc."),
+      String::from("Confidential\nAcme Inc."),
+      String::from("\n\nDefinitions\nAcme Inc."),
+    ] {
       let suffix = "Inc.";
       let suffix_start = text.find(suffix).unwrap();
       let found = SearchMatch::Literal {
