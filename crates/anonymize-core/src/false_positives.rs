@@ -19,6 +19,7 @@ const ALL_CAPS_LINE_LETTER_THRESHOLD: usize = 5;
 const ALL_CAPS_LINE_RATIO: f64 = 0.95;
 const ALL_CAPS_LINE_PROSE_EXTRA_LETTERS: usize = 20;
 const ALL_CAPS_LINE_HEADING_WORD_LIMIT: usize = 5;
+const MAX_PAGE_FOOTER_TOTAL: u32 = 1_000;
 
 static POSTAL_CODE_RE: LazyLock<Option<Regex>> =
   LazyLock::new(|| Regex::new(r"\d{3}\s?\d{2}").ok());
@@ -146,7 +147,14 @@ fn should_reject_entity(
   if exceeds_open_ended_word_count(entity) {
     return Ok(true);
   }
+  // Explicit section markers (`§ 6`, `6.1`, `3.2.4`) are never addresses,
+  // including when a place-of-performance cue extracts them as trigger values.
+  // Keep bare numbers because those can be valid house numbers.
+  if entity.label == ADDRESS_LABEL && is_explicit_section_number(text) {
+    return Ok(true);
+  }
   if entity.label != IP_ADDRESS_LABEL
+    && entity.label != ADDRESS_LABEL
     && is_section_number(text)
     && entity.source != DetectionSource::Trigger
   {
@@ -206,6 +214,12 @@ fn should_reject_entity(
   if entity.label == ORGANIZATION_LABEL
     && filters
       .is_some_and(|filters| is_document_structure_heading(text, filters))
+  {
+    return Ok(true);
+  }
+  if entity.label == ORGANIZATION_LABEL
+    && let Some(filters) = filters
+    && is_numbered_page_footer(full_text, offsets, entity, filters)?
   {
     return Ok(true);
   }
@@ -319,6 +333,24 @@ fn bracketed_inner(text: &str, open: char, close: char) -> Option<&str> {
 
 fn is_section_number(text: &str) -> bool {
   regex_is_match(&SECTION_NUMBER_RE, text.trim())
+}
+
+fn is_explicit_section_number(text: &str) -> bool {
+  let trimmed = text.trim();
+  if let Some(section) = trimmed.strip_prefix('§') {
+    return !section.trim().is_empty()
+      && section
+        .trim()
+        .chars()
+        .all(|ch| ch.is_ascii_digit() || ch == '.');
+  }
+  if trimmed.ends_with('.') {
+    return trimmed
+      .trim_end_matches('.')
+      .chars()
+      .all(|ch| ch.is_ascii_digit() || ch == '.');
+  }
+  is_section_number(trimmed) && trimmed.contains('.')
 }
 
 fn is_standalone_year(text: &str) -> bool {
@@ -452,6 +484,80 @@ fn role_exact_match(
     && filters
       .generic_roles
       .contains(&entity.text.trim().to_lowercase())
+}
+
+fn is_numbered_page_footer(
+  full_text: &str,
+  offsets: &ByteOffsets<'_>,
+  entity: &PipelineEntity,
+  filters: &DenyListFilterData,
+) -> Result<bool> {
+  if entity.source != DetectionSource::Trigger {
+    return Ok(false);
+  }
+  let Some((head, page)) = words_and_number(&entity.text) else {
+    return Ok(false);
+  };
+  let head = head.to_lowercase();
+
+  let start = offsets.validate_offset(entity.start)?;
+  let end = offsets.validate_offset(entity.end)?;
+  let before = full_text.get(..start).ok_or(Error::InvalidSpan {
+    start: entity.start,
+    end: entity.end,
+  })?;
+  if !before
+    .rsplit('\n')
+    .next()
+    .unwrap_or_default()
+    .trim()
+    .is_empty()
+  {
+    return Ok(false);
+  }
+
+  let after = full_text.get(end..).ok_or(Error::InvalidSpan {
+    start: entity.start,
+    end: entity.end,
+  })?;
+  let line_remainder = after.split('\n').next().unwrap_or_default().trim();
+  if line_remainder.is_empty() {
+    return Ok(
+      filters.page_footer_markers.contains(&head)
+        && page <= MAX_PAGE_FOOTER_TOTAL,
+    );
+  }
+  let counter =
+    bracketed_inner(line_remainder, '(', ')').unwrap_or(line_remainder);
+  let Some((counter_head, total)) = words_and_number(counter) else {
+    return Ok(false);
+  };
+  let marker = format!("{head} {}", counter_head.to_lowercase());
+  if !filters.page_footer_markers.contains(&marker) {
+    return Ok(false);
+  }
+  Ok(page <= total && total <= MAX_PAGE_FOOTER_TOTAL)
+}
+
+fn words_and_number(text: &str) -> Option<(&str, u32)> {
+  let trimmed = text.trim().trim_start_matches(',').trim_start();
+  let split = trimmed.rfind(char::is_whitespace)?;
+  let words = trimmed
+    .get(..split)?
+    .trim_end()
+    .trim_end_matches(':')
+    .trim_end();
+  let number = trimmed.get(split..)?.trim();
+  if words.is_empty()
+    || (words != "/"
+      && !words
+        .split_whitespace()
+        .all(|word| word.chars().all(char::is_alphabetic)))
+    || !number.chars().all(|ch| ch.is_ascii_digit())
+  {
+    return None;
+  }
+  Some((words, number.parse().ok()?))
 }
 
 fn is_all_caps_candidate(text: &str) -> bool {
@@ -1898,6 +2004,112 @@ mod tests {
   }
 
   #[test]
+  fn rejects_explicit_address_sections_but_keeps_house_numbers() {
+    for marker in ["6.", "6.1", "3.2.4", "§ 1983"] {
+      let section = filter_entity_false_positives(
+        vec![entity(
+          marker,
+          marker,
+          ADDRESS_LABEL,
+          DetectionSource::Trigger,
+        )],
+        marker,
+        Some(&DenyListFilterData::default()),
+      )
+      .unwrap();
+      assert!(section.is_empty(), "{marker}");
+    }
+    let house_number = filter_entity_false_positives(
+      vec![entity(
+        "123",
+        "123",
+        ADDRESS_LABEL,
+        DetectionSource::Trigger,
+      )],
+      "123",
+      Some(&DenyListFilterData::default()),
+    )
+    .unwrap();
+
+    assert_eq!(house_number.len(), 1);
+  }
+
+  #[test]
+  fn rejects_numbered_page_footers_without_hiding_numbered_names() {
+    let filters = DenyListFilterData {
+      page_footer_markers: set([
+        "oldal /",
+        "oldal összesen",
+        "stran celkem",
+        "strana celkem",
+        "strany celkem",
+        "strona łącznie",
+      ]),
+      ..DenyListFilterData::default()
+    };
+    let text = "Strana 7 (celkem 7)\nStrany 4 (celkem 9)\nStran celkem 9\nStrona 4 (łącznie 9)\nOldal 1 / 2\nOldal: 1 (összesen: 7)\nStudio 54 (Group 100)\nAcme Industries";
+    let entities = filter_entity_false_positives(
+      vec![
+        entity(
+          text,
+          "Strana 7",
+          ORGANIZATION_LABEL,
+          DetectionSource::Trigger,
+        ),
+        entity(
+          text,
+          "Strany 4",
+          ORGANIZATION_LABEL,
+          DetectionSource::Trigger,
+        ),
+        entity(
+          text,
+          "Stran celkem 9",
+          ORGANIZATION_LABEL,
+          DetectionSource::Trigger,
+        ),
+        entity(
+          text,
+          "Strona 4",
+          ORGANIZATION_LABEL,
+          DetectionSource::Trigger,
+        ),
+        entity(
+          text,
+          "Oldal 1",
+          ORGANIZATION_LABEL,
+          DetectionSource::Trigger,
+        ),
+        entity(
+          text,
+          "Oldal: 1",
+          ORGANIZATION_LABEL,
+          DetectionSource::Trigger,
+        ),
+        entity(
+          text,
+          "Studio 54",
+          ORGANIZATION_LABEL,
+          DetectionSource::Trigger,
+        ),
+        entity(
+          text,
+          "Acme Industries",
+          ORGANIZATION_LABEL,
+          DetectionSource::Trigger,
+        ),
+      ],
+      text,
+      Some(&filters),
+    )
+    .unwrap();
+
+    assert_eq!(entities.len(), 2);
+    assert_eq!(entities[0].text, "Studio 54");
+    assert_eq!(entities[1].text, "Acme Industries");
+  }
+
+  #[test]
   fn keeps_ipv4_addresses_that_resemble_section_numbers() {
     let text = "192.0.2.1";
     let entities = filter_entity_false_positives(
@@ -1917,9 +2129,11 @@ mod tests {
     label: &str,
     source: DetectionSource,
   ) -> PipelineEntity {
+    let start = full_text.find(text).expect("entity text is in fixture");
+    let end = start.saturating_add(text.len());
     PipelineEntity::detected(
-      0,
-      u32::try_from(full_text.len()).expect("fixture length fits u32"),
+      u32::try_from(start).expect("fixture offset fits u32"),
+      u32::try_from(end).expect("fixture offset fits u32"),
       label,
       text,
       0.8,
