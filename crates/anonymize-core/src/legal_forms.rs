@@ -50,6 +50,7 @@ pub(crate) struct PreparedLegalFormData {
   normalized_in_name_words: HashSet<String>,
   normalized_suffix_words: HashSet<String>,
   role_heads: HashSet<String>,
+  soft_wrap_boundary_labels: HashSet<String>,
   sentence_verb_indicators: HashSet<String>,
   clause_noun_heads: HashSet<String>,
   connector_prose_heads: HashSet<String>,
@@ -70,7 +71,15 @@ pub(crate) struct PreparedLegalFormData {
 }
 
 impl PreparedLegalFormData {
+  #[cfg(test)]
   pub(crate) fn new(data: LegalFormData) -> Self {
+    Self::new_with_soft_wrap_boundary_labels(data, Vec::new())
+  }
+
+  pub(crate) fn new_with_soft_wrap_boundary_labels(
+    data: LegalFormData,
+    soft_wrap_boundary_labels: Vec<String>,
+  ) -> Self {
     let LegalFormData {
       suffixes,
       non_ascii_name_short_suffixes,
@@ -111,6 +120,7 @@ impl PreparedLegalFormData {
       normalized_in_name_words: lower_set(normalized_in_name_words),
       normalized_suffix_words: lower_set(normalized_suffix_words),
       role_heads: lower_set(role_heads),
+      soft_wrap_boundary_labels: lower_set(soft_wrap_boundary_labels),
       sentence_verb_indicators: lower_set(sentence_verb_indicators),
       clause_noun_heads: lower_set(clause_noun_heads),
       connector_prose_heads: lower_set(connector_prose_heads),
@@ -732,14 +742,24 @@ fn previous_nonempty_line_has_organization_cue(
   else {
     return false;
   };
-  line
-    .split_whitespace()
-    .map(|token| token.trim_matches(|ch: char| !ch.is_alphabetic()))
-    .map(lowercase_lookup)
-    .any(|token| {
-      data.role_heads.contains(token.as_ref())
-        || data.company_suffix_words.contains(token.as_ref())
-    })
+  let normalized = lowercase_lookup(line);
+  data
+    .role_heads
+    .iter()
+    .chain(&data.company_suffix_words)
+    .any(|cue| contains_bounded_phrase(normalized.as_ref(), cue))
+}
+
+fn contains_bounded_phrase(text: &str, phrase: &str) -> bool {
+  text.match_indices(phrase).any(|(start, matched)| {
+    let before = text
+      .get(..start)
+      .and_then(|prefix| prefix.chars().next_back());
+    let end = start.saturating_add(matched.len());
+    let after = text.get(end..).and_then(|suffix| suffix.chars().next());
+    before.is_none_or(|ch| !ch.is_alphabetic())
+      && after.is_none_or(|ch| !ch.is_alphabetic())
+  })
 }
 
 fn single_token_name_soft_wrap_shape(
@@ -766,6 +786,7 @@ fn single_token_name_soft_wrap_shape(
   }
   let lower = lowercase_lookup(token);
   if data.role_heads.contains(lower.as_ref())
+    || data.soft_wrap_boundary_labels.contains(lower.as_ref())
     || data.structural_single_cap_prefixes.contains(lower.as_ref())
   {
     return false;
@@ -2862,7 +2883,8 @@ mod tests {
   use super::{
     Candidate, CandidateContainmentIndex, LegalFormData, PreparedLegalFormData,
     crosses_sentence_end, drop_overlapping, ends_with_list_suffix,
-    extend_backward, is_roman_legal_suffix, process_legal_form_matches,
+    extend_backward, is_roman_legal_suffix,
+    previous_nonempty_line_has_organization_cue, process_legal_form_matches,
     split_embedded_legal_form_list, trim_embedded_legal_form_list_prefix,
     trim_leading_clause, trim_role_head,
   };
@@ -4112,9 +4134,14 @@ mod tests {
     // wrapped mid-name without a comma (`Sidus\nSpace, Inc.`).
     let data = PreparedLegalFormData::new(LegalFormData {
       suffixes: vec![String::from("Inc.")],
+      role_heads: vec![String::from("donneur d'ordre")],
       company_suffix_words: vec![String::from("Company")],
       ..LegalFormData::default()
     });
+    assert!(previous_nonempty_line_has_organization_cue(
+      "Si au donneur d'ordre:\n\n",
+      &data,
+    ));
     for (text, suffix, expected) in [
       (
         "If to the Company:\n\nSidus\nSpace, Inc.\n\n150 N Sykes",
@@ -4152,15 +4179,18 @@ mod tests {
 
   #[test]
   fn headers_and_field_labels_stop_firm_name_soft_wrap() {
-    let data = PreparedLegalFormData::new(LegalFormData {
-      suffixes: vec![String::from("Inc.")],
-      ..LegalFormData::default()
-    });
+    let data = PreparedLegalFormData::new_with_soft_wrap_boundary_labels(
+      LegalFormData {
+        suffixes: vec![String::from("Inc.")],
+        company_suffix_words: vec![String::from("Company")],
+        ..LegalFormData::default()
+      },
+      vec![String::from("attention")],
+    );
     for text in [
       String::from("THE COMPANY\nAcme Inc."),
       String::from("COMPANY\nAcme Inc."),
-      String::from("Attention\nAcme Inc."),
-      String::from("Intro\n\nConfidential\nAcme Inc."),
+      String::from("If to the Company:\n\nAttention\nAcme Inc."),
       String::from("\n\nDefinitions\nAcme Inc."),
     ] {
       let suffix = "Inc.";

@@ -2032,6 +2032,13 @@ struct ExtendedName {
   text: String,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum PersonSoftWrapContext {
+  None,
+  Signature,
+  FieldLabel,
+}
+
 fn extend_person_name(
   full_text: &str,
   offsets: &ByteOffsets<'_>,
@@ -2040,8 +2047,8 @@ fn extend_person_name(
   filters: &DenyListFilterData,
 ) -> Result<ExtendedName> {
   let mut new_end = end;
-  let mut soft_wrap_available =
-    has_soft_wrapped_signature_name_context(full_text, offsets, start)?;
+  let mut soft_wrap_context =
+    person_soft_wrap_context(full_text, offsets, start)?;
   // EDGAR HTML often soft-wraps the surname onto the next line after a
   // given name (`/s/ Alan\nKhalili`). Only signature markers and compact
   // field-label layouts may cross one line break.
@@ -2054,10 +2061,10 @@ fn extend_person_name(
     };
     let wraps = separator.chars().any(is_person_name_line_break);
     if wraps {
-      if !soft_wrap_available {
+      if soft_wrap_context == PersonSoftWrapContext::None {
         break;
       }
-      soft_wrap_available = false;
+      soft_wrap_context = PersonSoftWrapContext::None;
     }
     let word_start = new_end.saturating_add(byte_len(separator));
     let Some(first) = after_separator.chars().next() else {
@@ -2088,7 +2095,9 @@ fn extend_person_name(
     }
 
     new_end = word_start.saturating_add(byte_len(stripped));
-    soft_wrap_available = false;
+    if soft_wrap_context == PersonSoftWrapContext::FieldLabel {
+      soft_wrap_context = PersonSoftWrapContext::None;
+    }
   }
 
   Ok(ExtendedName {
@@ -2097,24 +2106,24 @@ fn extend_person_name(
   })
 }
 
-fn has_soft_wrapped_signature_name_context(
+fn person_soft_wrap_context(
   full_text: &str,
   offsets: &ByteOffsets<'_>,
   start: u32,
-) -> Result<bool> {
+) -> Result<PersonSoftWrapContext> {
   let start_byte = offsets.validate_offset(start)?;
   let before = full_text
     .get(..start_byte)
     .ok_or(Error::ByteOffsetOutOfBounds { offset: start })?;
   let mut lines = before.rsplit('\n');
   if lines.next().unwrap_or_default().trim() == "/s/" {
-    return Ok(true);
+    return Ok(PersonSoftWrapContext::Signature);
   }
-  let previous = lines
-    .find(|line| !line.trim().is_empty())
-    .unwrap_or_default();
-  let label = previous.trim();
-  Ok(label.ends_with(':') && label.split_whitespace().count() == 1)
+  let label = lines.next().unwrap_or_default().trim();
+  if label.ends_with(':') && label.split_whitespace().count() == 1 {
+    return Ok(PersonSoftWrapContext::FieldLabel);
+  }
+  Ok(PersonSoftWrapContext::None)
 }
 
 /// Separator before an extended person-name token: one to four whitespace
@@ -3046,6 +3055,7 @@ mod tests {
         "Alan\u{2028}Khalili",
       ),
       ("/s/ Alan\u{2029}Khalili", "Alan"),
+      ("/s/ Alan Joseph\nKhalili", "Alan Joseph\nKhalili"),
     ] {
       let entities = process_deny_list_matches(
         &matches,
@@ -3058,6 +3068,20 @@ mod tests {
       assert_eq!(entities.len(), 1);
       assert_eq!(entities[0].label, "person");
       assert_eq!(entities[0].text, expected);
+    }
+  }
+
+  #[test]
+  fn person_soft_wrap_field_label_must_be_adjacent() {
+    for (text, expected) in [
+      ("Name:\nAlice", PersonSoftWrapContext::FieldLabel),
+      ("Name:\n\n\nAlice", PersonSoftWrapContext::None),
+    ] {
+      let start = u32::try_from(text.find("Alice").unwrap()).unwrap();
+      assert_eq!(
+        person_soft_wrap_context(text, &ByteOffsets::new(text), start).unwrap(),
+        expected,
+      );
     }
   }
 

@@ -80,11 +80,19 @@ pub(super) fn prepare_support_data(
   input: SupportDataInput,
   diagnostics: &mut Option<&mut StaticRedactionDiagnostics>,
 ) -> Result<PreparedSupportData> {
+  let legal_form_soft_wrap_boundary_labels = input
+    .triggers
+    .as_ref()
+    .map_or_else(Vec::new, |data| data.address_stop_keywords.clone());
   let prepared = crate::exec::scope(|scope| {
     let hotwords = scope.spawn(|| prepare_timed_hotword_data(input.hotwords));
     let triggers = scope.spawn(|| prepare_timed_trigger_data(input.triggers));
-    let legal_forms =
-      scope.spawn(|| Ok(prepare_timed_legal_form_data(input.legal_forms)));
+    let legal_forms = scope.spawn(|| {
+      Ok(prepare_timed_legal_form_data(
+        input.legal_forms,
+        legal_form_soft_wrap_boundary_labels,
+      ))
+    });
     let address_seed =
       scope.spawn(|| prepare_timed_address_seed_data(input.address_seed));
     let zones = scope.spawn(|| prepare_timed_zone_data(input.zones.as_ref()));

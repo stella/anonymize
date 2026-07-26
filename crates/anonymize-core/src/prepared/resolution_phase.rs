@@ -19,8 +19,9 @@ use crate::types::{Result, SearchMatch};
 use super::PreparedEngine;
 use super::diagnostic_stream::DiagnosticEventStream;
 use super::entity_filter::{
-  clear_internal_source_details, filter_entities_for_config,
-  filter_entities_for_labels, filter_entities_for_redaction, label_is_allowed,
+  RedactionFilterOptions, clear_internal_source_details,
+  filter_entities_for_config, filter_entities_for_labels,
+  filter_entities_for_redaction, label_is_allowed,
 };
 use super::phase::{
   PhaseTimer, ResolverStep, observe_diagnostic_stream, record_count_stage,
@@ -48,10 +49,13 @@ impl PreparedEngine {
     observe_diagnostic_stream(diagnostics, event_stream)?;
     let mut raw_entities = filter_entities_for_redaction(
       pre_threshold_entities,
-      full_text,
-      self.policy.threshold,
-      self.policy.confidence_boost,
-      resolution_labels.as_ref(),
+      RedactionFilterOptions {
+        full_text,
+        threshold: self.policy.threshold,
+        confidence_boost: self.policy.confidence_boost,
+        allowed_labels: resolution_labels.as_ref(),
+        boost_anchor_labels: &self.policy.allowed_labels,
+      },
     )?;
     let address_context_timer = PhaseTimer::start();
     let address_context_entities =

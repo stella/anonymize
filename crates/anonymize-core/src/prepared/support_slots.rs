@@ -49,10 +49,16 @@ pub(super) fn prepare_timed_trigger_data(
 
 pub(super) fn prepare_timed_legal_form_data(
   data: Option<LegalFormData>,
+  soft_wrap_boundary_labels: Vec<String>,
 ) -> TimedSupportData<Option<PreparedLegalFormData>> {
   let len = legal_form_data_len(data.as_ref());
   let start = Instant::now();
-  let data = data.map(PreparedLegalFormData::new);
+  let data = data.map(|data| {
+    PreparedLegalFormData::new_with_soft_wrap_boundary_labels(
+      data,
+      soft_wrap_boundary_labels,
+    )
+  });
   TimedSupportData {
     data,
     len,

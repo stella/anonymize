@@ -233,12 +233,29 @@ fn match_soft_wrapped_us_city_tail(after: &str) -> Option<(usize, &str)> {
   let mut byte = 0_usize;
   let mut line_breaks = 0_usize;
   let mut whitespace = 0_usize;
+  let mut previous_was_carriage_return = false;
   for ch in after.chars() {
     if !ch.is_whitespace() {
       break;
     }
-    if ch == '\n' {
-      line_breaks = line_breaks.saturating_add(1);
+    if ch == '\u{2029}' {
+      return None;
+    }
+    match ch {
+      '\r' => {
+        line_breaks = line_breaks.saturating_add(1);
+        previous_was_carriage_return = true;
+      }
+      '\n' if previous_was_carriage_return => {
+        previous_was_carriage_return = false;
+      }
+      '\n' | '\u{2028}' => {
+        line_breaks = line_breaks.saturating_add(1);
+        previous_was_carriage_return = false;
+      }
+      _ => {
+        previous_was_carriage_return = false;
+      }
     }
     whitespace = whitespace.saturating_add(1);
     byte = byte.saturating_add(ch.len_utf8());

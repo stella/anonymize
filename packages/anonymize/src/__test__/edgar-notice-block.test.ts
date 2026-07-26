@@ -664,12 +664,12 @@ Island, FL 32953`;
       denyListCountries: ["US"],
       nameCorpusLanguages: ["en"],
     });
-    for (const text of [
-      `Merritt
-Island, FL 32953-1234`,
-      `Bonita
-Springs, CO 80903`,
-    ]) {
+    const texts = ["\n", "\r", "\r\n", "\u2028"].map(
+      (separator) => `Merritt${separator}Island, FL 32953-1234`,
+    );
+    texts.push(`Bonita
+Springs, CO 80903`);
+    for (const text of texts) {
       const { redaction, resolvedEntities } = await redactNative(
         { ...baseConfig, dictionaries, labels: ["address"] },
         text,
