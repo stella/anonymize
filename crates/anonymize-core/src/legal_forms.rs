@@ -426,10 +426,10 @@ fn walk_backward(
   let mut steps = 0;
   let mut leftmost_cap = None::<usize>;
   let mut lower_bridge_run = 0_usize;
-  let mut crossed_comma_wrap = false;
+  let mut crossed_soft_wrap = false;
 
   while steps < HEAD_TOKEN_CAP {
-    let Some(token) = token_before(text, pos, steps == 0) else {
+    let Some(token) = token_before(text, pos, steps == 0, data) else {
       break;
     };
     let crossed_newline = text
@@ -439,10 +439,10 @@ fn walk_backward(
       if preceding_line_is_role_list(text, pos, data) {
         break;
       }
-      if crossed_comma_wrap {
+      if crossed_soft_wrap {
         break;
       }
-      crossed_comma_wrap = true;
+      crossed_soft_wrap = true;
     }
     if !is_acceptable_token(token.text, data) {
       break;
@@ -458,7 +458,7 @@ fn walk_backward(
     }
 
     if contains_lowercase(&data.connector_words, token.text) {
-      let previous = token_before(text, token.start, false);
+      let previous = token_before(text, token.start, false, data);
       if previous
         .as_ref()
         .is_some_and(|found| is_legal_form_suffix_word(found.text, data))
@@ -469,7 +469,7 @@ fn walk_backward(
         .and_connector_words
         .contains(lowercase_lookup(token.text).as_ref())
       {
-        let upper_before = count_upper_before(text, token.start);
+        let upper_before = count_upper_before(text, token.start, data);
         if upper_before <= 2 || has_middle_initial_before(text, token.start) {
           break;
         }
@@ -547,20 +547,23 @@ struct Token<'a> {
   text: &'a str,
 }
 
-fn token_before(
-  text: &str,
+fn token_before<'a>(
+  text: &'a str,
   pos: usize,
   allow_suffix_adjacent_jurisdiction: bool,
-) -> Option<Token<'_>> {
+  data: &PreparedLegalFormData,
+) -> Option<Token<'a>> {
   let mut end = pos;
   while let Some((prev_start, ch)) = previous_char(text, end) {
     if ch == '\n' {
-      // Soft EDGAR wrap inside a comma-separated firm name:
-      // "Slate,\nMeagher & Flom LLP". A bare paragraph break still stops.
-      if !comma_before_soft_wrap(
+      // Soft EDGAR wrap inside a firm name: comma lists
+      // ("Slate,\nMeagher & Flom LLP") or a single mid-name headword
+      // ("Sidus\nSpace, Inc."). A bare paragraph break still stops.
+      if !allows_soft_wrap_continuation(
         text,
         prev_start,
         allow_suffix_adjacent_jurisdiction,
+        data,
       ) {
         return None;
       }
@@ -602,6 +605,16 @@ fn token_before(
     end,
     text: text.get(start..end).unwrap_or_default(),
   })
+}
+
+fn allows_soft_wrap_continuation(
+  text: &str,
+  newline_start: usize,
+  suffix_is_the_continuation: bool,
+  data: &PreparedLegalFormData,
+) -> bool {
+  comma_before_soft_wrap(text, newline_start, suffix_is_the_continuation)
+    || single_token_name_soft_wrap(text, newline_start, data)
 }
 
 fn comma_before_soft_wrap(
@@ -648,6 +661,73 @@ fn comma_before_soft_wrap(
       )
     });
   segment_count >= 3 && all_name_shaped
+}
+
+/// EDGAR often wraps a one-token issuer head onto the next line before the
+/// rest of a legal-form name (`Sidus\nSpace, Inc.`). Require a single
+/// name-shaped token on the prior line so multi-word headers and role lists
+/// stay hard boundaries.
+fn single_token_name_soft_wrap(
+  text: &str,
+  newline_start: usize,
+  data: &PreparedLegalFormData,
+) -> bool {
+  let before_newline = text.get(..newline_start).unwrap_or_default();
+  let line_start = before_newline
+    .rfind('\n')
+    .map_or(0, |index| index.saturating_add(1));
+  let line = before_newline.get(line_start..).unwrap_or_default().trim();
+  if line.chars().any(|character| {
+    character.is_numeric() || matches!(character, ':' | '：' | ',' | '&')
+  }) {
+    return false;
+  }
+  if line.split_whitespace().count() != 1 {
+    return false;
+  }
+  let token = line.trim_end_matches(['.', ';']);
+  if !is_name_shaped_org_token(token) {
+    return false;
+  }
+  let lower = lowercase_lookup(token);
+  if data.role_heads.contains(lower.as_ref())
+    || data.structural_single_cap_prefixes.contains(lower.as_ref())
+  {
+    return false;
+  }
+  let after = text
+    .get(newline_start.saturating_add(1)..)
+    .unwrap_or_default();
+  if after.starts_with('\n') {
+    return false;
+  }
+  let after_token = after
+    .trim_start_matches(is_inter_token_space)
+    .split_whitespace()
+    .next()
+    .unwrap_or_default()
+    .trim_end_matches([',', ';', '.']);
+  is_name_shaped_org_token(after_token)
+}
+
+fn is_name_shaped_org_token(token: &str) -> bool {
+  let mut chars = token.chars();
+  let Some(first) = chars.next() else {
+    return false;
+  };
+  if !first.is_uppercase() {
+    return false;
+  }
+  for character in chars {
+    if character.is_uppercase() || character.is_lowercase() {
+      continue;
+    }
+    if matches!(character, '-' | '\'' | '’') {
+      continue;
+    }
+    return false;
+  }
+  true
 }
 
 fn jurisdiction_parenthetical_open(
@@ -761,10 +841,14 @@ fn is_in_name_legal_form_word(
     && data.normalized_in_name_words.contains(normalized.as_ref())
 }
 
-fn count_upper_before(text: &str, pos: usize) -> usize {
+fn count_upper_before(
+  text: &str,
+  pos: usize,
+  data: &PreparedLegalFormData,
+) -> usize {
   let mut scan = pos;
   let mut count = 0_usize;
-  while let Some(token) = token_before(text, scan, false) {
+  while let Some(token) = token_before(text, scan, false, data) {
     if !starts_upper(token.text) {
       break;
     }
@@ -1238,7 +1322,8 @@ fn process_candidate(
     false
   };
 
-  if processed_text.contains('\n') && has_disallowed_line_break(processed_text)
+  if processed_text.contains('\n')
+    && has_disallowed_line_break(processed_text, data)
   {
     return;
   }
@@ -1311,7 +1396,9 @@ fn emit_candidate_segments(
       segment_start = segment_start.saturating_add(leading_ws_len(trimmed));
     }
 
-    if segment_text.contains('\n') && has_disallowed_line_break(segment_text) {
+    if segment_text.contains('\n')
+      && has_disallowed_line_break(segment_text, data)
+    {
       continue;
     }
 
@@ -1700,7 +1787,7 @@ fn is_bare_single_cap_structural_inner_match(
   if !is_bare_single_cap_legal_form(text) {
     return false;
   }
-  token_before(full_text, match_start, false).is_some_and(|token| {
+  token_before(full_text, match_start, false, data).is_some_and(|token| {
     data
       .structural_single_cap_prefixes
       .contains(lowercase_lookup(token.text).as_ref())
@@ -1729,7 +1816,7 @@ fn is_single_cap_token(text: &str) -> bool {
   first.is_uppercase() && chars.next().is_none()
 }
 
-fn has_disallowed_line_break(text: &str) -> bool {
+fn has_disallowed_line_break(text: &str, data: &PreparedLegalFormData) -> bool {
   let mut search_start = 0_usize;
   while let Some(relative) =
     text.get(search_start..).and_then(|tail| tail.find('\n'))
@@ -1751,7 +1838,12 @@ fn has_disallowed_line_break(text: &str) -> bool {
       && after_trimmed.chars().any(char::is_uppercase);
     let upper_name_after =
       after_trimmed.chars().next().is_some_and(is_name_initial);
+    // Span-local check: treat the candidate text as the document so a
+    // mid-name wrap like `Sidus\nSpace, Inc.` stays allowed.
+    let single_token_name_continuation =
+      single_token_name_soft_wrap(text, index, data);
     let allowed = (comma_continuation_before && upper_name_after)
+      || single_token_name_continuation
       || (dotted_designator_before
         && (legal_suffix_after || all_caps_suffix_after));
     if !allowed {
@@ -3921,6 +4013,67 @@ mod tests {
         == "Skadden, Arps, Slate, Meagher & Flom (UK) LLP"),
       "expected soft-wrapped firm span, got {texts:?}"
     );
+  }
+
+  #[test]
+  fn single_token_title_case_soft_wrap_keeps_issuer_name() {
+    // Sidus Space employment agreement (2026-07-24): notice-block issuer
+    // wrapped mid-name without a comma (`Sidus\nSpace, Inc.`).
+    let text = "If to the Company:\n\nSidus\nSpace, Inc.\n\n150 N Sykes";
+    let data = PreparedLegalFormData::new(LegalFormData {
+      suffixes: vec![String::from("Inc.")],
+      ..LegalFormData::default()
+    });
+    let suffix = "Inc.";
+    let suffix_start = text.find(suffix).unwrap();
+    let found = SearchMatch::Literal {
+      pattern: 0,
+      start: u32::try_from(suffix_start).unwrap(),
+      end: u32::try_from(suffix_start + suffix.len()).unwrap(),
+    };
+    let texts: Vec<String> = process_legal_form_matches(
+      &[found],
+      PatternSlice { start: 0, end: 1 },
+      text,
+      &data,
+    )
+    .unwrap()
+    .into_iter()
+    .map(|entity| entity.text.replace('\n', " "))
+    .collect();
+    assert!(
+      texts
+        .iter()
+        .any(|candidate| candidate == "Sidus Space, Inc."),
+      "expected soft-wrapped issuer span, got {texts:?}"
+    );
+  }
+
+  #[test]
+  fn multi_word_header_soft_wrap_still_stops_firm_name_walk() {
+    let text = "THE COMPANY\nAcme Inc.";
+    let data = PreparedLegalFormData::new(LegalFormData {
+      suffixes: vec![String::from("Inc.")],
+      ..LegalFormData::default()
+    });
+    let suffix = "Inc.";
+    let suffix_start = text.find(suffix).unwrap();
+    let found = SearchMatch::Literal {
+      pattern: 0,
+      start: u32::try_from(suffix_start).unwrap(),
+      end: u32::try_from(suffix_start + suffix.len()).unwrap(),
+    };
+    let texts: Vec<String> = process_legal_form_matches(
+      &[found],
+      PatternSlice { start: 0, end: 1 },
+      text,
+      &data,
+    )
+    .unwrap()
+    .into_iter()
+    .map(|entity| entity.text)
+    .collect();
+    assert_eq!(texts, vec![String::from("Acme Inc.")]);
   }
 
   #[test]

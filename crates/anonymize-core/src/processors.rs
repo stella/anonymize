@@ -2033,13 +2033,29 @@ fn extend_person_name(
   filters: &DenyListFilterData,
 ) -> Result<ExtendedName> {
   let mut new_end = end;
+  let soft_wrap_context =
+    has_soft_wrapped_signature_name_context(full_text, offsets, start)?;
+  // EDGAR HTML often soft-wraps the surname onto the next line after a
+  // given name (`/s/ Alan\nKhalili`). Only signature markers and compact
+  // field-label layouts may cross one line break.
+  let mut crossed_soft_wrap = false;
 
   loop {
-    if char_at(full_text, offsets, new_end)? != Some(' ') {
+    let tail = slice_from(full_text, offsets, new_end)?;
+    let Some((separator, after_separator)) =
+      take_person_name_extension_separator(tail)
+    else {
       break;
+    };
+    let wraps = separator.contains('\n');
+    if wraps {
+      if crossed_soft_wrap || !soft_wrap_context {
+        break;
+      }
+      crossed_soft_wrap = true;
     }
-    let word_start = new_end.saturating_add(1);
-    let Some(first) = char_at(full_text, offsets, word_start)? else {
+    let word_start = new_end.saturating_add(byte_len(separator));
+    let Some(first) = after_separator.chars().next() else {
       break;
     };
     if !first.is_uppercase() {
@@ -2060,6 +2076,8 @@ fn extend_person_name(
     let lower = stripped.to_lowercase();
     if filters.stopwords.contains(&lower)
       || filters.person_stopwords.contains(&lower)
+      || (wraps && filters.sentence_starters.contains(&lower))
+      || (wraps && word.ends_with(':'))
     {
       break;
     }
@@ -2071,6 +2089,51 @@ fn extend_person_name(
     end: new_end,
     text: offsets.slice(start, new_end)?,
   })
+}
+
+fn has_soft_wrapped_signature_name_context(
+  full_text: &str,
+  offsets: &ByteOffsets<'_>,
+  start: u32,
+) -> Result<bool> {
+  let start_byte = offsets.validate_offset(start)?;
+  let before = full_text
+    .get(..start_byte)
+    .ok_or(Error::ByteOffsetOutOfBounds { offset: start })?;
+  let mut lines = before.rsplit('\n');
+  if lines.next().unwrap_or_default().trim() == "/s/" {
+    return Ok(true);
+  }
+  let previous = lines
+    .find(|line| !line.trim().is_empty())
+    .unwrap_or_default();
+  let label = previous.trim();
+  Ok(label.ends_with(':') && label.split_whitespace().count() == 1)
+}
+
+/// Separator before an extended person-name token: one to four whitespace
+/// characters with at most one newline (EDGAR soft wrap).
+fn take_person_name_extension_separator(tail: &str) -> Option<(&str, &str)> {
+  let mut count = 0_usize;
+  let mut line_breaks = 0_usize;
+  let mut byte = 0_usize;
+  for ch in tail.chars() {
+    if !ch.is_whitespace() {
+      break;
+    }
+    count = count.saturating_add(1);
+    if ch == '\n' {
+      line_breaks = line_breaks.saturating_add(1);
+    }
+    byte = byte.saturating_add(ch.len_utf8());
+    if count == 4 {
+      break;
+    }
+  }
+  if !(1..=4).contains(&count) || line_breaks > 1 {
+    return None;
+  }
+  Some((tail.get(..byte)?, tail.get(byte..)?))
 }
 
 fn is_middle_initial_token(word: &str) -> bool {
@@ -2926,6 +2989,104 @@ mod tests {
     assert_eq!(entities.len(), 1);
     assert_eq!(entities[0].label, "person");
     assert_eq!(entities[0].text, "Aabidah Rahman");
+  }
+
+  #[test]
+  fn deny_list_extends_person_across_edgar_soft_wrap() {
+    // Sidus Space employment agreement (2026-07-24): `/s/ Alan\nKhalili`
+    // left the surname residual when extension stopped at the line break.
+    let matches = vec![SearchMatch::Literal {
+      pattern: 0,
+      start: 4,
+      end: 8,
+    }];
+    let mut filters = DenyListFilterData::default();
+    filters.first_names.insert(String::from("alan"));
+    let data = DenyListMatchData {
+      labels: vec![vec![String::from("person")]].into(),
+      custom_labels: vec![vec![]].into(),
+      originals: vec![String::from("Alan")],
+      pattern_meta: DenyListPatternMetaSet::default(),
+      sources: vec![vec![String::from("first-name")]].into(),
+      filters: Some(filters),
+    };
+
+    let entities = process_deny_list_matches(
+      &matches,
+      PatternSlice { start: 0, end: 1 },
+      "/s/ Alan\nKhalili\n",
+      &data,
+    )
+    .unwrap();
+
+    assert_eq!(entities.len(), 1);
+    assert_eq!(entities[0].label, "person");
+    assert_eq!(entities[0].text.replace('\n', " "), "Alan Khalili");
+  }
+
+  #[test]
+  fn deny_list_soft_wrap_does_not_absorb_email_field_label() {
+    let matches = vec![SearchMatch::Literal {
+      pattern: 0,
+      start: 0,
+      end: 5,
+    }];
+    let mut filters = DenyListFilterData::default();
+    filters.first_names.insert(String::from("anika"));
+    let data = DenyListMatchData {
+      labels: vec![vec![String::from("person")]].into(),
+      custom_labels: vec![vec![]].into(),
+      originals: vec![String::from("Anika")],
+      pattern_meta: DenyListPatternMetaSet::default(),
+      sources: vec![vec![String::from("first-name")]].into(),
+      filters: Some(filters),
+    };
+
+    let entities = process_deny_list_matches(
+      &matches,
+      PatternSlice { start: 0, end: 1 },
+      "Anika Hermann Bargfrede\nEmail: abargfrede@example.com",
+      &data,
+    )
+    .unwrap();
+
+    assert_eq!(entities.len(), 1);
+    assert_eq!(entities[0].text, "Anika Hermann Bargfrede");
+  }
+
+  #[test]
+  fn deny_list_soft_wrap_does_not_absorb_city_state_zip_tail() {
+    let matches = vec![SearchMatch::Literal {
+      pattern: 0,
+      start: 0,
+      end: 7,
+    }];
+    let data = DenyListMatchData {
+      labels: vec![vec![String::from("person")]].into(),
+      custom_labels: vec![vec![]].into(),
+      originals: vec![String::from("Merritt")],
+      pattern_meta: DenyListPatternMetaSet::default(),
+      sources: vec![vec![String::from("surname")]].into(),
+      filters: Some(DenyListFilterData::default()),
+    };
+
+    let entities = process_deny_list_matches(
+      &matches,
+      PatternSlice { start: 0, end: 1 },
+      "Merritt\nIsland, FL 32953",
+      &data,
+    )
+    .unwrap();
+
+    // Surname-only hits need capitalized context to emit; Island supplies it,
+    // but the city/state/ZIP tail must block extension so FP reclassification
+    // can recover the address span.
+    assert!(
+      entities
+        .iter()
+        .all(|entity| entity.text.replace('\n', " ") != "Merritt Island"),
+      "city tail must not join the person span: {entities:?}"
+    );
   }
 
   #[test]

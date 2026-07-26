@@ -16,6 +16,9 @@
  *   given names missing from the scoped English first-name corpus.
  * - Kingfish Holding employment agreement (2026-07-24): job-description
  *   heading person FP and Independence Day city-list address FP.
+ * - Sidus Space employment agreement (2026-07-24): soft-wrapped `/s/`
+ *   surname, mid-name issuer wrap before Inc., and soft-wrapped city
+ *   headword labeled as a person.
  */
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 
@@ -576,6 +579,65 @@ Manage daily operations of the scrap yard.`;
     expect(
       entities.some(
         (entity) => entity.label === "person" && entity.text === "Dorothy Day",
+      ),
+    ).toBe(true);
+  });
+
+  test("soft-wrapped slash-s surname stays one person", async () => {
+    // Sidus Space EX-10.1 (2026-07-24): `/s/ Alan\nKhalili` left Khalili.
+    const text = `EXECUTIVE
+
+/s/ Alan
+Khalili
+`;
+    const entities = await detect(text);
+    expect(
+      entities.some(
+        (entity) =>
+          entity.label === "person" &&
+          entity.text.replaceAll(/\s+/g, " ") === "Alan Khalili",
+      ),
+    ).toBe(true);
+    expect(
+      entities.some(
+        (entity) => entity.label === "person" && entity.text === "Alan",
+      ),
+    ).toBe(false);
+  });
+
+  test("soft-wrapped title-case issuer before Inc is an organization", async () => {
+    // Sidus Space EX-10.1 (2026-07-24): `Sidus\nSpace, Inc.` left Sidus.
+    const text = `If to the Company:
+
+Sidus
+Space, Inc.
+
+150 N Example Ave`;
+    const entities = await detect(text);
+    expect(
+      entities.some(
+        (entity) =>
+          entity.label === "organization" &&
+          entity.text.replaceAll(/\s+/g, " ") === "Sidus Space, Inc.",
+      ),
+    ).toBe(true);
+  });
+
+  test("soft-wrapped US city headword is an address not a person", async () => {
+    // Sidus Space EX-10.1 (2026-07-24): `Merritt\nIsland, FL 32953`.
+    const text = `Merritt
+Island, FL 32953`;
+    const entities = await detect(text);
+    expect(
+      entities.some(
+        (entity) => entity.label === "person" && entity.text === "Merritt",
+      ),
+    ).toBe(false);
+    expect(
+      entities.some(
+        (entity) =>
+          entity.label === "address" &&
+          entity.text.replaceAll(/\s+/g, " ").includes("Merritt Island"),
       ),
     ).toBe(true);
   });

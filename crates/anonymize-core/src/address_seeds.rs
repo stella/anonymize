@@ -16,6 +16,74 @@ const ADDRESS_RIGHT_EXPAND_LIMIT: usize = 200;
 const BR_CEP_CONTEXT_WINDOW: usize = 200;
 const PLAIN_POSTAL_CONTEXT_WINDOW: usize = 120;
 const US_ZIP_CONTEXT_WINDOW: usize = 120;
+const US_STATE_ABBREVIATIONS: &[&str] = &[
+  "AK", "AL", "AR", "AZ", "CA", "CO", "CT", "DC", "DE", "FL", "GA", "GU", "HI",
+  "IA", "ID", "IL", "IN", "KS", "KY", "LA", "MA", "MD", "ME", "MI", "MN", "MO",
+  "MS", "MT", "NC", "ND", "NE", "NH", "NJ", "NM", "NV", "NY", "OH", "OK", "OR",
+  "PA", "PR", "RI", "SC", "SD", "TN", "TX", "UT", "VA", "VI", "VT", "WA", "WI",
+  "WV", "WY",
+];
+
+pub(crate) fn us_state_zip_prefix_len(text: &str) -> Option<usize> {
+  let mut cursor = usize::from(text.starts_with(','));
+  let gap = text
+    .get(cursor..)?
+    .chars()
+    .take_while(|ch| matches!(*ch, ' ' | '\t'))
+    .map(char::len_utf8)
+    .sum::<usize>();
+  if cursor == 0 && gap == 0 {
+    return None;
+  }
+  cursor = cursor.saturating_add(gap);
+
+  let state_len = text
+    .get(cursor..)?
+    .chars()
+    .take_while(char::is_ascii_uppercase)
+    .map(char::len_utf8)
+    .sum::<usize>();
+  let state = text.get(cursor..cursor.saturating_add(state_len))?;
+  if state_len != 2 || !is_us_state_abbreviation(state) {
+    return None;
+  }
+  cursor = cursor.saturating_add(state_len);
+
+  let state_gap = text
+    .get(cursor..)?
+    .chars()
+    .take_while(|ch| matches!(*ch, ' ' | '\t'))
+    .map(char::len_utf8)
+    .sum::<usize>();
+  if state_gap == 0 {
+    return None;
+  }
+  cursor = cursor.saturating_add(state_gap);
+
+  let zip_len = text
+    .get(cursor..)?
+    .chars()
+    .take_while(char::is_ascii_digit)
+    .map(char::len_utf8)
+    .sum::<usize>();
+  if zip_len != 5 {
+    return None;
+  }
+  cursor = cursor.saturating_add(zip_len);
+  if text
+    .get(cursor..)?
+    .chars()
+    .next()
+    .is_some_and(|ch| ch.is_ascii_alphanumeric())
+  {
+    return None;
+  }
+  Some(cursor)
+}
+
+fn is_us_state_abbreviation(text: &str) -> bool {
+  US_STATE_ABBREVIATIONS.binary_search(&text).is_ok()
+}
 
 /// Lowercase connective particles that commonly sit inside street names
 /// ("rue de la Paix", "van der Hoopstraat", "calle de los Reyes").
