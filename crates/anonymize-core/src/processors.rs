@@ -2176,6 +2176,11 @@ fn extend_person_name(
       break;
     }
     if wraps {
+      if soft_wrapped_us_city_tail(tail, &filters.us_state_abbreviations)
+        .is_some()
+      {
+        break;
+      }
       if soft_wrap_context == PersonSoftWrapContext::None {
         break;
       }
@@ -2210,9 +2215,6 @@ fn extend_person_name(
     }
 
     new_end = word_start.saturating_add(byte_len(stripped));
-    if soft_wrap_context == PersonSoftWrapContext::FieldLabel {
-      soft_wrap_context = PersonSoftWrapContext::None;
-    }
   }
 
   Ok(ExtendedName {
@@ -3236,6 +3238,23 @@ mod tests {
       assert_eq!(entities[0].label, "person");
       assert_eq!(entities[0].text, expected);
     }
+
+    let text = "Name:\nAlan Qwxyz\nZyxwv";
+    let document = ResolutionDocument::new(text);
+    let field_entities = process_deny_list_matches_with_field_labels(
+      &[SearchMatch::Literal {
+        pattern: 0,
+        start: 6,
+        end: 10,
+      }],
+      PatternSlice { start: 0, end: 1 },
+      &document,
+      &data,
+      &[String::from("name")],
+    )
+    .unwrap();
+    assert_eq!(field_entities.len(), 1);
+    assert_eq!(field_entities[0].text, "Alan Qwxyz\nZyxwv");
   }
 
   #[test]

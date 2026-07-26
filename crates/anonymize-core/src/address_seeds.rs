@@ -1434,6 +1434,7 @@ fn cluster_seeds(
       full_text,
       current.end,
       seed.start,
+      &current,
       entity_index,
     );
     if gap_ok {
@@ -1593,16 +1594,23 @@ fn has_cluster_barrier(
   full_text: &str,
   gap_start: usize,
   gap_end: usize,
+  cluster: &SeedCluster,
   entity_index: &NonAddressEntityIndex,
 ) -> bool {
-  full_text
-    .get(gap_start..gap_end)
-    .is_some_and(|gap| has_paragraph_break(gap) || has_prose_line_break(gap))
-    || entity_index.has_barrier(gap_start, gap_end)
+  full_text.get(gap_start..gap_end).is_some_and(|gap| {
+    has_paragraph_break(gap) || has_prose_wrap_after_weak_cluster(gap, cluster)
+  }) || entity_index.has_barrier(gap_start, gap_end)
 }
 
-fn has_prose_line_break(text: &str) -> bool {
-  if !text.contains('\n') {
+fn has_prose_wrap_after_weak_cluster(
+  text: &str,
+  cluster: &SeedCluster,
+) -> bool {
+  if cluster.has_expandable_address_context()
+    || !text
+      .chars()
+      .any(|ch| matches!(ch, '\r' | '\n' | '\u{2028}' | '\u{2029}'))
+  {
     return false;
   }
   text
@@ -2636,6 +2644,37 @@ mod tests {
         .any(|entity| entity.text == "Bismarckring 18, 65183 Wiesbaden"),
       "address seed entities: {result:?}",
     );
+
+    for separator in ["\n", "\r", "\r\n", "\u{2028}"] {
+      let wrapped_text = format!(
+        "123 Avenue of the Americas, Floor Thirty Seven{separator}New York, NY 10020"
+      );
+      let wrapped_existing = vec![entity(
+        &wrapped_text,
+        "New York",
+        "address",
+        DetectionSource::DenyList,
+      )?];
+      let wrapped_result = data
+        .process_profiled(
+          &[SearchMatch::Literal {
+            pattern: 0,
+            start: 4,
+            end: 10,
+          }],
+          PatternSlice { start: 0, end: 1 },
+          &wrapped_text,
+          &wrapped_existing,
+        )?
+        .entities;
+
+      assert!(
+        wrapped_result
+          .iter()
+          .any(|entity| entity.text == wrapped_text),
+        "address seed entities for {separator:?}: {wrapped_result:?}",
+      );
+    }
     Ok(())
   }
 
