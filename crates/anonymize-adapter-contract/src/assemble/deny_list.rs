@@ -108,6 +108,7 @@ fn scoped_page_footer_markers(
     let mut count_words = Vec::new();
     append_word_array(&mut count_words, group.get("countWords"));
     for page_word in &page_words {
+      markers.push(page_word.to_lowercase());
       for count_word in &count_words {
         markers.push(format!(
           "{} {}",
@@ -1386,19 +1387,19 @@ mod tests {
   #[test]
   fn page_footer_markers_follow_content_language_scope() {
     let coverage = [
-      ("cs", "stran celkem"),
-      ("de", "seiten insgesamt"),
-      ("en", "pages of"),
-      ("pt-br", "páginas de"),
-      ("es", "páginas de"),
-      ("fr", "pages sur"),
-      ("hu", "oldalak összesen"),
-      ("it", "pagine di"),
-      ("lv", "lappuses no"),
-      ("pl", "stron łącznie"),
-      ("ro", "pagini din"),
-      ("sk", "strán celkom"),
-      ("sv", "sidor av"),
+      ("cs", "strana", "stran celkem"),
+      ("de", "seite", "seiten insgesamt"),
+      ("en", "page", "pages of"),
+      ("pt-br", "página", "páginas de"),
+      ("es", "página", "páginas de"),
+      ("fr", "page", "pages sur"),
+      ("hu", "oldal", "oldalak összesen"),
+      ("it", "pagina", "pagine di"),
+      ("lv", "lapa", "lappuses no"),
+      ("pl", "strona", "stron łącznie"),
+      ("ro", "pagina", "pagini din"),
+      ("sk", "strana", "strán celkom"),
+      ("sv", "sida", "sidor av"),
     ];
     let scope_data: Value = parse_data_file("language-scopes.json")
       .expect("language scopes should parse");
@@ -1411,24 +1412,26 @@ mod tests {
       .collect();
     let covered_languages: HashSet<String> = coverage
       .iter()
-      .map(|(language, _)| String::from(*language))
+      .map(|(language, _, _)| String::from(*language))
       .collect();
     assert_eq!(
       covered_languages, scope_languages,
       "every supported content language needs reviewed page-footer vocabulary"
     );
 
-    for (language, expected) in coverage {
+    for (language, standalone, paired) in coverage {
       let selected = [String::from(language)];
       let filters =
         build_deny_list_filter_data(&test_corpus(), Some(&selected))
           .expect("language-scoped deny-list filters should assemble");
-      assert!(
-        filters
-          .page_footer_markers
-          .contains(&String::from(expected)),
-        "{language} should include {expected}"
-      );
+      for expected in [standalone, paired] {
+        assert!(
+          filters
+            .page_footer_markers
+            .contains(&String::from(expected)),
+          "{language} should include {expected}"
+        );
+      }
       if language != "en" {
         assert!(
           !filters

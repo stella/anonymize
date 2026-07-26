@@ -1,5 +1,5 @@
 {
-  "_comment": "Language-scoped page/footer vocabulary. The assembler creates page-word/count-word pairs; the false-positive filter only rejects structurally numbered footers whose pair belongs to an enabled language. Keep this matrix aligned with every language in language-scopes.json.",
+  "_comment": "Language-scoped page/footer vocabulary. The assembler creates standalone page-word markers and page-word/count-word pairs; the false-positive filter only rejects structurally numbered footers whose marker belongs to an enabled language. Keep this matrix aligned with every language in language-scopes.json.",
   "cs": {
     "pageWords": ["strana", "strany", "stran"],
     "countWords": ["celkem", "z"]

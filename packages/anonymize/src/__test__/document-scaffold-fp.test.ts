@@ -45,7 +45,7 @@ const detect = async (
 describe("document scaffolding false positives", () => {
   test("section markers and numbered page footers are not PII", async () => {
     const text =
-      "Místo plnění\n\n6.1. Místem plnění se rozumí: Technická správa města\n\nStrana 7 (celkem 7)\nStrany 4 (celkem 9)\nStran celkem 9";
+      "Místo plnění\n\n6.1. Místem plnění se rozumí: Technická správa města\n\nStrana 7 (celkem 7)\nStrany 4 (celkem 9)\nStran celkem 9\nStrana 8";
     const entities = await detect(text);
     expect(
       entities.some((e) => e.label === "address" && e.text.trim() === "6.1"),
