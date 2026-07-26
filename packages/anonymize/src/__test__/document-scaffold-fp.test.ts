@@ -25,9 +25,21 @@ const CONFIG: PipelineConfig = {
 };
 
 let cachedDictionaries: Dictionaries | undefined;
-const detect = async (text: string) => {
+const detect = async (
+  text: string,
+  languages: NonNullable<PipelineConfig["languages"]> = ["cs"],
+  denyListCountries: NonNullable<PipelineConfig["denyListCountries"]> = ["CZ"],
+) => {
   cachedDictionaries ??= await loadTestDictionaries();
-  return detectNative({ ...CONFIG, dictionaries: cachedDictionaries }, text);
+  return detectNative(
+    {
+      ...CONFIG,
+      languages,
+      denyListCountries,
+      dictionaries: cachedDictionaries,
+    },
+    text,
+  );
 };
 
 describe("document scaffolding false positives", () => {
@@ -57,4 +69,20 @@ describe("document scaffolding false positives", () => {
       ),
     ).toBe(true);
   });
+
+  test.each([
+    ["Czech house number", ["cs"], ["CZ"], "č.p. 6.", "6"],
+    ["Spanish postal code", ["es"], ["ES"], "C.P. 28001.", "28001"],
+  ] as const)(
+    "%s remains PII at sentence end",
+    async (_name, languages, countries, text, expected) => {
+      const entities = await detect(text, [...languages], [...countries]);
+      expect(
+        entities.some(
+          (entity) =>
+            entity.label === "address" && entity.text.trim() === expected,
+        ),
+      ).toBe(true);
+    },
+  );
 });

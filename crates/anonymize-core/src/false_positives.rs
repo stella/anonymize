@@ -149,8 +149,11 @@ fn should_reject_entity(
   }
   // Explicit section markers (`§ 6`, `6.1`, `3.2.4`) are never addresses,
   // including when a place-of-performance cue extracts them as trigger values.
-  // Keep bare numbers because those can be valid house numbers.
-  if entity.label == ADDRESS_LABEL && is_explicit_section_number(text) {
+  // A single dotted number needs heading context because the same shape is
+  // valid for sentence-final house numbers and postal codes.
+  if entity.label == ADDRESS_LABEL
+    && is_explicit_address_section(full_text, offsets, entity)?
+  {
     return Ok(true);
   }
   if entity.label != IP_ADDRESS_LABEL
@@ -335,22 +338,64 @@ fn is_section_number(text: &str) -> bool {
   regex_is_match(&SECTION_NUMBER_RE, text.trim())
 }
 
-fn is_explicit_section_number(text: &str) -> bool {
-  let trimmed = text.trim();
+fn is_explicit_address_section(
+  full_text: &str,
+  offsets: &ByteOffsets<'_>,
+  entity: &PipelineEntity,
+) -> Result<bool> {
+  let trimmed = entity.text.trim();
   if let Some(section) = trimmed.strip_prefix('§') {
-    return !section.trim().is_empty()
-      && section
-        .trim()
-        .chars()
-        .all(|ch| ch.is_ascii_digit() || ch == '.');
+    return Ok(
+      !section.trim().is_empty()
+        && section
+          .trim()
+          .chars()
+          .all(|ch| ch.is_ascii_digit() || ch == '.'),
+    );
   }
-  if trimmed.ends_with('.') {
-    return trimmed
-      .trim_end_matches('.')
-      .chars()
-      .all(|ch| ch.is_ascii_digit() || ch == '.');
+  if !is_section_number(trimmed) {
+    return Ok(false);
   }
-  is_section_number(trimmed) && trimmed.contains('.')
+  let without_terminal = trimmed.trim_end_matches('.');
+  if without_terminal.contains('.') {
+    return Ok(true);
+  }
+  if !trimmed.ends_with('.') {
+    return Ok(false);
+  }
+
+  let start = offsets.validate_offset(entity.start)?;
+  let before = full_text.get(..start).ok_or(Error::InvalidSpan {
+    start: entity.start,
+    end: entity.end,
+  })?;
+  if !before
+    .rsplit('\n')
+    .next()
+    .unwrap_or_default()
+    .trim()
+    .is_empty()
+  {
+    return Ok(false);
+  }
+  let end = offsets.validate_offset(entity.end)?;
+  let after = full_text.get(end..).ok_or(Error::InvalidSpan {
+    start: entity.start,
+    end: entity.end,
+  })?;
+  let line_end = after
+    .find('\n')
+    .map_or(full_text.len(), |index| end.saturating_add(index));
+  let line_start = before
+    .rfind('\n')
+    .map_or(0usize, |index| index.saturating_add('\n'.len_utf8()));
+  let line = full_text
+    .get(line_start..line_end)
+    .ok_or(Error::InvalidSpan {
+      start: entity.start,
+      end: entity.end,
+    })?;
+  Ok(starts_with_section_heading_prefix(line))
 }
 
 fn is_standalone_year(text: &str) -> bool {
@@ -2004,34 +2049,44 @@ mod tests {
   }
 
   #[test]
-  fn rejects_explicit_address_sections_but_keeps_house_numbers() {
-    for marker in ["6.", "6.1", "3.2.4", "§ 1983"] {
+  fn rejects_explicit_address_sections_but_keeps_address_numbers() {
+    for (full_text, marker) in [
+      ("6. Heading", "6."),
+      ("6.1", "6.1"),
+      ("3.2.4", "3.2.4"),
+      ("§ 1983", "§ 1983"),
+    ] {
       let section = filter_entity_false_positives(
         vec![entity(
-          marker,
+          full_text,
           marker,
           ADDRESS_LABEL,
           DetectionSource::Trigger,
         )],
-        marker,
+        full_text,
         Some(&DenyListFilterData::default()),
       )
       .unwrap();
       assert!(section.is_empty(), "{marker}");
     }
-    let house_number = filter_entity_false_positives(
-      vec![entity(
-        "123",
-        "123",
-        ADDRESS_LABEL,
-        DetectionSource::Trigger,
-      )],
-      "123",
-      Some(&DenyListFilterData::default()),
-    )
-    .unwrap();
 
-    assert_eq!(house_number.len(), 1);
+    for (full_text, value) in
+      [("123", "123"), ("č.p. 6.", "6."), ("C.P. 28001.", "28001.")]
+    {
+      let address_number = filter_entity_false_positives(
+        vec![entity(
+          full_text,
+          value,
+          ADDRESS_LABEL,
+          DetectionSource::Trigger,
+        )],
+        full_text,
+        Some(&DenyListFilterData::default()),
+      )
+      .unwrap();
+
+      assert_eq!(address_number.len(), 1, "{full_text}");
+    }
   }
 
   #[test]
