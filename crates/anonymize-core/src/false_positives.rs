@@ -40,15 +40,19 @@ fn line_context<'a>(
   document: &'a ResolutionDocument<'a>,
   offsets: &ByteOffsets<'_>,
   entity: &PipelineEntity,
-) -> Result<LineContext<'a>> {
+) -> Result<Option<LineContext<'a>>> {
   let full_text = document.text();
   let start = offsets.validate_offset(entity.start)?;
   let end = offsets.validate_offset(entity.end)?;
-  let line_range =
-    document.line_range(start, end).ok_or(Error::InvalidSpan {
+  if start > end {
+    return Err(Error::InvalidSpan {
       start: entity.start,
       end: entity.end,
-    })?;
+    });
+  }
+  let Some(line_range) = document.line_range(start, end) else {
+    return Ok(None);
+  };
   let line = full_text
     .get(line_range.clone())
     .ok_or(Error::InvalidSpan {
@@ -65,12 +69,12 @@ fn line_context<'a>(
     start: entity.start,
     end: entity.end,
   })?;
-  Ok(LineContext {
+  Ok(Some(LineContext {
     line,
     before,
     after,
     entity: relative_start..relative_end,
-  })
+  }))
 }
 
 pub(crate) fn filter_entity_false_positives(
@@ -412,7 +416,9 @@ fn is_explicit_address_section(
     return Ok(false);
   }
 
-  let context = line_context(document, offsets, entity)?;
+  let Some(context) = line_context(document, offsets, entity)? else {
+    return Ok(false);
+  };
   if !context.before.trim().is_empty() {
     return Ok(false);
   }
@@ -566,7 +572,9 @@ fn is_numbered_page_footer(
   };
   let head = head.to_lowercase();
 
-  let context = line_context(document, offsets, entity)?;
+  let Some(context) = line_context(document, offsets, entity)? else {
+    return Ok(false);
+  };
   if !context.before.trim().is_empty() {
     return Ok(false);
   }
@@ -627,7 +635,9 @@ fn is_all_caps_boilerplate_line(
   offsets: &ByteOffsets<'_>,
   entity: &PipelineEntity,
 ) -> Result<bool> {
-  let context = line_context(document, offsets, entity)?;
+  let Some(context) = line_context(document, offsets, entity)? else {
+    return Ok(false);
+  };
 
   let mut letter_count = 0usize;
   let mut upper_count = 0usize;
@@ -2041,6 +2051,25 @@ mod tests {
     .unwrap();
 
     assert!(entities.is_empty());
+  }
+
+  #[test]
+  fn keeps_multiline_all_caps_organizations() {
+    let text = "ACME\nCORP";
+    let entities = filter_entity_false_positives(
+      vec![entity(
+        text,
+        text,
+        ORGANIZATION_LABEL,
+        DetectionSource::Regex,
+      )],
+      text,
+      Some(&DenyListFilterData::default()),
+    )
+    .unwrap();
+
+    assert_eq!(entities.len(), 1);
+    assert_eq!(entities[0].text, "ACME CORP");
   }
 
   #[test]
