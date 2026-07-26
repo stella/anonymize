@@ -28,6 +28,7 @@ pub(super) struct SupportDataInput {
   triggers: Option<TriggerData>,
   legal_forms: Option<LegalFormData>,
   address_seed: Option<AddressSeedData>,
+  state_abbreviations: Vec<String>,
   zones: Option<ZoneData>,
   address_context: Option<AddressContextData>,
   coreference: Option<CoreferenceData>,
@@ -52,6 +53,11 @@ pub(super) fn take_support_input(
   config: &mut PreparedEngineDetectorConfig,
 ) -> SupportDataInput {
   let legal_forms = config.legal_form_data.take();
+  let state_abbreviations = config
+    .false_positive_filters
+    .as_ref()
+    .map(|filters| filters.us_state_abbreviations.iter().cloned().collect())
+    .unwrap_or_default();
   let mut signature = config.signature_data.take();
   if let (Some(legal_forms), Some(signature)) =
     (legal_forms.as_ref(), signature.as_mut())
@@ -68,6 +74,7 @@ pub(super) fn take_support_input(
     triggers: config.trigger_data.take(),
     legal_forms,
     address_seed: config.address_seed_data.take(),
+    state_abbreviations,
     zones: config.zone_data.take(),
     address_context: config.address_context_data.take(),
     coreference: config.coreference_data.take(),
@@ -97,8 +104,12 @@ pub(super) fn prepare_support_data(
         legal_form_soft_wrap_boundary_labels,
       ))
     });
-    let address_seed =
-      scope.spawn(|| prepare_timed_address_seed_data(input.address_seed));
+    let address_seed = scope.spawn(|| {
+      prepare_timed_address_seed_data(
+        input.address_seed,
+        input.state_abbreviations,
+      )
+    });
     let zones = scope.spawn(|| prepare_timed_zone_data(input.zones.as_ref()));
     let address_context =
       scope.spawn(|| prepare_timed_address_context_data(input.address_context));

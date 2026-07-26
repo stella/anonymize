@@ -180,26 +180,28 @@ fn build_street_abbreviations(street_types: &OrderedMap<Value>) -> Vec<String> {
 
 // ── address_seed_data ───────────────────────────────
 
+pub(super) struct AddressSharedData {
+  pub(super) boundary_words: Vec<String>,
+  br_cep_cue_words: Vec<String>,
+  pub(super) us_state_abbreviations: Vec<String>,
+}
+
 /// # Errors
 ///
 /// Returns [`AssembleError`] when any backing data file fails to parse.
-pub(super) fn build_address_seed_data(
+pub(super) fn build_address_shared_data(
   ctx: &AssembleContext<'_>,
-) -> Result<Option<BindingAddressSeedData>, AssembleError> {
-  if !ctx.label_allowed("address") {
-    return Ok(None);
-  }
+) -> Result<AddressSharedData, AssembleError> {
   let boundaries: OrderedMap<Value> =
     parse_ordered_data_file("address-boundaries.json")?;
   let stop_keywords: OrderedMap<Value> =
     parse_ordered_data_file("address-stop-keywords.json")?;
-  let unit_abbreviations: OrderedMap<Value> =
-    parse_ordered_data_file("address-unit-abbreviations.json")?;
   let street_types: OrderedMap<Value> =
     parse_ordered_data_file("address-street-types.json")?;
   let conjunctions: Conjunctions = parse_data_file("conjunctions.json")?;
   let exit_followers: AddressExitFollowers =
     parse_data_file("address-exit-followers.json")?;
+  let scoped = super::language::apply_pipeline_language_scope(ctx.config)?;
 
   let mut boundary_words = Vec::new();
   extend_deduplicated(
@@ -219,11 +221,57 @@ pub(super) fn build_address_seed_data(
     }),
   );
 
-  Ok(Some(BindingAddressSeedData {
+  Ok(AddressSharedData {
     boundary_words,
     br_cep_cue_words: build_br_cue_words(&street_types, &boundaries),
+    us_state_abbreviations: scoped_country_words(
+      "address-state-abbreviations.json",
+      "US",
+      scoped.deny_list_countries.as_deref(),
+    )?,
+  })
+}
+
+pub(super) fn build_address_seed_data(
+  ctx: &AssembleContext<'_>,
+  shared: &AddressSharedData,
+) -> Result<Option<BindingAddressSeedData>, AssembleError> {
+  let legal_form_boundaries_are_needed = ctx.label_allowed("organization")
+    && ctx.config.enable_legal_forms != Some(false);
+  if !ctx.label_allowed("address") && !legal_form_boundaries_are_needed {
+    return Ok(None);
+  }
+  let unit_abbreviations: OrderedMap<Value> =
+    parse_ordered_data_file("address-unit-abbreviations.json")?;
+
+  Ok(Some(BindingAddressSeedData {
+    boundary_words: shared.boundary_words.clone(),
+    br_cep_cue_words: shared.br_cep_cue_words.clone(),
     unit_abbreviations: flatten_dictionaries(&[&unit_abbreviations]),
   }))
+}
+
+fn scoped_country_words(
+  file: &str,
+  country: &str,
+  selected_countries: Option<&[String]>,
+) -> Result<Vec<String>, AssembleError> {
+  if selected_countries
+    .is_some_and(|selected| !selected.iter().any(|value| value == country))
+  {
+    return Ok(Vec::new());
+  }
+  let values: OrderedMap<Value> = parse_ordered_data_file(file)?;
+  Ok(
+    values
+      .get(country)
+      .and_then(Value::as_array)
+      .into_iter()
+      .flatten()
+      .filter_map(Value::as_str)
+      .map(ToOwned::to_owned)
+      .collect(),
+  )
 }
 
 fn scoped_boundary_words(
@@ -361,7 +409,7 @@ mod tests {
   };
 
   use super::{
-    AssembleContext, Conjunctions, build_address_seed_data,
+    AssembleContext, Conjunctions, build_address_shared_data,
     flatten_dictionaries,
   };
 
@@ -406,10 +454,37 @@ mod tests {
       content_languages: config.languages.clone(),
       allowed_labels: None,
     };
-    Ok(
-      build_address_seed_data(&context)?
-        .map_or_else(Vec::new, |data| data.boundary_words),
-    )
+    Ok(build_address_shared_data(&context)?.boundary_words)
+  }
+
+  fn state_abbreviations(
+    countries: &[&str],
+  ) -> Result<Vec<String>, AssembleError> {
+    let mut config = config(Vec::new());
+    config.deny_list_countries = Some(
+      countries
+        .iter()
+        .map(|country| (*country).to_owned())
+        .collect(),
+    );
+    let context = AssembleContext {
+      config: &config,
+      dictionaries: None,
+      content_languages: config.languages.clone(),
+      allowed_labels: None,
+    };
+    Ok(build_address_shared_data(&context)?.us_state_abbreviations)
+  }
+
+  #[test]
+  fn state_abbreviations_follow_country_scope() -> Result<(), AssembleError> {
+    assert!(
+      state_abbreviations(&["US"])?
+        .iter()
+        .any(|state| state == "DE")
+    );
+    assert!(state_abbreviations(&["DE"])?.is_empty());
+    Ok(())
   }
 
   fn assert_no_bare_conjunctions(

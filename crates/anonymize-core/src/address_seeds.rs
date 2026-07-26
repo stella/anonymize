@@ -16,15 +16,11 @@ const ADDRESS_RIGHT_EXPAND_LIMIT: usize = 200;
 const BR_CEP_CONTEXT_WINDOW: usize = 200;
 const PLAIN_POSTAL_CONTEXT_WINDOW: usize = 120;
 const US_ZIP_CONTEXT_WINDOW: usize = 120;
-const US_STATE_ABBREVIATIONS: &[&str] = &[
-  "AK", "AL", "AR", "AS", "AZ", "CA", "CO", "CT", "DC", "DE", "FL", "GA", "GU",
-  "HI", "IA", "ID", "IL", "IN", "KS", "KY", "LA", "MA", "MD", "ME", "MI", "MN",
-  "MO", "MP", "MS", "MT", "NC", "ND", "NE", "NH", "NJ", "NM", "NV", "NY", "OH",
-  "OK", "OR", "PA", "PR", "RI", "SC", "SD", "TN", "TX", "UT", "VA", "VI", "VT",
-  "WA", "WI", "WV", "WY",
-];
 
-pub(crate) fn us_state_zip_prefix_len(text: &str) -> Option<usize> {
+pub(crate) fn us_state_zip_prefix_len(
+  text: &str,
+  state_abbreviations: &BTreeSet<String>,
+) -> Option<usize> {
   let mut cursor = usize::from(text.starts_with(','));
   let gap = text
     .get(cursor..)?
@@ -44,7 +40,7 @@ pub(crate) fn us_state_zip_prefix_len(text: &str) -> Option<usize> {
     .map(char::len_utf8)
     .sum::<usize>();
   let state = text.get(cursor..cursor.saturating_add(state_len))?;
-  if state_len != 2 || !is_us_state_abbreviation(state) {
+  if state_len != 2 || !state_abbreviations.contains(state) {
     return None;
   }
   cursor = cursor.saturating_add(state_len);
@@ -102,7 +98,10 @@ pub(crate) fn us_state_zip_prefix_len(text: &str) -> Option<usize> {
   Some(cursor)
 }
 
-pub(crate) fn soft_wrapped_us_city_tail(after: &str) -> Option<(usize, &str)> {
+pub(crate) fn soft_wrapped_us_city_tail<'a>(
+  after: &'a str,
+  state_abbreviations: &BTreeSet<String>,
+) -> Option<(usize, &'a str)> {
   let mut byte = 0_usize;
   let mut line_breaks = 0_usize;
   let mut whitespace = 0_usize;
@@ -148,8 +147,7 @@ pub(crate) fn soft_wrapped_us_city_tail(after: &str) -> Option<(usize, &str)> {
       .chars()
       .take_while(|ch| ch.is_alphabetic() || matches!(*ch, '-' | '\'' | '’'))
       .collect::<String>();
-    if token.is_empty() || !token.chars().next().is_some_and(char::is_uppercase)
-    {
+    if token.is_empty() {
       return None;
     }
     words = words.saturating_add(1);
@@ -171,12 +169,11 @@ pub(crate) fn soft_wrapped_us_city_tail(after: &str) -> Option<(usize, &str)> {
     return None;
   };
   let city_tail = rest.get(..city_end)?;
-  cursor = cursor.saturating_add(us_state_zip_prefix_len(rest.get(cursor..)?)?);
+  cursor = cursor.saturating_add(us_state_zip_prefix_len(
+    rest.get(cursor..)?,
+    state_abbreviations,
+  )?);
   Some((byte.saturating_add(cursor), city_tail))
-}
-
-fn is_us_state_abbreviation(text: &str) -> bool {
-  US_STATE_ABBREVIATIONS.binary_search(&text).is_ok()
 }
 
 /// Lowercase connective particles that commonly sit inside street names
@@ -209,7 +206,7 @@ pub(crate) struct PreparedAddressSeedData {
   postal_code_re: Regex,
   br_cep_shape_re: Regex,
   us_zip_plus_four_shape_re: Regex,
-  us_state_before_zip_re: Regex,
+  us_state_before_zip_re: Option<Regex>,
   house_number_before_street_re: Regex,
   house_number_after_street_re: Regex,
 }
@@ -243,9 +240,21 @@ pub(crate) struct AddressSeedDetection {
 }
 
 impl PreparedAddressSeedData {
+  #[cfg(test)]
   pub(crate) fn new(data: AddressSeedData) -> Result<Self> {
+    Self::new_with_state_abbreviations(data, Vec::new())
+  }
+
+  pub(crate) fn new_with_state_abbreviations(
+    data: AddressSeedData,
+    state_abbreviations: Vec<String>,
+  ) -> Result<Self> {
     let (boundary_search, boundary_phrase_re) =
       boundary_searches(data.boundary_words)?;
+    let us_state_abbreviations =
+      state_abbreviations.into_iter().collect::<BTreeSet<_>>();
+    let us_state_before_zip_re =
+      us_state_before_zip_regex(&us_state_abbreviations)?;
     Ok(Self {
       boundary_search,
       boundary_phrase_re,
@@ -256,9 +265,7 @@ impl PreparedAddressSeedData {
       )?,
       br_cep_shape_re: compile_regex(r"(?u)^\d{5}[-‐‑‒–—―]\d{3}$")?,
       us_zip_plus_four_shape_re: compile_regex(r"(?u)^\d{5}[-‐‑‒–—―]\d{4}$")?,
-      us_state_before_zip_re: compile_regex(
-        r"(?u)(?:^|[^A-Za-z0-9])(?P<state>A[KLRZ]|C[AOT]|D[CE]|F[LM]|G[AU]|HI|I[ADLN]|K[SY]|LA|M[ADEHINOPST]|N[CDEHJMVY]|O[HKR]|P[AR]|RI|S[CD]|T[NX]|UT|V[AIT]|W[AIVY])\s*,?\s*$",
-      )?,
+      us_state_before_zip_re,
       house_number_before_street_re: compile_regex(
         r"(?u)\b\d{1,6}(?:[-/]\d{1,6})?\s+(?:\p{Lu}\p{L}+[^\S\n\t]+){0,4}$",
       )?,
@@ -647,7 +654,7 @@ impl PreparedAddressSeedData {
   ) -> Option<Seed> {
     let window_start = floor_char_boundary(full_text, start.saturating_sub(24));
     let window = full_text.get(window_start..start)?;
-    let captures = self.us_state_before_zip_re.captures(window)?;
+    let captures = self.us_state_before_zip_re.as_ref()?.captures(window)?;
     let state = captures.name("state")?;
     Some(Seed {
       kind: SeedType::State,
@@ -1000,6 +1007,23 @@ fn compile_regex(pattern: &str) -> Result<Regex> {
     engine: SearchEngine::Regex,
     reason: error.to_string(),
   })
+}
+
+fn us_state_before_zip_regex(
+  state_abbreviations: &BTreeSet<String>,
+) -> Result<Option<Regex>> {
+  if state_abbreviations.is_empty() {
+    return Ok(None);
+  }
+  let alternation = state_abbreviations
+    .iter()
+    .map(|state| regex::escape(state))
+    .collect::<Vec<_>>()
+    .join("|");
+  compile_regex(&format!(
+    r"(?u)(?:^|[^A-Za-z0-9])(?P<state>{alternation})\s*,?\s*$"
+  ))
+  .map(Some)
 }
 
 fn elapsed_us(start: Instant) -> u64 {
@@ -1953,13 +1977,24 @@ mod tests {
 
   #[test]
   fn us_state_zip_prefix_includes_optional_four_digit_extension() {
-    assert_eq!(us_state_zip_prefix_len(", FL 32953"), Some(10));
-    assert_eq!(us_state_zip_prefix_len(", FL 32953-1234"), Some(15));
-    assert_eq!(us_state_zip_prefix_len(", FL 32953‑1234"), Some(17));
-    assert_eq!(us_state_zip_prefix_len(", FL 32953-123"), Some(10));
-    assert_eq!(us_state_zip_prefix_len(", FL 32953—Attention:"), Some(10));
-    assert_eq!(us_state_zip_prefix_len(", AS 96799"), Some(10));
-    assert_eq!(us_state_zip_prefix_len(", MP 96950"), Some(10));
+    let states = ["AS", "FL", "MP"].into_iter().map(String::from).collect();
+    assert_eq!(us_state_zip_prefix_len(", FL 32953", &states), Some(10));
+    assert_eq!(
+      us_state_zip_prefix_len(", FL 32953-1234", &states),
+      Some(15)
+    );
+    assert_eq!(
+      us_state_zip_prefix_len(", FL 32953‑1234", &states),
+      Some(17)
+    );
+    assert_eq!(us_state_zip_prefix_len(", FL 32953-123", &states), Some(10));
+    assert_eq!(
+      us_state_zip_prefix_len(", FL 32953—Attention:", &states),
+      Some(10)
+    );
+    assert_eq!(us_state_zip_prefix_len(", AS 96799", &states), Some(10));
+    assert_eq!(us_state_zip_prefix_len(", MP 96950", &states), Some(10));
+    assert_eq!(us_state_zip_prefix_len(", DE 61348", &states), None);
   }
 
   proptest! {

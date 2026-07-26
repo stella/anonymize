@@ -1459,6 +1459,16 @@
         { "type": "values", "values": ["dič", "ičo"] },
         { "type": "copy", "start": 174, "end": 175 }
       ]
+    },
+    {
+      "type": "set",
+      "path": ["deny_list_data", "filters", "us_state_abbreviations"],
+      "value": []
+    },
+    {
+      "type": "set",
+      "path": ["false_positive_filters", "us_state_abbreviations"],
+      "value": []
     }
   ]
 }

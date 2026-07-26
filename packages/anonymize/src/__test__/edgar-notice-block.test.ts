@@ -616,7 +616,7 @@ Sidus
 Space, Inc.
 
 150 N Example Ave`;
-    const entities = await detect(text);
+    const entities = await detect(text, { labels: ["organization"] });
     expect(
       entities.some(
         (entity) =>
@@ -714,6 +714,8 @@ Island, FL 32953`;
 Springs, CO 80903`);
     texts.push(`Fair
 Oaks, CA 95628`);
+    texts.push(`Coeur
+d'Alene, ID 83814`);
     texts.push(`Pago
 Pago, AS 96799`);
     texts.push(`Merritt

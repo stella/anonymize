@@ -287,6 +287,7 @@ pub(super) fn build_deny_list_filter_data(
     defined_term_cues: deny_list_filter_static("definedTermCues")?,
     unit_designators,
     in_name_connectors,
+    us_state_abbreviations: Vec::new(),
     signing_place_guards,
     // Both title sources: dotted honorifics ("M.", "Sig.", "Sr.") live in
     // `title_abbreviations` (already trailing-dot-stripped and lowercased),
@@ -710,6 +711,15 @@ pub(super) fn build_deny_list(
     for entry in &city_list {
       add_deny_list_entry(&mut builder, &dctx, entry, "address", "city");
     }
+    for entry in soft_wrapped_city_head_entries(&city_list) {
+      add_deny_list_entry(
+        &mut builder,
+        &dctx,
+        &entry,
+        "person",
+        CITY_HEAD_NAME_SOURCE,
+      );
+    }
   }
 
   if let Some(custom) = dctx.config.custom_deny_list.as_ref() {
@@ -833,8 +843,8 @@ fn add_deny_list_entry(
   let lower = js_lowercase(&normalized);
   let mut effective_source = source;
   if source != "custom-deny-list" {
-    let is_loaded_city_head_name =
-      source == "name-dictionary" && dctx.city_head_words.contains(&lower);
+    let is_loaded_city_head_name = source == CITY_HEAD_NAME_SOURCE
+      || source == "name-dictionary" && dctx.city_head_words.contains(&lower);
     if label != "address" {
       if is_single_word(&normalized)
         && dctx.common_words.contains(&lower)
@@ -869,6 +879,26 @@ fn city_head_words(cities: &[String]) -> HashSet<String> {
     let normalized = normalize_for_search(city);
     if let Some(head) = normalized.split_whitespace().next() {
       result.insert(js_lowercase(head));
+    }
+  }
+  result
+}
+
+fn soft_wrapped_city_head_entries(cities: &[String]) -> Vec<String> {
+  let mut seen = HashSet::new();
+  let mut result = Vec::new();
+  for city in cities {
+    let normalized = normalize_for_search(city);
+    let mut words = normalized.split_whitespace();
+    let (Some(head), Some(continuation)) = (words.next(), words.next()) else {
+      continue;
+    };
+    if !continuation.chars().next().is_some_and(char::is_lowercase) {
+      continue;
+    }
+    let lower = js_lowercase(head);
+    if seen.insert(lower) {
+      result.push(String::from(head));
     }
   }
   result

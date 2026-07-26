@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::collections::BTreeSet;
 
 use crate::diagnostics::{DiagnosticStage, StaticRedactionDiagnostics};
 use crate::false_positives::{
@@ -39,7 +40,6 @@ impl PreparedEngine {
     event_stream: &mut DiagnosticEventStream<'_>,
   ) -> Result<Vec<PipelineEntity>> {
     let document = ResolutionDocument::new(full_text);
-    let resolution_labels = self.resolution_labels();
     let pre_threshold_entities = self.prepare_pre_threshold_entities(
       detections,
       caller_entities,
@@ -55,7 +55,7 @@ impl PreparedEngine {
         full_text,
         threshold: self.policy.threshold,
         confidence_boost: self.policy.confidence_boost,
-        allowed_labels: resolution_labels.as_ref(),
+        allowed_labels: &self.policy.allowed_labels,
         boost_anchor_labels: &self.policy.allowed_labels,
       },
     )?;
@@ -303,10 +303,27 @@ impl PreparedEngine {
     document: &ResolutionDocument<'_>,
   ) -> Result<Vec<PipelineEntity>> {
     let offsets = document.offsets();
+    let empty_states = BTreeSet::default();
+    let state_abbreviations = self
+      .data
+      .false_positive_filters
+      .as_ref()
+      .or_else(|| {
+        self
+          .data
+          .deny_list
+          .as_ref()
+          .and_then(|data| data.filters.as_ref())
+      })
+      .map_or(&empty_states, |filters| &filters.us_state_abbreviations);
     let mut reclassified = Vec::with_capacity(entities.len());
     for mut entity in entities {
-      let Some(candidate) =
-        soft_wrapped_city_person_candidate(&entity, document.text(), &offsets)?
+      let Some(candidate) = soft_wrapped_city_person_candidate(
+        &entity,
+        document.text(),
+        &offsets,
+        state_abbreviations,
+      )?
       else {
         reclassified.push(entity);
         continue;
