@@ -1091,6 +1091,15 @@ fn curated_labels_for_match(
   let common_word = args.filters.stopwords.contains(args.keyword)
     || args.filters.allow_list.contains(args.keyword);
   let has_city_tail = has_soft_wrapped_us_city_tail(args)?;
+  let has_address_format = if args.city_head_name_requires_tail {
+    has_adjacent_address_format(
+      args.full_text,
+      args.start,
+      args.start.saturating_add(byte_len(args.match_text)),
+    )?
+  } else {
+    false
+  };
   let city_head_candidate = common_word && has_city_tail;
   let passes_filters = source_char.is_some_and(char::is_uppercase)
     && (!common_word || city_head_candidate)
@@ -1140,13 +1149,14 @@ fn curated_labels_for_match(
         let is_hyphenated_person = has_hyphen_edge
           && !supported_hyphenated_person
           && *label == PERSON_LABEL;
-        let is_city_head_person_without_tail = args
+        let is_city_head_person_without_evidence = args
           .city_head_name_requires_tail
           && !has_city_tail
+          && !has_address_format
           && *label == PERSON_LABEL;
         !is_custom_duplicate
           && !is_hyphenated_person
-          && !is_city_head_person_without_tail
+          && !is_city_head_person_without_evidence
       })
       .map(String::from)
       .collect(),
@@ -1737,14 +1747,31 @@ fn has_adjacent_address_evidence(
   end: u32,
   filters: &DenyListFilterData,
 ) -> Result<bool> {
+  let window = adjacent_text_window(full_text, start, end)?;
+  Ok(has_address_format(&window) || has_street_type(&window, filters))
+}
+
+fn has_adjacent_address_format(
+  full_text: &str,
+  start: u32,
+  end: u32,
+) -> Result<bool> {
+  Ok(has_address_format(&adjacent_text_window(
+    full_text, start, end,
+  )?))
+}
+
+fn adjacent_text_window(
+  full_text: &str,
+  start: u32,
+  end: u32,
+) -> Result<String> {
   let offsets = ByteOffsets::new(full_text);
   let full_len = offsets.len()?;
   let window_start = offsets.floor_offset(start.saturating_sub(40))?;
   let window_end =
     offsets.floor_offset(end.saturating_add(40).min(full_len))?;
-  let window = offsets.slice(window_start, window_end)?;
-
-  Ok(has_address_format(&window) || has_street_type(&window, filters))
+  offsets.slice(window_start, window_end)
 }
 
 fn has_address_format(text: &str) -> bool {
