@@ -4117,7 +4117,7 @@ mod tests {
       String::from("THE COMPANY\nAcme Inc."),
       String::from("COMPANY\nAcme Inc."),
       String::from("Attention\nAcme Inc."),
-      String::from("Confidential\nAcme Inc."),
+      String::from("Intro\n\nConfidential\nAcme Inc."),
       String::from("\n\nDefinitions\nAcme Inc."),
     ] {
       let suffix = "Inc.";

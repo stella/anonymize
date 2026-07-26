@@ -290,7 +290,9 @@ impl PreparedEngine {
     filters: Option<&DenyListFilterData>,
   ) -> Result<Vec<PipelineEntity>> {
     let filtered = filter_entity_false_positives(entities, document, filters)?;
-    self.reclassify_soft_wrapped_city_people(filtered, document)
+    let reclassified =
+      self.reclassify_soft_wrapped_city_people(filtered, document)?;
+    Ok(merge_and_dedup(&reclassified))
   }
 
   fn reclassify_soft_wrapped_city_people(

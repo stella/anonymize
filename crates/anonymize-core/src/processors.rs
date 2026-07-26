@@ -2052,7 +2052,7 @@ fn extend_person_name(
     else {
       break;
     };
-    let wraps = separator.contains(['\r', '\n']);
+    let wraps = separator.chars().any(is_person_name_line_break);
     if wraps {
       if !soft_wrap_available {
         break;
@@ -2128,6 +2128,9 @@ fn take_person_name_extension_separator(tail: &str) -> Option<(&str, &str)> {
     if !ch.is_whitespace() {
       break;
     }
+    if ch == '\u{2029}' {
+      return None;
+    }
     count = count.saturating_add(1);
     match ch {
       '\r' => {
@@ -2137,7 +2140,7 @@ fn take_person_name_extension_separator(tail: &str) -> Option<(&str, &str)> {
       '\n' if previous_was_carriage_return => {
         previous_was_carriage_return = false;
       }
-      '\n' => {
+      '\n' | '\u{2028}' => {
         line_breaks = line_breaks.saturating_add(1);
         previous_was_carriage_return = false;
       }
@@ -2154,6 +2157,10 @@ fn take_person_name_extension_separator(tail: &str) -> Option<(&str, &str)> {
     return None;
   }
   Some((tail.get(..byte)?, tail.get(byte..)?))
+}
+
+const fn is_person_name_line_break(ch: char) -> bool {
+  matches!(ch, '\r' | '\n' | '\u{2028}' | '\u{2029}')
 }
 
 fn is_middle_initial_token(word: &str) -> bool {
@@ -3034,6 +3041,11 @@ mod tests {
     for (text, expected) in [
       ("/s/ Alan\nKhalili\n", "Alan\nKhalili"),
       ("/s/ Alan\rKhalili\rZephyr", "Alan\rKhalili"),
+      (
+        "/s/ Alan\u{2028}Khalili\u{2028}Zephyr",
+        "Alan\u{2028}Khalili",
+      ),
+      ("/s/ Alan\u{2029}Khalili", "Alan"),
     ] {
       let entities = process_deny_list_matches(
         &matches,

@@ -664,12 +664,21 @@ Island, FL 32953`;
       denyListCountries: ["US"],
       nameCorpusLanguages: ["en"],
     });
-    const { redaction } = await redactNative(
-      { ...baseConfig, dictionaries, labels: ["address"] },
+    for (const text of [
       `Merritt
 Island, FL 32953-1234`,
-    );
-    expect(redaction.redactedText).toBe("[ADDRESS_1]");
+      `Bonita
+Springs, CO 80903`,
+    ]) {
+      const { redaction, resolvedEntities } = await redactNative(
+        { ...baseConfig, dictionaries, labels: ["address"] },
+        text,
+      );
+      expect(redaction.redactedText).toBe("[ADDRESS_1]");
+      expect(resolvedEntities).toHaveLength(1);
+      expect(resolvedEntities[0]?.start).toBe(0);
+      expect(resolvedEntities[0]?.end).toBe(text.length);
+    }
   });
 
   test("person boundaries survive person-only selection", async () => {
