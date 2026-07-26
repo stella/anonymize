@@ -814,6 +814,22 @@ pub fn process_deny_list_matches(
   full_text: &str,
   data: &DenyListMatchData,
 ) -> Result<Vec<PipelineEntity>> {
+  process_deny_list_matches_with_field_labels(
+    matches,
+    slice,
+    full_text,
+    data,
+    &[],
+  )
+}
+
+pub(crate) fn process_deny_list_matches_with_field_labels(
+  matches: &[SearchMatch],
+  slice: PatternSlice,
+  full_text: &str,
+  data: &DenyListMatchData,
+  person_field_labels: &[String],
+) -> Result<Vec<PipelineEntity>> {
   let offsets = ByteOffsets::new(full_text);
   let mut matches =
     collect_deny_list_matches(matches, slice, full_text, data, &offsets)?;
@@ -878,6 +894,7 @@ pub fn process_deny_list_matches(
     data,
     &mut name_hits,
     &matches,
+    person_field_labels,
   )?;
   extend_city_districts(
     &mut results,
@@ -1301,6 +1318,7 @@ fn append_person_name_hits(
   data: &DenyListMatchData,
   name_hits: &mut [RawDenyListMatch],
   evidence_hits: &[RawDenyListMatch],
+  person_field_labels: &[String],
 ) -> Result<()> {
   name_hits.sort_by_key(|hit| hit.start);
   let mut consumed = vec![false; name_hits.len()];
@@ -1377,17 +1395,15 @@ fn append_person_name_hits(
     if chain.len() == 1 && single_name_context == SingleNameContext::None {
       continue;
     }
-    let mut extended =
-      extend_person_name(full_text, offsets, first.start, last.end, filters)?;
-    let score = if chain.len() >= 2
-      || matches!(
-        single_name_context,
-        SingleNameContext::KnownUppercaseSurname { .. }
-      ) {
-      0.9
-    } else {
-      0.5
-    };
+    let mut extended = extend_person_name(
+      full_text,
+      offsets,
+      first.start,
+      last.end,
+      filters,
+      person_field_labels,
+    )?;
+    let score = extended_person_score(chain.len(), single_name_context);
     if let SingleNameContext::KnownUppercaseSurname { end } =
       single_name_context
       && end > extended.end
@@ -1409,6 +1425,18 @@ fn append_person_name_hits(
   }
 
   Ok(())
+}
+
+const fn extended_person_score(
+  chain_len: usize,
+  context: SingleNameContext,
+) -> f64 {
+  if chain_len >= 2
+    || matches!(context, SingleNameContext::KnownUppercaseSurname { .. })
+  {
+    return 0.9;
+  }
+  0.5
 }
 
 pub fn process_gazetteer_matches(
@@ -2062,10 +2090,11 @@ fn extend_person_name(
   start: u32,
   end: u32,
   filters: &DenyListFilterData,
+  person_field_labels: &[String],
 ) -> Result<ExtendedName> {
   let mut new_end = end;
   let mut soft_wrap_context =
-    person_soft_wrap_context(full_text, offsets, start)?;
+    person_soft_wrap_context(full_text, offsets, start, person_field_labels)?;
   // EDGAR HTML often soft-wraps the surname onto the next line after a
   // given name (`/s/ Alan\nKhalili`). Only signature markers and compact
   // field-label layouts may cross one line break.
@@ -2127,6 +2156,7 @@ fn person_soft_wrap_context(
   full_text: &str,
   offsets: &ByteOffsets<'_>,
   start: u32,
+  person_field_labels: &[String],
 ) -> Result<PersonSoftWrapContext> {
   let start_byte = offsets.validate_offset(start)?;
   let before = full_text
@@ -2137,7 +2167,15 @@ fn person_soft_wrap_context(
     return Ok(PersonSoftWrapContext::Signature);
   }
   let label = previous_line.unwrap_or_default().trim();
-  if label.ends_with(':') && label.split_whitespace().count() == 1 {
+  let normalized_label = label
+    .strip_suffix(':')
+    .map(str::trim)
+    .unwrap_or_default()
+    .to_lowercase();
+  if person_field_labels
+    .iter()
+    .any(|candidate| candidate == &normalized_label)
+  {
     return Ok(PersonSoftWrapContext::FieldLabel);
   }
   Ok(PersonSoftWrapContext::None)
@@ -3163,6 +3201,7 @@ mod tests {
 
   #[test]
   fn person_soft_wrap_field_label_must_be_adjacent() {
+    let field_labels = [String::from("name")];
     for (text, expected) in [
       ("Name:\nAlice", PersonSoftWrapContext::FieldLabel),
       ("Name:\rAlice", PersonSoftWrapContext::FieldLabel),
@@ -3170,10 +3209,17 @@ mod tests {
       ("Name:\u{2028}Alice", PersonSoftWrapContext::FieldLabel),
       ("Name:\n\n\nAlice", PersonSoftWrapContext::None),
       ("Name:\u{2029}Alice", PersonSoftWrapContext::None),
+      ("Invoice:\nAlice", PersonSoftWrapContext::None),
     ] {
       let start = u32::try_from(text.find("Alice").unwrap()).unwrap();
       assert_eq!(
-        person_soft_wrap_context(text, &ByteOffsets::new(text), start).unwrap(),
+        person_soft_wrap_context(
+          text,
+          &ByteOffsets::new(text),
+          start,
+          &field_labels,
+        )
+        .unwrap(),
         expected,
       );
     }

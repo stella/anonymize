@@ -649,6 +649,40 @@ Acme Inc.`,
     }
   });
 
+  test("organization wrap boundaries follow the configured language", async () => {
+    const entities = await detect(
+      `If to the Company:
+
+Bank
+America, Inc.`,
+      { enableTriggerPhrases: false },
+    );
+    expect(
+      entities.some(
+        (entity) =>
+          entity.label === "organization" &&
+          entity.text === "Bank America, Inc.",
+      ),
+    ).toBe(true);
+  });
+
+  test("only configured person fields authorize a name wrap", async () => {
+    for (const [label, expected] of [
+      ["Name", true],
+      ["Invoice", false],
+    ] as const) {
+      const entities = await detect(`${label}:
+Alice
+Zephyr`);
+      expect(
+        entities.some(
+          (entity) =>
+            entity.label === "person" && entity.text === "Alice Zephyr",
+        ),
+      ).toBe(expected);
+    }
+  });
+
   test("soft-wrapped US city headword is an address not a person", async () => {
     // Sidus Space EX-10.1 (2026-07-24): `Merritt\nIsland, FL 32953`.
     const text = `Merritt

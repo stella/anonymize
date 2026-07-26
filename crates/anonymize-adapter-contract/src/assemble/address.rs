@@ -201,7 +201,15 @@ pub(super) fn build_address_seed_data(
   let exit_followers: AddressExitFollowers =
     parse_data_file("address-exit-followers.json")?;
 
-  let mut boundary_words = flatten_dictionaries(&[&boundaries, &stop_keywords]);
+  let mut boundary_words = Vec::new();
+  extend_deduplicated(
+    &mut boundary_words,
+    scoped_boundary_words(&boundaries, ctx.content_languages.as_deref()),
+  );
+  extend_deduplicated(
+    &mut boundary_words,
+    scoped_boundary_words(&stop_keywords, ctx.content_languages.as_deref()),
+  );
   extend_deduplicated(
     &mut boundary_words,
     contextual_conjunction_boundaries(&ContextualBoundaryData {
@@ -216,6 +224,30 @@ pub(super) fn build_address_seed_data(
     br_cep_cue_words: build_br_cue_words(&street_types, &boundaries),
     unit_abbreviations: flatten_dictionaries(&[&unit_abbreviations]),
   }))
+}
+
+fn scoped_boundary_words(
+  record: &OrderedMap<Value>,
+  selected_languages: Option<&[String]>,
+) -> Vec<String> {
+  let mut words = Vec::new();
+  for (language, values) in record {
+    if language != "universal"
+      && !language_config_matches(language, selected_languages)
+    {
+      continue;
+    }
+    let Some(values) = values.as_array() else {
+      continue;
+    };
+    words.extend(
+      values
+        .iter()
+        .filter_map(Value::as_str)
+        .map(ToOwned::to_owned),
+    );
+  }
+  words
 }
 
 struct ContextualBoundaryData<'a> {
@@ -394,6 +426,8 @@ mod tests {
   fn contextual_boundaries_follow_english_scope() -> Result<(), AssembleError> {
     let boundaries = boundary_words(&["en"])?;
 
+    assert!(boundaries.iter().any(|word| word == "attention"));
+    assert!(!boundaries.iter().any(|word| word == "bank"));
     assert!(boundaries.iter().any(|word| word == "or emailed"));
     assert!(boundaries.iter().any(|word| word == "or sent"));
     assert!(boundaries.iter().any(|word| word == "and delivered"));
@@ -411,6 +445,8 @@ mod tests {
   -> Result<(), AssembleError> {
     let boundaries = boundary_words(&["de"])?;
 
+    assert!(boundaries.iter().any(|word| word == "bank"));
+    assert!(!boundaries.iter().any(|word| word == "attention"));
     assert!(!boundaries.iter().any(|word| word == "or emailed"));
     assert!(!boundaries.iter().any(|word| word == "or sent"));
     assert!(!boundaries.iter().any(|word| word == "and delivered"));
@@ -432,7 +468,12 @@ mod tests {
     assert!(boundaries.iter().any(|word| word == "or emailed"));
     assert!(boundaries.iter().any(|word| word == "or sent"));
     assert!(boundaries.iter().any(|word| word == "and provide"));
-    assert_eq!(boundaries, english_only);
+    assert!(boundaries.iter().any(|word| word == "bank"));
+    assert!(
+      english_only
+        .iter()
+        .all(|word| boundaries.iter().any(|candidate| candidate == word))
+    );
     assert_no_bare_conjunctions(&boundaries)?;
     Ok(())
   }

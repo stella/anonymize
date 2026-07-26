@@ -8,8 +8,9 @@ use crate::legal_forms::process_legal_form_matches;
 use crate::name_corpus::{NameCorpusDetection, PreparedNameCorpusData};
 use crate::processors::{
   CountryMatchData, DenyListMatchData, GazetteerMatchData, PatternSlice,
-  RegexMatchMeta, process_country_matches, process_deny_list_matches,
-  process_gazetteer_matches, process_regex_matches,
+  RegexMatchMeta, process_country_matches,
+  process_deny_list_matches_with_field_labels, process_gazetteer_matches,
+  process_regex_matches,
 };
 use crate::resolution::PipelineEntity;
 use crate::signatures::{PreparedSignatureData, detect_signatures};
@@ -223,11 +224,14 @@ impl<'a> StaticDetectorContext<'a> {
     let Some(data) = self.deny_list_data()? else {
       return Ok(Vec::new());
     };
-    process_deny_list_matches(
+    process_deny_list_matches_with_field_labels(
       self.literal_matches()?,
       self.deny_list_slice()?,
       self.full_text()?,
       data,
+      self
+        .signature_data()?
+        .map_or(&[], PreparedSignatureData::form_field_labels),
     )
   }
 
