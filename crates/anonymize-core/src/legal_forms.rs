@@ -664,10 +664,27 @@ fn comma_before_soft_wrap(
 }
 
 /// EDGAR often wraps a one-token issuer head onto the next line before the
-/// rest of a legal-form name (`Sidus\nSpace, Inc.`). Require a single
-/// name-shaped token on the prior line so multi-word headers and role lists
-/// stay hard boundaries.
+/// rest of a legal-form name (`Sidus\nSpace, Inc.`). Require an isolated,
+/// single name-shaped token after a blank line so field labels, multi-word
+/// headers, and role lists stay hard boundaries.
 fn single_token_name_soft_wrap(
+  text: &str,
+  newline_start: usize,
+  data: &PreparedLegalFormData,
+) -> bool {
+  let before_newline = text.get(..newline_start).unwrap_or_default();
+  let line_start = before_newline
+    .rfind('\n')
+    .map_or(0, |index| index.saturating_add(1));
+  if !previous_line_is_blank(
+    before_newline.get(..line_start).unwrap_or_default(),
+  ) {
+    return false;
+  }
+  single_token_name_soft_wrap_shape(text, newline_start, data)
+}
+
+fn single_token_name_soft_wrap_shape(
   text: &str,
   newline_start: usize,
   data: &PreparedLegalFormData,
@@ -708,6 +725,22 @@ fn single_token_name_soft_wrap(
     .unwrap_or_default()
     .trim_end_matches([',', ';', '.']);
   is_name_shaped_org_token(after_token)
+}
+
+fn previous_line_is_blank(before_current_line: &str) -> bool {
+  let Some(previous_lines) = before_current_line
+    .strip_suffix("\r\n")
+    .or_else(|| before_current_line.strip_suffix('\n'))
+    .or_else(|| before_current_line.strip_suffix('\r'))
+  else {
+    return false;
+  };
+  let previous_line_start = previous_lines
+    .rfind(['\r', '\n'])
+    .map_or(0, |index| index.saturating_add(1));
+  previous_lines
+    .get(previous_line_start..)
+    .is_some_and(|line| line.trim().is_empty())
 }
 
 fn is_name_shaped_org_token(token: &str) -> bool {
@@ -1838,10 +1871,10 @@ fn has_disallowed_line_break(text: &str, data: &PreparedLegalFormData) -> bool {
       && after_trimmed.chars().any(char::is_uppercase);
     let upper_name_after =
       after_trimmed.chars().next().is_some_and(is_name_initial);
-    // Span-local check: treat the candidate text as the document so a
-    // mid-name wrap like `Sidus\nSpace, Inc.` stays allowed.
+    // The backward walk already established the blank-line evidence. This
+    // span-local pass only rechecks the mid-name shape.
     let single_token_name_continuation =
-      single_token_name_soft_wrap(text, index, data);
+      single_token_name_soft_wrap_shape(text, index, data);
     let allowed = (comma_continuation_before && upper_name_after)
       || single_token_name_continuation
       || (dotted_designator_before
@@ -4050,30 +4083,32 @@ mod tests {
   }
 
   #[test]
-  fn multi_word_header_soft_wrap_still_stops_firm_name_walk() {
-    let text = "THE COMPANY\nAcme Inc.";
+  fn headers_and_field_labels_stop_firm_name_soft_wrap() {
     let data = PreparedLegalFormData::new(LegalFormData {
       suffixes: vec![String::from("Inc.")],
       ..LegalFormData::default()
     });
-    let suffix = "Inc.";
-    let suffix_start = text.find(suffix).unwrap();
-    let found = SearchMatch::Literal {
-      pattern: 0,
-      start: u32::try_from(suffix_start).unwrap(),
-      end: u32::try_from(suffix_start + suffix.len()).unwrap(),
-    };
-    let texts: Vec<String> = process_legal_form_matches(
-      &[found],
-      PatternSlice { start: 0, end: 1 },
-      text,
-      &data,
-    )
-    .unwrap()
-    .into_iter()
-    .map(|entity| entity.text)
-    .collect();
-    assert_eq!(texts, vec![String::from("Acme Inc.")]);
+    for header in ["THE COMPANY", "COMPANY", "Attention"] {
+      let text = format!("{header}\nAcme Inc.");
+      let suffix = "Inc.";
+      let suffix_start = text.find(suffix).unwrap();
+      let found = SearchMatch::Literal {
+        pattern: 0,
+        start: u32::try_from(suffix_start).unwrap(),
+        end: u32::try_from(suffix_start + suffix.len()).unwrap(),
+      };
+      let texts: Vec<String> = process_legal_form_matches(
+        &[found],
+        PatternSlice { start: 0, end: 1 },
+        &text,
+        &data,
+      )
+      .unwrap()
+      .into_iter()
+      .map(|entity| entity.text)
+      .collect();
+      assert_eq!(texts, vec![String::from("Acme Inc.")]);
+    }
   }
 
   #[test]

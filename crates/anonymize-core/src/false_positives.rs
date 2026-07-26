@@ -83,7 +83,6 @@ pub(crate) fn filter_entity_false_positives(
   document: &ResolutionDocument<'_>,
   filters: Option<&DenyListFilterData>,
 ) -> Result<Vec<PipelineEntity>> {
-  let full_text = document.text();
   let offsets = document.offsets();
   let mut filtered = Vec::with_capacity(entities.len());
   for entity in entities {
@@ -95,12 +94,6 @@ pub(crate) fn filter_entity_false_positives(
     let Some(normalized) = normalize_entity(entity, &offsets, filters)? else {
       continue;
     };
-    if let Some(reclassified) =
-      reclassify_soft_wrapped_city_person(&normalized, full_text, &offsets)?
-    {
-      filtered.push(reclassified);
-      continue;
-    }
     if should_reject_entity(&normalized, document, &offsets, filters)? {
       continue;
     }
@@ -190,15 +183,21 @@ fn normalize_entity(
   Ok(Some(entity))
 }
 
-/// Soft-wrapped US city lines (`Merritt\nIsland, FL 32953`) often leave the
-/// first city token as a person surname hit. Reclassify the span to address
-/// when the next line completes a city + state + ZIP shape.
-fn reclassify_soft_wrapped_city_person(
+pub(crate) struct SoftWrappedCityPersonCandidate {
+  pub(crate) city_name: String,
+  pub(crate) end: u32,
+}
+
+/// Soft-wrapped US city lines (`Merritt\nIsland, FL 32953`) can leave the
+/// first city token as a person surname hit. Return the possible city name
+/// and address end; the prepared literal index supplies the city evidence.
+pub(crate) fn soft_wrapped_city_person_candidate(
   entity: &PipelineEntity,
   full_text: &str,
   offsets: &ByteOffsets<'_>,
-) -> Result<Option<PipelineEntity>> {
-  if entity.label != PERSON_LABEL {
+) -> Result<Option<SoftWrappedCityPersonCandidate>> {
+  if entity.label != PERSON_LABEL || entity.source != DetectionSource::DenyList
+  {
     return Ok(None);
   }
   let person = entity.text.trim();
@@ -209,24 +208,28 @@ fn reclassify_soft_wrapped_city_person(
   }
   let after_byte = offsets.validate_offset(entity.end)?;
   let after = full_text.get(after_byte..).unwrap_or_default();
-  let Some(tail_len) = match_soft_wrapped_us_city_tail(after) else {
+  let Some((tail_len, city_tail)) = match_soft_wrapped_us_city_tail(after)
+  else {
     return Ok(None);
   };
   let Ok(tail_units) = u32::try_from(tail_len) else {
     return Ok(None);
   };
-  let new_end = entity.end.saturating_add(tail_units);
-  let mut reclassified = entity.clone();
-  reclassified.label = String::from(ADDRESS_LABEL);
-  reclassified.end = new_end;
-  reclassified.text = offsets.slice(entity.start, new_end)?;
-  if reclassified.score < 0.9 {
-    reclassified.score = 0.9;
-  }
-  Ok(Some(reclassified))
+  let mut city_name = String::with_capacity(
+    person
+      .len()
+      .saturating_add(city_tail.len().saturating_add(1)),
+  );
+  city_name.push_str(person);
+  city_name.push(' ');
+  city_name.push_str(city_tail);
+  Ok(Some(SoftWrappedCityPersonCandidate {
+    city_name,
+    end: entity.end.saturating_add(tail_units),
+  }))
 }
 
-fn match_soft_wrapped_us_city_tail(after: &str) -> Option<usize> {
+fn match_soft_wrapped_us_city_tail(after: &str) -> Option<(usize, &str)> {
   let mut byte = 0_usize;
   let mut line_breaks = 0_usize;
   let mut whitespace = 0_usize;
@@ -249,14 +252,14 @@ fn match_soft_wrapped_us_city_tail(after: &str) -> Option<usize> {
   let rest = after.get(byte..)?;
   let mut cursor = 0_usize;
   let mut words = 0_usize;
-  loop {
+  let city_end = loop {
     let token_source = rest.get(cursor..)?;
     let token = token_source
       .chars()
       .take_while(|ch| ch.is_alphabetic() || matches!(*ch, '-' | '\'' | '’'))
       .collect::<String>();
     if token.is_empty() {
-      break;
+      return None;
     }
     if !token.chars().next().is_some_and(char::is_uppercase) {
       return None;
@@ -268,8 +271,9 @@ fn match_soft_wrapped_us_city_tail(after: &str) -> Option<usize> {
     cursor = cursor.saturating_add(token.len());
     let after_token = rest.get(cursor..)?;
     if after_token.starts_with(',') {
+      let city_end = cursor;
       cursor = cursor.saturating_add(','.len_utf8());
-      break;
+      break city_end;
     }
     let ch = after_token.chars().next()?;
     if ch == ' ' || ch == '\t' {
@@ -277,12 +281,10 @@ fn match_soft_wrapped_us_city_tail(after: &str) -> Option<usize> {
       continue;
     }
     return None;
-  }
-  if words == 0 {
-    return None;
-  }
+  };
+  let city_tail = rest.get(..city_end)?;
   cursor = cursor.saturating_add(us_state_zip_prefix_len(rest.get(cursor..)?)?);
-  Some(byte.saturating_add(cursor))
+  Some((byte.saturating_add(cursor), city_tail))
 }
 
 fn should_reject_entity(
@@ -1856,28 +1858,25 @@ mod tests {
   }
 
   #[test]
-  fn soft_wrapped_us_city_person_is_reclassified_as_address() {
+  fn soft_wrapped_us_city_person_produces_lookup_candidate() {
     // Sidus Space employment agreement (2026-07-24): `Merritt\nIsland, FL
     // 32953` left the city headword labeled as a person.
     let full_text = "Merritt\nIsland, FL 32953";
-    let entities = filter_entity_false_positives(
-      vec![entity(
+    let candidate = soft_wrapped_city_person_candidate(
+      &entity(
         "Merritt",
         "Merritt",
         PERSON_LABEL,
         DetectionSource::DenyList,
-      )],
+      ),
       full_text,
-      Some(&DenyListFilterData::default()),
+      &ByteOffsets::new(full_text),
     )
+    .unwrap()
     .unwrap();
 
-    assert_eq!(entities.len(), 1);
-    assert_eq!(entities[0].label, ADDRESS_LABEL);
-    assert_eq!(
-      entities[0].text.replace('\n', " "),
-      "Merritt Island, FL 32953"
-    );
+    assert_eq!(candidate.city_name, "Merritt Island");
+    assert_eq!(candidate.end, 24);
   }
 
   #[test]

@@ -433,6 +433,13 @@ impl DenyListMatchData {
       })
       .unwrap_or_default()
   }
+
+  pub(crate) fn pattern_has_city_source(&self, index: usize) -> bool {
+    self
+      .sources
+      .get(index)
+      .is_some_and(|sources| sources.iter().any(|source| source == CITY_SOURCE))
+  }
 }
 
 impl DenyListPatternMetaSet {

@@ -1,6 +1,10 @@
 use crate::diagnostics::{DiagnosticStage, StaticRedactionDiagnostics};
-use crate::false_positives::filter_entity_false_positives;
+use crate::false_positives::{
+  filter_entity_false_positives, soft_wrapped_city_person_candidate,
+};
 use crate::hotwords::apply_hotword_rules;
+use crate::labels::ADDRESS_LABEL;
+use crate::normalize::normalize_for_search;
 use crate::processors::DenyListFilterData;
 use crate::resolution::{
   PipelineEntity, ResolutionDocument,
@@ -95,7 +99,7 @@ impl PreparedEngine {
           .and_then(|data| data.filters.as_ref())
       });
     let mut resolved_entities = filter_entities_for_config(
-      filter_entity_false_positives(
+      self.filter_false_positives(
         sanitized_entities,
         &document,
         false_positive_filters,
@@ -251,7 +255,7 @@ impl PreparedEngine {
       self.person_span_terminators(),
     )?;
     let sanitized = sanitize_entities_with_document(consistent, document)?;
-    let filtered = filter_entity_false_positives(
+    let filtered = self.filter_false_positives(
       sanitized,
       document,
       false_positive_filters,
@@ -260,6 +264,56 @@ impl PreparedEngine {
       filtered,
       &self.policy.allowed_labels,
     ))
+  }
+
+  fn filter_false_positives(
+    &self,
+    entities: Vec<PipelineEntity>,
+    document: &ResolutionDocument<'_>,
+    filters: Option<&DenyListFilterData>,
+  ) -> Result<Vec<PipelineEntity>> {
+    let filtered = filter_entity_false_positives(entities, document, filters)?;
+    let offsets = document.offsets();
+    let mut resolved = Vec::with_capacity(filtered.len());
+    for mut entity in filtered {
+      let Some(candidate) =
+        soft_wrapped_city_person_candidate(&entity, document.text(), &offsets)?
+      else {
+        resolved.push(entity);
+        continue;
+      };
+      if !self.deny_list_contains_city(&candidate.city_name)? {
+        resolved.push(entity);
+        continue;
+      }
+      entity.label = String::from(ADDRESS_LABEL);
+      entity.end = candidate.end;
+      entity.text = offsets.slice(entity.start, candidate.end)?;
+      entity.score = entity.score.max(0.9);
+      resolved.push(entity);
+    }
+    Ok(resolved)
+  }
+
+  fn deny_list_contains_city(&self, city_name: &str) -> Result<bool> {
+    let Some(data) = &self.data.deny_list else {
+      return Ok(false);
+    };
+    let normalized = normalize_for_search(city_name);
+    let Ok(expected_end) = u32::try_from(normalized.len()) else {
+      return Ok(false);
+    };
+    let matches = self.indexes.literals.find_iter(&normalized)?;
+    Ok(matches.into_iter().any(|found| {
+      found.start() == 0
+        && found.end() == expected_end
+        && self
+          .policy
+          .slices
+          .deny_list
+          .local_index(found.pattern())
+          .is_some_and(|index| data.pattern_has_city_source(index))
+    }))
   }
 
   fn extend_monetary_entities(

@@ -623,6 +623,23 @@ Space, Inc.
     ).toBe(true);
   });
 
+  test("field label is not absorbed into a wrapped organization", async () => {
+    const entities = await detect(`Attention
+Acme Inc.`);
+    expect(
+      entities.some(
+        (entity) =>
+          entity.label === "organization" && entity.text === "Acme Inc.",
+      ),
+    ).toBe(true);
+    expect(
+      entities.some(
+        (entity) =>
+          entity.label === "organization" && entity.text.includes("Attention"),
+      ),
+    ).toBe(false);
+  });
+
   test("soft-wrapped US city headword is an address not a person", async () => {
     // Sidus Space EX-10.1 (2026-07-24): `Merritt\nIsland, FL 32953`.
     const text = `Merritt
@@ -638,6 +655,23 @@ Island, FL 32953`;
         (entity) =>
           entity.label === "address" &&
           entity.text.replaceAll(/\s+/g, " ").includes("Merritt Island"),
+      ),
+    ).toBe(true);
+  });
+
+  test("person before an unrelated city survives person-only selection", async () => {
+    const dictionaries = await loadTestDictionaries({
+      denyListCountries: ["US"],
+      nameCorpusLanguages: ["en"],
+    });
+    const entities = await detectNative(
+      { ...baseConfig, dictionaries, labels: ["person"] },
+      `Alice
+Boston, MA 02110`,
+    );
+    expect(
+      entities.some(
+        (entity) => entity.label === "person" && entity.text === "Alice",
       ),
     ).toBe(true);
   });
