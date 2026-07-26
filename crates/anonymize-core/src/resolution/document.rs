@@ -216,16 +216,10 @@ mod tests {
 
   use super::ResolutionDocument;
 
-  fn generated_lines(
-    segments: &[String],
-    ending_codes: &[u8],
-  ) -> (String, Vec<std::ops::Range<usize>>) {
+  fn generated_text(segments: &[String], ending_codes: &[u8]) -> String {
     let mut text = String::new();
-    let mut ranges = Vec::with_capacity(segments.len());
     for (index, segment) in segments.iter().enumerate() {
-      let start = text.len();
       text.push_str(segment);
-      ranges.push(start..text.len());
       if index.saturating_add(1) == segments.len() {
         continue;
       }
@@ -239,7 +233,27 @@ mod tests {
         _ => "\r",
       });
     }
-    (text, ranges)
+    text
+  }
+
+  fn reference_line_ranges(text: &str) -> Vec<std::ops::Range<usize>> {
+    let mut ranges = Vec::new();
+    let mut line_start = 0_usize;
+    let mut chars = text.char_indices().peekable();
+    while let Some((offset, ch)) = chars.next() {
+      let delimiter_len = match ch {
+        '\r' if chars.peek().is_some_and(|(_, next)| *next == '\n') => {
+          chars.next();
+          2
+        }
+        '\r' | '\n' => 1,
+        _ => continue,
+      };
+      ranges.push(line_start..offset);
+      line_start = offset.saturating_add(delimiter_len);
+    }
+    ranges.push(line_start..text.len());
+    ranges
   }
 
   proptest! {
@@ -249,7 +263,8 @@ mod tests {
       ending_codes in proptest::collection::vec(any::<u8>(), 0..32),
       queries in proptest::collection::vec((any::<usize>(), any::<usize>()), 0..64),
     ) {
-      let (text, ranges) = generated_lines(&segments, &ending_codes);
+      let text = generated_text(&segments, &ending_codes);
+      let ranges = reference_line_ranges(&text);
       let document = ResolutionDocument::new(&text);
       for (first, second) in queries {
         let divisor = text.len().saturating_add(1);
