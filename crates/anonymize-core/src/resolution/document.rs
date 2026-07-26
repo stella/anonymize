@@ -1,4 +1,5 @@
 use std::collections::BTreeSet;
+use std::ops::Range;
 use std::sync::OnceLock;
 
 use crate::byte_offsets::ByteOffsets;
@@ -19,6 +20,7 @@ pub(super) struct WordAnalysis {
 
 pub(crate) struct ResolutionDocument<'a> {
   text: &'a str,
+  line_starts: OnceLock<Vec<usize>>,
   word_analysis: OnceLock<WordAnalysis>,
 }
 
@@ -26,6 +28,7 @@ impl<'a> ResolutionDocument<'a> {
   pub(crate) const fn new(text: &'a str) -> Self {
     Self {
       text,
+      line_starts: OnceLock::new(),
       word_analysis: OnceLock::new(),
     }
   }
@@ -40,6 +43,34 @@ impl<'a> ResolutionDocument<'a> {
 
   pub(crate) fn slice_ref(&self, start: u32, end: u32) -> Result<&'a str> {
     self.offsets().slice_ref(start, end)
+  }
+
+  pub(crate) fn line_range(
+    &self,
+    start: usize,
+    end: usize,
+  ) -> Option<Range<usize>> {
+    if start > end || end > self.text.len() {
+      return None;
+    }
+    let starts = self.line_starts.get_or_init(|| {
+      let mut starts = vec![0];
+      starts.extend(
+        self
+          .text
+          .match_indices('\n')
+          .map(|(index, _)| index.saturating_add('\n'.len_utf8())),
+      );
+      starts
+    });
+    let line_index = starts
+      .partition_point(|line_start| *line_start <= start)
+      .checked_sub(1)?;
+    let line_start = *starts.get(line_index)?;
+    let line_end = starts
+      .get(line_index.saturating_add(1))
+      .map_or(self.text.len(), |next_start| next_start.saturating_sub(1));
+    (end <= line_end).then_some(line_start..line_end)
   }
 
   pub(super) fn word_analysis(&self) -> &WordAnalysis {
@@ -148,5 +179,17 @@ mod tests {
     assert!(std::ptr::eq(first, second));
     assert!(first.boundaries.contains(&0));
     assert!(first.boundaries.contains(&12));
+  }
+
+  #[test]
+  fn line_ranges_are_built_lazily_and_reused() {
+    let document = ResolutionDocument::new("first\nsecond");
+
+    assert!(document.line_starts.get().is_none());
+    assert_eq!(document.line_range(6, 12), Some(6..12));
+    let first = document.line_starts.get().map(Vec::as_ptr);
+    assert!(first.is_some());
+    assert_eq!(document.line_range(0, 5), Some(0..5));
+    assert_eq!(first, document.line_starts.get().map(Vec::as_ptr));
   }
 }

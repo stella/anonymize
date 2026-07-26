@@ -6,7 +6,9 @@ use regex::Regex;
 
 use crate::byte_offsets::ByteOffsets;
 use crate::processors::DenyListFilterData;
-use crate::resolution::{DetectionSource, PipelineEntity, SourceDetail};
+use crate::resolution::{
+  DetectionSource, PipelineEntity, ResolutionDocument, SourceDetail,
+};
 use crate::types::{Error, Result};
 
 use crate::labels::{
@@ -27,43 +29,6 @@ static POSTAL_CODE_RE: LazyLock<Option<Regex>> =
 static SECTION_NUMBER_RE: LazyLock<Option<Regex>> =
   LazyLock::new(|| Regex::new(r"^(?:§\s*)?\d{1,3}(?:\.\d{1,3}){0,4}\.?$").ok());
 
-struct LineBoundaries {
-  starts: Vec<usize>,
-  text_len: usize,
-}
-
-impl LineBoundaries {
-  fn new(text: &str) -> Self {
-    let mut starts = Vec::new();
-    starts.push(0);
-    starts.extend(
-      text
-        .match_indices('\n')
-        .map(|(index, _)| index.saturating_add('\n'.len_utf8())),
-    );
-    Self {
-      starts,
-      text_len: text.len(),
-    }
-  }
-
-  fn containing(&self, start: usize, end: usize) -> Option<Range<usize>> {
-    if start > end || end > self.text_len {
-      return None;
-    }
-    let line_index = self
-      .starts
-      .partition_point(|line_start| *line_start <= start)
-      .checked_sub(1)?;
-    let line_start = *self.starts.get(line_index)?;
-    let line_end = self
-      .starts
-      .get(line_index.saturating_add(1))
-      .map_or(self.text_len, |next_start| next_start.saturating_sub(1));
-    (end <= line_end).then_some(line_start..line_end)
-  }
-}
-
 struct LineContext<'a> {
   line: &'a str,
   before: &'a str,
@@ -72,20 +37,18 @@ struct LineContext<'a> {
 }
 
 fn line_context<'a>(
-  full_text: &'a str,
+  document: &'a ResolutionDocument<'a>,
   offsets: &ByteOffsets<'_>,
-  line_boundaries: &LineBoundaries,
   entity: &PipelineEntity,
 ) -> Result<LineContext<'a>> {
+  let full_text = document.text();
   let start = offsets.validate_offset(entity.start)?;
   let end = offsets.validate_offset(entity.end)?;
   let line_range =
-    line_boundaries
-      .containing(start, end)
-      .ok_or(Error::InvalidSpan {
-        start: entity.start,
-        end: entity.end,
-      })?;
+    document.line_range(start, end).ok_or(Error::InvalidSpan {
+      start: entity.start,
+      end: entity.end,
+    })?;
   let line = full_text
     .get(line_range.clone())
     .ok_or(Error::InvalidSpan {
@@ -112,11 +75,10 @@ fn line_context<'a>(
 
 pub(crate) fn filter_entity_false_positives(
   entities: Vec<PipelineEntity>,
-  full_text: &str,
+  document: &ResolutionDocument<'_>,
   filters: Option<&DenyListFilterData>,
 ) -> Result<Vec<PipelineEntity>> {
-  let offsets = ByteOffsets::new(full_text);
-  let line_boundaries = LineBoundaries::new(full_text);
+  let offsets = document.offsets();
   let mut filtered = Vec::with_capacity(entities.len());
   for entity in entities {
     if is_caller_owned(&entity) {
@@ -127,13 +89,7 @@ pub(crate) fn filter_entity_false_positives(
     let Some(normalized) = normalize_entity(entity, &offsets, filters)? else {
       continue;
     };
-    if should_reject_entity(
-      &normalized,
-      full_text,
-      &offsets,
-      &line_boundaries,
-      filters,
-    )? {
+    if should_reject_entity(&normalized, document, &offsets, filters)? {
       continue;
     }
     filtered.push(normalized);
@@ -224,11 +180,11 @@ fn normalize_entity(
 
 fn should_reject_entity(
   entity: &PipelineEntity,
-  full_text: &str,
+  document: &ResolutionDocument<'_>,
   offsets: &ByteOffsets<'_>,
-  line_boundaries: &LineBoundaries,
   filters: Option<&DenyListFilterData>,
 ) -> Result<bool> {
+  let full_text = document.text();
   let text = entity.text.trim();
   if is_template_placeholder(text) {
     return Ok(true);
@@ -244,7 +200,7 @@ fn should_reject_entity(
   // A single dotted number needs heading context because the same shape is
   // valid for sentence-final house numbers and postal codes.
   if entity.label == ADDRESS_LABEL
-    && is_explicit_address_section(full_text, offsets, line_boundaries, entity)?
+    && is_explicit_address_section(document, offsets, entity)?
   {
     return Ok(true);
   }
@@ -302,12 +258,7 @@ fn should_reject_entity(
   }
   if entity.label == ORGANIZATION_LABEL
     && is_all_caps_candidate(text)
-    && is_all_caps_boilerplate_line(
-      full_text,
-      offsets,
-      line_boundaries,
-      entity,
-    )?
+    && is_all_caps_boilerplate_line(document, offsets, entity)?
   {
     return Ok(true);
   }
@@ -319,13 +270,7 @@ fn should_reject_entity(
   }
   if entity.label == ORGANIZATION_LABEL
     && let Some(filters) = filters
-    && is_numbered_page_footer(
-      full_text,
-      offsets,
-      line_boundaries,
-      entity,
-      filters,
-    )?
+    && is_numbered_page_footer(document, offsets, entity, filters)?
   {
     return Ok(true);
   }
@@ -442,9 +387,8 @@ fn is_section_number(text: &str) -> bool {
 }
 
 fn is_explicit_address_section(
-  full_text: &str,
+  document: &ResolutionDocument<'_>,
   offsets: &ByteOffsets<'_>,
-  line_boundaries: &LineBoundaries,
   entity: &PipelineEntity,
 ) -> Result<bool> {
   let trimmed = entity.text.trim();
@@ -468,7 +412,7 @@ fn is_explicit_address_section(
     return Ok(false);
   }
 
-  let context = line_context(full_text, offsets, line_boundaries, entity)?;
+  let context = line_context(document, offsets, entity)?;
   if !context.before.trim().is_empty() {
     return Ok(false);
   }
@@ -609,9 +553,8 @@ fn role_exact_match(
 }
 
 fn is_numbered_page_footer(
-  full_text: &str,
+  document: &ResolutionDocument<'_>,
   offsets: &ByteOffsets<'_>,
-  line_boundaries: &LineBoundaries,
   entity: &PipelineEntity,
   filters: &DenyListFilterData,
 ) -> Result<bool> {
@@ -623,7 +566,7 @@ fn is_numbered_page_footer(
   };
   let head = head.to_lowercase();
 
-  let context = line_context(full_text, offsets, line_boundaries, entity)?;
+  let context = line_context(document, offsets, entity)?;
   if !context.before.trim().is_empty() {
     return Ok(false);
   }
@@ -680,12 +623,11 @@ fn is_all_caps_candidate(text: &str) -> bool {
 }
 
 fn is_all_caps_boilerplate_line(
-  full_text: &str,
+  document: &ResolutionDocument<'_>,
   offsets: &ByteOffsets<'_>,
-  line_boundaries: &LineBoundaries,
   entity: &PipelineEntity,
 ) -> Result<bool> {
-  let context = line_context(full_text, offsets, line_boundaries, entity)?;
+  let context = line_context(document, offsets, entity)?;
 
   let mut letter_count = 0usize;
   let mut upper_count = 0usize;
@@ -1415,6 +1357,18 @@ mod tests {
   use std::collections::BTreeSet;
 
   use super::*;
+
+  fn filter_entity_false_positives(
+    entities: Vec<PipelineEntity>,
+    full_text: &str,
+    filters: Option<&DenyListFilterData>,
+  ) -> Result<Vec<PipelineEntity>> {
+    super::filter_entity_false_positives(
+      entities,
+      &ResolutionDocument::new(full_text),
+      filters,
+    )
+  }
 
   #[test]
   fn normalization_reuses_unchanged_text_allocation() -> Result<()> {
