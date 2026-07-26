@@ -28,6 +28,7 @@ pub(super) struct SupportDataInput {
   triggers: Option<TriggerData>,
   legal_forms: Option<LegalFormData>,
   address_seed: Option<AddressSeedData>,
+  document_heading_words: Vec<String>,
   state_abbreviations: Vec<String>,
   zones: Option<ZoneData>,
   address_context: Option<AddressContextData>,
@@ -58,6 +59,11 @@ pub(super) fn take_support_input(
     .as_ref()
     .map(|filters| filters.us_state_abbreviations.iter().cloned().collect())
     .unwrap_or_default();
+  let document_heading_words = config
+    .false_positive_filters
+    .as_ref()
+    .map(|filters| filters.document_heading_words.iter().cloned().collect())
+    .unwrap_or_default();
   let mut signature = config.signature_data.take();
   if let (Some(legal_forms), Some(signature)) =
     (legal_forms.as_ref(), signature.as_mut())
@@ -74,6 +80,7 @@ pub(super) fn take_support_input(
     triggers: config.trigger_data.take(),
     legal_forms,
     address_seed: config.address_seed_data.take(),
+    document_heading_words,
     state_abbreviations,
     zones: config.zone_data.take(),
     address_context: config.address_context_data.take(),
@@ -87,14 +94,14 @@ pub(super) fn prepare_support_data(
   input: SupportDataInput,
   diagnostics: &mut Option<&mut StaticRedactionDiagnostics>,
 ) -> Result<PreparedSupportData> {
-  // The address boundary vocabulary is detector-independent support. Reuse
-  // it for legal-form soft wraps even when trigger detection is disabled.
-  // If address support is absent, the optional wrap path fails closed.
-  let legal_form_soft_wrap_boundary_labels = input
+  // Reuse detector-independent address and heading vocabulary as legal-form
+  // soft-wrap boundaries even when trigger detection is disabled.
+  let mut legal_form_soft_wrap_boundary_labels = input
     .address_seed
     .as_ref()
     .map(|data| data.boundary_words.clone())
     .unwrap_or_default();
+  legal_form_soft_wrap_boundary_labels.extend(input.document_heading_words);
   let prepared = crate::exec::scope(|scope| {
     let hotwords = scope.spawn(|| prepare_timed_hotword_data(input.hotwords));
     let triggers = scope.spawn(|| prepare_timed_trigger_data(input.triggers));

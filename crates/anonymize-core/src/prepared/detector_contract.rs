@@ -3,6 +3,7 @@ use std::collections::BTreeSet;
 use crate::address_seeds::AddressSeedDetection;
 use crate::address_seeds::PreparedAddressSeedData;
 use crate::diagnostics::{DiagnosticStage, StaticRedactionDiagnostics};
+use crate::labels::ADDRESS_LABEL;
 use crate::legal_forms::PreparedLegalFormData;
 use crate::legal_forms::process_legal_form_matches;
 use crate::name_corpus::{NameCorpusDetection, PreparedNameCorpusData};
@@ -12,7 +13,7 @@ use crate::processors::{
   process_deny_list_matches_with_field_labels, process_gazetteer_matches,
   process_regex_matches,
 };
-use crate::resolution::PipelineEntity;
+use crate::resolution::{PipelineEntity, ResolutionDocument};
 use crate::signatures::{PreparedSignatureData, detect_signatures};
 use crate::triggers::{PreparedTriggerData, process_trigger_matches};
 use crate::types::{Error, Result, SearchMatch};
@@ -169,7 +170,7 @@ pub(super) struct StaticDetectorContext<'a> {
   spec: StaticDetectorSpec,
   engine: &'a PreparedEngine,
   matches: &'a PreparedEngineMatches,
-  document: PreparedDocument<'a>,
+  document: &'a PreparedDocument<'a>,
 }
 
 impl<'a> StaticDetectorContext<'a> {
@@ -177,13 +178,13 @@ impl<'a> StaticDetectorContext<'a> {
     spec: &StaticDetectorSpec,
     engine: &'a PreparedEngine,
     matches: &'a PreparedEngineMatches,
-    full_text: &'a str,
+    document: &'a PreparedDocument<'a>,
   ) -> Self {
     Self {
       spec: *spec,
       engine,
       matches,
-      document: PreparedDocument::new(full_text),
+      document,
     }
   }
 
@@ -227,7 +228,7 @@ impl<'a> StaticDetectorContext<'a> {
     process_deny_list_matches_with_field_labels(
       self.literal_matches()?,
       self.deny_list_slice()?,
-      self.full_text()?,
+      self.resolution_document()?,
       data,
       self
         .signature_data()?
@@ -344,7 +345,16 @@ impl<'a> StaticDetectorContext<'a> {
   }
 
   pub(super) fn address_seed_is_active(&self) -> Result<bool> {
-    Ok(self.address_seed_data()?.is_some())
+    Ok(
+      self.address_seed_data()?.is_some()
+        && (self.engine.policy.allowed_labels.is_empty()
+          || self
+            .engine
+            .policy
+            .allowed_labels
+            .iter()
+            .any(|label| label == ADDRESS_LABEL)),
+    )
   }
 
   pub(super) fn detect_address_seed(
@@ -371,6 +381,11 @@ impl<'a> StaticDetectorContext<'a> {
 
   fn full_text(&self) -> Result<&'a str> {
     self.document.text(&self.spec)
+  }
+
+  fn resolution_document(&self) -> Result<&ResolutionDocument<'a>> {
+    self.spec.require_input(StaticDetectorInput::FullText)?;
+    Ok(self.document.resolution())
   }
 
   fn regex_matches(&self) -> Result<&'a [SearchMatch]> {

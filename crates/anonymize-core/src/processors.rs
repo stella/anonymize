@@ -830,10 +830,11 @@ pub fn process_deny_list_matches(
   full_text: &str,
   data: &DenyListMatchData,
 ) -> Result<Vec<PipelineEntity>> {
+  let document = ResolutionDocument::new(full_text);
   process_deny_list_matches_with_field_labels(
     matches,
     slice,
-    full_text,
+    &document,
     data,
     &[],
   )
@@ -842,12 +843,12 @@ pub fn process_deny_list_matches(
 pub(crate) fn process_deny_list_matches_with_field_labels(
   matches: &[SearchMatch],
   slice: PatternSlice,
-  full_text: &str,
+  document: &ResolutionDocument<'_>,
   data: &DenyListMatchData,
   person_field_labels: &[String],
 ) -> Result<Vec<PipelineEntity>> {
-  let offsets = ByteOffsets::new(full_text);
-  let document = ResolutionDocument::new(full_text);
+  let full_text = document.text();
+  let offsets = document.offsets();
   let mut matches =
     collect_deny_list_matches(matches, slice, full_text, data, &offsets)?;
   suppress_shorter_curated_contained_matches(&mut matches);
@@ -910,7 +911,7 @@ pub(crate) fn process_deny_list_matches_with_field_labels(
     &mut name_hits,
     &matches,
     person_field_labels,
-    &document,
+    document,
   )?;
   extend_city_districts(
     &mut results,

@@ -4191,13 +4191,14 @@ mod tests {
         company_suffix_words: vec![String::from("Company")],
         ..LegalFormData::default()
       },
-      vec![String::from("attention")],
+      vec![String::from("attention"), String::from("table")],
     );
     for text in [
       String::from("THE COMPANY\nAcme Inc."),
       String::from("COMPANY\nAcme Inc."),
       String::from("If to the Company:\n\nAttention\nAcme Inc."),
       String::from("\n\nDefinitions\nAcme Inc."),
+      String::from("\n\nTABLE\nAcme Inc."),
     ] {
       let suffix = "Inc.";
       let suffix_start = text.find(suffix).unwrap();

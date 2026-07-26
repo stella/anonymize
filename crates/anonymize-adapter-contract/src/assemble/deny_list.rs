@@ -670,8 +670,13 @@ pub(super) fn build_deny_list(
     ctx.config.deny_list_regions.as_deref(),
     ctx.deny_list_countries,
   );
+  let exclude_categories = exclude_category_set(ctx.config);
   let city_list = city_entries(ctx.dictionaries, allowed_countries.as_deref());
-  let city_head_words = city_head_words(&city_list);
+  let city_head_words = if exclude_categories.contains("Places") {
+    HashSet::new()
+  } else {
+    city_head_words(&city_list)
+  };
   let dctx = DenyBuildContext {
     config: ctx.config,
     dictionaries: ctx.dictionaries,
@@ -698,7 +703,6 @@ pub(super) fn build_deny_list(
   }
 
   let mut builder = Builder::new();
-  let exclude_categories = exclude_category_set(dctx.config);
 
   apply_dictionary_entries(
     &mut builder,
@@ -877,9 +881,11 @@ fn city_head_words(cities: &[String]) -> HashSet<String> {
   let mut result = HashSet::new();
   for city in cities {
     let normalized = normalize_for_search(city);
-    if let Some(head) = normalized.split_whitespace().next() {
-      result.insert(js_lowercase(head));
-    }
+    let mut words = normalized.split_whitespace();
+    let (Some(head), Some(_)) = (words.next(), words.next()) else {
+      continue;
+    };
+    result.insert(js_lowercase(head));
   }
   result
 }
@@ -1381,6 +1387,46 @@ mod tests {
       builder.source_list.get(index),
       Some(&vec![String::from(CITY_HEAD_NAME_SOURCE)])
     );
+  }
+
+  #[test]
+  fn excluded_places_do_not_exempt_city_heads_from_common_word_filter() {
+    let config = PipelineConfig {
+      enable_name_corpus: true,
+      deny_list_exclude_categories: Some(vec![String::from("Places")]),
+      ..test_pipeline_config()
+    };
+    let corpus = NameCorpus {
+      common_words_set: HashSet::from([String::from("fair")]),
+      ..test_corpus()
+    };
+    let dictionaries = Dictionaries {
+      cities: Some(vec![String::from("Fair Haven")]),
+      deny_list: Some(OrderedMap(vec![(
+        String::from("names/global"),
+        vec![String::from("Fair")],
+      )])),
+      deny_list_meta: Some(OrderedMap(vec![(
+        String::from("names/global"),
+        DictionaryMeta {
+          label: String::from("person"),
+          category: DenyListCategory::Names,
+          country: None,
+        },
+      )])),
+      ..Dictionaries::default()
+    };
+
+    let data = build_deny_list(&DenyBuildContextArgs {
+      config: &config,
+      dictionaries: Some(&dictionaries),
+      name_corpus_languages: None,
+      deny_list_countries: None,
+      corpus: &corpus,
+    })
+    .expect("deny-list assembly should succeed");
+
+    assert!(data.is_none());
   }
 
   /// The defined-term-quote filter must carry both title sources: plain

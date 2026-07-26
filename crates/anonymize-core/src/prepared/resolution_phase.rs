@@ -28,6 +28,7 @@ use super::phase::{
   PhaseTimer, ResolverStep, observe_diagnostic_stream, record_count_stage,
   record_entities, record_resolver_entities,
 };
+use super::prepared_document::PreparedDocument;
 use super::results::StaticDetectionResult;
 
 impl PreparedEngine {
@@ -35,19 +36,22 @@ impl PreparedEngine {
     &self,
     detections: &StaticDetectionResult,
     caller_entities: &[PipelineEntity],
-    full_text: &str,
+    document: &PreparedDocument<'_>,
     diagnostics: &mut Option<&mut StaticRedactionDiagnostics>,
     event_stream: &mut DiagnosticEventStream<'_>,
   ) -> Result<Vec<PipelineEntity>> {
-    let document = ResolutionDocument::new(full_text);
+    let full_text = document.resolution().text();
+    let resolution_document = document.resolution();
     let pre_threshold_entities = self.prepare_pre_threshold_entities(
       detections,
       caller_entities,
       full_text,
       diagnostics.as_deref_mut(),
     )?;
-    let pre_threshold_entities = self
-      .reclassify_soft_wrapped_city_people(pre_threshold_entities, &document)?;
+    let pre_threshold_entities = self.reclassify_soft_wrapped_city_people(
+      pre_threshold_entities,
+      resolution_document,
+    )?;
     observe_diagnostic_stream(diagnostics, event_stream)?;
     let mut raw_entities = filter_entities_for_redaction(
       pre_threshold_entities,
@@ -85,7 +89,7 @@ impl PreparedEngine {
     let boundary_timer = PhaseTimer::start();
     let consistent = enforce_boundary_consistency_with_document(
       merged,
-      &document,
+      resolution_document,
       self.person_span_terminators(),
     )?;
     record_resolver_entities(
@@ -98,7 +102,7 @@ impl PreparedEngine {
     )?;
     let sanitize_timer = PhaseTimer::start();
     let sanitized_entities =
-      sanitize_entities_with_document(consistent, &document)?;
+      sanitize_entities_with_document(consistent, resolution_document)?;
     let false_positive_filters =
       self.data.false_positive_filters.as_ref().or_else(|| {
         self
@@ -110,7 +114,7 @@ impl PreparedEngine {
     let mut resolved_entities = filter_entities_for_config(
       Self::filter_false_positives(
         sanitized_entities,
-        &document,
+        resolution_document,
         false_positive_filters,
       )?,
       self.policy.threshold,
@@ -118,7 +122,7 @@ impl PreparedEngine {
     );
     resolved_entities = self.process_coreference_entities(
       full_text,
-      &document,
+      resolution_document,
       resolved_entities,
       false_positive_filters,
       diagnostics.as_deref_mut(),
