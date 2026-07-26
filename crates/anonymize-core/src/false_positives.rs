@@ -1,4 +1,5 @@
 use std::collections::BTreeSet;
+use std::ops::Range;
 use std::sync::LazyLock;
 
 use regex::Regex;
@@ -26,12 +27,96 @@ static POSTAL_CODE_RE: LazyLock<Option<Regex>> =
 static SECTION_NUMBER_RE: LazyLock<Option<Regex>> =
   LazyLock::new(|| Regex::new(r"^(?:§\s*)?\d{1,3}(?:\.\d{1,3}){0,4}\.?$").ok());
 
+struct LineBoundaries {
+  starts: Vec<usize>,
+  text_len: usize,
+}
+
+impl LineBoundaries {
+  fn new(text: &str) -> Self {
+    let mut starts = Vec::new();
+    starts.push(0);
+    starts.extend(
+      text
+        .match_indices('\n')
+        .map(|(index, _)| index.saturating_add('\n'.len_utf8())),
+    );
+    Self {
+      starts,
+      text_len: text.len(),
+    }
+  }
+
+  fn containing(&self, start: usize, end: usize) -> Option<Range<usize>> {
+    if start > end || end > self.text_len {
+      return None;
+    }
+    let line_index = self
+      .starts
+      .partition_point(|line_start| *line_start <= start)
+      .checked_sub(1)?;
+    let line_start = *self.starts.get(line_index)?;
+    let line_end = self
+      .starts
+      .get(line_index.saturating_add(1))
+      .map_or(self.text_len, |next_start| next_start.saturating_sub(1));
+    (end <= line_end).then_some(line_start..line_end)
+  }
+}
+
+struct LineContext<'a> {
+  line: &'a str,
+  before: &'a str,
+  after: &'a str,
+  entity: Range<usize>,
+}
+
+fn line_context<'a>(
+  full_text: &'a str,
+  offsets: &ByteOffsets<'_>,
+  line_boundaries: &LineBoundaries,
+  entity: &PipelineEntity,
+) -> Result<LineContext<'a>> {
+  let start = offsets.validate_offset(entity.start)?;
+  let end = offsets.validate_offset(entity.end)?;
+  let line_range =
+    line_boundaries
+      .containing(start, end)
+      .ok_or(Error::InvalidSpan {
+        start: entity.start,
+        end: entity.end,
+      })?;
+  let line = full_text
+    .get(line_range.clone())
+    .ok_or(Error::InvalidSpan {
+      start: entity.start,
+      end: entity.end,
+    })?;
+  let relative_start = start.saturating_sub(line_range.start);
+  let relative_end = end.saturating_sub(line_range.start);
+  let before = line.get(..relative_start).ok_or(Error::InvalidSpan {
+    start: entity.start,
+    end: entity.end,
+  })?;
+  let after = line.get(relative_end..).ok_or(Error::InvalidSpan {
+    start: entity.start,
+    end: entity.end,
+  })?;
+  Ok(LineContext {
+    line,
+    before,
+    after,
+    entity: relative_start..relative_end,
+  })
+}
+
 pub(crate) fn filter_entity_false_positives(
   entities: Vec<PipelineEntity>,
   full_text: &str,
   filters: Option<&DenyListFilterData>,
 ) -> Result<Vec<PipelineEntity>> {
   let offsets = ByteOffsets::new(full_text);
+  let line_boundaries = LineBoundaries::new(full_text);
   let mut filtered = Vec::with_capacity(entities.len());
   for entity in entities {
     if is_caller_owned(&entity) {
@@ -42,7 +127,13 @@ pub(crate) fn filter_entity_false_positives(
     let Some(normalized) = normalize_entity(entity, &offsets, filters)? else {
       continue;
     };
-    if should_reject_entity(&normalized, full_text, &offsets, filters)? {
+    if should_reject_entity(
+      &normalized,
+      full_text,
+      &offsets,
+      &line_boundaries,
+      filters,
+    )? {
       continue;
     }
     filtered.push(normalized);
@@ -135,6 +226,7 @@ fn should_reject_entity(
   entity: &PipelineEntity,
   full_text: &str,
   offsets: &ByteOffsets<'_>,
+  line_boundaries: &LineBoundaries,
   filters: Option<&DenyListFilterData>,
 ) -> Result<bool> {
   let text = entity.text.trim();
@@ -152,7 +244,7 @@ fn should_reject_entity(
   // A single dotted number needs heading context because the same shape is
   // valid for sentence-final house numbers and postal codes.
   if entity.label == ADDRESS_LABEL
-    && is_explicit_address_section(full_text, offsets, entity)?
+    && is_explicit_address_section(full_text, offsets, line_boundaries, entity)?
   {
     return Ok(true);
   }
@@ -210,7 +302,12 @@ fn should_reject_entity(
   }
   if entity.label == ORGANIZATION_LABEL
     && is_all_caps_candidate(text)
-    && is_all_caps_boilerplate_line(full_text, offsets, entity)?
+    && is_all_caps_boilerplate_line(
+      full_text,
+      offsets,
+      line_boundaries,
+      entity,
+    )?
   {
     return Ok(true);
   }
@@ -222,7 +319,13 @@ fn should_reject_entity(
   }
   if entity.label == ORGANIZATION_LABEL
     && let Some(filters) = filters
-    && is_numbered_page_footer(full_text, offsets, entity, filters)?
+    && is_numbered_page_footer(
+      full_text,
+      offsets,
+      line_boundaries,
+      entity,
+      filters,
+    )?
   {
     return Ok(true);
   }
@@ -341,6 +444,7 @@ fn is_section_number(text: &str) -> bool {
 fn is_explicit_address_section(
   full_text: &str,
   offsets: &ByteOffsets<'_>,
+  line_boundaries: &LineBoundaries,
   entity: &PipelineEntity,
 ) -> Result<bool> {
   let trimmed = entity.text.trim();
@@ -364,38 +468,11 @@ fn is_explicit_address_section(
     return Ok(false);
   }
 
-  let start = offsets.validate_offset(entity.start)?;
-  let before = full_text.get(..start).ok_or(Error::InvalidSpan {
-    start: entity.start,
-    end: entity.end,
-  })?;
-  if !before
-    .rsplit('\n')
-    .next()
-    .unwrap_or_default()
-    .trim()
-    .is_empty()
-  {
+  let context = line_context(full_text, offsets, line_boundaries, entity)?;
+  if !context.before.trim().is_empty() {
     return Ok(false);
   }
-  let end = offsets.validate_offset(entity.end)?;
-  let after = full_text.get(end..).ok_or(Error::InvalidSpan {
-    start: entity.start,
-    end: entity.end,
-  })?;
-  let line_end = after
-    .find('\n')
-    .map_or(full_text.len(), |index| end.saturating_add(index));
-  let line_start = before
-    .rfind('\n')
-    .map_or(0usize, |index| index.saturating_add('\n'.len_utf8()));
-  let line = full_text
-    .get(line_start..line_end)
-    .ok_or(Error::InvalidSpan {
-      start: entity.start,
-      end: entity.end,
-    })?;
-  Ok(starts_with_section_heading_prefix(line))
+  Ok(starts_with_section_heading_prefix(context.line))
 }
 
 fn is_standalone_year(text: &str) -> bool {
@@ -534,6 +611,7 @@ fn role_exact_match(
 fn is_numbered_page_footer(
   full_text: &str,
   offsets: &ByteOffsets<'_>,
+  line_boundaries: &LineBoundaries,
   entity: &PipelineEntity,
   filters: &DenyListFilterData,
 ) -> Result<bool> {
@@ -545,27 +623,12 @@ fn is_numbered_page_footer(
   };
   let head = head.to_lowercase();
 
-  let start = offsets.validate_offset(entity.start)?;
-  let end = offsets.validate_offset(entity.end)?;
-  let before = full_text.get(..start).ok_or(Error::InvalidSpan {
-    start: entity.start,
-    end: entity.end,
-  })?;
-  if !before
-    .rsplit('\n')
-    .next()
-    .unwrap_or_default()
-    .trim()
-    .is_empty()
-  {
+  let context = line_context(full_text, offsets, line_boundaries, entity)?;
+  if !context.before.trim().is_empty() {
     return Ok(false);
   }
 
-  let after = full_text.get(end..).ok_or(Error::InvalidSpan {
-    start: entity.start,
-    end: entity.end,
-  })?;
-  let line_remainder = after.split('\n').next().unwrap_or_default().trim();
+  let line_remainder = context.after.trim();
   if line_remainder.is_empty() {
     return Ok(
       filters.page_footer_markers.contains(&head)
@@ -619,37 +682,15 @@ fn is_all_caps_candidate(text: &str) -> bool {
 fn is_all_caps_boilerplate_line(
   full_text: &str,
   offsets: &ByteOffsets<'_>,
+  line_boundaries: &LineBoundaries,
   entity: &PipelineEntity,
 ) -> Result<bool> {
-  let start = offsets.validate_offset(entity.start)?;
-  let end = offsets.validate_offset(entity.end)?;
-  let before = full_text.get(..start).ok_or(Error::InvalidSpan {
-    start: entity.start,
-    end: entity.end,
-  })?;
-  let line_start = before
-    .rfind('\n')
-    .map_or(0usize, |index| index.saturating_add('\n'.len_utf8()));
-  let after = full_text.get(end..).ok_or(Error::InvalidSpan {
-    start: entity.start,
-    end: entity.end,
-  })?;
-  let line_end = after
-    .find('\n')
-    .map_or(full_text.len(), |index| end.saturating_add(index));
-  let line = full_text
-    .get(line_start..line_end)
-    .ok_or(Error::InvalidSpan {
-      start: entity.start,
-      end: entity.end,
-    })?;
-  let entity_rel_start = start.saturating_sub(line_start);
-  let entity_rel_end = end.saturating_sub(line_start);
+  let context = line_context(full_text, offsets, line_boundaries, entity)?;
 
   let mut letter_count = 0usize;
   let mut upper_count = 0usize;
   let mut outside_entity_letters = 0usize;
-  for (index, ch) in line.char_indices() {
+  for (index, ch) in context.line.char_indices() {
     if !ch.is_alphabetic() {
       continue;
     }
@@ -657,7 +698,7 @@ fn is_all_caps_boilerplate_line(
     if ch.is_uppercase() {
       upper_count = upper_count.saturating_add(1);
     }
-    if index < entity_rel_start || index >= entity_rel_end {
+    if index < context.entity.start || index >= context.entity.end {
       outside_entity_letters = outside_entity_letters.saturating_add(1);
     }
   }
@@ -668,7 +709,7 @@ fn is_all_caps_boilerplate_line(
   if !uppercase_ratio_at_least(upper_count, letter_count) {
     return Ok(false);
   }
-  if starts_with_section_heading_prefix(line) {
+  if starts_with_section_heading_prefix(context.line) {
     return Ok(true);
   }
   if outside_entity_letters >= ALL_CAPS_LINE_PROSE_EXTRA_LETTERS {
