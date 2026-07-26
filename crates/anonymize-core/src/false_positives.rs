@@ -197,7 +197,9 @@ pub(crate) fn soft_wrapped_city_person_candidate(
   offsets: &ByteOffsets<'_>,
   state_abbreviations: &BTreeSet<String>,
 ) -> Result<Option<SoftWrappedCityPersonCandidate>> {
-  if entity.label != PERSON_LABEL || entity.source != DetectionSource::DenyList
+  if entity.label != PERSON_LABEL
+    || entity.source != DetectionSource::DenyList
+    || entity.source_detail == Some(SourceDetail::CustomDenyList)
   {
     return Ok(None);
   }
@@ -1823,6 +1825,24 @@ mod tests {
 
     assert_eq!(candidate.city_name, "Merritt Island");
     assert_eq!(candidate.end, 24);
+
+    let mut custom = entity(
+      "Merritt",
+      "Merritt",
+      PERSON_LABEL,
+      DetectionSource::DenyList,
+    );
+    custom.source_detail = Some(SourceDetail::CustomDenyList);
+    assert!(
+      soft_wrapped_city_person_candidate(
+        &custom,
+        full_text,
+        &ByteOffsets::new(full_text),
+        &states,
+      )
+      .unwrap()
+      .is_none()
+    );
   }
 
   #[test]
