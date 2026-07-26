@@ -4088,7 +4088,7 @@ mod tests {
       suffixes: vec![String::from("Inc.")],
       ..LegalFormData::default()
     });
-    for header in ["THE COMPANY", "COMPANY", "Attention"] {
+    for header in ["THE COMPANY", "COMPANY", "Attention", "Confidential"] {
       let text = format!("{header}\nAcme Inc.");
       let suffix = "Inc.";
       let suffix_start = text.find(suffix).unwrap();

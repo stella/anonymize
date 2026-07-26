@@ -70,6 +70,21 @@ pub(crate) fn us_state_zip_prefix_len(text: &str) -> Option<usize> {
     return None;
   }
   cursor = cursor.saturating_add(zip_len);
+  if let Some(separator) =
+    text.get(cursor..)?.chars().next().filter(|ch| is_dash(*ch))
+  {
+    cursor = cursor.saturating_add(separator.len_utf8());
+    let extension_len = text
+      .get(cursor..)?
+      .chars()
+      .take_while(char::is_ascii_digit)
+      .map(char::len_utf8)
+      .sum::<usize>();
+    if extension_len != 4 {
+      return None;
+    }
+    cursor = cursor.saturating_add(extension_len);
+  }
   if text
     .get(cursor..)?
     .chars()
@@ -1856,6 +1871,14 @@ mod tests {
   use proptest::prelude::*;
 
   use super::*;
+
+  #[test]
+  fn us_state_zip_prefix_includes_optional_four_digit_extension() {
+    assert_eq!(us_state_zip_prefix_len(", FL 32953"), Some(10));
+    assert_eq!(us_state_zip_prefix_len(", FL 32953-1234"), Some(15));
+    assert_eq!(us_state_zip_prefix_len(", FL 32953‑1234"), Some(17));
+    assert_eq!(us_state_zip_prefix_len(", FL 32953-123"), None);
+  }
 
   proptest! {
     #[test]

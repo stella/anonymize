@@ -2054,7 +2054,7 @@ fn extend_person_name(
     else {
       break;
     };
-    let wraps = separator.contains('\n');
+    let wraps = separator.contains(['\r', '\n']);
     if wraps {
       if crossed_soft_wrap || !soft_wrap_context {
         break;
@@ -2124,13 +2124,27 @@ fn take_person_name_extension_separator(tail: &str) -> Option<(&str, &str)> {
   let mut count = 0_usize;
   let mut line_breaks = 0_usize;
   let mut byte = 0_usize;
+  let mut previous_was_carriage_return = false;
   for ch in tail.chars() {
     if !ch.is_whitespace() {
       break;
     }
     count = count.saturating_add(1);
-    if ch == '\n' {
-      line_breaks = line_breaks.saturating_add(1);
+    match ch {
+      '\r' => {
+        line_breaks = line_breaks.saturating_add(1);
+        previous_was_carriage_return = true;
+      }
+      '\n' if previous_was_carriage_return => {
+        previous_was_carriage_return = false;
+      }
+      '\n' => {
+        line_breaks = line_breaks.saturating_add(1);
+        previous_was_carriage_return = false;
+      }
+      _ => {
+        previous_was_carriage_return = false;
+      }
     }
     byte = byte.saturating_add(ch.len_utf8());
     if count == 4 {
@@ -3018,17 +3032,22 @@ mod tests {
       filters: Some(filters),
     };
 
-    let entities = process_deny_list_matches(
-      &matches,
-      PatternSlice { start: 0, end: 1 },
-      "/s/ Alan\nKhalili\n",
-      &data,
-    )
-    .unwrap();
+    for (text, expected) in [
+      ("/s/ Alan\nKhalili\n", "Alan\nKhalili"),
+      ("/s/ Alan\rKhalili\rZephyr", "Alan\rKhalili"),
+    ] {
+      let entities = process_deny_list_matches(
+        &matches,
+        PatternSlice { start: 0, end: 1 },
+        text,
+        &data,
+      )
+      .unwrap();
 
-    assert_eq!(entities.len(), 1);
-    assert_eq!(entities[0].label, "person");
-    assert_eq!(entities[0].text.replace('\n', " "), "Alan Khalili");
+      assert_eq!(entities.len(), 1);
+      assert_eq!(entities[0].label, "person");
+      assert_eq!(entities[0].text, expected);
+    }
   }
 
   #[test]

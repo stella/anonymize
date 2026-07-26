@@ -27,7 +27,7 @@ setDefaultTimeout(60_000);
 import { DEFAULT_ENTITY_LABELS } from "../constants";
 import type { NativePipelineEntity } from "../native";
 import type { PipelineConfig } from "../types";
-import { detectNative } from "./native-detect";
+import { detectNative, redactNative } from "./native-detect";
 import { loadTestDictionaries } from "./load-dictionaries";
 
 const baseConfig: Omit<PipelineConfig, "dictionaries"> = {
@@ -657,6 +657,19 @@ Island, FL 32953`;
           entity.text.replaceAll(/\s+/g, " ").includes("Merritt Island"),
       ),
     ).toBe(true);
+  });
+
+  test("soft-wrapped US city redaction consumes ZIP+4", async () => {
+    const dictionaries = await loadTestDictionaries({
+      denyListCountries: ["US"],
+      nameCorpusLanguages: ["en"],
+    });
+    const { redaction } = await redactNative(
+      { ...baseConfig, dictionaries },
+      `Merritt
+Island, FL 32953-1234`,
+    );
+    expect(redaction.redactedText).toBe("[ADDRESS_1]");
   });
 
   test("person before an unrelated city survives person-only selection", async () => {
