@@ -21,6 +21,8 @@ pub(super) struct WordAnalysis {
 pub(crate) struct ResolutionDocument<'a> {
   text: &'a str,
   line_starts: OnceLock<Vec<usize>>,
+  #[cfg(test)]
+  line_operations: std::cell::Cell<usize>,
   word_analysis: OnceLock<WordAnalysis>,
 }
 
@@ -29,6 +31,8 @@ impl<'a> ResolutionDocument<'a> {
     Self {
       text,
       line_starts: OnceLock::new(),
+      #[cfg(test)]
+      line_operations: std::cell::Cell::new(0),
       word_analysis: OnceLock::new(),
     }
   }
@@ -58,6 +62,10 @@ impl<'a> ResolutionDocument<'a> {
       let bytes = self.text.as_bytes();
       let mut index = 0_usize;
       while let Some(byte) = bytes.get(index) {
+        #[cfg(test)]
+        self
+          .line_operations
+          .set(self.line_operations.get().saturating_add(1));
         let delimiter_len = match byte {
           b'\r'
             if bytes.get(index.saturating_add(1)).copied() == Some(b'\n') =>
@@ -75,9 +83,21 @@ impl<'a> ResolutionDocument<'a> {
       }
       starts
     });
-    let line_index = starts
-      .partition_point(|line_start| *line_start <= start)
-      .checked_sub(1)?;
+    let mut left = 0_usize;
+    let mut right = starts.len();
+    while left < right {
+      #[cfg(test)]
+      self
+        .line_operations
+        .set(self.line_operations.get().saturating_add(1));
+      let middle = left.midpoint(right);
+      if *starts.get(middle)? <= start {
+        left = middle.saturating_add(1);
+      } else {
+        right = middle;
+      }
+    }
+    let line_index = left.checked_sub(1)?;
     let line_start = *starts.get(line_index)?;
     let line_end = starts.get(line_index.saturating_add(1)).map_or(
       self.text.len(),
@@ -192,7 +212,60 @@ const fn is_combining_mark(ch: char) -> bool {
 
 #[cfg(test)]
 mod tests {
+  use proptest::prelude::*;
+
   use super::ResolutionDocument;
+
+  fn generated_lines(
+    segments: &[String],
+    ending_codes: &[u8],
+  ) -> (String, Vec<std::ops::Range<usize>>) {
+    let mut text = String::new();
+    let mut ranges = Vec::with_capacity(segments.len());
+    for (index, segment) in segments.iter().enumerate() {
+      let start = text.len();
+      text.push_str(segment);
+      ranges.push(start..text.len());
+      if index.saturating_add(1) == segments.len() {
+        continue;
+      }
+      let ending = ending_codes
+        .get(index.checked_rem(ending_codes.len()).unwrap_or_default())
+        .copied()
+        .unwrap_or_default();
+      text.push_str(match ending % 3 {
+        0 => "\n",
+        1 => "\r\n",
+        _ => "\r",
+      });
+    }
+    (text, ranges)
+  }
+
+  proptest! {
+    #[test]
+    fn generated_line_index_matches_reference_model(
+      segments in proptest::collection::vec("[A-Za-z0-9 ]{0,16}", 1..32),
+      ending_codes in proptest::collection::vec(any::<u8>(), 0..32),
+      queries in proptest::collection::vec((any::<usize>(), any::<usize>()), 0..64),
+    ) {
+      let (text, ranges) = generated_lines(&segments, &ending_codes);
+      let document = ResolutionDocument::new(&text);
+      for (first, second) in queries {
+        let divisor = text.len().saturating_add(1);
+        let left = first.checked_rem(divisor).unwrap_or_default();
+        let right = second.checked_rem(divisor).unwrap_or_default();
+        let start = left.min(right);
+        let end = left.max(right);
+        let expected = ranges
+          .iter()
+          .find(|range| start >= range.start && end <= range.end)
+          .cloned();
+
+        prop_assert_eq!(document.line_range(start, end), expected);
+      }
+    }
+  }
 
   #[test]
   fn word_analysis_is_built_once_and_reused() {
@@ -227,5 +300,27 @@ mod tests {
       let document = ResolutionDocument::new(text);
       assert_eq!(document.line_range(range.start, range.end), Some(range));
     }
+  }
+
+  #[test]
+  fn dense_line_queries_have_bounded_structural_work() {
+    const LINE_COUNT: usize = 10_000;
+    let text = "x\n".repeat(LINE_COUNT);
+    let document = ResolutionDocument::new(&text);
+
+    for index in 0..LINE_COUNT {
+      let start = index.saturating_mul(2);
+      assert_eq!(
+        document.line_range(start, start + 1),
+        Some(start..start + 1)
+      );
+    }
+
+    let linear_build_work = text.len();
+    let logarithmic_query_work = LINE_COUNT.saturating_mul(20);
+    assert!(
+      document.line_operations.get()
+        <= linear_build_work.saturating_add(logarithmic_query_work)
+    );
   }
 }
