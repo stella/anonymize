@@ -131,8 +131,9 @@ fn normalize_entity(
     {
       end_byte = start_byte.saturating_add(trimmed_end);
     }
-    let address_text = slice(raw_text, start_byte, end_byte)?;
-    if let Some(trimmed_end) = trim_address_before_website(address_text) {
+    let address_after_prose = slice(raw_text, start_byte, end_byte)?;
+    if let Some(trimmed_end) = trim_address_before_website(address_after_prose)
+    {
       end_byte = start_byte.saturating_add(trimmed_end);
     }
   }
@@ -441,7 +442,7 @@ fn trim_address_before_website(text: &str) -> Option<usize> {
     let after = text.get(dot.saturating_add(1)..)?;
     let tld_len = after
       .chars()
-      .take_while(|ch| ch.is_ascii_alphabetic())
+      .take_while(char::is_ascii_alphabetic)
       .map(char::len_utf8)
       .sum::<usize>();
     if tld_len == 0 {

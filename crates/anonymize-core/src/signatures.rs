@@ -373,7 +373,7 @@ fn trim_at_comma_officer_title(text: &str) -> &str {
     let title = after.trim_start();
     let title_token_len = title
       .chars()
-      .take_while(|ch| ch.is_ascii_alphabetic())
+      .take_while(char::is_ascii_alphabetic)
       .map(char::len_utf8)
       .sum::<usize>();
     let title_token = title.get(..title_token_len).unwrap_or_default();
