@@ -131,6 +131,10 @@ fn normalize_entity(
     {
       end_byte = start_byte.saturating_add(trimmed_end);
     }
+    let address_text = slice(raw_text, start_byte, end_byte)?;
+    if let Some(trimmed_end) = trim_address_before_website(address_text) {
+      end_byte = start_byte.saturating_add(trimmed_end);
+    }
   }
 
   if entity.label == ORGANIZATION_LABEL
@@ -356,6 +360,11 @@ fn should_reject_address(
   if looks_like_statute_title_address(text) {
     return true;
   }
+  // City-list hits plus a statute head noun ("Ontario Employment" from
+  // "Ontario Employment Standards Act") are not postal addresses.
+  if looks_like_statute_modifier_address(text) {
+    return true;
+  }
 
   let has_digits = text.chars().any(|ch| ch.is_ascii_digit());
   let has_component =
@@ -388,6 +397,109 @@ fn looks_like_statute_title_address(text: &str) -> bool {
     && (lower.contains(" reform")
       || lower.contains(" protection act")
       || lower.contains(" act "))
+}
+
+/// Two Title-case words whose second token is a statute-ish head noun, with no
+/// digits or commas: city-list + trailing-word attachment on Act titles.
+fn looks_like_statute_modifier_address(text: &str) -> bool {
+  if text.chars().any(|ch| ch.is_ascii_digit() || ch == ',') {
+    return false;
+  }
+  let mut words = text.split_whitespace();
+  let Some(first) = words.next() else {
+    return false;
+  };
+  let Some(second) = words.next() else {
+    return false;
+  };
+  if words.next().is_some() {
+    return false;
+  }
+  if !token_is_title_case(first) || !token_is_title_case(second) {
+    return false;
+  }
+  matches!(
+    second.to_lowercase().as_str(),
+    "employment" | "reform" | "protection" | "securities" | "banking"
+  )
+}
+
+fn token_is_title_case(token: &str) -> bool {
+  let mut chars = token.chars();
+  let Some(first) = chars.next() else {
+    return false;
+  };
+  first.is_uppercase() && chars.all(char::is_lowercase)
+}
+
+/// Letterhead addresses often continue into a bare website token
+/// (`… Canada n-able.com Delivered via …`). Trim before that domain.
+fn trim_address_before_website(text: &str) -> Option<usize> {
+  let mut search_from = 0usize;
+  while let Some(relative) = text.get(search_from..)?.find('.') {
+    let dot = search_from.saturating_add(relative);
+    let after = text.get(dot.saturating_add(1)..)?;
+    let tld_len = after
+      .chars()
+      .take_while(|ch| ch.is_ascii_alphabetic())
+      .map(char::len_utf8)
+      .sum::<usize>();
+    if tld_len == 0 {
+      search_from = dot.saturating_add(1);
+      continue;
+    }
+    let tld = after.get(..tld_len)?;
+    if !is_common_website_tld(tld) {
+      search_from = dot.saturating_add(1);
+      continue;
+    }
+    let after_tld = after.get(tld_len..)?;
+    if after_tld
+      .chars()
+      .next()
+      .is_some_and(|ch| ch.is_ascii_alphanumeric() || ch == '-' || ch == '.')
+    {
+      search_from = dot.saturating_add(1);
+      continue;
+    }
+    let before = text.get(..dot)?;
+    let domain_start = before
+      .char_indices()
+      .rev()
+      .take_while(|(_, ch)| {
+        ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_')
+      })
+      .map(|(index, _)| index)
+      .last()?;
+    if domain_start == 0 {
+      return None;
+    }
+    let prefix = text.get(..domain_start)?.trim_end();
+    if prefix.is_empty() || !prefix.chars().any(|ch| ch.is_ascii_digit()) {
+      search_from = dot.saturating_add(1);
+      continue;
+    }
+    return Some(prefix.len());
+  }
+  None
+}
+
+fn is_common_website_tld(tld: &str) -> bool {
+  matches!(
+    tld.to_ascii_lowercase().as_str(),
+    "com"
+      | "net"
+      | "org"
+      | "io"
+      | "co"
+      | "edu"
+      | "gov"
+      | "info"
+      | "biz"
+      | "us"
+      | "uk"
+      | "ca"
+  )
 }
 
 fn exceeds_label_length(entity: &PipelineEntity) -> bool {
@@ -1784,6 +1896,42 @@ mod tests {
       ),
       Some("123 Main St.".len())
     );
+  }
+
+  #[test]
+  fn trims_website_domain_and_following_prose_from_address() {
+    let text =
+      "450 March Rd. 2nd Floor Ottawa, Ontario K2K 3K2 Canada n-able.com Delivered via";
+    assert_eq!(
+      trim_address_before_website(text),
+      Some("450 March Rd. 2nd Floor Ottawa, Ontario K2K 3K2 Canada".len())
+    );
+    let entities = filter_entity_false_positives(
+      vec![entity(text, text, ADDRESS_LABEL, DetectionSource::Regex)],
+      text,
+      Some(&DenyListFilterData {
+        street_types: set(["rd.", "road"]),
+        ..DenyListFilterData::default()
+      }),
+    )
+    .unwrap();
+    assert_eq!(entities.len(), 1);
+    assert_eq!(
+      entities[0].text,
+      "450 March Rd. 2nd Floor Ottawa, Ontario K2K 3K2 Canada"
+    );
+  }
+
+  #[test]
+  fn rejects_city_plus_statute_modifier_as_address() {
+    let text = "Ontario Employment";
+    let entities = filter_entity_false_positives(
+      vec![entity(text, text, ADDRESS_LABEL, DetectionSource::DenyList)],
+      text,
+      Some(&DenyListFilterData::default()),
+    )
+    .unwrap();
+    assert!(entities.is_empty());
   }
 
   #[test]

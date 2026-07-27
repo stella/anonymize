@@ -358,11 +358,48 @@ fn ends_with_configured_label(
 fn normalise_candidate(text: &str, data: &PreparedSignatureData) -> String {
   let stripped = strip_post_nominal_suffix(text.trim(), data);
   let first_cell_end = first_column_end(stripped).unwrap_or(stripped.len());
-  stripped
+  let cell = stripped
     .get(..first_cell_end)
     .unwrap_or(stripped)
-    .trim()
-    .to_owned()
+    .trim();
+  // Flattened EDGAR lines: `/s/ Name Name, Director Acme ULC` — keep the name.
+  trim_at_comma_officer_title(cell).to_owned()
+}
+
+fn trim_at_comma_officer_title(text: &str) -> &str {
+  let mut search_from = 0usize;
+  while let Some(relative) = text.get(search_from..).and_then(|tail| tail.find(','))
+  {
+    let comma = search_from.saturating_add(relative);
+    let after = text.get(comma.saturating_add(1)..).unwrap_or_default();
+    let title = after.trim_start();
+    let title_token_len = title
+      .chars()
+      .take_while(|ch| ch.is_ascii_alphabetic())
+      .map(char::len_utf8)
+      .sum::<usize>();
+    let title_token = title.get(..title_token_len).unwrap_or_default();
+    if is_comma_appositive_officer_title(title_token) {
+      return text.get(..comma).unwrap_or(text).trim_end();
+    }
+    search_from = comma.saturating_add(1);
+  }
+  text
+}
+
+fn is_comma_appositive_officer_title(token: &str) -> bool {
+  matches!(
+    token.to_ascii_lowercase().as_str(),
+    "director"
+      | "president"
+      | "secretary"
+      | "treasurer"
+      | "manager"
+      | "ceo"
+      | "cfo"
+      | "coo"
+      | "cto"
+  )
 }
 
 fn strip_post_nominal_suffix<'a>(
@@ -830,6 +867,31 @@ mod tests {
     assert_eq!(
       entities.first().map(|entity| entity.text.as_str()),
       Some("Jane Doe")
+    );
+  }
+
+  #[test]
+  fn slash_signature_stops_at_comma_officer_title_before_org() {
+    let data = PreparedSignatureData::new(SignatureData {
+      labels: vec![String::from("name")],
+      witness_phrases: Vec::new(),
+      form_field_labels: Vec::new(),
+      signature_stamp_phrases: Vec::new(),
+      name_particles: Vec::new(),
+      post_nominal_suffixes: Vec::new(),
+      organization_suffixes: vec![String::from("ulc")],
+      image_stub_prefixes: Vec::new(),
+    });
+    let entities = detect_signatures(
+      "/s/ Goetz Eaton Goetz Eaton, Director N-able Solutions ULC",
+      &data,
+    );
+    assert_eq!(
+      entities
+        .iter()
+        .map(|entity| entity.text.as_str())
+        .collect::<Vec<_>>(),
+      vec!["Goetz Eaton Goetz Eaton"]
     );
   }
 

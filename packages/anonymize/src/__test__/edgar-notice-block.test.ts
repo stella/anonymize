@@ -19,6 +19,9 @@
  * - Sidus Space employment agreement (2026-07-24): soft-wrapped `/s/`
  *   surname, mid-name issuer wrap before Inc., and soft-wrapped city
  *   headword labeled as a person.
+ * - N-able Solutions ULC separation letter (2026-07-24): letterhead
+ *   address past website into prose, Ontario Employment statute address,
+ *   and comma-appositive officer title swallowing `/s/` person into org.
  */
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 
@@ -780,5 +783,65 @@ Boston, MA 02110`,
         ),
       ).toBe(false);
     }
+  });
+
+  test("letterhead address stops before website domain prose", async () => {
+    // N-able EX-10.1 (2026-07-24): `… Canada n-able.com Delivered via`.
+    const text =
+      "450 March Rd. 2nd Floor Ottawa, Ontario K2K 3K2 Canada n-able.com Delivered via Email";
+    const entities = await detect(text, { labels: ["address"] });
+    const addresses = entities.filter((entity) => entity.label === "address");
+    expect(addresses.some((entity) => entity.text.includes("n-able.com"))).toBe(
+      false,
+    );
+    expect(addresses.some((entity) => entity.text.includes("Delivered"))).toBe(
+      false,
+    );
+    expect(
+      addresses.some(
+        (entity) =>
+          entity.text.includes("450 March Rd") &&
+          entity.text.includes("Canada"),
+      ),
+    ).toBe(true);
+  });
+
+  test("Ontario Employment statute title is not an address", async () => {
+    // N-able EX-10.1 (2026-07-24): city-list + trailing word on Act title.
+    const text =
+      'in accordance with the Ontario Employment Standards Act, 2000 (the "ESA").';
+    const entities = await detect(text, { labels: ["address"] });
+    expect(
+      entities.some(
+        (entity) =>
+          entity.label === "address" && entity.text === "Ontario Employment",
+      ),
+    ).toBe(false);
+  });
+
+  test("slash signature with comma officer title keeps person and org", async () => {
+    // N-able EX-10.1 (2026-07-24): flattened signature + ULC line.
+    const text = "/s/ Goetz Eaton Goetz Eaton, Director N-able Solutions ULC";
+    const entities = await detect(text);
+    expect(
+      entities.some(
+        (entity) =>
+          entity.label === "person" && entity.text.includes("Goetz Eaton"),
+      ),
+    ).toBe(true);
+    expect(
+      entities.some(
+        (entity) =>
+          entity.label === "organization" &&
+          entity.text === "N-able Solutions ULC",
+      ),
+    ).toBe(true);
+    expect(
+      entities.some(
+        (entity) =>
+          entity.label === "organization" &&
+          entity.text.includes("Goetz Eaton"),
+      ),
+    ).toBe(false);
   });
 });

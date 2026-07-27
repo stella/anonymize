@@ -486,6 +486,16 @@ fn walk_backward(
       }
     }
 
+    // Signature / notice lines often flatten to
+    // `Name, Director Acme Solutions ULC`. Stop before the comma-appositive
+    // officer title so the walk keeps only the company name.
+    if starts_upper(token.text)
+      && is_comma_appositive_officer_title(token.text)
+      && preceded_by_comma(text, token.start)
+    {
+      break;
+    }
+
     if starts_upper(token.text) {
       leftmost_cap = Some(token.start);
       lower_bridge_run = 0;
@@ -909,6 +919,30 @@ fn starts_with_list_separator(text: &str) -> bool {
     .chars()
     .next()
     .is_some_and(|ch| matches!(ch, ',' | ';'))
+}
+
+fn preceded_by_comma(text: &str, token_start: usize) -> bool {
+  text
+    .get(..token_start)
+    .map(str::trim_end)
+    .is_some_and(|before| before.ends_with(','))
+}
+
+/// Single-token corporate officer titles used as comma appositives before an
+/// organization name (`Goetz Eaton, Director N-able Solutions ULC`).
+fn is_comma_appositive_officer_title(token: &str) -> bool {
+  matches!(
+    token.to_ascii_lowercase().as_str(),
+    "director"
+      | "president"
+      | "secretary"
+      | "treasurer"
+      | "manager"
+      | "ceo"
+      | "cfo"
+      | "coo"
+      | "cto"
+  )
 }
 
 fn normalize_suffix_token(text: &str) -> Cow<'_, str> {
@@ -4294,6 +4328,35 @@ mod tests {
     .map(|entity| entity.text)
     .collect();
     assert_eq!(texts, vec![String::from("Acme LLC")]);
+  }
+
+  #[test]
+  fn comma_appositive_officer_title_does_not_pull_person_into_org() {
+    // N-able EX-10.1 (2026-07-24): flattened `/s/` line.
+    let text = "Goetz Eaton Goetz Eaton, Director N-able Solutions ULC";
+    let data = PreparedLegalFormData::new(LegalFormData {
+      suffixes: vec![String::from("ULC")],
+      company_suffix_words: vec![String::from("Solutions")],
+      ..LegalFormData::default()
+    });
+    let suffix = "ULC";
+    let suffix_start = text.find(suffix).unwrap();
+    let found = SearchMatch::Literal {
+      pattern: 0,
+      start: u32::try_from(suffix_start).unwrap(),
+      end: u32::try_from(suffix_start + suffix.len()).unwrap(),
+    };
+    let texts: Vec<String> = process_legal_form_matches(
+      &[found],
+      PatternSlice { start: 0, end: 1 },
+      text,
+      &data,
+    )
+    .unwrap()
+    .into_iter()
+    .map(|entity| entity.text)
+    .collect();
+    assert_eq!(texts, vec![String::from("N-able Solutions ULC")]);
   }
 
   #[test]
