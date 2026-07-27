@@ -274,12 +274,13 @@ impl PreparedAddressSeedData {
       // number trails the street word) instead of requiring the digits to
       // sit immediately after the street word. Like the "before" variant
       // (which only tolerates `\p{Lu}\p{L}+` words), the bridge is
-      // restricted: up to three known street-name particles plus at most
-      // one capitalized street-name word directly ahead of the number, so
-      // ordinary prose ("rue is a French word 12345", "Road docket
-      // 94304-1050") cannot supply house-number evidence.
+      // restricted: known street-name particles, short lowercase dotted
+      // house-number markers (`č.`, `nr.`), and at most one capitalized
+      // street-name word directly ahead of the number, so ordinary prose
+      // ("rue is a French word 12345", "Road docket 94304-1050") cannot
+      // supply house-number evidence.
       house_number_after_street_re: compile_regex(&format!(
-        r"(?u)^[^\S\n\t]+(?:(?i:{STREET_PARTICLE_ALTERNATION})[^\S\n\t]+){{0,3}}(?:\p{{Lu}}\p{{L}}+[^\S\n\t]+)?\d{{1,6}}(?:[-/]\d{{1,6}})?\b"
+        r"(?u)^[^\S\n\t]+(?:(?:(?i:{STREET_PARTICLE_ALTERNATION})|\p{{Ll}}{{1,3}}\.)[^\S\n\t]+){{0,4}}(?:\p{{Lu}}\p{{L}}+[^\S\n\t]+)?\d{{1,6}}(?:[-/]\d{{1,6}})?\b"
       ))?,
     })
   }
@@ -1233,7 +1234,8 @@ fn street_number_candidate_at(
     return None;
   }
   let street_end = scan_title_word_tail(full_text, start, first)?;
-  let number_start = skip_required_whitespace(full_text, street_end)?;
+  let after_street = skip_required_whitespace(full_text, street_end)?;
+  let number_start = skip_house_number_markers(full_text, after_street);
   let number_end = scan_house_number(full_text, number_start)?;
   if !has_comma_or_newline_after_optional_whitespace(full_text, number_end) {
     return None;
@@ -1244,6 +1246,43 @@ fn street_number_candidate_at(
     street: full_text.get(start..street_end)?,
     number: full_text.get(number_start..number_end)?,
   })
+}
+
+/// Skip short lowercase dotted markers (`č.`, `ev.`, `nr.`) that sit between a
+/// street name and its house number. Bare lowercase words without a dot are
+/// left in place so ordinary prose still fails the candidate.
+fn skip_house_number_markers(full_text: &str, mut cursor: usize) -> usize {
+  loop {
+    let Some((word_end, word)) = next_contiguous_word(full_text, cursor) else {
+      return cursor;
+    };
+    if !is_skippable_house_number_marker(word) {
+      return cursor;
+    }
+    cursor = word_end;
+    let Some(after_ws) = skip_required_whitespace(full_text, cursor) else {
+      return cursor;
+    };
+    cursor = after_ws;
+  }
+}
+
+fn next_contiguous_word(
+  full_text: &str,
+  start: usize,
+) -> Option<(usize, &str)> {
+  let rest = full_text.get(start..)?;
+  let mut end = start;
+  for (rel, ch) in rest.char_indices() {
+    if ch.is_whitespace() || ch == ',' {
+      break;
+    }
+    end = start.saturating_add(rel).saturating_add(ch.len_utf8());
+  }
+  if end <= start {
+    return None;
+  }
+  Some((end, full_text.get(start..end)?))
 }
 
 fn italian_cap_candidates(
@@ -1743,31 +1782,59 @@ fn date_can_prefix_street_name(
 }
 
 fn expand_left(full_text: &str, start: usize, left_bound: usize) -> usize {
-  let mut left_pos = start;
-  while left_pos > left_bound {
+  // Commit only after an uppercase/digit street-or-place token. Short
+  // lowercase dotted markers (`č.`, `ev.`, `nr.`) between a house number and
+  // that token are skipped so they do not stop leftward expansion.
+  let mut committed = start;
+  let mut cursor = start;
+  while cursor > left_bound {
     let Some((word_start, word_end, word)) =
-      word_before_for_address(full_text, left_pos, left_bound)
+      word_before_for_address(full_text, cursor, left_bound)
     else {
       break;
     };
-    if word.len() < 2
-      || !starts_uppercase_or_digit(word)
-      || is_left_address_label(word)
-    {
-      break;
-    }
     if full_text
-      .get(word_start..left_pos)
+      .get(word_start..cursor)
       .is_some_and(|slice| slice.contains('\n'))
     {
       break;
     }
-    left_pos = word_start;
-    if word_end <= left_bound {
+    if is_left_address_label(word) {
       break;
     }
+    if word.len() >= 2 && starts_uppercase_or_digit(word) {
+      committed = word_start;
+      cursor = word_start;
+      if word_end <= left_bound {
+        break;
+      }
+      continue;
+    }
+    if is_skippable_house_number_marker(word) {
+      cursor = word_start;
+      continue;
+    }
+    break;
   }
-  left_pos
+  committed
+}
+
+/// Lowercase dotted abbreviations that glue a street name to a house number
+/// (`Lesní č. ev. 296`, `Main nr. 12`). Bare lowercase words without a dot are
+/// not skipped, so ordinary prepositions still bound the span.
+fn is_skippable_house_number_marker(word: &str) -> bool {
+  let mut chars = word.chars();
+  let Some(first) = chars.next() else {
+    return false;
+  };
+  if !first.is_lowercase() || !word.contains('.') {
+    return false;
+  }
+  let len = word.chars().count();
+  if !(2..=6).contains(&len) {
+    return false;
+  }
+  word.chars().all(|ch| ch.is_lowercase() || ch == '.')
 }
 
 fn word_before_for_address(
@@ -2598,6 +2665,130 @@ mod tests {
       0.9,
       source,
     ))
+  }
+
+
+  #[test]
+  fn expands_left_across_dotted_house_number_markers() -> Result<()> {
+    let data = PreparedAddressSeedData::new(AddressSeedData::default())?;
+    // Spaced Czech evidenční-číslo markers between street and digits.
+    let spaced = "Lesní č. ev. 296, Nový Hradec Králové, 500 08 Hradec Králové";
+    let spaced_existing = vec![entity(
+      spaced,
+      "Hradec Králové",
+      "address",
+      DetectionSource::DenyList,
+    )?];
+    let spaced_result = data
+      .process_profiled(
+        &[],
+        PatternSlice::default(),
+        spaced,
+        &spaced_existing,
+      )?
+      .entities;
+    assert!(
+      spaced_result.iter().any(|entity| {
+        entity.text.starts_with("Lesní č. ev. 296")
+          && entity.text.contains("500 08")
+      }),
+      "spaced marker address entities: {spaced_result:?}",
+    );
+
+    // Compact č.ev. marker with the same city seed shape as production.
+    let compact = "Lesní č.ev. 296, 500 08 Hradec Králové";
+    let compact_existing = vec![entity(
+      compact,
+      "Hradec Králové",
+      "address",
+      DetectionSource::DenyList,
+    )?];
+    let compact_result = data
+      .process_profiled(
+        &[],
+        PatternSlice::default(),
+        compact,
+        &compact_existing,
+      )?
+      .entities;
+    assert!(
+      compact_result
+        .iter()
+        .any(|entity| entity.text.starts_with("Lesní č.ev. 296")),
+      "compact marker address entities: {compact_result:?}",
+    );
+
+    // Language-neutral dotted house-number marker (`nr.`).
+    let neutral = "Hauptstraße nr. 12, 10115 Berlin";
+    let neutral_existing = vec![entity(
+      neutral,
+      "Berlin",
+      "address",
+      DetectionSource::DenyList,
+    )?];
+    let neutral_result = data
+      .process_profiled(
+        &[],
+        PatternSlice::default(),
+        neutral,
+        &neutral_existing,
+      )?
+      .entities;
+    assert!(
+      neutral_result
+        .iter()
+        .any(|entity| entity.text.starts_with("Hauptstraße nr. 12")),
+      "neutral marker address entities: {neutral_result:?}",
+    );
+
+    // Next-line bullet/hyphen prose must not drop the street+marker span.
+    let wrapped = concat!(
+      "Lesní č. ev. 296, Nový Hradec Králové, 500 08 Hradec Králové\n",
+      "- zapsaná v obchodním rejstříku",
+    );
+    let wrapped_existing = vec![entity(
+      wrapped,
+      "Hradec Králové",
+      "address",
+      DetectionSource::DenyList,
+    )?];
+    let wrapped_result = data
+      .process_profiled(
+        &[],
+        PatternSlice::default(),
+        wrapped,
+        &wrapped_existing,
+      )?
+      .entities;
+    assert!(
+      wrapped_result.iter().any(|entity| {
+        entity.text.starts_with("Lesní č. ev. 296")
+          && !entity.text.contains("zapsaná")
+      }),
+      "wrapped marker address entities: {wrapped_result:?}",
+    );
+    Ok(())
+  }
+
+  #[test]
+  fn does_not_expand_left_across_plain_lowercase_prepositions() -> Result<()> {
+    let data = PreparedAddressSeedData::new(AddressSeedData::default())?;
+    // Without a dot, lowercase tokens still bound left expansion.
+    let full_text = "Delivered in 296, 500 08 Hradec Králové";
+    let existing = vec![entity(
+      full_text,
+      "Hradec Králové",
+      "address",
+      DetectionSource::DenyList,
+    )?];
+    let result = data
+      .process_profiled(&[], PatternSlice::default(), full_text, &existing)?
+      .entities;
+    assert!(
+      result.iter().all(|entity| !entity.text.contains("Delivered")),
+      "preposition should bound address entities: {result:?}",
+    );
+    Ok(())
   }
 
   #[test]
