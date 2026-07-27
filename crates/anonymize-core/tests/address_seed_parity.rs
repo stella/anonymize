@@ -400,6 +400,7 @@ fn street_engine(standalone: Option<StandaloneStreetData>) -> PreparedEngine {
       literal("Rue"),
       literal("Street"),
       literal("Straße"),
+      literal("calle"),
     ],
     literal_options: SearchOptions {
       literal: LiteralSearchOptions {
@@ -410,7 +411,7 @@ fn street_engine(standalone: Option<StandaloneStreetData>) -> PreparedEngine {
     },
     slices: PreparedEngineSlices {
       deny_list: PatternSlice { start: 0, end: 3 },
-      street_types: PatternSlice { start: 3, end: 6 },
+      street_types: PatternSlice { start: 3, end: 7 },
       ..PreparedEngineSlices::default()
     },
     deny_list_data: Some(DenyListMatchData {
@@ -676,6 +677,84 @@ fn city_anchored_span_excludes_leading_prose() {
   );
   assert!(
     !found.iter().any(|text| text.contains("it to")),
+    "address entities: {found:?}",
+  );
+}
+
+#[test]
+fn address_span_joins_a_lowercase_multi_word_street_name() {
+  let prepared = street_engine(None);
+
+  // French street names carry lowercase name words ("paix", "liberté") and a
+  // connective ("et") that no particle list enumerates. Once the street word
+  // is in the cluster, those words are street-name material.
+  assert_eq!(
+    street_addresses(&prepared, "10 rue de la paix et de la liberté, Paris",),
+    vec![String::from("10 rue de la paix et de la liberté, Paris")],
+  );
+}
+
+#[test]
+fn address_span_joins_a_lowercase_spanish_street_name() {
+  let prepared = street_engine(None);
+
+  // A two-digit house number: the generic left expansion skips single
+  // characters, which is unrelated to the connective under test here.
+  assert_eq!(
+    street_addresses(&prepared, "15 calle de la paz y de la libertad, Paris"),
+    vec![String::from("15 calle de la paz y de la libertad, Paris")],
+  );
+}
+
+#[test]
+fn prose_before_a_street_word_still_ends_the_cluster() {
+  let prepared = street_engine(None);
+
+  // The barrier only guards a gap that has not reached a street word yet, so
+  // the sentence in front of the address must still split it.
+  let found =
+    street_addresses(&prepared, "Send it to 10 rue de la paix, Paris");
+  assert!(
+    found.iter().any(|text| text == "10 rue de la paix, Paris"),
+    "address entities: {found:?}",
+  );
+  assert!(
+    !found.iter().any(|text| text.contains("it to")),
+    "address entities: {found:?}",
+  );
+}
+
+#[test]
+fn standalone_street_span_keeps_a_non_ascii_unit_letter() {
+  let prepared = standalone_engine();
+
+  // The unit letter is one character, not the two bytes it encodes to.
+  assert_eq!(
+    street_addresses(&prepared, "Hauptstraße 5Ä"),
+    vec![String::from("Hauptstraße 5Ä")],
+  );
+}
+
+#[test]
+fn a_header_number_does_not_join_a_later_street_address() {
+  let prepared = street_engine(None);
+
+  // A bare five-digit number in a docket header seeds a postal code. It must
+  // not reach across the sentence to the address that follows; this is the
+  // shape behind the refreshed digest in the address-seed scaling suite.
+  let found = street_addresses(
+    &prepared,
+    "Notice 12345: send process to 100 Main Street, Springfield 02101.",
+  );
+
+  assert!(
+    found
+      .iter()
+      .any(|text| text == "100 Main Street, Springfield 02101"),
+    "address entities: {found:?}",
+  );
+  assert!(
+    !found.iter().any(|text| text.contains("Notice")),
     "address entities: {found:?}",
   );
 }

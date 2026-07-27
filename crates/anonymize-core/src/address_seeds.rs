@@ -1806,12 +1806,14 @@ fn is_house_number_word(word: &str) -> bool {
     && word.split(['-', '/']).all(is_house_number_part)
 }
 
-/// Digits with at most one trailing unit letter ("18", "221B", "5a").
+/// Digits with at most one trailing unit letter ("18", "221B", "5a", "5Ä").
+/// The suffix is counted in characters: a non-ASCII letter is one letter, not
+/// the two bytes it encodes to.
 fn is_house_number_part(part: &str) -> bool {
   let digits = part.trim_end_matches(char::is_alphabetic);
   !digits.is_empty()
     && digits.chars().all(|ch| ch.is_ascii_digit())
-    && part.len().saturating_sub(digits.len()) <= 1
+    && part.chars().count().saturating_sub(digits.chars().count()) <= 1
 }
 
 fn is_street_name_word(word: &str) -> bool {
@@ -1874,7 +1876,10 @@ fn cluster_seeds(
       full_text,
       current.end,
       seed.start,
-      &current,
+      ClusterJoin {
+        cluster: &current,
+        seed,
+      },
       entity_index,
     );
     if gap_ok {
@@ -2030,26 +2035,53 @@ fn offset_after_text_units(
   full_text.len()
 }
 
+/// The two seeds a gap sits between.
+#[derive(Clone, Copy)]
+struct ClusterJoin<'a> {
+  cluster: &'a SeedCluster,
+  seed: &'a Seed,
+}
+
+impl ClusterJoin<'_> {
+  /// Once a street word is in the cluster, everything up to the destination
+  /// is street-name material: "10 rue de la paix et de la liberté, Paris"
+  /// carries lowercase name words and a non-English connective that no
+  /// particle list can enumerate. Before a street word is found, a gap of
+  /// running prose means the seeds belong to different sentences.
+  fn guards_against_prose(self) -> bool {
+    let cluster_has_street = self
+      .cluster
+      .seeds
+      .iter()
+      .any(|seed| seed.kind == SeedType::StreetWord);
+    let seed_completes_address = matches!(
+      self.seed.kind,
+      SeedType::City | SeedType::PostalCode | SeedType::State
+    );
+    !(cluster_has_street && seed_completes_address)
+  }
+}
+
 fn has_cluster_barrier(
   full_text: &str,
   gap_start: usize,
   gap_end: usize,
-  cluster: &SeedCluster,
+  join: ClusterJoin<'_>,
   entity_index: &NonAddressEntityIndex,
 ) -> bool {
   full_text.get(gap_start..gap_end).is_some_and(|gap| {
     has_paragraph_break(gap)
-      || has_prose_wrap_after_weak_cluster(gap, cluster)
-      || has_prose_run(gap)
+      || has_prose_wrap_after_weak_cluster(gap, join.cluster)
+      || (join.guards_against_prose() && has_prose_run(gap))
   }) || entity_index.has_barrier(gap_start, gap_end)
 }
 
-/// Address components are separated by punctuation, whitespace, or connective
-/// particles, never by running prose. Two ordinary words in the gap mean the
-/// seeds sit in a sentence rather than in one address, so a city name that is
-/// also an ordinary word ("Send it to 14 Rue de la Paix") cannot pull the
-/// sentence into the span. One word is tolerated so a connective still joins
-/// components ("10 Main Street in Springfield").
+/// Two ordinary words in the gap mean the seeds sit in a sentence rather than
+/// in one address, so a city name that is also an ordinary word ("Send it to
+/// 14 Rue de la Paix") cannot pull the sentence into the span. One word is
+/// tolerated so a connective still joins components ("10 Main Street in
+/// Springfield"). Only applied before a street word opens the address; see
+/// `ClusterJoin::guards_against_prose`.
 fn has_prose_run(gap: &str) -> bool {
   gap
     .split(|ch: char| !ch.is_alphanumeric() && !matches!(ch, '-' | '\'' | '’'))
