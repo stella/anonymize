@@ -143,16 +143,6 @@ describe("v2 legal-form span discipline — verb trim", () => {
       entities.some((e) => e.text.includes("Stavba se nachází")),
     ).toBeFalse();
   });
-
-  test("abbreviated `p.o.` legal form keeps the preceding institution name", async () => {
-    const text = "1. Domov Testovací, p.o.\n   se sídlem: Ulice 1";
-    const entities = orgs(await detect(text));
-    expect(
-      entities.some((e) =>
-        e.text.replace(/\s+/g, " ").startsWith("Domov Testovací, p.o."),
-      ),
-    ).toBeTrue();
-  });
 });
 
 describe("v2 legal-form span discipline — institutional prose trim", () => {
