@@ -260,12 +260,16 @@ mod tests {
         .iter()
         .enumerate()
         .map(|(index, (left, right))| {
-          (u32::from(*left), u32::from(*right), index)
+          let start = u32::from(*left.min(right));
+          let end = u32::from(*left.max(right));
+          (start, end, index)
         })
         .collect::<Vec<_>>();
       let index = SpanIndex::new(spans.clone());
       let start = u32::from(first.min(second));
       let end = u32::from(first.max(second));
+      // Empty query ranges are a no-op in the index API.
+      prop_assume!(start < end);
 
       let expected_overlap = spans.iter().any(|(span_start, span_end, _)| {
         *span_start < end && *span_end > start
