@@ -11,6 +11,16 @@ use crate::types::{Error, Result, SearchEngine, SearchMatch};
 
 const ADDRESS_SCORE_BASE: f64 = 0.5;
 const ADDRESS_SCORE_MAX: f64 = 0.95;
+/// Score for a street-type word carrying a house number with no other address
+/// evidence in the cluster. Above the 0.6 cluster gate, below every
+/// multi-component score so a real address always outranks it.
+const STANDALONE_STREET_SCORE: f64 = 0.65;
+/// Shortest street-type word allowed to match as the tail of a compound token
+/// ("Hauptstraße" -> "straße"). Shorter entries ("via", "weg", "út") end far
+/// too many ordinary words to carry an address on their own.
+const COMPOUND_STREET_SUFFIX_MIN_CHARS: usize = 5;
+/// Cap on street-name words joined to the right of a standalone street seed.
+const STANDALONE_STREET_MAX_TAIL_WORDS: usize = 6;
 const ADDRESS_CLUSTER_MAX_GAP: usize = 150;
 const ADDRESS_RIGHT_EXPAND_LIMIT: usize = 200;
 const BR_CEP_CONTEXT_WINDOW: usize = 200;
@@ -186,6 +196,20 @@ const STREET_PARTICLE_ALTERNATION: &str = "de|del|della|delle|dei|degli|der\
 |den|des|di|du|da|das|dos|do|el|al|la|le|les|las|los|van|von|ten|ter|op|aan\
 |am|an|im|zum|zur";
 
+/// Street-type vocabulary for standalone street detection.
+///
+/// Standalone detection recognizes a street address from a house number plus a
+/// street-type word alone, with no known-city anchor. Present only when the
+/// caller opts in through `PipelineConfig.standaloneStreetDetection`; absence
+/// keeps the mode off.
+#[derive(
+  Clone, Debug, Default, Eq, PartialEq, serde::Deserialize, serde::Serialize,
+)]
+pub struct StandaloneStreetData {
+  #[serde(default)]
+  pub street_type_words: Vec<String>,
+}
+
 #[derive(
   Clone, Debug, Default, Eq, PartialEq, serde::Deserialize, serde::Serialize,
 )]
@@ -196,6 +220,15 @@ pub struct AddressSeedData {
   pub br_cep_cue_words: Vec<String>,
   #[serde(default)]
   pub unit_abbreviations: Vec<String>,
+  #[serde(default)]
+  pub standalone_street: Option<StandaloneStreetData>,
+}
+
+/// Index over the compound street-type tails ("Hauptstraße", "Herenstraat")
+/// the whole-word street-type automaton never sees, so standalone detection
+/// can recognize them itself.
+struct PreparedStandaloneStreetData {
+  compound_suffix_search: Option<SearchIndex>,
 }
 
 pub(crate) struct PreparedAddressSeedData {
@@ -203,6 +236,7 @@ pub(crate) struct PreparedAddressSeedData {
   boundary_phrase_re: Option<Regex>,
   br_cep_cue_search: Option<SearchIndex>,
   unit_abbreviations: BTreeSet<String>,
+  standalone_street: Option<PreparedStandaloneStreetData>,
   postal_code_re: Regex,
   br_cep_shape_re: Regex,
   us_zip_plus_four_shape_re: Regex,
@@ -255,11 +289,16 @@ impl PreparedAddressSeedData {
       state_abbreviations.into_iter().collect::<BTreeSet<_>>();
     let us_state_before_zip_re =
       us_state_before_zip_regex(&us_state_abbreviations)?;
+    let standalone_street = data
+      .standalone_street
+      .map(PreparedStandaloneStreetData::new)
+      .transpose()?;
     Ok(Self {
       boundary_search,
       boundary_phrase_re,
       br_cep_cue_search: literal_search(data.br_cep_cue_words)?,
       unit_abbreviations: lowercased_set(data.unit_abbreviations),
+      standalone_street,
       postal_code_re: compile_regex(
         r"(?u)(?:\d{5}[-‐‑‒–—―]\d{4}|\d{5}[-‐‑‒–—―]\d{3}|\d{3}\s\d{2}|\d{2}[-‐‑‒–—―]\d{3}|\d{5})",
       )?,
@@ -320,11 +359,19 @@ impl PreparedAddressSeedData {
     let mut results = Vec::new();
 
     for cluster in clusters {
-      let score = score_cluster(&cluster);
+      let (score, growth) = score_cluster(&cluster).map_or_else(
+        || {
+          (
+            self.standalone_street_score(&cluster, full_text),
+            SpanGrowth::StreetNameOnly,
+          )
+        },
+        |score| (score, cluster.growth()),
+      );
       if score < 0.6 {
         continue;
       }
-      let boundary_starts = if cluster.expands_right() {
+      let boundary_starts = if growth == SpanGrowth::ToAddressBoundary {
         if boundary_starts.is_none() {
           let boundary_start = Instant::now();
           let starts = self.boundary_starts(full_text);
@@ -342,45 +389,14 @@ impl PreparedAddressSeedData {
         &cluster,
         &entity_index,
         boundary_starts,
+        growth,
       );
       profile.expand_elapsed_us = profile
         .expand_elapsed_us
         .saturating_add(elapsed_us(expand_start));
-      let Some(raw_text) = full_text.get(span.start..span.end) else {
-        continue;
-      };
-      let resolution = resolve_newline_boundary(span.start, raw_text, &cluster);
-      if resolution == NewlineBoundaryResolution::Drop {
-        continue;
+      if let Some(entity) = address_entity(full_text, span, &cluster, score) {
+        results.push(entity);
       }
-      let relative_end = match resolution {
-        NewlineBoundaryResolution::Keep => raw_text.len(),
-        NewlineBoundaryResolution::Drop => 0,
-        NewlineBoundaryResolution::Trim { relative_end } => relative_end,
-      };
-      let effective_raw = raw_text.get(..relative_end).unwrap_or_default();
-      let leading = effective_raw
-        .len()
-        .saturating_sub(effective_raw.trim_start().len());
-      let start = span.start.saturating_add(leading);
-      let end = trim_address_tail(
-        full_text,
-        start,
-        span.start.saturating_add(effective_raw.len()),
-      );
-      let effective_text = full_text.get(start..end).unwrap_or_default();
-      let effective_len = text_units(effective_text);
-      if !(5..=300).contains(&effective_len) {
-        continue;
-      }
-      results.push(PipelineEntity::detected(
-        u32::try_from(start).unwrap_or(u32::MAX),
-        u32::try_from(end).unwrap_or(u32::MAX),
-        "address",
-        effective_text,
-        score,
-        DetectionSource::Regex,
-      ));
     }
     profile.expanded_count = results.len();
 
@@ -402,6 +418,7 @@ impl PreparedAddressSeedData {
     let street_type_start = Instant::now();
     let mut seeds =
       self.collect_street_type_seeds(matches, street_type_slice, full_text)?;
+    self.collect_compound_street_seeds(&mut seeds, full_text, entity_index)?;
     profile.street_type_elapsed_us = elapsed_us(street_type_start);
     profile.street_type_seed_count = seeds.len();
 
@@ -462,6 +479,36 @@ impl PreparedAddressSeedData {
       seeds.push(seed);
     }
     Ok(seeds)
+  }
+
+  /// Seeds the compound street-type tokens the whole-word street-type
+  /// automaton cannot see ("Hauptstraße", "Herenstraat"). Runs only in
+  /// standalone street mode; the emitted seed spans the whole compound token.
+  fn collect_compound_street_seeds(
+    &self,
+    seeds: &mut Vec<Seed>,
+    full_text: &str,
+    entity_index: &NonAddressEntityIndex,
+  ) -> Result<()> {
+    let Some(search) = self
+      .standalone_street
+      .as_ref()
+      .and_then(|data| data.compound_suffix_search.as_ref())
+    else {
+      return Ok(());
+    };
+    for found in search.find_iter(full_text)? {
+      let Some(seed) = compound_street_seed(full_text, &found) else {
+        continue;
+      };
+      if entity_index.overlaps(seed.start, seed.end)
+        || seed_covered(seeds, seed.start, seed.end)
+      {
+        continue;
+      }
+      seeds.push(seed);
+    }
+    Ok(())
   }
 
   fn collect_postal_code_seeds(&self, seeds: &mut Vec<Seed>, full_text: &str) {
@@ -664,12 +711,38 @@ impl PreparedAddressSeedData {
     })
   }
 
+  /// A cluster with a single evidence type is normally too weak to be an
+  /// address. Standalone street detection accepts one exception: a street-type
+  /// word with a house number attached ("14 Rue de la Paix", "123 Main
+  /// Street", "Hauptstraße 5"). A bare street name with no number ("Main
+  /// Street") still scores nothing, and the mode is off unless the caller
+  /// opts in.
+  fn standalone_street_score(
+    &self,
+    cluster: &SeedCluster,
+    full_text: &str,
+  ) -> f64 {
+    if self.standalone_street.is_none() {
+      return 0.0;
+    }
+    let house_number_anchored = cluster.seeds.iter().any(|seed| {
+      seed.kind == SeedType::StreetWord
+        && has_house_number_near_street_word(full_text, seed, self)
+    });
+    if house_number_anchored {
+      STANDALONE_STREET_SCORE
+    } else {
+      0.0
+    }
+  }
+
   fn expand_cluster(
     &self,
     full_text: &str,
     cluster: &SeedCluster,
     entity_index: &NonAddressEntityIndex,
     boundary_starts: &[usize],
+    growth: SpanGrowth,
   ) -> Span {
     let left_bound = nearest_left_non_address(
       full_text,
@@ -678,18 +751,18 @@ impl PreparedAddressSeedData {
       cluster_starts_with_street_type_word(cluster),
     );
     let left_pos = expand_left(full_text, cluster.start, left_bound);
-    if !cluster.expands_right() {
-      return Span {
-        start: left_pos.min(cluster.start),
-        end: cluster.end,
-      };
-    }
-
-    let right_pos =
-      self.expand_right(full_text, cluster, entity_index, boundary_starts);
+    let end = match growth {
+      SpanGrowth::None => cluster.end,
+      SpanGrowth::StreetNameOnly => {
+        expand_standalone_street_right(full_text, cluster.end)
+      }
+      SpanGrowth::ToAddressBoundary => self
+        .expand_right(full_text, cluster, entity_index, boundary_starts)
+        .max(cluster.end),
+    };
     Span {
       start: left_pos.min(cluster.start),
-      end: right_pos.max(cluster.end),
+      end,
     }
   }
 
@@ -806,6 +879,46 @@ impl SeedCoverageIndex {
   }
 }
 
+/// Trims the expanded span to its emitted form: resolves the newline
+/// boundary, drops leading and trailing padding, and enforces the length
+/// bounds. `None` when the span cannot become an address entity.
+fn address_entity(
+  full_text: &str,
+  span: Span,
+  cluster: &SeedCluster,
+  score: f64,
+) -> Option<PipelineEntity> {
+  let raw_text = full_text.get(span.start..span.end)?;
+  let relative_end =
+    match resolve_newline_boundary(span.start, raw_text, cluster) {
+      NewlineBoundaryResolution::Keep => raw_text.len(),
+      NewlineBoundaryResolution::Drop => return None,
+      NewlineBoundaryResolution::Trim { relative_end } => relative_end,
+    };
+  let effective_raw = raw_text.get(..relative_end).unwrap_or_default();
+  let leading = effective_raw
+    .len()
+    .saturating_sub(effective_raw.trim_start().len());
+  let start = span.start.saturating_add(leading);
+  let end = trim_address_tail(
+    full_text,
+    start,
+    span.start.saturating_add(effective_raw.len()),
+  );
+  let effective_text = full_text.get(start..end).unwrap_or_default();
+  if !(5..=300).contains(&text_units(effective_text)) {
+    return None;
+  }
+  Some(PipelineEntity::detected(
+    u32::try_from(start).unwrap_or(u32::MAX),
+    u32::try_from(end).unwrap_or(u32::MAX),
+    "address",
+    effective_text,
+    score,
+    DetectionSource::Regex,
+  ))
+}
+
 fn compare_seeds(left: &Seed, right: &Seed) -> std::cmp::Ordering {
   left
     .start
@@ -878,11 +991,24 @@ impl SeedCluster {
     ends_at_city
   }
 
-  /// The cluster carries address evidence and has not already reached a
-  /// completed destination, so right-expansion can still add components.
-  fn expands_right(&self) -> bool {
-    self.has_expandable_address_context() && !self.ends_at_city()
+  fn growth(&self) -> SpanGrowth {
+    if !self.has_expandable_address_context() || self.ends_at_city() {
+      return SpanGrowth::None;
+    }
+    SpanGrowth::ToAddressBoundary
   }
+}
+
+/// How far the span may grow to the right of its seed cluster.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum SpanGrowth {
+  /// The cluster already ends at its final component.
+  None,
+  /// Street-name material only: a standalone street has no destination to
+  /// bound its right edge.
+  StreetNameOnly,
+  /// Full address context: grow to the next address boundary.
+  ToAddressBoundary,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -902,6 +1028,41 @@ enum NewlineBoundaryResolution {
   Keep,
   Drop,
   Trim { relative_end: usize },
+}
+
+impl PreparedStandaloneStreetData {
+  fn new(data: StandaloneStreetData) -> Result<Self> {
+    let suffixes = data
+      .street_type_words
+      .into_iter()
+      .filter(|word| is_compound_street_suffix(word))
+      .collect::<Vec<_>>();
+    Ok(Self {
+      compound_suffix_search: substring_search(suffixes)?,
+    })
+  }
+}
+
+/// Only alphabetic words long enough to be a distinctive compound tail
+/// qualify. Abbreviations ("nábř.", "ul.") never appear inside a compound.
+fn is_compound_street_suffix(word: &str) -> bool {
+  word.chars().count() >= COMPOUND_STREET_SUFFIX_MIN_CHARS
+    && word.chars().all(char::is_alphabetic)
+}
+
+fn substring_search(patterns: Vec<String>) -> Result<Option<SearchIndex>> {
+  let patterns = patterns
+    .into_iter()
+    .map(|pattern| SearchPattern::LiteralWithOptions {
+      pattern,
+      case_insensitive: Some(true),
+      whole_words: Some(false),
+    })
+    .collect::<Vec<_>>();
+  if patterns.is_empty() {
+    return Ok(None);
+  }
+  Ok(Some(SearchIndex::new(patterns, SearchOptions::default())?))
 }
 
 fn literal_search(patterns: Vec<String>) -> Result<Option<SearchIndex>> {
@@ -1405,6 +1566,100 @@ fn is_word_like(ch: char) -> bool {
   ch.is_alphanumeric() || ch == '_'
 }
 
+/// A compound hit must end the token ("Hauptstraße", not "Straßenbahn") and
+/// must be preceded by letters inside the same token; a bare street-type word
+/// already reaches the seed list through the whole-word street-type automaton.
+fn compound_street_seed(full_text: &str, found: &SearchMatch) -> Option<Seed> {
+  let start = usize::try_from(found.start()).ok()?;
+  let end = usize::try_from(found.end()).ok()?;
+  if next_char(full_text, end).is_some_and(|(_, ch)| is_word_like(ch)) {
+    return None;
+  }
+  let mut token_start = start;
+  while let Some((previous_start, ch)) = previous_char(full_text, token_start) {
+    if !ch.is_alphabetic() {
+      break;
+    }
+    token_start = previous_start;
+  }
+  if token_start == start || !has_left_word_boundary(full_text, token_start) {
+    return None;
+  }
+  Some(Seed {
+    kind: SeedType::StreetWord,
+    start: token_start,
+    end,
+    text: full_text.get(token_start..end)?.to_owned(),
+  })
+}
+
+/// Standalone street spans have no destination to fix their right edge, so
+/// they may only grow over street-name material: connective particles,
+/// capitalized name words, and a closing house number. Anything else
+/// ("... Paix are closed") ends the span.
+fn expand_standalone_street_right(full_text: &str, end: usize) -> usize {
+  let mut cursor = end;
+  for _ in 0..STANDALONE_STREET_MAX_TAIL_WORDS {
+    let Some(word_start) = skip_inline_whitespace(full_text, cursor) else {
+      return cursor;
+    };
+    let word_end = scan_street_name_word_end(full_text, word_start);
+    let Some(word) = full_text.get(word_start..word_end) else {
+      return cursor;
+    };
+    if is_house_number_word(word) {
+      return word_end;
+    }
+    if !is_street_name_word(word) {
+      return cursor;
+    }
+    cursor = word_end;
+  }
+  cursor
+}
+
+fn skip_inline_whitespace(full_text: &str, start: usize) -> Option<usize> {
+  let mut cursor = start;
+  let mut saw_whitespace = false;
+  while let Some((index, ch)) = next_char(full_text, cursor) {
+    if ch != ' ' && ch != '\t' {
+      break;
+    }
+    saw_whitespace = true;
+    cursor = index.saturating_add(ch.len_utf8());
+  }
+  saw_whitespace.then_some(cursor)
+}
+
+fn scan_street_name_word_end(full_text: &str, start: usize) -> usize {
+  let mut cursor = start;
+  while let Some((index, ch)) = next_char(full_text, cursor) {
+    if !ch.is_alphanumeric() && !matches!(ch, '-' | '/' | '\'' | '’') {
+      break;
+    }
+    cursor = index.saturating_add(ch.len_utf8());
+  }
+  cursor
+}
+
+fn is_house_number_word(word: &str) -> bool {
+  !word.is_empty()
+    && word.len() <= 13
+    && word.split(['-', '/']).all(|part| {
+      !part.is_empty() && part.chars().all(|ch| ch.is_ascii_digit())
+    })
+}
+
+fn is_street_name_word(word: &str) -> bool {
+  if word.chars().count() < 2 || !word.chars().all(char::is_alphabetic) {
+    return false;
+  }
+  word.chars().next().is_some_and(char::is_uppercase)
+    || STREET_PARTICLE_ALTERNATION
+      .split('|')
+      .any(|particle| particle.eq_ignore_ascii_case(word))
+}
+
 fn seed_covered(seeds: &[Seed], start: usize, end: usize) -> bool {
   seeds
     .iter()
@@ -1660,7 +1915,10 @@ fn has_paragraph_break(text: &str) -> bool {
   false
 }
 
-fn score_cluster(cluster: &SeedCluster) -> f64 {
+/// `None` when the cluster carries fewer than two kinds of address evidence,
+/// which is too little for an address on its own. Standalone street detection
+/// re-scores exactly that case; see `standalone_street_score`.
+fn score_cluster(cluster: &SeedCluster) -> Option<f64> {
   let mut has_street_word = false;
   let mut has_postal_code = false;
   let mut has_city = false;
@@ -1688,7 +1946,7 @@ fn score_cluster(cluster: &SeedCluster) -> f64 {
   .filter(|seen| *seen)
   .count();
   if type_count < 2 {
-    return 0.0;
+    return None;
   }
 
   let mut score = ADDRESS_SCORE_BASE;
@@ -1707,7 +1965,7 @@ fn score_cluster(cluster: &SeedCluster) -> f64 {
   if has_address_trigger {
     score += 0.1;
   }
-  score.min(ADDRESS_SCORE_MAX)
+  Some(score.min(ADDRESS_SCORE_MAX))
 }
 
 fn nearest_left_non_address(
@@ -2627,8 +2885,7 @@ mod tests {
   fn expands_compound_street_with_plain_postal_city() -> Result<()> {
     let data = PreparedAddressSeedData::new(AddressSeedData {
       boundary_words: vec![String::from("steuer-id")],
-      br_cep_cue_words: Vec::new(),
-      unit_abbreviations: Vec::new(),
+      ..AddressSeedData::default()
     })?;
     let full_text = concat!(
       "(2) Frau Karoline M. Brentano,\n",

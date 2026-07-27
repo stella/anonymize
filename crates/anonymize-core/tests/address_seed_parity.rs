@@ -6,6 +6,7 @@ use stella_anonymize_core::{
   AddressSeedData, DenyListFilterData, DenyListMatchData, LiteralSearchOptions,
   OperatorConfig, PatternSlice, PreparedEngine, PreparedEngineConfig,
   PreparedEngineSlices, RegexMatchMeta, SearchOptions, SearchPattern,
+  StandaloneStreetData,
 };
 use support::prepared_config;
 
@@ -383,9 +384,9 @@ fn preserves_unit_abbreviation_inside_address_seed_span() {
   assert!(!result.redaction.redacted_text.contains(&suffix));
 }
 
-/// Fixture for the city-anchored span cases: "Paris" as a deny-list city, a
-/// street-type slice covering the words the cases need.
-fn street_engine() -> PreparedEngine {
+/// Fixture for the city-anchored / standalone street cases: "Paris" as a
+/// deny-list city, a street-type slice covering the words the cases need.
+fn street_engine(standalone: Option<StandaloneStreetData>) -> PreparedEngine {
   let literal = |pattern: &str| SearchPattern::LiteralWithOptions {
     pattern: String::from(pattern),
     case_insensitive: Some(true),
@@ -420,8 +421,8 @@ fn street_engine() -> PreparedEngine {
     }),
     address_seed_data: Some(AddressSeedData {
       unit_abbreviations: vec![String::from("apt.")],
-      boundary_words: Vec::new(),
-      br_cep_cue_words: Vec::new(),
+      standalone_street: standalone,
+      ..AddressSeedData::default()
     }),
     ..empty_config(PreparedEngineSlices::default())
   })
@@ -440,7 +441,7 @@ fn street_addresses(prepared: &PreparedEngine, full_text: &str) -> Vec<String> {
 
 #[test]
 fn address_span_ends_at_the_city_not_the_conjunction_that_follows() {
-  let prepared = street_engine();
+  let prepared = street_engine(None);
 
   assert_eq!(
     street_addresses(
@@ -453,7 +454,7 @@ fn address_span_ends_at_the_city_not_the_conjunction_that_follows() {
 
 #[test]
 fn address_span_ends_at_the_city_not_the_prose_that_follows() {
-  let prepared = street_engine();
+  let prepared = street_engine(None);
 
   assert_eq!(
     street_addresses(
@@ -466,7 +467,7 @@ fn address_span_ends_at_the_city_not_the_prose_that_follows() {
 
 #[test]
 fn address_span_still_grows_past_a_city_followed_by_a_postal_code() {
-  let prepared = street_engine();
+  let prepared = street_engine(None);
 
   assert_eq!(
     street_addresses(
@@ -478,8 +479,80 @@ fn address_span_still_grows_past_a_city_followed_by_a_postal_code() {
 }
 
 #[test]
+fn standalone_street_detection_is_off_by_default() {
+  let prepared = street_engine(None);
+
+  for text in ["14 Rue de la Paix", "123 Main Street", "Hauptstraße 5"] {
+    assert!(
+      street_addresses(&prepared, text).is_empty(),
+      "unexpected address in {text:?}",
+    );
+  }
+}
+
+#[test]
+fn standalone_street_detection_accepts_a_house_number_in_either_order() {
+  let prepared = street_engine(Some(StandaloneStreetData {
+    street_type_words: ["Rue", "Street", "Straße"]
+      .into_iter()
+      .map(String::from)
+      .collect(),
+  }));
+
+  assert_eq!(
+    street_addresses(&prepared, "14 Rue de la Paix"),
+    vec![String::from("14 Rue de la Paix")],
+  );
+  assert_eq!(
+    street_addresses(&prepared, "123 Main Street"),
+    vec![String::from("123 Main Street")],
+  );
+  // "Hauptstraße" never reaches the whole-word street-type automaton; the
+  // compound tail index standalone mode carries is what seeds it.
+  assert_eq!(
+    street_addresses(&prepared, "Hauptstraße 5"),
+    vec![String::from("Hauptstraße 5")],
+  );
+}
+
+#[test]
+fn standalone_street_detection_requires_a_house_number() {
+  let prepared = street_engine(Some(StandaloneStreetData {
+    street_type_words: ["Rue", "Street", "Straße"]
+      .into_iter()
+      .map(String::from)
+      .collect(),
+  }));
+
+  for text in ["Main Street", "Rue de la Paix", "Hauptstraße"] {
+    assert!(
+      street_addresses(&prepared, text).is_empty(),
+      "unexpected address in {text:?}",
+    );
+  }
+}
+
+#[test]
+fn standalone_street_span_stops_at_the_prose_after_the_street_name() {
+  let prepared = street_engine(Some(StandaloneStreetData {
+    street_type_words: ["Rue", "Street", "Straße"]
+      .into_iter()
+      .map(String::from)
+      .collect(),
+  }));
+
+  assert_eq!(
+    street_addresses(
+      &prepared,
+      "Our office at 14 Rue de la Paix are closed on Monday."
+    ),
+    vec![String::from("14 Rue de la Paix")],
+  );
+}
+
+#[test]
 fn multi_line_notice_block_still_joins_street_and_destination_lines() {
-  let prepared = street_engine();
+  let prepared = street_engine(None);
 
   assert_eq!(
     street_addresses(&prepared, "ACME Corp\n10 Rue Verte\nParis 75002"),
