@@ -55,6 +55,16 @@ describe("address span boundary", () => {
     expect(address?.text).toBe("14 Rue de la Paix, Paris");
   });
 
+  test("a unit component after the city stays inside the span", async () => {
+    // "Apt. 5" is not an address seed, so the city is the span's rightmost
+    // evidence; the unit component still belongs to the address.
+    const found = await addresses(
+      "Notices go to 10 Main Street, Springfield Apt. 5.",
+    );
+    const address = found.find((entity) => entity.text.includes("Main Street"));
+    expect(address?.text).toBe("10 Main Street, Springfield Apt. 5");
+  });
+
   test("a city-anchored address with no trailing prose is unchanged", async () => {
     const found = await addresses("14 Rue de la Paix, Paris");
     expect(

@@ -224,10 +224,14 @@ pub struct AddressSeedData {
   pub standalone_street: Option<StandaloneStreetData>,
 }
 
-/// Index over the compound street-type tails ("Hauptstraße", "Herenstraat")
-/// the whole-word street-type automaton never sees, so standalone detection
-/// can recognize them itself.
+/// The selected languages' street-type vocabulary.
+///
+/// `words` gates standalone scoring: the whole-word street-type automaton is
+/// assembled across every language, so an English-only pipeline must not score
+/// a German street word on its own. `compound_suffix_search` covers the
+/// compound tails ("Hauptstraße", "Herenstraat") that automaton never sees.
 struct PreparedStandaloneStreetData {
+  words: BTreeSet<String>,
   compound_suffix_search: Option<SearchIndex>,
 }
 
@@ -366,7 +370,7 @@ impl PreparedAddressSeedData {
             SpanGrowth::StreetNameOnly,
           )
         },
-        |score| (score, cluster.growth()),
+        |score| (score, self.cluster_growth(&cluster, full_text)),
       );
       if score < 0.6 {
         continue;
@@ -497,12 +501,19 @@ impl PreparedAddressSeedData {
     else {
       return Ok(());
     };
+    seeds.sort_by(compare_seeds);
+    let coverage = SeedCoverageIndex::new(seeds);
+    // `find_iter` yields non-overlapping hits in ascending order, and an
+    // accepted seed spans only the token its hit terminates, so a seed added
+    // here can never cover a later candidate. The index over the seeds already
+    // collected therefore stays valid for the whole loop, and the scan never
+    // rereads the growing vector.
     for found in search.find_iter(full_text)? {
       let Some(seed) = compound_street_seed(full_text, &found) else {
         continue;
       };
       if entity_index.overlaps(seed.start, seed.end)
-        || seed_covered(seeds, seed.start, seed.end)
+        || coverage.covers(seed.start, seed.end)
       {
         continue;
       }
@@ -713,20 +724,21 @@ impl PreparedAddressSeedData {
 
   /// A cluster with a single evidence type is normally too weak to be an
   /// address. Standalone street detection accepts one exception: a street-type
-  /// word with a house number attached ("14 Rue de la Paix", "123 Main
-  /// Street", "Hauptstraße 5"). A bare street name with no number ("Main
-  /// Street") still scores nothing, and the mode is off unless the caller
-  /// opts in.
+  /// word from a selected language with a house number attached ("14 Rue de la
+  /// Paix", "123 Main Street", "Hauptstraße 5"). A bare street name with no
+  /// number ("Main Street") still scores nothing, and the mode is off unless
+  /// the caller opts in.
   fn standalone_street_score(
     &self,
     cluster: &SeedCluster,
     full_text: &str,
   ) -> f64 {
-    if self.standalone_street.is_none() {
+    let Some(standalone) = self.standalone_street.as_ref() else {
       return 0.0;
-    }
+    };
     let house_number_anchored = cluster.seeds.iter().any(|seed| {
       seed.kind == SeedType::StreetWord
+        && standalone.covers(&seed.text)
         && has_house_number_near_street_word(full_text, seed, self)
     });
     if house_number_anchored {
@@ -734,6 +746,50 @@ impl PreparedAddressSeedData {
     } else {
       0.0
     }
+  }
+
+  /// A city name completes the destination, so nothing to its right belongs
+  /// to the address. Without this the right-expansion runs on to the next
+  /// unrelated boundary and swallows the prose that follows the city ("...,
+  /// Paris, and Meridian Capital", "..., Paris last year"). A postal code
+  /// trailing the city is itself seeded, so it becomes the rightmost seed;
+  /// a unit component ("..., Springfield Apt. 5") is not, so it is recognized
+  /// here instead.
+  fn cluster_growth(
+    &self,
+    cluster: &SeedCluster,
+    full_text: &str,
+  ) -> SpanGrowth {
+    if !cluster.has_expandable_address_context() {
+      return SpanGrowth::None;
+    }
+    if cluster.ends_at_city()
+      && !self.unit_component_follows(full_text, cluster.end)
+    {
+      return SpanGrowth::None;
+    }
+    SpanGrowth::ToAddressBoundary
+  }
+
+  /// Whether a known address unit abbreviation ("Apt.", "Ste.") sits at the
+  /// cluster's right edge. The abbreviation may straddle that edge, because a
+  /// deny-list city span can already cover its word while the closing dot
+  /// stays outside ("... Paris Apt" | ". 5").
+  fn unit_component_follows(&self, full_text: &str, end: usize) -> bool {
+    [
+      unit_token_start(full_text, end),
+      skip_unit_separators(full_text, end),
+    ]
+    .into_iter()
+    .any(|start| self.unit_abbreviation_at(full_text, start))
+  }
+
+  fn unit_abbreviation_at(&self, full_text: &str, start: usize) -> bool {
+    let end = unit_token_end(full_text, start);
+    full_text.get(start..end).is_some_and(|token| {
+      !token.is_empty()
+        && self.unit_abbreviations.contains(&token.to_lowercase())
+    })
   }
 
   fn expand_cluster(
@@ -790,7 +846,7 @@ impl PreparedAddressSeedData {
       nearest_boundary = nearest_boundary.min(double_newline);
     }
     if let Some(sentence_boundary) =
-      sentence_boundary(remaining, &self.unit_abbreviations)
+      sentence_boundary(full_text, right_pos, &self.unit_abbreviations)
     {
       nearest_boundary = nearest_boundary.min(sentence_boundary);
     }
@@ -974,12 +1030,8 @@ impl SeedCluster {
     })
   }
 
-  /// A city name completes the destination, so nothing to its right belongs
-  /// to the address. Without this the right-expansion runs on to the next
-  /// unrelated boundary and swallows the prose that follows the city
-  /// ("... 14 Rue de la Paix, Paris, and Meridian Capital", "..., Paris last
-  /// year"). A postal code trailing the city is itself seeded, so it becomes
-  /// the rightmost seed and the span still ends after it.
+  /// Every seed reaching the cluster's right edge is a city name, so the
+  /// destination is complete. See `PreparedAddressSeedData::cluster_growth`.
   fn ends_at_city(&self) -> bool {
     let mut ends_at_city = false;
     for seed in self.seeds.iter().filter(|seed| seed.end == self.end) {
@@ -989,13 +1041,6 @@ impl SeedCluster {
       ends_at_city = true;
     }
     ends_at_city
-  }
-
-  fn growth(&self) -> SpanGrowth {
-    if !self.has_expandable_address_context() || self.ends_at_city() {
-      return SpanGrowth::None;
-    }
-    SpanGrowth::ToAddressBoundary
   }
 }
 
@@ -1034,12 +1079,33 @@ impl PreparedStandaloneStreetData {
   fn new(data: StandaloneStreetData) -> Result<Self> {
     let suffixes = data
       .street_type_words
-      .into_iter()
+      .iter()
       .filter(|word| is_compound_street_suffix(word))
+      .cloned()
       .collect::<Vec<_>>();
     Ok(Self {
+      words: lowercased_set(data.street_type_words),
       compound_suffix_search: substring_search(suffixes)?,
     })
+  }
+
+  /// Whether a street seed's text belongs to the selected languages: either
+  /// the whole word is a scoped street type ("Rue", "Street") or it ends in a
+  /// scoped compound tail ("Hauptstraße"). Seeds carrying other text, such as
+  /// the title-word-plus-number candidates, never qualify on their own.
+  fn covers(&self, text: &str) -> bool {
+    if self.words.contains(&text.to_lowercase()) {
+      return true;
+    }
+    self
+      .compound_suffix_search
+      .as_ref()
+      .and_then(|search| search.find_iter(text).ok())
+      .is_some_and(|found| {
+        found.iter().any(|hit| {
+          usize::try_from(hit.end()).is_ok_and(|end| end == text.len())
+        })
+      })
   }
 }
 
@@ -1642,6 +1708,40 @@ fn scan_street_name_word_end(full_text: &str, start: usize) -> usize {
   cursor
 }
 
+/// Start of the unit-abbreviation-shaped token the offset sits inside.
+fn unit_token_start(full_text: &str, offset: usize) -> usize {
+  let mut start = offset;
+  while let Some((previous_start, ch)) = previous_char(full_text, start) {
+    if !ch.is_alphanumeric() && ch != '.' {
+      break;
+    }
+    start = previous_start;
+  }
+  start
+}
+
+fn unit_token_end(full_text: &str, offset: usize) -> usize {
+  let mut end = offset;
+  while let Some((index, ch)) = next_char(full_text, end) {
+    if !ch.is_alphanumeric() && ch != '.' {
+      break;
+    }
+    end = index.saturating_add(ch.len_utf8());
+  }
+  end
+}
+
+fn skip_unit_separators(full_text: &str, offset: usize) -> usize {
+  let mut cursor = offset;
+  while let Some((index, ch)) = next_char(full_text, cursor) {
+    if !matches!(ch, ' ' | '\t' | ',') {
+      break;
+    }
+    cursor = index.saturating_add(ch.len_utf8());
+  }
+  cursor
+}
+
 fn is_house_number_word(word: &str) -> bool {
   !word.is_empty()
     && word.len() <= 13
@@ -2110,16 +2210,28 @@ fn trim_address_tail(full_text: &str, start: usize, mut end: usize) -> usize {
   end
 }
 
+/// Offset of the first sentence terminator at or after `from`, relative to
+/// `from`. The abbreviation check reads the whole text, not the tail: a unit
+/// abbreviation can start before `from` when a deny-list city span already
+/// covers its word ("... Springfield Apt" | ". 5").
 fn sentence_boundary(
-  text: &str,
+  full_text: &str,
+  from: usize,
   unit_abbreviations: &BTreeSet<String>,
 ) -> Option<usize> {
+  let text = full_text.get(from..)?;
   let mut iter = text.char_indices().peekable();
   while let Some((index, ch)) = iter.next() {
     if !matches!(ch, '.' | '!' | '?') {
       continue;
     }
-    if ch == '.' && is_unit_abbreviation(text, index, unit_abbreviations) {
+    if ch == '.'
+      && is_unit_abbreviation(
+        full_text,
+        from.saturating_add(index),
+        unit_abbreviations,
+      )
+    {
       continue;
     }
     let mut saw_whitespace = false;

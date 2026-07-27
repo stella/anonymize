@@ -395,6 +395,7 @@ fn street_engine(standalone: Option<StandaloneStreetData>) -> PreparedEngine {
   PreparedEngine::new(prepared_config! {
     literal_patterns: vec![
       literal("Paris"),
+      literal("Springfield"),
       literal("Rue"),
       literal("Street"),
       literal("Straße"),
@@ -407,16 +408,18 @@ fn street_engine(standalone: Option<StandaloneStreetData>) -> PreparedEngine {
       ..SearchOptions::default()
     },
     slices: PreparedEngineSlices {
-      deny_list: PatternSlice { start: 0, end: 1 },
-      street_types: PatternSlice { start: 1, end: 4 },
+      deny_list: PatternSlice { start: 0, end: 2 },
+      street_types: PatternSlice { start: 2, end: 5 },
       ..PreparedEngineSlices::default()
     },
     deny_list_data: Some(DenyListMatchData {
-      labels: vec![vec![String::from("address")]].into(),
-      custom_labels: vec![vec![]].into(),
-      originals: vec![String::from("Paris")],
+      labels: vec![vec![String::from("address")], vec![String::from("address")]]
+        .into(),
+      custom_labels: vec![vec![], vec![]].into(),
+      originals: vec![String::from("Paris"), String::from("Springfield")],
       pattern_meta: stella_anonymize_core::DenyListPatternMetaSet::default(),
-      sources: vec![vec![String::from("city")]].into(),
+      sources: vec![vec![String::from("city")], vec![String::from("city")]]
+        .into(),
       filters: Some(DenyListFilterData::default()),
     }),
     address_seed_data: Some(AddressSeedData {
@@ -557,5 +560,33 @@ fn multi_line_notice_block_still_joins_street_and_destination_lines() {
   assert_eq!(
     street_addresses(&prepared, "ACME Corp\n10 Rue Verte\nParis 75002"),
     vec![String::from("10 Rue Verte Paris 75002")],
+  );
+}
+
+#[test]
+fn address_span_keeps_a_unit_component_that_follows_the_city() {
+  let prepared = street_engine(None);
+
+  // "Apt. 5" is not an address seed, so the city is the cluster's rightmost
+  // seed; the unit abbreviation still belongs to the address.
+  assert_eq!(
+    street_addresses(
+      &prepared,
+      "Notices go to 10 Main Street, Springfield Apt. 5."
+    ),
+    vec![String::from("10 Main Street, Springfield Apt. 5")],
+  );
+}
+
+#[test]
+fn address_span_ends_at_the_city_when_no_unit_component_follows() {
+  let prepared = street_engine(None);
+
+  assert_eq!(
+    street_addresses(
+      &prepared,
+      "Notices go to 10 Main Street, Springfield and Meridian signs."
+    ),
+    vec![String::from("10 Main Street, Springfield")],
   );
 }
