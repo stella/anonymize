@@ -1429,6 +1429,13 @@ fn is_sentence_terminator(
     return false;
   }
   let head = text.get(..period_byte).unwrap_or_default();
+  // Trigger extraction starts after the cue. When the cue ends a sentence
+  // (`…organizace. Next…`), the value opens at that period with an empty
+  // head. Treat it as a terminator so to-next-comma does not absorb the
+  // following sentence as the trigger value.
+  if head.trim_end().is_empty() {
+    return true;
+  }
   lowercase_tail_len(head) >= 5
     || currency_tail(head, sentence_terminal_currency_terms)
     || head
@@ -3379,6 +3386,102 @@ mod tests {
 
   fn uncapped_to_next_comma_data() -> PreparedTriggerData {
     uncapped_to_next_comma_data_with_stops(Vec::new())
+  }
+
+  #[test]
+  fn to_next_comma_stops_when_value_opens_at_sentence_boundary() {
+    // When a cue ends a sentence, extraction starts at the boundary period.
+    // Absorbing the next sentence as the trigger value is never correct.
+    let text = "Institutional cue. Next sentence continues without a comma.";
+    let data = PreparedTriggerData::new(TriggerData {
+      rules: vec![TriggerRule {
+        trigger: String::from("cue"),
+        label: String::from("organization"),
+        strategy: TriggerStrategy::ToNextComma {
+          stop_words: Vec::new(),
+          max_length: None,
+        },
+        validations: Vec::new(),
+        include_trigger: false,
+      }],
+      address_stop_keywords: Vec::new(),
+      party_position_terms: Vec::new(),
+      legal_form_suffixes: Vec::new(),
+      post_nominals: Vec::new(),
+      sentence_terminal_currency_terms: Vec::new(),
+      phone_extension_labels: Vec::new(),
+      number_markers: Vec::new(),
+      number_labels: Vec::new(),
+      person_field_labels: Vec::new(),
+    })
+    .unwrap();
+
+    let start = text.find("cue").unwrap();
+    let end = start.saturating_add("cue".len());
+    let entities = process_trigger_matches(
+      &[SearchMatch::Literal {
+        pattern: 0,
+        start: u32::try_from(start).unwrap(),
+        end: u32::try_from(end).unwrap(),
+      }],
+      PatternSlice { start: 0, end: 1 },
+      text,
+      &data,
+      &BTreeSet::new(),
+      None,
+    )
+    .unwrap();
+    assert!(entities.is_empty(), "{entities:?}");
+  }
+
+  #[test]
+  fn to_next_comma_still_captures_value_before_sentence_boundary() {
+    let text = "Partner: Acme Holdings. Next sentence continues.";
+    let data = PreparedTriggerData::new(TriggerData {
+      rules: vec![TriggerRule {
+        trigger: String::from("Partner"),
+        label: String::from("organization"),
+        strategy: TriggerStrategy::ToNextComma {
+          stop_words: Vec::new(),
+          max_length: None,
+        },
+        validations: vec![TriggerValidation::MinLength(3)],
+        include_trigger: false,
+      }],
+      address_stop_keywords: Vec::new(),
+      party_position_terms: Vec::new(),
+      legal_form_suffixes: Vec::new(),
+      post_nominals: Vec::new(),
+      sentence_terminal_currency_terms: Vec::new(),
+      phone_extension_labels: Vec::new(),
+      number_markers: Vec::new(),
+      number_labels: Vec::new(),
+      person_field_labels: Vec::new(),
+    })
+    .unwrap();
+
+    let start = text.find("Partner").unwrap();
+    let end = start.saturating_add("Partner".len());
+    let entities = process_trigger_matches(
+      &[SearchMatch::Literal {
+        pattern: 0,
+        start: u32::try_from(start).unwrap(),
+        end: u32::try_from(end).unwrap(),
+      }],
+      PatternSlice { start: 0, end: 1 },
+      text,
+      &data,
+      &BTreeSet::new(),
+      None,
+    )
+    .unwrap();
+    assert_eq!(
+      entities
+        .iter()
+        .map(|entity| entity.text.as_str())
+        .collect::<Vec<_>>(),
+      vec!["Acme Holdings"]
+    );
   }
 
   fn uncapped_to_next_comma_data_with_stops(

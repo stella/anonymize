@@ -463,7 +463,11 @@ fn is_explicit_address_section(
   if without_terminal.contains('.') {
     return Ok(true);
   }
-  if !trimmed.ends_with('.') {
+  // Address extractors may drop the trailing section period from the
+  // value (`1` from `1. Heading`) while leaving it in the document.
+  let has_terminal_period = trimmed.ends_with('.')
+    || document_has_section_period_after(document, offsets, entity)?;
+  if !has_terminal_period {
     return Ok(false);
   }
 
@@ -474,6 +478,18 @@ fn is_explicit_address_section(
     return Ok(false);
   }
   Ok(starts_with_section_heading_prefix(context.line))
+}
+
+fn document_has_section_period_after(
+  document: &ResolutionDocument<'_>,
+  offsets: &ByteOffsets<'_>,
+  entity: &PipelineEntity,
+) -> Result<bool> {
+  let end_byte = offsets.validate_offset(entity.end)?;
+  let Some(tail) = document.text().get(end_byte..) else {
+    return Ok(false);
+  };
+  Ok(tail.starts_with('.'))
 }
 
 fn is_standalone_year(text: &str) -> bool {
@@ -2192,6 +2208,8 @@ mod tests {
       ("6.1", "6.1"),
       ("3.2.4", "3.2.4"),
       ("§ 1983", "§ 1983"),
+      // Extractors may drop the trailing section period from the value.
+      ("Place of performance\n1.   Contractor shall perform", "1"),
     ] {
       let section = filter_entity_false_positives(
         vec![entity(
@@ -2222,7 +2240,14 @@ mod tests {
       )
       .unwrap();
 
-      assert_eq!(address_number.len(), 1, "{full_text}");
+      assert_eq!(
+        address_number
+          .iter()
+          .map(|entity| entity.text.as_str())
+          .collect::<Vec<_>>(),
+        vec![value],
+        "{value}"
+      );
     }
   }
 
