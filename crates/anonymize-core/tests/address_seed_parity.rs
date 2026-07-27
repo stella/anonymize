@@ -396,6 +396,7 @@ fn street_engine(standalone: Option<StandaloneStreetData>) -> PreparedEngine {
     literal_patterns: vec![
       literal("Paris"),
       literal("Springfield"),
+      literal("Send"),
       literal("Rue"),
       literal("Street"),
       literal("Straße"),
@@ -408,18 +409,23 @@ fn street_engine(standalone: Option<StandaloneStreetData>) -> PreparedEngine {
       ..SearchOptions::default()
     },
     slices: PreparedEngineSlices {
-      deny_list: PatternSlice { start: 0, end: 2 },
-      street_types: PatternSlice { start: 2, end: 5 },
+      deny_list: PatternSlice { start: 0, end: 3 },
+      street_types: PatternSlice { start: 3, end: 6 },
       ..PreparedEngineSlices::default()
     },
     deny_list_data: Some(DenyListMatchData {
-      labels: vec![vec![String::from("address")], vec![String::from("address")]]
-        .into(),
-      custom_labels: vec![vec![], vec![]].into(),
-      originals: vec![String::from("Paris"), String::from("Springfield")],
+      // "Send" is a real place name that is also an ordinary English word;
+      // the city dictionaries carry it, which is what made a sentence join a
+      // street cluster.
+      labels: vec![vec![String::from("address")]; 3].into(),
+      custom_labels: vec![vec![]; 3].into(),
+      originals: vec![
+        String::from("Paris"),
+        String::from("Springfield"),
+        String::from("Send"),
+      ],
       pattern_meta: stella_anonymize_core::DenyListPatternMetaSet::default(),
-      sources: vec![vec![String::from("city")], vec![String::from("city")]]
-        .into(),
+      sources: vec![vec![String::from("city")]; 3].into(),
       filters: Some(DenyListFilterData::default()),
     }),
     address_seed_data: Some(AddressSeedData {
@@ -588,5 +594,88 @@ fn address_span_ends_at_the_city_when_no_unit_component_follows() {
       "Notices go to 10 Main Street, Springfield and Meridian signs."
     ),
     vec![String::from("10 Main Street, Springfield")],
+  );
+}
+
+fn standalone_engine() -> PreparedEngine {
+  street_engine(Some(StandaloneStreetData {
+    street_type_words: ["Rue", "Street", "Straße"]
+      .into_iter()
+      .map(String::from)
+      .collect(),
+  }))
+}
+
+#[test]
+fn standalone_street_span_excludes_leading_prose() {
+  let prepared = standalone_engine();
+
+  // "Send" is a deny-list city, so it seeds a cluster four words to the left
+  // of the street word. The sentence between them must keep the two apart.
+  let found = street_addresses(&prepared, "Send it to 14 Rue de la Paix.");
+
+  assert!(
+    found.iter().any(|text| text == "14 Rue de la Paix"),
+    "address entities: {found:?}",
+  );
+  assert!(
+    !found.iter().any(|text| text.contains("it to")),
+    "address entities: {found:?}",
+  );
+}
+
+#[test]
+fn standalone_street_span_excludes_leading_prose_in_german() {
+  let prepared = standalone_engine();
+
+  assert_eq!(
+    street_addresses(&prepared, "Bitte an Hauptstraße 5 senden."),
+    vec![String::from("Hauptstraße 5")],
+  );
+}
+
+#[test]
+fn standalone_street_span_keeps_a_multi_word_street_name() {
+  let prepared = standalone_engine();
+
+  assert_eq!(
+    street_addresses(&prepared, "221B Baker Street"),
+    vec![String::from("221B Baker Street")],
+  );
+  assert_eq!(
+    street_addresses(&prepared, "14 Rue de la Paix"),
+    vec![String::from("14 Rue de la Paix")],
+  );
+}
+
+#[test]
+fn standalone_street_span_stops_at_a_capitalized_prose_run() {
+  let prepared = standalone_engine();
+
+  // Nothing left of the house number belongs to the street, however many
+  // capitalized words precede it.
+  assert_eq!(
+    street_addresses(&prepared, "Alpha Beta Gamma 14 Rue de la Paix"),
+    vec![String::from("14 Rue de la Paix")],
+  );
+}
+
+#[test]
+fn city_anchored_span_excludes_leading_prose() {
+  let prepared = street_engine(None);
+
+  assert_eq!(
+    street_addresses(&prepared, "Registered at 14 Rue de la Paix, Paris"),
+    vec![String::from("14 Rue de la Paix, Paris")],
+  );
+  let found =
+    street_addresses(&prepared, "Send it to 14 Rue de la Paix, Paris.");
+  assert!(
+    found.iter().any(|text| text == "14 Rue de la Paix, Paris"),
+    "address entities: {found:?}",
+  );
+  assert!(
+    !found.iter().any(|text| text.contains("it to")),
+    "address entities: {found:?}",
   );
 }
