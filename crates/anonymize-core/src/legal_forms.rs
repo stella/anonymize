@@ -2039,6 +2039,11 @@ fn extend_backward(
       suffix_mode && data.in_name_prepositions.contains(lower.as_ref());
 
     if is_upper {
+      if is_comma_appositive_officer_title(word)
+        && preceded_by_comma(full_text, found.start)
+      {
+        break;
+      }
       pos = found.start;
       continue;
     }

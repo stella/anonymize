@@ -308,10 +308,10 @@ fn try_emit(
   context: CandidateContext,
 ) -> bool {
   let raw = full_text.get(start..end).unwrap_or_default();
-  if contains_org_suffix(raw, data) {
+  let candidate = normalise_candidate(raw, data);
+  if contains_org_suffix(&candidate, data) {
     return false;
   }
-  let candidate = normalise_candidate(raw, data);
   if context == CandidateContext::LabelledField
     && ends_with_configured_label(&candidate, data)
   {
