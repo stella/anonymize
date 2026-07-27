@@ -1900,8 +1900,7 @@ mod tests {
 
   #[test]
   fn trims_website_domain_and_following_prose_from_address() {
-    let text =
-      "450 March Rd. 2nd Floor Ottawa, Ontario K2K 3K2 Canada n-able.com Delivered via";
+    let text = "450 March Rd. 2nd Floor Ottawa, Ontario K2K 3K2 Canada n-able.com Delivered via";
     assert_eq!(
       trim_address_before_website(text),
       Some("450 March Rd. 2nd Floor Ottawa, Ontario K2K 3K2 Canada".len())

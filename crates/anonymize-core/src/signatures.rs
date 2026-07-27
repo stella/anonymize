@@ -358,17 +358,15 @@ fn ends_with_configured_label(
 fn normalise_candidate(text: &str, data: &PreparedSignatureData) -> String {
   let stripped = strip_post_nominal_suffix(text.trim(), data);
   let first_cell_end = first_column_end(stripped).unwrap_or(stripped.len());
-  let cell = stripped
-    .get(..first_cell_end)
-    .unwrap_or(stripped)
-    .trim();
+  let cell = stripped.get(..first_cell_end).unwrap_or(stripped).trim();
   // Flattened EDGAR lines: `/s/ Name Name, Director Acme ULC` — keep the name.
   trim_at_comma_officer_title(cell).to_owned()
 }
 
 fn trim_at_comma_officer_title(text: &str) -> &str {
   let mut search_from = 0usize;
-  while let Some(relative) = text.get(search_from..).and_then(|tail| tail.find(','))
+  while let Some(relative) =
+    text.get(search_from..).and_then(|tail| tail.find(','))
   {
     let comma = search_from.saturating_add(relative);
     let after = text.get(comma.saturating_add(1)..).unwrap_or_default();
