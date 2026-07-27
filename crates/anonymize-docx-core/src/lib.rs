@@ -21,7 +21,7 @@ pub const DOCX_XML_MAX_DEPTH: usize = 256;
 const DOCX_MAX_ENTRIES: usize = 4_096;
 const DOCX_MAX_TEXT_BLOCKS: usize = 100_000;
 const DOCX_MAX_TEXT_SEGMENTS: usize = 1_000_000;
-#[cfg(test)]
+const DOCX_MAX_XML_EVENTS: usize = 10_000_000;
 const DOCX_MAX_INLINE_CONTEXT_SCAN_OPS: usize = 20_000_000;
 const DOCX_MAX_REPLACEMENTS: usize = 1_000_000;
 const DOCX_RESTORE_MAX_CANDIDATES: usize = 1_000_000;
@@ -1791,13 +1791,25 @@ fn kernel_error(source: docx_kernel::ScanError, part_path: &str) -> DocxError {
     docx_kernel::ScanError::TooManyBlocks => error(
       DocxErrorCode::UncompressedLimitExceeded,
       format!(
-        "DOCX parts must not contain more than {DOCX_MAX_TEXT_BLOCKS} text blocks"
+        "DOCX archives must not contain more than {DOCX_MAX_TEXT_BLOCKS} text blocks"
       ),
     ),
     docx_kernel::ScanError::TooManySegments => error(
       DocxErrorCode::UncompressedLimitExceeded,
       format!(
         "DOCX archives must not contain more than {DOCX_MAX_TEXT_SEGMENTS} text segments"
+      ),
+    ),
+    docx_kernel::ScanError::TooManyEvents => error(
+      DocxErrorCode::UncompressedLimitExceeded,
+      format!(
+        "DOCX archives must not require more than {DOCX_MAX_XML_EVENTS} XML events"
+      ),
+    ),
+    docx_kernel::ScanError::TooManyInlineContextCopies => error(
+      DocxErrorCode::UncompressedLimitExceeded,
+      format!(
+        "DOCX archives must not require more than {DOCX_MAX_INLINE_CONTEXT_SCAN_OPS} aggregate inline-context scan operations"
       ),
     ),
     docx_kernel::ScanError::TextLengthOverflow => error(
@@ -1897,28 +1909,106 @@ fn convert_block(
   }
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct DocxScanBudget {
+  blocks: usize,
+  segments: usize,
+  events: usize,
+  inline_context_copies: usize,
+}
+
+impl DocxScanBudget {
+  fn remaining_limits(self) -> Result<docx_kernel::ScanLimits, DocxError> {
+    let blocks = DOCX_MAX_TEXT_BLOCKS.checked_sub(self.blocks).ok_or_else(
+      || {
+        error(
+          DocxErrorCode::UncompressedLimitExceeded,
+          format!(
+            "DOCX archives must not contain more than {DOCX_MAX_TEXT_BLOCKS} text blocks"
+          ),
+        )
+      },
+    )?;
+    let segments = DOCX_MAX_TEXT_SEGMENTS.checked_sub(self.segments).ok_or_else(
+      || {
+        error(
+          DocxErrorCode::UncompressedLimitExceeded,
+          format!(
+            "DOCX archives must not contain more than {DOCX_MAX_TEXT_SEGMENTS} text segments"
+          ),
+        )
+      },
+    )?;
+    let events = DOCX_MAX_XML_EVENTS.checked_sub(self.events).ok_or_else(|| {
+      error(
+        DocxErrorCode::UncompressedLimitExceeded,
+        format!(
+          "DOCX archives must not require more than {DOCX_MAX_XML_EVENTS} XML events"
+        ),
+      )
+    })?;
+    let inline_context_copies = DOCX_MAX_INLINE_CONTEXT_SCAN_OPS
+      .checked_sub(self.inline_context_copies)
+      .ok_or_else(|| {
+        error(
+          DocxErrorCode::UncompressedLimitExceeded,
+          format!(
+            "DOCX archives must not require more than {DOCX_MAX_INLINE_CONTEXT_SCAN_OPS} aggregate inline-context scan operations"
+          ),
+        )
+      })?;
+    Ok(docx_kernel::ScanLimits {
+      blocks,
+      segments,
+      depth: DOCX_XML_MAX_DEPTH,
+      events,
+      inline_context_copies,
+    })
+  }
+
+  fn add(&mut self, delta: Self) -> Result<(), DocxError> {
+    self.blocks = self.blocks.checked_add(delta.blocks).ok_or_else(|| {
+      error(
+        DocxErrorCode::UncompressedLimitExceeded,
+        "DOCX text block count overflowed",
+      )
+    })?;
+    self.segments =
+      self.segments.checked_add(delta.segments).ok_or_else(|| {
+        error(
+          DocxErrorCode::UncompressedLimitExceeded,
+          "DOCX text segment count overflowed",
+        )
+      })?;
+    self.events = self.events.checked_add(delta.events).ok_or_else(|| {
+      error(
+        DocxErrorCode::UncompressedLimitExceeded,
+        "DOCX XML event count overflowed",
+      )
+    })?;
+    self.inline_context_copies = self
+      .inline_context_copies
+      .checked_add(delta.inline_context_copies)
+      .ok_or_else(|| {
+        error(
+          DocxErrorCode::UncompressedLimitExceeded,
+          "DOCX inline-context scan operation count overflowed",
+        )
+      })?;
+    Ok(())
+  }
+}
+
 fn extract_part(
   part: &DocxPart,
   bytes: &[u8],
-  total_segments: &mut usize,
+  budget: &mut DocxScanBudget,
 ) -> Result<(Vec<DocxTextBlock>, DocxCoverage), DocxError> {
-  let remaining_segments = DOCX_MAX_TEXT_SEGMENTS
-    .checked_sub(*total_segments)
-    .ok_or_else(|| {
-      error(
-        DocxErrorCode::UncompressedLimitExceeded,
-        "DOCX text segment count overflowed",
-      )
-    })?;
   let mut blocks = Vec::new();
   let mut part_segment_count = 0_usize;
   let coverage = docx_kernel::scan_wordprocessing_part_with(
     bytes,
-    docx_kernel::ScanLimits {
-      blocks: DOCX_MAX_TEXT_BLOCKS,
-      segments: remaining_segments,
-      depth: DOCX_XML_MAX_DEPTH,
-    },
+    budget.remaining_limits()?,
     |block| {
       part_segment_count = part_segment_count
         .checked_add(block.segments.len())
@@ -1929,15 +2019,12 @@ fn extract_part(
     },
   )
   .map_err(|source| kernel_error(source, &part.path))?;
-  *total_segments =
-    total_segments
-      .checked_add(part_segment_count)
-      .ok_or_else(|| {
-        error(
-          DocxErrorCode::UncompressedLimitExceeded,
-          "DOCX text segment count overflowed",
-        )
-      })?;
+  budget.add(DocxScanBudget {
+    blocks: blocks.len(),
+    segments: part_segment_count,
+    events: coverage.work.events,
+    inline_context_copies: coverage.work.inline_context_copies,
+  })?;
   let coverage = DocxCoverage {
     hyperlink_text_segment_count: coverage.hyperlink_segments,
     revision_text_segment_count: coverage.revision_segments,
@@ -2052,7 +2139,7 @@ pub fn extract_docx_text(document: &[u8]) -> Result<DocxExtraction, DocxError> {
   validate_main_part(&supported, &main_target)?;
   let mut blocks = Vec::new();
   let mut coverage = DocxCoverage::default();
-  let mut total_segments = 0_usize;
+  let mut scan_budget = DocxScanBudget::default();
   let mut covered =
     HashSet::from([CONTENT_TYPES_PATH, ROOT_RELATIONSHIPS_PATH]);
   for part in &supported {
@@ -2063,15 +2150,7 @@ pub fn extract_docx_text(document: &[u8]) -> Result<DocxExtraction, DocxError> {
       )
     })?;
     let (part_blocks, part_coverage) =
-      extract_part(part, bytes, &mut total_segments)?;
-    if blocks.len().saturating_add(part_blocks.len()) > DOCX_MAX_TEXT_BLOCKS {
-      return Err(error(
-        DocxErrorCode::UncompressedLimitExceeded,
-        format!(
-          "DOCX archives must not contain more than {DOCX_MAX_TEXT_BLOCKS} text blocks"
-        ),
-      ));
-    }
+      extract_part(part, bytes, &mut scan_budget)?;
     coverage.parts.push(DocxCoverageItem::Extracted {
       part: part.clone(),
       block_count: part_blocks.len(),
@@ -2447,8 +2526,10 @@ mod extraction_kernel_parity {
   use std::fmt::Write as _;
 
   use super::{
-    DOCX_MAX_TEXT_BLOCKS, DocxError, DocxErrorCode, DocxPart, DocxPartType,
-    extract_part, extract_part_dom, kernel_error,
+    DOCX_MAX_INLINE_CONTEXT_SCAN_OPS, DOCX_MAX_TEXT_BLOCKS,
+    DOCX_MAX_TEXT_SEGMENTS, DOCX_MAX_XML_EVENTS, DocxError, DocxErrorCode,
+    DocxPart, DocxPartType, DocxScanBudget, extract_part, extract_part_dom,
+    kernel_error,
   };
 
   const WORD_TRANSITIONAL: &str =
@@ -2485,9 +2566,9 @@ mod extraction_kernel_parity {
     bytes: &[u8],
   ) -> Result<(Vec<super::DocxTextBlock>, super::DocxCoverage, usize), DocxError>
   {
-    let mut segments = 0;
-    let (blocks, coverage) = extract_part(&part(), bytes, &mut segments)?;
-    Ok((blocks, coverage, segments))
+    let mut budget = DocxScanBudget::default();
+    let (blocks, coverage) = extract_part(&part(), bytes, &mut budget)?;
+    Ok((blocks, coverage, budget.segments))
   }
 
   fn assert_parity(name: &str, xml: &str) -> Result<(), DocxError> {
@@ -2545,7 +2626,7 @@ mod extraction_kernel_parity {
       (
         "Transitional markup-compatibility coverage",
         format!(
-          "<w:document xmlns:w=\"{WORD_TRANSITIONAL}\" xmlns:mc=\"{MC_TRANSITIONAL}\" xmlns:x=\"urn:unsupported\"><w:body><w:p><w:r><w:t>Visible</w:t></w:r></w:p><mc:AlternateContent><mc:Choice Requires=\"x\"><w:p><w:r><w:t>unsupported choice</w:t></w:r></w:p></mc:Choice><mc:Fallback><w:p><w:r><w:t>fallback</w:t></w:r></w:p></mc:Fallback></mc:AlternateContent><w:sym/><w:instrText> REF target </w:instrText><w:fldSimple/></w:body></w:document>"
+          "<w:document xmlns:w=\"{WORD_TRANSITIONAL}\" xmlns:mc=\"{MC_TRANSITIONAL}\" xmlns:x=\"urn:unsupported\"><w:body><w:p><w:r><w:t>Visible</w:t></w:r></w:p><mc:AlternateContent><mc:Choice Requires=\"x\"><w:p><w:r><w:sym/><w:instrText> suppressed instruction </w:instrText><w:t>unsupported choice</w:t></w:r></w:p></mc:Choice><mc:Fallback><w:p><w:r><w:t>fallback</w:t></w:r></w:p></mc:Fallback></mc:AlternateContent><w:sym/><w:instrText> REF target </w:instrText><w:fldSimple/></w:body></w:document>"
         ),
       ),
       (
@@ -2654,12 +2735,22 @@ mod extraction_kernel_parity {
       (
         stella_docx_kernel::ScanError::TooManyBlocks,
         DocxErrorCode::UncompressedLimitExceeded,
-        "DOCX parts must not contain more than 100000 text blocks",
+        "DOCX archives must not contain more than 100000 text blocks",
       ),
       (
         stella_docx_kernel::ScanError::TooManySegments,
         DocxErrorCode::UncompressedLimitExceeded,
         "DOCX archives must not contain more than 1000000 text segments",
+      ),
+      (
+        stella_docx_kernel::ScanError::TooManyEvents,
+        DocxErrorCode::UncompressedLimitExceeded,
+        "DOCX archives must not require more than 10000000 XML events",
+      ),
+      (
+        stella_docx_kernel::ScanError::TooManyInlineContextCopies,
+        DocxErrorCode::UncompressedLimitExceeded,
+        "DOCX archives must not require more than 20000000 aggregate inline-context scan operations",
       ),
       (
         stella_docx_kernel::ScanError::TextLengthOverflow,
@@ -2679,13 +2770,10 @@ mod extraction_kernel_parity {
     }
   }
 
-  fn projection_work(xml: &str) -> Result<(usize, usize), DocxError> {
-    let (blocks, _, _) = kernel(xml.as_bytes())?;
-    let segments = blocks
-      .iter()
-      .map(|block| block.segments.len())
-      .sum::<usize>();
-    Ok((blocks.len(), segments))
+  fn projection_work(xml: &str) -> Result<DocxScanBudget, DocxError> {
+    let mut budget = DocxScanBudget::default();
+    extract_part(&part(), xml.as_bytes(), &mut budget)?;
+    Ok(budget)
   }
 
   fn sibling_run_fixture(run_count: usize) -> String {
@@ -2708,26 +2796,115 @@ mod extraction_kernel_parity {
     )
   }
 
+  fn sibling_revision_fixture(segment_count: usize) -> String {
+    let mut runs = String::new();
+    for _ in 0..segment_count {
+      runs.push_str("<w:ins><w:r><w:t>x</w:t></w:r></w:ins>");
+    }
+    format!(
+      "<w:document xmlns:w=\"{WORD_TRANSITIONAL}\"><w:body><w:p>{runs}</w:p></w:body></w:document>"
+    )
+  }
+
+  fn assert_second_part_exhausts_budget(
+    mut budget: DocxScanBudget,
+    xml: &str,
+    expected_message: &str,
+  ) -> Result<(), DocxError> {
+    extract_part(&part(), xml.as_bytes(), &mut budget)?;
+    let committed = budget;
+    let rejected = extract_part(&part(), xml.as_bytes(), &mut budget);
+    let actual = rejected
+      .as_ref()
+      .err()
+      .map(|rejected| (rejected.code(), rejected.to_string()));
+    assert_eq!(
+      actual,
+      Some((
+        DocxErrorCode::UncompressedLimitExceeded,
+        expected_message.to_owned(),
+      )),
+    );
+    assert_eq!(budget, committed, "failed scans must not consume budget");
+    Ok(())
+  }
+
+  #[test]
+  fn aggregate_scan_budgets_are_carried_across_parts() -> Result<(), DocxError>
+  {
+    let plain = sibling_run_fixture(1);
+    let plain_work = projection_work(&plain)?;
+    assert_second_part_exhausts_budget(
+      DocxScanBudget {
+        blocks: DOCX_MAX_TEXT_BLOCKS - plain_work.blocks,
+        ..DocxScanBudget::default()
+      },
+      &plain,
+      "DOCX archives must not contain more than 100000 text blocks",
+    )?;
+    assert_second_part_exhausts_budget(
+      DocxScanBudget {
+        segments: DOCX_MAX_TEXT_SEGMENTS - plain_work.segments,
+        ..DocxScanBudget::default()
+      },
+      &plain,
+      "DOCX archives must not contain more than 1000000 text segments",
+    )?;
+    assert_second_part_exhausts_budget(
+      DocxScanBudget {
+        events: DOCX_MAX_XML_EVENTS - plain_work.events,
+        ..DocxScanBudget::default()
+      },
+      &plain,
+      "DOCX archives must not require more than 10000000 XML events",
+    )?;
+
+    let revision = sibling_revision_fixture(1);
+    let revision_work = projection_work(&revision)?;
+    assert!(revision_work.inline_context_copies > 0);
+    assert_second_part_exhausts_budget(
+      DocxScanBudget {
+        inline_context_copies: DOCX_MAX_INLINE_CONTEXT_SCAN_OPS
+          - revision_work.inline_context_copies,
+        ..DocxScanBudget::default()
+      },
+      &revision,
+      "DOCX archives must not require more than 20000000 aggregate inline-context scan operations",
+    )?;
+    Ok(())
+  }
+
   #[test]
   fn projection_work_is_additive_across_independent_growth_axes()
   -> Result<(), DocxError> {
+    let empty_segments = projection_work(&sibling_run_fixture(0))?;
     let small_segments = projection_work(&sibling_run_fixture(512))?;
     let large_segments = projection_work(&sibling_run_fixture(1_024))?;
-    assert_eq!(small_segments, (1, 512));
-    assert_eq!(large_segments, (1, 1_024));
+    assert_eq!(small_segments.blocks, 1);
+    assert_eq!(small_segments.segments, 512);
+    assert_eq!(large_segments.blocks, 1);
+    assert_eq!(large_segments.segments, 1_024);
     assert_eq!(
-      large_segments.0 + large_segments.1,
-      2 * (small_segments.0 + small_segments.1) - 1,
+      large_segments.events - empty_segments.events,
+      2 * (small_segments.events - empty_segments.events),
     );
 
+    let empty_blocks = projection_work(&sibling_paragraph_fixture(0))?;
     let small_blocks = projection_work(&sibling_paragraph_fixture(256))?;
     let large_blocks = projection_work(&sibling_paragraph_fixture(512))?;
-    assert_eq!(small_blocks, (256, 256));
-    assert_eq!(large_blocks, (512, 512));
+    assert_eq!(small_blocks.blocks, 256);
+    assert_eq!(small_blocks.segments, 256);
+    assert_eq!(large_blocks.blocks, 512);
+    assert_eq!(large_blocks.segments, 512);
     assert_eq!(
-      large_blocks.0 + large_blocks.1,
-      2 * (small_blocks.0 + small_blocks.1),
+      large_blocks.events - empty_blocks.events,
+      2 * (small_blocks.events - empty_blocks.events),
     );
+
+    let small_contexts = projection_work(&sibling_revision_fixture(256))?;
+    let large_contexts = projection_work(&sibling_revision_fixture(512))?;
+    assert_eq!(small_contexts.inline_context_copies, 256);
+    assert_eq!(large_contexts.inline_context_copies, 512);
     Ok(())
   }
 }
