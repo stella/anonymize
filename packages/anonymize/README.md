@@ -362,10 +362,12 @@ export default {
   trigger). Set it to `"houseNumberAnchored"` to also accept a street-type word
   with a house number directly beside it in either order (`14 Rue de la Paix`,
   `Hauptstraße 5`, `123 Main Street`). A bare street name with no number never
-  fires. The mode trades precision for recall: a street-type word next to a
-  number also occurs in contract prose (`District Court 2019`), so enable it per
-  workspace rather than globally. It changes the prepared package, so rebuild the
-  package after changing it.
+  fires, and only the street types of the languages in `languages` / `language`
+  are recognized, so an English-scoped pipeline does not detect `Hauptstraße 5`.
+  The mode trades precision for recall: a street-type word next to a number also
+  occurs in contract prose (`District Court 2019`), so enable it per workspace
+  rather than globally. It changes the prepared package, so rebuild the package
+  after changing it.
 - The optional `@stll/anonymize-data` package carries the published dictionary and trigger data used when building prepared packages.
 - `customDenyList` and `customRegexes` are part of the prepared package input and should be regenerated when they change.
 

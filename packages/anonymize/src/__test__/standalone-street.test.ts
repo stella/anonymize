@@ -41,6 +41,12 @@ const standaloneConfig: PipelineConfig = {
   workspaceId: "standalone-street-test-on",
 };
 
+const scopedConfig = (languages: string[]): PipelineConfig => ({
+  ...standaloneConfig,
+  languages,
+  workspaceId: `standalone-street-test-${languages.join("-")}`,
+});
+
 const addresses = async (
   config: PipelineConfig,
   fullText: string,
@@ -104,5 +110,25 @@ describe("standalone street detection", () => {
     );
     const address = found.find((entity) => entity.text.includes("Rue de la"));
     expect(address?.text).toBe("14 Rue de la Paix");
+  });
+
+  test("a language-scoped pipeline only detects its own street types", async () => {
+    // The whole-word street-type automaton is assembled across every
+    // language, so scoping has to come from the standalone payload.
+    const english = await addresses(scopedConfig(["en"]), "Hauptstraße 5");
+    expect(english.some((entity) => entity.text.includes("Hauptstraße"))).toBe(
+      false,
+    );
+
+    const german = await addresses(scopedConfig(["de"]), "Hauptstraße 5");
+    expect(german.some((entity) => entity.text === "Hauptstraße 5")).toBe(true);
+
+    const englishStreet = await addresses(
+      scopedConfig(["en"]),
+      "123 Main Street",
+    );
+    expect(
+      englishStreet.some((entity) => entity.text === "123 Main Street"),
+    ).toBe(true);
   });
 });
