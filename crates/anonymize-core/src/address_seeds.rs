@@ -2667,7 +2667,6 @@ mod tests {
     ))
   }
 
-
   #[test]
   fn expands_left_across_dotted_house_number_markers() -> Result<()> {
     let data = PreparedAddressSeedData::new(AddressSeedData::default())?;
@@ -2680,12 +2679,7 @@ mod tests {
       DetectionSource::DenyList,
     )?];
     let spaced_result = data
-      .process_profiled(
-        &[],
-        PatternSlice::default(),
-        spaced,
-        &spaced_existing,
-      )?
+      .process_profiled(&[], PatternSlice::default(), spaced, &spaced_existing)?
       .entities;
     assert!(
       spaced_result.iter().any(|entity| {
@@ -2785,7 +2779,9 @@ mod tests {
       .process_profiled(&[], PatternSlice::default(), full_text, &existing)?
       .entities;
     assert!(
-      result.iter().all(|entity| !entity.text.contains("Delivered")),
+      result
+        .iter()
+        .all(|entity| !entity.text.contains("Delivered")),
       "preposition should bound address entities: {result:?}",
     );
     Ok(())
