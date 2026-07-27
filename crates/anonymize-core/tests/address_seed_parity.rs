@@ -102,6 +102,7 @@ fn detects_cue_gated_br_cep_address_seed() {
       boundary_words: Vec::new(),
       br_cep_cue_words: vec![String::from("CEP")],
       unit_abbreviations: Vec::new(),
+      ..AddressSeedData::default()
     }),
     ..empty_config(PreparedEngineSlices::default())
   })
@@ -357,6 +358,7 @@ fn preserves_unit_abbreviation_inside_address_seed_span() {
       boundary_words: Vec::new(),
       br_cep_cue_words: Vec::new(),
       unit_abbreviations: vec![String::from("apt.")],
+      ..AddressSeedData::default()
     }),
     ..empty_config(PreparedEngineSlices::default())
   })
@@ -379,4 +381,108 @@ fn preserves_unit_abbreviation_inside_address_seed_span() {
   );
   assert!(!result.redaction.redacted_text.contains("Apt. 5"));
   assert!(!result.redaction.redacted_text.contains(&suffix));
+}
+
+/// Fixture for the city-anchored span cases: "Paris" as a deny-list city, a
+/// street-type slice covering the words the cases need.
+fn street_engine() -> PreparedEngine {
+  let literal = |pattern: &str| SearchPattern::LiteralWithOptions {
+    pattern: String::from(pattern),
+    case_insensitive: Some(true),
+    whole_words: Some(true),
+  };
+  PreparedEngine::new(prepared_config! {
+    literal_patterns: vec![
+      literal("Paris"),
+      literal("Rue"),
+      literal("Street"),
+      literal("Straße"),
+    ],
+    literal_options: SearchOptions {
+      literal: LiteralSearchOptions {
+        case_insensitive: true,
+        whole_words: false,
+      },
+      ..SearchOptions::default()
+    },
+    slices: PreparedEngineSlices {
+      deny_list: PatternSlice { start: 0, end: 1 },
+      street_types: PatternSlice { start: 1, end: 4 },
+      ..PreparedEngineSlices::default()
+    },
+    deny_list_data: Some(DenyListMatchData {
+      labels: vec![vec![String::from("address")]].into(),
+      custom_labels: vec![vec![]].into(),
+      originals: vec![String::from("Paris")],
+      pattern_meta: stella_anonymize_core::DenyListPatternMetaSet::default(),
+      sources: vec![vec![String::from("city")]].into(),
+      filters: Some(DenyListFilterData::default()),
+    }),
+    address_seed_data: Some(AddressSeedData {
+      unit_abbreviations: vec![String::from("apt.")],
+      boundary_words: Vec::new(),
+      br_cep_cue_words: Vec::new(),
+    }),
+    ..empty_config(PreparedEngineSlices::default())
+  })
+  .expect("address seed data should prepare")
+}
+
+fn street_addresses(prepared: &PreparedEngine, full_text: &str) -> Vec<String> {
+  let result = prepared
+    .redact_static_entities(full_text, &OperatorConfig::default())
+    .expect("static redaction should succeed");
+  address_texts(&result)
+    .into_iter()
+    .map(ToOwned::to_owned)
+    .collect()
+}
+
+#[test]
+fn address_span_ends_at_the_city_not_the_conjunction_that_follows() {
+  let prepared = street_engine();
+
+  assert_eq!(
+    street_addresses(
+      &prepared,
+      "Notices to the offices of 14 Rue de la Paix, Paris, and Meridian shall apply.",
+    ),
+    vec![String::from("14 Rue de la Paix, Paris")],
+  );
+}
+
+#[test]
+fn address_span_ends_at_the_city_not_the_prose_that_follows() {
+  let prepared = street_engine();
+
+  assert_eq!(
+    street_addresses(
+      &prepared,
+      "Notices to the offices of 14 Rue de la Paix, Paris last year.",
+    ),
+    vec![String::from("14 Rue de la Paix, Paris")],
+  );
+}
+
+#[test]
+fn address_span_still_grows_past_a_city_followed_by_a_postal_code() {
+  let prepared = street_engine();
+
+  assert_eq!(
+    street_addresses(
+      &prepared,
+      "Notices go to 10 Rue Verte, Paris 75002 Apt. 5."
+    ),
+    vec![String::from("10 Rue Verte, Paris 75002 Apt. 5")],
+  );
+}
+
+#[test]
+fn multi_line_notice_block_still_joins_street_and_destination_lines() {
+  let prepared = street_engine();
+
+  assert_eq!(
+    street_addresses(&prepared, "ACME Corp\n10 Rue Verte\nParis 75002"),
+    vec![String::from("10 Rue Verte Paris 75002")],
+  );
 }

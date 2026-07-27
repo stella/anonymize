@@ -324,7 +324,7 @@ impl PreparedAddressSeedData {
       if score < 0.6 {
         continue;
       }
-      let boundary_starts = if cluster.has_expandable_address_context() {
+      let boundary_starts = if cluster.expands_right() {
         if boundary_starts.is_none() {
           let boundary_start = Instant::now();
           let starts = self.boundary_starts(full_text);
@@ -678,7 +678,7 @@ impl PreparedAddressSeedData {
       cluster_starts_with_street_type_word(cluster),
     );
     let left_pos = expand_left(full_text, cluster.start, left_bound);
-    if !cluster.has_expandable_address_context() {
+    if !cluster.expands_right() {
       return Span {
         start: left_pos.min(cluster.start),
         end: cluster.end,
@@ -859,6 +859,29 @@ impl SeedCluster {
         SeedType::StreetWord | SeedType::PostalCode | SeedType::AddressTrigger
       )
     })
+  }
+
+  /// A city name completes the destination, so nothing to its right belongs
+  /// to the address. Without this the right-expansion runs on to the next
+  /// unrelated boundary and swallows the prose that follows the city
+  /// ("... 14 Rue de la Paix, Paris, and Meridian Capital", "..., Paris last
+  /// year"). A postal code trailing the city is itself seeded, so it becomes
+  /// the rightmost seed and the span still ends after it.
+  fn ends_at_city(&self) -> bool {
+    let mut ends_at_city = false;
+    for seed in self.seeds.iter().filter(|seed| seed.end == self.end) {
+      if seed.kind != SeedType::City {
+        return false;
+      }
+      ends_at_city = true;
+    }
+    ends_at_city
+  }
+
+  /// The cluster carries address evidence and has not already reached a
+  /// completed destination, so right-expansion can still add components.
+  fn expands_right(&self) -> bool {
+    self.has_expandable_address_context() && !self.ends_at_city()
   }
 }
 
