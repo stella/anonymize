@@ -585,19 +585,22 @@ fn equivalent_nhs_cues_share_placeholders() {
 #[test]
 fn equivalent_passport_cues_share_placeholders() {
   let text = concat!(
-    "US passport number X12345678 was inspected.\n",
-    "Passport No. X12345678 was listed."
+    "C01X00T47 was repeated. US passport number C01X00T47 was inspected.\n",
+    "PAA123456 was repeated. Passport No. PAA123456 was listed."
   );
   let entities = vec![
-    entity(text, "passport number", "US passport number X12345678"),
-    entity(text, "passport number", "Passport No. X12345678"),
+    entity(text, "passport number", "C01X00T47"),
+    entity(text, "passport number", "US passport number C01X00T47"),
+    entity(text, "passport number", "PAA123456"),
+    entity(text, "passport number", "Passport No. PAA123456"),
   ];
 
   let result =
     redact_text(text, &entities, &OperatorConfig::default()).unwrap();
 
-  assert_eq!(result.redaction_map.len(), 1);
+  assert_eq!(result.redaction_map.len(), 2);
   assert_eq!(result.redaction_map[0].placeholder, "[PASSPORT_NUMBER_1]");
+  assert_eq!(result.redaction_map[1].placeholder, "[PASSPORT_NUMBER_2]");
 }
 
 #[test]

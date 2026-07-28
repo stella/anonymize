@@ -411,7 +411,10 @@ fn normalize_passport_text(text: &str) -> String {
 
 fn is_passport_identifier(token: &str) -> bool {
   let chars: Vec<char> = token.chars().collect();
-  matches_letters_digits(&chars, 1, 2, 6, 8)
+  (chars.len() == 9
+    && chars.iter().all(|ch| ch.is_ascii_alphanumeric())
+    && chars.iter().any(|ch| ch.is_ascii_digit()))
+    || matches_letters_digits(&chars, 1, 2, 6, 8)
     || matches_digits_letters_digits(&chars, 2, 2, 5)
     || (token.len() >= 7
       && token.len() <= 9

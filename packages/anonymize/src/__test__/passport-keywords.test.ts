@@ -178,6 +178,7 @@ const PUNCTUATED_CONTINUATION_FIXTURES = POSITIVE_FIXTURES.map(
 
 const SEPARATOR_CONTINUATION_FIXTURES = POSITIVE_FIXTURES.flatMap(
   ([language, text, passportNumber]) => [
+    [language, text.replace(passportNumber, `${passportNumber} 99`)] as const,
     [language, text.replace(passportNumber, `${passportNumber}: 99`)] as const,
     [language, text.replace(passportNumber, `${passportNumber} - 99`)] as const,
     [

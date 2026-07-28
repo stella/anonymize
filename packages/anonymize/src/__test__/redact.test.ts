@@ -88,6 +88,28 @@ describe("redactText / deanonymise round-trip", () => {
     expect([...result.redactionMap.keys()]).toEqual(["[PHONE_NUMBER_1]"]);
   });
 
+  test("generic passport shapes normalize across exact and cue spans", () => {
+    const text = [
+      "C01X00T47 was repeated",
+      "US passport number C01X00T47 was inspected",
+      "PAA123456 was repeated",
+      "Passport No. PAA123456 was listed",
+    ].join("; ");
+    const entities = [
+      at(text, "passport number", "C01X00T47"),
+      at(text, "passport number", "US passport number C01X00T47"),
+      at(text, "passport number", "PAA123456"),
+      at(text, "passport number", "Passport No. PAA123456"),
+    ];
+
+    const result = redactText(text, entities);
+    expect(result.redactionMap.size).toBe(2);
+    expect([...result.redactionMap.keys()]).toEqual([
+      "[PASSPORT_NUMBER_1]",
+      "[PASSPORT_NUMBER_2]",
+    ]);
+  });
+
   test("passport separators normalize without collapsing prefixes", () => {
     const text = [
       "Passport X12345678 was inspected",
