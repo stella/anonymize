@@ -19,6 +19,9 @@
  * - Sidus Space employment agreement (2026-07-24): soft-wrapped `/s/`
  *   surname, mid-name issuer wrap before Inc., and soft-wrapped city
  *   headword labeled as a person.
+ * - Cracker Barrel transition agreement (2026-07-27): scoped EN first/surname
+ *   gaps for Julie Masino, soft-wrapped Paul Weiss LLP counsel block, and
+ *   street-type deny-list person spans (`Hartmann Drive`).
  */
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 
@@ -780,5 +783,82 @@ Boston, MA 02110`,
         ),
       ).toBe(false);
     }
+  });
+
+  test("party name from scoped English corpus is a person", async () => {
+    // Cracker Barrel EX-10.2 (2026-07-27): Julie/Masino were absent from the
+    // scoped EN name corpus, so preamble and release party names survived.
+    const text =
+      'Tennessee corporation (the "Company"), and Julie Masino (the "Executive").';
+    const entities = await detect(text);
+    expect(
+      entities.some(
+        (entity) => entity.label === "person" && entity.text === "Julie Masino",
+      ),
+    ).toBe(true);
+  });
+
+  test("soft-wrapped Paul Weiss LLP counsel block is an organization", async () => {
+    // Cracker Barrel EX-10.2 (2026-07-27): LLP wrapped after a finished
+    // ampersand firm line without a trailing comma.
+    const text = `with a copy to:
+
+Paul, Weiss, Rifkind, Wharton & Garrison
+LLP
+
+1285 Avenue of the Americas
+
+New York, NY 10019-6064
+
+Attention: Jean M. McLoughlin`;
+    const entities = await detect(text);
+    expect(
+      entities.some(
+        (entity) =>
+          entity.label === "organization" &&
+          entity.text
+            .replaceAll(/\s+/g, " ")
+            .includes("Paul, Weiss, Rifkind, Wharton & Garrison LLP"),
+      ),
+    ).toBe(true);
+    expect(
+      entities.some(
+        (entity) =>
+          entity.label === "address" &&
+          (entity.text === "Wharton" || entity.text === "Garrison"),
+      ),
+    ).toBe(false);
+    expect(
+      entities.some(
+        (entity) =>
+          entity.label === "person" && entity.text === "Jean M. McLoughlin",
+      ),
+    ).toBe(true);
+  });
+
+  test("house-numbered street is an address not a person", async () => {
+    // Cracker Barrel EX-10.2 (2026-07-27): Hartmann (first-name corpus) plus
+    // Drive (street type) was labeled person inside the notice block.
+    const text = `Attn: General Counsel
+
+PO Box 787
+
+305 Hartmann Drive
+
+Lebanon, TN 37088-0787`;
+    const entities = await detect(text);
+    expect(
+      entities.some(
+        (entity) =>
+          entity.label === "person" && entity.text.includes("Hartmann"),
+      ),
+    ).toBe(false);
+    expect(
+      entities.some(
+        (entity) =>
+          entity.label === "address" &&
+          entity.text.replaceAll(/\s+/g, " ").includes("305 Hartmann Drive"),
+      ),
+    ).toBe(true);
   });
 });
