@@ -114,6 +114,12 @@ const SEPARATED_IDENTIFIER_FIXTURES = POSITIVE_FIXTURES.flatMap(
   ([language, text, passportNumber]) =>
     [
       "X-12345678",
+      "X‐12345678",
+      "X‑12345678",
+      "X‒12345678",
+      "X–12345678",
+      "X—12345678",
+      "X―12345678",
       "Y 12345678",
       "Z/12345678",
       "Q.12345678",
@@ -129,8 +135,10 @@ const SEPARATED_CONTINUATION_FIXTURES = POSITIVE_FIXTURES.flatMap(
   ([language, text, passportNumber]) =>
     [
       "X-123456789",
+      "X‑123456789",
       "Y 123456789",
       "X-12345678/99",
+      "X—12345678-OLD",
       "Y 12345678-OLD",
       "X / 12345678 / 99",
       "Nr. 12345678",
@@ -323,6 +331,34 @@ const WRAPPED_METADATA_FIXTURES = POSITIVE_FIXTURES.map(
       passportNumber,
     ] as const;
   },
+);
+
+const ALTERNATE_QUOTE_CONTINUATION_FIXTURES = POSITIVE_FIXTURES.map(
+  ([language, text, passportNumber]) =>
+    [language, text.replace(passportNumber, `„${passportNumber}”/99`)] as const,
+);
+
+const NESTED_WRAPPER_CONTINUATION_FIXTURES = POSITIVE_FIXTURES.map(
+  ([language, text, passportNumber]) =>
+    [
+      language,
+      text.replace(passportNumber, `"(${passportNumber})"/99`),
+    ] as const,
+);
+
+const NESTED_WRAPPER_METADATA_FIXTURES = POSITIVE_FIXTURES.flatMap(
+  ([language, text, passportNumber]) =>
+    [
+      `"(${passportNumber}), issued 2020"`,
+      `„${passportNumber}”, issued 2020`,
+    ].map(
+      (wrapped) =>
+        [
+          language,
+          text.replace(passportNumber, wrapped),
+          passportNumber,
+        ] as const,
+    ),
 );
 
 const canonicalVariants = (text: string): string[] => {
@@ -558,8 +594,37 @@ describe("localized passport-number triggers", () => {
     },
   );
 
+  test.each(ALTERNATE_QUOTE_CONTINUATION_FIXTURES)(
+    "%s rejects a compound suffix after an alternate quote closer",
+    async (language, text) => {
+      expect(await detect(language, text)).toEqual([]);
+    },
+  );
+
+  test.each(NESTED_WRAPPER_CONTINUATION_FIXTURES)(
+    "%s rejects a compound suffix after adjacent nested closers",
+    async (language, text) => {
+      expect(await detect(language, text)).toEqual([]);
+    },
+  );
+
   test.each(WRAPPED_METADATA_FIXTURES)(
     "%s keeps punctuation after the closing wrapper outside the passport",
+    async (language, text, expected) => {
+      const entities = await detect(language, text);
+      const passport = entities.find(
+        (entity) => entity.label === "passport number",
+      );
+
+      expect(passport?.text).toBe(expected);
+      expect(passport && text.slice(passport.start, passport.end)).toBe(
+        expected,
+      );
+    },
+  );
+
+  test.each(NESTED_WRAPPER_METADATA_FIXTURES)(
+    "%s keeps metadata between nested wrapper closers outside the passport",
     async (language, text, expected) => {
       const entities = await detect(language, text);
       const passport = entities.find(

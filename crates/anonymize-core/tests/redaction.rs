@@ -605,12 +605,24 @@ fn passport_separator_variants_share_placeholders() {
   let text = concat!(
     "Passport X12345678 was inspected.\n",
     "Passport X-12345678 was repeated.\n",
+    "Passport X‐12345678 was repeated.\n",
+    "Passport X‑12345678 was repeated.\n",
+    "Passport X‒12345678 was repeated.\n",
+    "Passport X–12345678 was repeated.\n",
+    "Passport X—12345678 was repeated.\n",
+    "Passport X―12345678 was repeated.\n",
     "Passport X / 12345678 was copied.\n",
     "Passport X.12345678 was listed."
   );
   let entities = vec![
     entity(text, "passport number", "X12345678"),
     entity(text, "passport number", "X-12345678"),
+    entity(text, "passport number", "X‐12345678"),
+    entity(text, "passport number", "X‑12345678"),
+    entity(text, "passport number", "X‒12345678"),
+    entity(text, "passport number", "X–12345678"),
+    entity(text, "passport number", "X—12345678"),
+    entity(text, "passport number", "X―12345678"),
     entity(text, "passport number", "X / 12345678"),
     entity(text, "passport number", "X.12345678"),
   ];
@@ -625,10 +637,10 @@ fn passport_separator_variants_share_placeholders() {
 #[test]
 fn passport_prefixes_split_by_separators_stay_distinct() {
   let text =
-    "Passport X-12345678 was inspected. Passport Y 12345678 was listed.";
+    "Passport X‑12345678 was inspected. Passport Y‑12345678 was listed.";
   let entities = vec![
-    entity(text, "passport number", "X-12345678"),
-    entity(text, "passport number", "Y 12345678"),
+    entity(text, "passport number", "X‑12345678"),
+    entity(text, "passport number", "Y‑12345678"),
   ];
 
   let result =

@@ -92,16 +92,28 @@ describe("redactText / deanonymise round-trip", () => {
     const text = [
       "Passport X12345678 was inspected",
       "X-12345678 was repeated",
+      "X‐12345678 was repeated",
+      "X‑12345678 was repeated",
+      "X‒12345678 was repeated",
+      "X–12345678 was repeated",
+      "X—12345678 was repeated",
+      "X―12345678 was repeated",
       "X / 12345678 was copied",
       "X.12345678 was listed",
-      "Y 12345678 was distinct",
+      "Y‑12345678 was distinct",
     ].join("; ");
     const entities = [
       at(text, "passport number", "X12345678"),
       at(text, "passport number", "X-12345678"),
+      at(text, "passport number", "X‐12345678"),
+      at(text, "passport number", "X‑12345678"),
+      at(text, "passport number", "X‒12345678"),
+      at(text, "passport number", "X–12345678"),
+      at(text, "passport number", "X—12345678"),
+      at(text, "passport number", "X―12345678"),
       at(text, "passport number", "X / 12345678"),
       at(text, "passport number", "X.12345678"),
-      at(text, "passport number", "Y 12345678"),
+      at(text, "passport number", "Y‑12345678"),
     ];
 
     const result = redactText(text, entities);

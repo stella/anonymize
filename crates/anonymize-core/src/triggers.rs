@@ -1051,7 +1051,7 @@ fn extract_match_pattern(
     return Ok(Some(value));
   }
   let mut candidate = value_text;
-  let mut expected_closers = Vec::new();
+  let mut wrapper_depth = 0_usize;
   loop {
     let Some(opener) = candidate
       .chars()
@@ -1063,10 +1063,7 @@ fn extract_match_pattern(
     let Some(after_opener) = candidate.get(opener.len_utf8()..) else {
       return Ok(None);
     };
-    let Some(closer) = match_pattern_closer(opener) else {
-      return Ok(None);
-    };
-    expected_closers.push(closer);
+    wrapper_depth = wrapper_depth.saturating_add(1);
     candidate = after_opener.trim_start_matches(is_horizontal_whitespace);
     let opener_bytes = value_text.len().saturating_sub(candidate.len());
     let candidate_start_byte = value_start_byte.saturating_add(opener_bytes);
@@ -1077,7 +1074,7 @@ fn extract_match_pattern(
         candidate,
         candidate_start_byte,
         &value,
-        &expected_closers,
+        wrapper_depth,
         regex,
       )? {
         return Ok(Some(value));
@@ -1091,7 +1088,7 @@ fn wrapped_pattern_boundary_is_valid(
   candidate: &str,
   candidate_start_byte: usize,
   value: &ByteValue,
-  expected_closers: &[char],
+  wrapper_depth: usize,
   regex: &BoundedRegex,
 ) -> Result<bool> {
   let Some(relative_end) = value.end_byte.checked_sub(candidate_start_byte)
@@ -1102,13 +1099,15 @@ fn wrapped_pattern_boundary_is_valid(
     return Ok(false);
   };
   let mut consumed_closer = false;
-  for expected in expected_closers.iter().rev() {
+  // Quote pairings vary by locale. Remove only the bounded run of
+  // recognized closers, then let the original pattern validate the suffix.
+  for _ in 0..wrapper_depth {
     tail = tail.trim_start_matches(is_horizontal_whitespace);
     let Some(actual) = tail.chars().next() else {
-      return Ok(!consumed_closer);
+      break;
     };
-    if actual != *expected {
-      return Ok(!consumed_closer);
+    if !is_match_pattern_closer(actual) {
+      break;
     }
     consumed_closer = true;
     let Some(after_closer) = tail.get(actual.len_utf8()..) else {
@@ -1158,36 +1157,71 @@ fn extract_anchored_pattern(
 }
 
 const fn is_match_pattern_opener(ch: char) -> bool {
-  match_pattern_closer(ch).is_some()
+  matches!(
+    ch,
+    '\''
+      | '"'
+      | '‘'
+      | '’'
+      | '‚'
+      | '‛'
+      | '“'
+      | '”'
+      | '„'
+      | '‟'
+      | '«'
+      | '»'
+      | '‹'
+      | '›'
+      | '('
+      | '['
+      | '{'
+      | '（'
+      | '［'
+      | '｛'
+      | '｟'
+      | '〈'
+      | '《'
+      | '「'
+      | '『'
+      | '【'
+      | '〔'
+      | '〖'
+      | '〘'
+      | '〚'
+  )
 }
 
-const fn match_pattern_closer(ch: char) -> Option<char> {
-  match ch {
-    '\'' | '"' | '’' | '‛' | '”' | '‟' | '»' | '›' => Some(ch),
-    '‘' => Some('’'),
-    '‚' => Some('‘'),
-    '“' => Some('”'),
-    '„' => Some('“'),
-    '«' => Some('»'),
-    '‹' => Some('›'),
-    '(' => Some(')'),
-    '[' => Some(']'),
-    '{' => Some('}'),
-    '（' => Some('）'),
-    '［' => Some('］'),
-    '｛' => Some('｝'),
-    '｟' => Some('｠'),
-    '〈' => Some('〉'),
-    '《' => Some('》'),
-    '「' => Some('」'),
-    '『' => Some('』'),
-    '【' => Some('】'),
-    '〔' => Some('〕'),
-    '〖' => Some('〗'),
-    '〘' => Some('〙'),
-    '〚' => Some('〛'),
-    _ => None,
-  }
+const fn is_match_pattern_closer(ch: char) -> bool {
+  matches!(
+    ch,
+    '\''
+      | '"'
+      | '‘'
+      | '’'
+      | '‛'
+      | '“'
+      | '”'
+      | '‟'
+      | '»'
+      | '›'
+      | ')'
+      | ']'
+      | '}'
+      | '）'
+      | '］'
+      | '｝'
+      | '｠'
+      | '〉'
+      | '》'
+      | '」'
+      | '』'
+      | '】'
+      | '〕'
+      | '〗'
+      | '〙'
+      | '〛'
+  )
 }
 
 const fn is_horizontal_whitespace(ch: char) -> bool {
@@ -2999,8 +3033,15 @@ mod tests {
   fn match_pattern_checks_suffix_after_closing_delimiters() {
     let regex =
       BoundedRegex::new(r"^[A-Z]\d{7}\b(?![ \t]{0,8}/[ \t]{0,8}\d)").unwrap();
-    for value in ["(A1234567)/99", "« A1234567 » / 99", "« ( A1234567 ) »/99"]
-    {
+    for value in [
+      "(A1234567)/99",
+      "« A1234567 » / 99",
+      "« ( A1234567 ) »/99",
+      "„A1234567”/99",
+      "„A1234567“/99",
+      "„A1234567)/99",
+      "\"(A1234567)\" / 99",
+    ] {
       assert!(
         extract_match_pattern(value, 10, &regex).unwrap().is_none(),
         "{value}"
@@ -3009,6 +3050,8 @@ mod tests {
     for (value, expected_start) in [
       ("(A1234567). The holder", 11),
       ("« A1234567 », issued 2020", 10 + "« ".len()),
+      ("\"(A1234567), issued 2020\"", 12),
+      ("„A1234567”, issued 2020", 10 + "„".len()),
     ] {
       let extracted =
         extract_match_pattern(value, 10, &regex).unwrap().unwrap();
