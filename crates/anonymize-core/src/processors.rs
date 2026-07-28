@@ -1492,26 +1492,24 @@ fn push_extended_person_hit(
   score: f64,
   filters: &DenyListFilterData,
 ) -> Result<()> {
-  if person_text_ends_with_street_type(&extended.text, filters) {
-    // Do not create standalone street addresses here: that path is gated by
-    // `standaloneStreetDetection`. Only reclassify when a nearby city/ZIP
-    // cue shows this is an address block; otherwise drop the person FP.
-    if let Some(address) = person_span_as_street_address(
-      full_text,
-      offsets,
-      person_start,
-      &extended,
-      filters,
-    )? {
-      results.push(PipelineEntity::detected(
-        address.start,
-        address.end,
-        ADDRESS_LABEL,
-        address.text,
-        score.max(0.9),
-        DetectionSource::DenyList,
-      ));
-    }
+  // Reclassify only with a nearby city/ZIP cue so this does not recreate
+  // opt-in standalone street detection. Without that cue, keep the person
+  // span: dropping it can unmask an overlapping regex street address.
+  if let Some(address) = person_span_as_street_address(
+    full_text,
+    offsets,
+    person_start,
+    &extended,
+    filters,
+  )? {
+    results.push(PipelineEntity::detected(
+      address.start,
+      address.end,
+      ADDRESS_LABEL,
+      address.text,
+      score.max(0.9),
+      DetectionSource::DenyList,
+    ));
     return Ok(());
   }
 
@@ -3505,9 +3503,9 @@ mod tests {
   }
 
   #[test]
-  fn deny_list_drops_bare_street_type_person_without_city_cue() {
-    // Standalone street detection stays opt-in: a deny-list first-name hit
-    // that absorbed a street type must not become an address on its own.
+  fn deny_list_keeps_bare_street_type_person_without_city_cue() {
+    // Standalone street detection stays opt-in: without a city/ZIP cue the
+    // street-type person span is left alone rather than turned into an address.
     let text = "123 Main Street";
     let main_start = u32::try_from(text.find("Main").unwrap()).unwrap();
     let main_end = main_start.saturating_add(4);
@@ -3535,7 +3533,9 @@ mod tests {
     )
     .unwrap();
 
-    assert!(entities.is_empty());
+    assert_eq!(entities.len(), 1);
+    assert_eq!(entities[0].label, "person");
+    assert_eq!(entities[0].text, "Main Street");
   }
 
   #[test]
