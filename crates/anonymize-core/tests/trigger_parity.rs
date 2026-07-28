@@ -859,6 +859,33 @@ fn match_pattern_trigger_with_lookahead_matches_through_bounded_engine() {
 }
 
 #[test]
+fn match_pattern_trigger_preserves_an_opener_consumed_inside_a_wrapper() {
+  let prepared = prepared_for_trigger(
+    "telephone",
+    "phone number",
+    TriggerStrategy::MatchPattern {
+      pattern: String::from(r"^\(?\d{3}\) \d{3}-\d{4}"),
+      flags: None,
+    },
+  );
+
+  let text = "telephone: \"(212) 555-0142\"";
+  let result = prepared
+    .detect_static_entities(text)
+    .expect("static detection should succeed");
+
+  let entity = result
+    .entities
+    .trigger()
+    .first()
+    .expect("the phone entity should exist");
+  let start = usize::try_from(entity.start).expect("start should fit usize");
+  let end = usize::try_from(entity.end).expect("end should fit usize");
+  assert_eq!(entity.text, "(212) 555-0142");
+  assert_eq!(text.get(start..end), Some(entity.text.as_str()));
+}
+
+#[test]
 fn match_pattern_trigger_surfaces_backtrack_budget_exhaustion() {
   // A catastrophic pattern/input pair must surface as a typed error from
   // detection — not hang, and not silently read as "no match" while the

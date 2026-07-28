@@ -360,7 +360,11 @@ pub(crate) fn process_trigger_matches(
       record_trigger_rejection(&mut diagnostics, found, rule, "empty-value");
       continue;
     };
-    let Some(mut value) = strip_quotes(&raw_value) else {
+    let cleaned_value = match &rule.strategy {
+      PreparedTriggerStrategy::MatchPattern { .. } => Some(raw_value),
+      _ => strip_quotes(&raw_value),
+    };
+    let Some(mut value) = cleaned_value else {
       record_trigger_rejection(
         &mut diagnostics,
         found,
@@ -1048,18 +1052,25 @@ fn extract_match_pattern(
   }
   let mut candidate = value_text;
   loop {
-    let after_openers = candidate.trim_start_matches(is_match_pattern_opener);
-    if after_openers.len() == candidate.len() {
-      break;
+    let Some(opener) = candidate
+      .chars()
+      .next()
+      .filter(|ch| is_match_pattern_opener(*ch))
+    else {
+      return Ok(None);
+    };
+    let Some(after_opener) = candidate.get(opener.len_utf8()..) else {
+      return Ok(None);
+    };
+    candidate = after_opener.trim_start_matches(is_horizontal_whitespace);
+    let opener_bytes = value_text.len().saturating_sub(candidate.len());
+    let candidate_start_byte = value_start_byte.saturating_add(opener_bytes);
+    if let Some(value) =
+      extract_anchored_pattern(candidate, candidate_start_byte, regex)?
+    {
+      return Ok(Some(value));
     }
-    candidate = after_openers.trim_start_matches(is_horizontal_whitespace);
   }
-  if candidate.len() == value_text.len() {
-    return Ok(None);
-  }
-  let opener_bytes = value_text.len().saturating_sub(candidate.len());
-  let candidate_start_byte = value_start_byte.saturating_add(opener_bytes);
-  extract_anchored_pattern(candidate, candidate_start_byte, regex)
 }
 
 fn extract_anchored_pattern(
@@ -2903,11 +2914,14 @@ mod tests {
   #[test]
   fn match_pattern_preserves_consumed_opening_delimiter() {
     let regex = BoundedRegex::new(r"^\(?\d{3}\)").unwrap();
-    let extracted = extract_match_pattern("(212) 555-0142", 10, &regex)
-      .unwrap()
-      .unwrap();
-    assert_eq!(extracted.start_byte, 10);
-    assert_eq!(extracted.end_byte, 15);
+    for (value, expected_start) in
+      [("(212) 555-0142", 10), ("\"(212) 555-0142\"", 11)]
+    {
+      let extracted =
+        extract_match_pattern(value, 10, &regex).unwrap().unwrap();
+      assert_eq!(extracted.start_byte, expected_start);
+      assert_eq!(extracted.end_byte, expected_start + "(212)".len());
+    }
   }
 
   #[test]

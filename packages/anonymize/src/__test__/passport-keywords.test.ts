@@ -124,6 +124,10 @@ const SEPARATOR_CONTINUATION_FIXTURES = POSITIVE_FIXTURES.flatMap(
     [language, text.replace(passportNumber, `${passportNumber} / 99`)] as const,
     [
       language,
+      text.replace(passportNumber, `${passportNumber} / ABC`),
+    ] as const,
+    [
+      language,
       text.replace(passportNumber, `${passportNumber}\u{202f}/\u{a0}99`),
     ] as const,
     [language, text.replace(passportNumber, `${passportNumber}:99`)] as const,
@@ -138,6 +142,10 @@ const SEPARATOR_CONTINUATION_FIXTURES = POSITIVE_FIXTURES.flatMap(
       language,
       text.replace(passportNumber, `${passportNumber} - - 99`),
     ] as const,
+    [
+      language,
+      text.replace(passportNumber, `${passportNumber}: / 99`),
+    ] as const,
     [language, text.replace(passportNumber, `${passportNumber}..99`)] as const,
   ],
 );
@@ -149,6 +157,23 @@ const SENTENCE_PUNCTUATION_FIXTURES = POSITIVE_FIXTURES.map(
       text.replace(passportNumber, `${passportNumber}. The holder`),
       passportNumber,
     ] as const,
+);
+
+const SEPARATOR_METADATA_FIXTURES = POSITIVE_FIXTURES.flatMap(
+  ([language, text, passportNumber]) =>
+    [
+      ": issued 2020",
+      " - valid until 2030",
+      " — valid until 2030",
+      "： issued 2020",
+    ].map(
+      (metadata) =>
+        [
+          language,
+          text.replace(passportNumber, `${passportNumber}${metadata}`),
+          passportNumber,
+        ] as const,
+    ),
 );
 
 const PARENTHETICAL_METADATA_FIXTURES = POSITIVE_FIXTURES.flatMap(
@@ -340,6 +365,21 @@ describe("localized passport-number triggers", () => {
 
   test.each(SENTENCE_PUNCTUATION_FIXTURES)(
     "%s keeps ordinary sentence punctuation outside the passport",
+    async (language, text, expected) => {
+      const entities = await detect(language, text);
+      const passport = entities.find(
+        (entity) => entity.label === "passport number",
+      );
+
+      expect(passport?.text).toBe(expected);
+      expect(passport && text.slice(passport.start, passport.end)).toBe(
+        expected,
+      );
+    },
+  );
+
+  test.each(SEPARATOR_METADATA_FIXTURES)(
+    "%s keeps separator-delimited metadata outside the passport",
     async (language, text, expected) => {
       const entities = await detect(language, text);
       const passport = entities.find(
