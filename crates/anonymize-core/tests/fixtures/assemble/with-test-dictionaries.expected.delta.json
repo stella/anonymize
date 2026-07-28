@@ -238,7 +238,31 @@
         {
           "type": "copy",
           "start": 0,
-          "end": 220
+          "end": 12
+        },
+        {
+          "type": "copy",
+          "start": 154,
+          "end": 163
+        },
+        {
+          "type": "copy",
+          "start": 135,
+          "end": 136
+        },
+        {
+          "type": "copy",
+          "start": 163,
+          "end": 174
+        },
+        {
+          "type": "values",
+          "values": ["dič", "ičo"]
+        },
+        {
+          "type": "copy",
+          "start": 174,
+          "end": 175
         }
       ]
     },
@@ -574,12 +598,12 @@
         {
           "type": "copy",
           "start": 1039,
-          "end": 1729
+          "end": 1731
         },
         {
           "type": "copy",
-          "start": 3132,
-          "end": 3178
+          "start": 3144,
+          "end": 3190
         }
       ]
     },
@@ -590,12 +614,12 @@
         {
           "type": "copy",
           "start": 0,
-          "end": 322
+          "end": 324
         },
         {
           "type": "copy",
-          "start": 1725,
-          "end": 1771
+          "start": 1737,
+          "end": 1783
         }
       ]
     },
@@ -5052,6 +5076,11 @@
     },
     {
       "type": "array",
+      "path": ["deny_list_data", "filters", "us_state_abbreviations"],
+      "segments": []
+    },
+    {
+      "type": "array",
       "path": ["deny_list_data", "filters", "address_trailing_nouns"],
       "segments": []
     },
@@ -5361,6 +5390,11 @@
     },
     {
       "type": "array",
+      "path": ["false_positive_filters", "us_state_abbreviations"],
+      "segments": []
+    },
+    {
+      "type": "array",
       "path": ["false_positive_filters", "address_trailing_nouns"],
       "segments": []
     },
@@ -5480,7 +5514,7 @@
     {
       "type": "set",
       "path": ["slices", "triggers", "end"],
-      "value": 1749
+      "value": 1751
     },
     {
       "type": "set",
@@ -5526,28 +5560,6 @@
       "type": "set",
       "path": ["slices", "hotwords", "end"],
       "value": 6622
-    },
-    {
-      "type": "array",
-      "path": ["address_seed_data", "boundary_words"],
-      "segments": [
-        { "type": "copy", "start": 0, "end": 12 },
-        { "type": "copy", "start": 154, "end": 163 },
-        { "type": "copy", "start": 135, "end": 136 },
-        { "type": "copy", "start": 163, "end": 174 },
-        { "type": "values", "values": ["dič", "ičo"] },
-        { "type": "copy", "start": 174, "end": 175 }
-      ]
-    },
-    {
-      "type": "set",
-      "path": ["deny_list_data", "filters", "us_state_abbreviations"],
-      "value": []
-    },
-    {
-      "type": "set",
-      "path": ["false_positive_filters", "us_state_abbreviations"],
-      "value": []
     }
   ]
 }

@@ -20,10 +20,26 @@ const SUPPORTED_LANGUAGES = [
 ] as const;
 
 type TriggerEntry = {
-  id?: unknown;
-  label?: unknown;
-  strategy?: { type?: unknown };
-  triggers?: unknown;
+  id?: string;
+  label: string;
+  strategy: { type: string };
+  triggers: string[];
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const isTriggerEntry = (value: unknown): value is TriggerEntry => {
+  if (!isRecord(value) || !isRecord(value.strategy)) {
+    return false;
+  }
+  return (
+    (value.id === undefined || typeof value.id === "string") &&
+    typeof value.label === "string" &&
+    typeof value.strategy.type === "string" &&
+    Array.isArray(value.triggers) &&
+    value.triggers.every((trigger) => typeof trigger === "string")
+  );
 };
 
 const loadLanguageTriggers = async (
@@ -35,10 +51,12 @@ const loadLanguageTriggers = async (
       import.meta.url,
     ),
   ).json();
-  if (!Array.isArray(value)) {
-    throw new TypeError(`triggers.${language}.json must contain an array`);
+  if (!Array.isArray(value) || !value.every(isTriggerEntry)) {
+    throw new TypeError(
+      `triggers.${language}.json must contain valid trigger entries`,
+    );
   }
-  return value as TriggerEntry[];
+  return value;
 };
 
 const BASE_CONFIG: PipelineConfig = {
@@ -101,14 +119,69 @@ const PUNCTUATED_CONTINUATION_FIXTURES = POSITIVE_FIXTURES.map(
     [language, text.replace(passportNumber, `${passportNumber}-OLD`)] as const,
 );
 
-const LANGUAGE_ISOLATION_FIXTURES = POSITIVE_FIXTURES.map(
-  ([language], index) => {
-    const foreign = POSITIVE_FIXTURES[(index + 1) % POSITIVE_FIXTURES.length];
-    if (!foreign) {
-      throw new TypeError("passport language-isolation fixture is missing");
+const SEPARATOR_CONTINUATION_FIXTURES = POSITIVE_FIXTURES.flatMap(
+  ([language, text, passportNumber]) => [
+    [language, text.replace(passportNumber, `${passportNumber} / 99`)] as const,
+    [language, text.replace(passportNumber, `${passportNumber}--99`)] as const,
+    [
+      language,
+      text.replace(passportNumber, `${passportNumber} - - 99`),
+    ] as const,
+    [language, text.replace(passportNumber, `${passportNumber}..99`)] as const,
+  ],
+);
+
+const SENTENCE_PUNCTUATION_FIXTURES = POSITIVE_FIXTURES.map(
+  ([language, text, passportNumber]) =>
+    [
+      language,
+      text.replace(passportNumber, `${passportNumber}. The holder`),
+      passportNumber,
+    ] as const,
+);
+
+const QUOTE_WRAPPERS = [
+  ['"', '"'],
+  ["„", "“"],
+  ["“", "”"],
+  ["«", "»"],
+  ["‹", "›"],
+  ["(", ")"],
+] as const;
+
+const QUOTED_FIXTURES = POSITIVE_FIXTURES.map(
+  ([language, text, passportNumber], index) => {
+    const wrapper = QUOTE_WRAPPERS[index % QUOTE_WRAPPERS.length];
+    if (!wrapper) {
+      throw new TypeError("passport quote fixture is missing");
     }
-    return [language, foreign[1]] as const;
+    const [open, close] = wrapper;
+    return [
+      language,
+      `😀 ${text.replace(passportNumber, `${open}${passportNumber}${close}`)}`,
+      passportNumber,
+    ] as const;
   },
+);
+
+const CANONICALLY_DECOMPOSED_FIXTURES = POSITIVE_FIXTURES.flatMap(
+  ([language, text, passportNumber]) => {
+    const decomposed = text.normalize("NFD");
+    return decomposed === text
+      ? []
+      : [[language, `😀 ${decomposed}`, passportNumber] as const];
+  },
+);
+
+const PUNCTUATED_ABBREVIATION_FIXTURES = [
+  ["pl", "paszport nr. AB1234567", "AB1234567"],
+  ["sv", "pass nr. 12345678", "12345678"],
+] as const;
+
+const LANGUAGE_ISOLATION_FIXTURES = POSITIVE_FIXTURES.flatMap(([language]) =>
+  POSITIVE_FIXTURES.flatMap(([foreignLanguage, foreignText]) =>
+    language === foreignLanguage ? [] : [[language, foreignText] as const],
+  ),
 );
 
 describe("localized passport-number triggers", () => {
@@ -119,11 +192,12 @@ describe("localized passport-number triggers", () => {
         (candidate) => candidate.id === `${language}-passport-number`,
       );
 
-      expect(entry, `${language}-passport-number is missing`).toBeDefined();
-      expect(entry?.label).toBe("passport number");
-      expect(entry?.strategy?.type).toBe("match-pattern");
-      expect(entry?.triggers).toBeArray();
-      expect((entry?.triggers as unknown[])?.length).toBeGreaterThan(0);
+      if (!entry) {
+        throw new TypeError(`${language}-passport-number is missing`);
+      }
+      expect(entry.label).toBe("passport number");
+      expect(entry.strategy.type).toBe("match-pattern");
+      expect(entry.triggers.length).toBeGreaterThan(0);
     }
   });
 
@@ -163,6 +237,84 @@ describe("localized passport-number triggers", () => {
     "%s rejects a punctuated continuation",
     async (language, text) => {
       expect(await detect(language, text)).toEqual([]);
+    },
+  );
+
+  test.each(SEPARATOR_CONTINUATION_FIXTURES)(
+    "%s rejects a spaced or repeated separator continuation",
+    async (language, text) => {
+      expect(await detect(language, text)).toEqual([]);
+    },
+  );
+
+  test.each(SENTENCE_PUNCTUATION_FIXTURES)(
+    "%s keeps ordinary sentence punctuation outside the passport",
+    async (language, text, expected) => {
+      const entities = await detect(language, text);
+      const passport = entities.find(
+        (entity) => entity.label === "passport number",
+      );
+
+      expect(passport?.text).toBe(expected);
+      expect(passport && text.slice(passport.start, passport.end)).toBe(
+        expected,
+      );
+    },
+  );
+
+  test.each(QUOTED_FIXTURES)(
+    "%s detects a passport value after an opening delimiter",
+    async (language, text, expected) => {
+      const entities = await detect(language, text);
+      expect(entities).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            label: "passport number",
+            text: expected,
+          }),
+        ]),
+      );
+      const passport = entities.find(
+        (entity) => entity.label === "passport number",
+      );
+      expect(passport && text.slice(passport.start, passport.end)).toBe(
+        expected,
+      );
+    },
+  );
+
+  test.each(CANONICALLY_DECOMPOSED_FIXTURES)(
+    "%s detects canonically decomposed passport triggers",
+    async (language, text, expected) => {
+      const entities = await detect(language, text);
+      expect(entities).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            label: "passport number",
+            text: expected,
+          }),
+        ]),
+      );
+      const passport = entities.find(
+        (entity) => entity.label === "passport number",
+      );
+      expect(passport && text.slice(passport.start, passport.end)).toBe(
+        expected,
+      );
+    },
+  );
+
+  test.each(PUNCTUATED_ABBREVIATION_FIXTURES)(
+    "%s detects a punctuated passport abbreviation",
+    async (language, text, expected) => {
+      expect(await detect(language, text)).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            label: "passport number",
+            text: expected,
+          }),
+        ]),
+      );
     },
   );
 

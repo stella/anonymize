@@ -218,9 +218,14 @@
     "label": "passport number",
     "strategy": {
       "type": "match-pattern",
-      "pattern": "^(?:[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/.][\\p{L}\\p{N}])"
+      "pattern": "^(?:[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/](?:[ \\t]*[-‐‑‒–—―+/.])*[ \\t]*[\\p{L}\\p{N}]|\\.[\\p{L}\\p{N}]|\\.(?:[ \\t]*[-‐‑‒–—―+/.])+[ \\t]*[\\p{L}\\p{N}])"
     },
-    "triggers": ["cestovní pas č.", "cestovní pas"]
+    "triggers": [
+      "cestovní pas č.",
+      "cestovní pas",
+      "cestovni\u0301 pas c\u030c.",
+      "cestovni\u0301 pas"
+    ]
   },
   {
     "id": "cs-bank-account-eol",

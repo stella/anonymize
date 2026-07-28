@@ -254,8 +254,53 @@
       "segments": [
         {
           "type": "copy",
-          "start": 0,
-          "end": 220
+          "start": 12,
+          "end": 17
+        },
+        {
+          "type": "copy",
+          "start": 52,
+          "end": 72
+        },
+        {
+          "type": "copy",
+          "start": 87,
+          "end": 114
+        },
+        {
+          "type": "copy",
+          "start": 154,
+          "end": 163
+        },
+        {
+          "type": "copy",
+          "start": 175,
+          "end": 183
+        },
+        {
+          "type": "copy",
+          "start": 184,
+          "end": 188
+        },
+        {
+          "type": "copy",
+          "start": 172,
+          "end": 173
+        },
+        {
+          "type": "copy",
+          "start": 188,
+          "end": 195
+        },
+        {
+          "type": "copy",
+          "start": 183,
+          "end": 184
+        },
+        {
+          "type": "copy",
+          "start": 195,
+          "end": 198
         }
       ]
     },
@@ -650,43 +695,43 @@
         },
         {
           "type": "copy",
-          "start": 1729,
-          "end": 1815
+          "start": 1731,
+          "end": 1817
         },
         {
           "type": "copy",
-          "start": 2163,
-          "end": 2425
+          "start": 2167,
+          "end": 2429
         },
         {
           "type": "copy",
-          "start": 2513,
-          "end": 2703
+          "start": 2519,
+          "end": 2710
         },
         {
           "type": "copy",
-          "start": 3132,
-          "end": 3173
+          "start": 3144,
+          "end": 3185
         },
         {
           "type": "copy",
-          "start": 3180,
-          "end": 3184
+          "start": 3192,
+          "end": 3196
+        },
+        {
+          "type": "copy",
+          "start": 3197,
+          "end": 3199
         },
         {
           "type": "copy",
           "start": 3185,
-          "end": 3187
+          "end": 3188
         },
         {
           "type": "copy",
-          "start": 3173,
-          "end": 3176
-        },
-        {
-          "type": "copy",
-          "start": 3190,
-          "end": 3192
+          "start": 3202,
+          "end": 3204
         }
       ]
     },
@@ -696,53 +741,43 @@
       "segments": [
         {
           "type": "copy",
-          "start": 322,
-          "end": 408
+          "start": 324,
+          "end": 410
         },
         {
           "type": "copy",
-          "start": 756,
-          "end": 1018
+          "start": 760,
+          "end": 1022
         },
         {
           "type": "copy",
-          "start": 1106,
-          "end": 1109
+          "start": 1112,
+          "end": 1303
         },
         {
           "type": "copy",
-          "start": 360,
-          "end": 361
+          "start": 1737,
+          "end": 1778
         },
         {
           "type": "copy",
-          "start": 1110,
-          "end": 1296
+          "start": 1785,
+          "end": 1789
         },
         {
           "type": "copy",
-          "start": 1725,
-          "end": 1766
-        },
-        {
-          "type": "copy",
-          "start": 1773,
-          "end": 1777
+          "start": 1790,
+          "end": 1792
         },
         {
           "type": "copy",
           "start": 1778,
-          "end": 1780
+          "end": 1781
         },
         {
           "type": "copy",
-          "start": 1766,
-          "end": 1769
-        },
-        {
-          "type": "copy",
-          "start": 1783,
-          "end": 1785
+          "start": 1795,
+          "end": 1797
         }
       ]
     },
@@ -1355,6 +1390,11 @@
     },
     {
       "type": "array",
+      "path": ["deny_list_data", "filters", "us_state_abbreviations"],
+      "segments": []
+    },
+    {
+      "type": "array",
       "path": ["deny_list_data", "filters", "address_trailing_nouns"],
       "segments": []
     },
@@ -1794,6 +1834,11 @@
     },
     {
       "type": "array",
+      "path": ["false_positive_filters", "us_state_abbreviations"],
+      "segments": []
+    },
+    {
+      "type": "array",
       "path": ["false_positive_filters", "address_trailing_nouns"],
       "segments": []
     },
@@ -1908,7 +1953,7 @@
     {
       "type": "set",
       "path": ["slices", "triggers", "end"],
-      "value": 1973
+      "value": 1974
     },
     {
       "type": "set",
@@ -1954,32 +1999,6 @@
       "type": "set",
       "path": ["slices", "hotwords", "end"],
       "value": 6614
-    },
-    {
-      "type": "array",
-      "path": ["address_seed_data", "boundary_words"],
-      "segments": [
-        { "type": "copy", "start": 12, "end": 17 },
-        { "type": "copy", "start": 52, "end": 72 },
-        { "type": "copy", "start": 87, "end": 114 },
-        { "type": "copy", "start": 154, "end": 163 },
-        { "type": "copy", "start": 175, "end": 183 },
-        { "type": "copy", "start": 184, "end": 188 },
-        { "type": "copy", "start": 172, "end": 173 },
-        { "type": "copy", "start": 188, "end": 195 },
-        { "type": "copy", "start": 183, "end": 184 },
-        { "type": "copy", "start": 195, "end": 198 }
-      ]
-    },
-    {
-      "type": "set",
-      "path": ["deny_list_data", "filters", "us_state_abbreviations"],
-      "value": []
-    },
-    {
-      "type": "set",
-      "path": ["false_positive_filters", "us_state_abbreviations"],
-      "value": []
     }
   ]
 }

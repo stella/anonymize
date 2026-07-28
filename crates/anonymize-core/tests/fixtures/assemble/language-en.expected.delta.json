@@ -229,6 +229,42 @@
     },
     {
       "type": "array",
+      "path": ["address_seed_data", "boundary_words"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 17,
+          "end": 35
+        },
+        {
+          "type": "copy",
+          "start": 154,
+          "end": 163
+        },
+        {
+          "type": "copy",
+          "start": 183,
+          "end": 184
+        },
+        {
+          "type": "copy",
+          "start": 177,
+          "end": 178
+        },
+        {
+          "type": "copy",
+          "start": 176,
+          "end": 177
+        },
+        {
+          "type": "copy",
+          "start": 220,
+          "end": 308
+        }
+      ]
+    },
+    {
+      "type": "array",
       "path": ["legal_form_data", "non_ascii_name_short_suffixes"],
       "segments": [
         {
@@ -301,18 +337,18 @@
         },
         {
           "type": "copy",
-          "start": 1815,
-          "end": 1910
+          "start": 1817,
+          "end": 1912
         },
         {
           "type": "copy",
-          "start": 3132,
-          "end": 3173
-        },
-        {
-          "type": "copy",
-          "start": 3184,
+          "start": 3144,
           "end": 3185
+        },
+        {
+          "type": "copy",
+          "start": 3196,
+          "end": 3197
         }
       ]
     },
@@ -322,8 +358,8 @@
       "segments": [
         {
           "type": "copy",
-          "start": 408,
-          "end": 452
+          "start": 410,
+          "end": 454
         },
         {
           "type": "values",
@@ -346,8 +382,8 @@
         },
         {
           "type": "copy",
-          "start": 453,
-          "end": 460
+          "start": 455,
+          "end": 462
         },
         {
           "type": "values",
@@ -384,8 +420,8 @@
         },
         {
           "type": "copy",
-          "start": 462,
-          "end": 503
+          "start": 464,
+          "end": 505
         },
         {
           "type": "values",
@@ -424,8 +460,8 @@
         },
         {
           "type": "copy",
-          "start": 1727,
-          "end": 1729
+          "start": 1739,
+          "end": 1741
         },
         {
           "type": "values",
@@ -464,13 +500,13 @@
         },
         {
           "type": "copy",
-          "start": 1731,
-          "end": 1766
+          "start": 1743,
+          "end": 1778
         },
         {
           "type": "copy",
-          "start": 1777,
-          "end": 1778
+          "start": 1789,
+          "end": 1790
         }
       ]
     },
@@ -1337,18 +1373,6 @@
       "type": "set",
       "path": ["slices", "hotwords", "end"],
       "value": 6614
-    },
-    {
-      "type": "array",
-      "path": ["address_seed_data", "boundary_words"],
-      "segments": [
-        { "type": "copy", "start": 17, "end": 35 },
-        { "type": "copy", "start": 154, "end": 163 },
-        { "type": "copy", "start": 183, "end": 184 },
-        { "type": "copy", "start": 177, "end": 178 },
-        { "type": "copy", "start": 176, "end": 177 },
-        { "type": "copy", "start": 220, "end": 308 }
-      ]
     }
   ]
 }

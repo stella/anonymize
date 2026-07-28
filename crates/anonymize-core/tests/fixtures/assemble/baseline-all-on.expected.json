@@ -23880,6 +23880,16 @@
     },
     {
       "kind": "literal-with-options",
+      "pattern": "cestovní pas č.",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "cestovní pas",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
       "pattern": "bankovní spojení",
       "case_insensitive": true
     },
@@ -25680,6 +25690,11 @@
     },
     {
       "kind": "literal-with-options",
+      "pattern": "número do passaporte",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
       "pattern": "representada por",
       "case_insensitive": true
     },
@@ -26621,6 +26636,11 @@
     {
       "kind": "literal-with-options",
       "pattern": "nº de pasaporte",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "número de pasaporte",
       "case_insensitive": true
     },
     {
@@ -28250,6 +28270,16 @@
     },
     {
       "kind": "literal-with-options",
+      "pattern": "útlevélszám",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "útlevél száma",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
       "pattern": "adószám",
       "case_insensitive": true
     },
@@ -28691,6 +28721,11 @@
     {
       "kind": "literal-with-options",
       "pattern": "paszport nr",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "paszport nr.",
       "case_insensitive": true
     },
     {
@@ -29640,6 +29675,16 @@
     },
     {
       "kind": "literal-with-options",
+      "pattern": "numărul pașaportului",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "număr pașaport",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
       "pattern": "domiciliat în",
       "case_insensitive": true
     },
@@ -29846,6 +29891,16 @@
     {
       "kind": "literal-with-options",
       "pattern": "číslo cestovného pasu",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "číslo pasu",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "číslo cestovného pasu",
       "case_insensitive": true
     },
     {
@@ -31586,6 +31641,11 @@
     {
       "kind": "literal-with-options",
       "pattern": "pass nr",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "pass nr.",
       "case_insensitive": true
     },
     {
@@ -33800,7 +33860,7 @@
         "label": "passport number",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/.][\\p{L}\\p{N}])"
+          "pattern": "^(?:[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/](?:[ \\t]*[-‐‑‒–—―+/.])*[ \\t]*[\\p{L}\\p{N}]|\\.[\\p{L}\\p{N}]|\\.(?:[ \\t]*[-‐‑‒–—―+/.])+[ \\t]*[\\p{L}\\p{N}])"
         },
         "validations": [],
         "include_trigger": false
@@ -33810,7 +33870,27 @@
         "label": "passport number",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/.][\\p{L}\\p{N}])"
+          "pattern": "^(?:[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/](?:[ \\t]*[-‐‑‒–—―+/.])*[ \\t]*[\\p{L}\\p{N}]|\\.[\\p{L}\\p{N}]|\\.(?:[ \\t]*[-‐‑‒–—―+/.])+[ \\t]*[\\p{L}\\p{N}])"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
+        "trigger": "cestovní pas č.",
+        "label": "passport number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^(?:[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/](?:[ \\t]*[-‐‑‒–—―+/.])*[ \\t]*[\\p{L}\\p{N}]|\\.[\\p{L}\\p{N}]|\\.(?:[ \\t]*[-‐‑‒–—―+/.])+[ \\t]*[\\p{L}\\p{N}])"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
+        "trigger": "cestovní pas",
+        "label": "passport number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^(?:[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/](?:[ \\t]*[-‐‑‒–—―+/.])*[ \\t]*[\\p{L}\\p{N}]|\\.[\\p{L}\\p{N}]|\\.(?:[ \\t]*[-‐‑‒–—―+/.])+[ \\t]*[\\p{L}\\p{N}])"
         },
         "validations": [],
         "include_trigger": false
@@ -36394,7 +36474,7 @@
         "label": "passport number",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:(?=[A-Za-z0-9]{0,8}\\d)[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/.][\\p{L}\\p{N}])"
+          "pattern": "^(?:(?=[A-Za-z0-9]{0,8}\\d)[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/](?:[ \\t]*[-‐‑‒–—―+/.])*[ \\t]*[\\p{L}\\p{N}]|\\.[\\p{L}\\p{N}]|\\.(?:[ \\t]*[-‐‑‒–—―+/.])+[ \\t]*[\\p{L}\\p{N}])"
         },
         "validations": [],
         "include_trigger": false
@@ -36404,7 +36484,7 @@
         "label": "passport number",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:(?=[A-Za-z0-9]{0,8}\\d)[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/.][\\p{L}\\p{N}])"
+          "pattern": "^(?:(?=[A-Za-z0-9]{0,8}\\d)[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/](?:[ \\t]*[-‐‑‒–—―+/.])*[ \\t]*[\\p{L}\\p{N}]|\\.[\\p{L}\\p{N}]|\\.(?:[ \\t]*[-‐‑‒–—―+/.])+[ \\t]*[\\p{L}\\p{N}])"
         },
         "validations": [],
         "include_trigger": false
@@ -37356,7 +37436,7 @@
         "label": "passport number",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:(?=[A-Za-z0-9]{0,8}\\d)[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/.][\\p{L}\\p{N}])"
+          "pattern": "^(?:(?=[A-Za-z0-9]{0,8}\\d)[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/](?:[ \\t]*[-‐‑‒–—―+/.])*[ \\t]*[\\p{L}\\p{N}]|\\.[\\p{L}\\p{N}]|\\.(?:[ \\t]*[-‐‑‒–—―+/.])+[ \\t]*[\\p{L}\\p{N}])"
         },
         "validations": [],
         "include_trigger": false
@@ -37366,7 +37446,7 @@
         "label": "passport number",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:(?=[A-Za-z0-9]{0,8}\\d)[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/.][\\p{L}\\p{N}])"
+          "pattern": "^(?:(?=[A-Za-z0-9]{0,8}\\d)[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/](?:[ \\t]*[-‐‑‒–—―+/.])*[ \\t]*[\\p{L}\\p{N}]|\\.[\\p{L}\\p{N}]|\\.(?:[ \\t]*[-‐‑‒–—―+/.])+[ \\t]*[\\p{L}\\p{N}])"
         },
         "validations": [],
         "include_trigger": false
@@ -37376,7 +37456,7 @@
         "label": "passport number",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:(?=[A-Za-z0-9]{0,8}\\d)[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/.][\\p{L}\\p{N}])"
+          "pattern": "^(?:(?=[A-Za-z0-9]{0,8}\\d)[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/](?:[ \\t]*[-‐‑‒–—―+/.])*[ \\t]*[\\p{L}\\p{N}]|\\.[\\p{L}\\p{N}]|\\.(?:[ \\t]*[-‐‑‒–—―+/.])+[ \\t]*[\\p{L}\\p{N}])"
         },
         "validations": [],
         "include_trigger": false
@@ -38613,7 +38693,7 @@
         "label": "passport number",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:(?=[A-Za-z0-9]{0,8}\\d)[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/.][\\p{L}\\p{N}])"
+          "pattern": "^(?:(?=[A-Za-z0-9]{0,8}\\d)[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/](?:[ \\t]*[-‐‑‒–—―+/.])*[ \\t]*[\\p{L}\\p{N}]|\\.[\\p{L}\\p{N}]|\\.(?:[ \\t]*[-‐‑‒–—―+/.])+[ \\t]*[\\p{L}\\p{N}])"
         },
         "validations": [],
         "include_trigger": false
@@ -38623,7 +38703,7 @@
         "label": "passport number",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:(?=[A-Za-z0-9]{0,8}\\d)[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/.][\\p{L}\\p{N}])"
+          "pattern": "^(?:(?=[A-Za-z0-9]{0,8}\\d)[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/](?:[ \\t]*[-‐‑‒–—―+/.])*[ \\t]*[\\p{L}\\p{N}]|\\.[\\p{L}\\p{N}]|\\.(?:[ \\t]*[-‐‑‒–—―+/.])+[ \\t]*[\\p{L}\\p{N}])"
         },
         "validations": [],
         "include_trigger": false
@@ -38633,7 +38713,17 @@
         "label": "passport number",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:(?=[A-Za-z0-9]{0,8}\\d)[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/.][\\p{L}\\p{N}])"
+          "pattern": "^(?:(?=[A-Za-z0-9]{0,8}\\d)[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/](?:[ \\t]*[-‐‑‒–—―+/.])*[ \\t]*[\\p{L}\\p{N}]|\\.[\\p{L}\\p{N}]|\\.(?:[ \\t]*[-‐‑‒–—―+/.])+[ \\t]*[\\p{L}\\p{N}])"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
+        "trigger": "número do passaporte",
+        "label": "passport number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^(?:(?=[A-Za-z0-9]{0,8}\\d)[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/](?:[ \\t]*[-‐‑‒–—―+/.])*[ \\t]*[\\p{L}\\p{N}]|\\.[\\p{L}\\p{N}]|\\.(?:[ \\t]*[-‐‑‒–—―+/.])+[ \\t]*[\\p{L}\\p{N}])"
         },
         "validations": [],
         "include_trigger": false
@@ -40929,7 +41019,7 @@
         "label": "passport number",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:(?=[A-Za-z0-9]{0,8}\\d)[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/.][\\p{L}\\p{N}])"
+          "pattern": "^(?:(?=[A-Za-z0-9]{0,8}\\d)[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/](?:[ \\t]*[-‐‑‒–—―+/.])*[ \\t]*[\\p{L}\\p{N}]|\\.[\\p{L}\\p{N}]|\\.(?:[ \\t]*[-‐‑‒–—―+/.])+[ \\t]*[\\p{L}\\p{N}])"
         },
         "validations": [],
         "include_trigger": false
@@ -40939,7 +41029,7 @@
         "label": "passport number",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:(?=[A-Za-z0-9]{0,8}\\d)[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/.][\\p{L}\\p{N}])"
+          "pattern": "^(?:(?=[A-Za-z0-9]{0,8}\\d)[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/](?:[ \\t]*[-‐‑‒–—―+/.])*[ \\t]*[\\p{L}\\p{N}]|\\.[\\p{L}\\p{N}]|\\.(?:[ \\t]*[-‐‑‒–—―+/.])+[ \\t]*[\\p{L}\\p{N}])"
         },
         "validations": [],
         "include_trigger": false
@@ -40949,7 +41039,17 @@
         "label": "passport number",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:(?=[A-Za-z0-9]{0,8}\\d)[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/.][\\p{L}\\p{N}])"
+          "pattern": "^(?:(?=[A-Za-z0-9]{0,8}\\d)[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/](?:[ \\t]*[-‐‑‒–—―+/.])*[ \\t]*[\\p{L}\\p{N}]|\\.[\\p{L}\\p{N}]|\\.(?:[ \\t]*[-‐‑‒–—―+/.])+[ \\t]*[\\p{L}\\p{N}])"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
+        "trigger": "número de pasaporte",
+        "label": "passport number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^(?:(?=[A-Za-z0-9]{0,8}\\d)[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/](?:[ \\t]*[-‐‑‒–—―+/.])*[ \\t]*[\\p{L}\\p{N}]|\\.[\\p{L}\\p{N}]|\\.(?:[ \\t]*[-‐‑‒–—―+/.])+[ \\t]*[\\p{L}\\p{N}])"
         },
         "validations": [],
         "include_trigger": false
@@ -41962,7 +42062,7 @@
         "label": "passport number",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/.][\\p{L}\\p{N}])"
+          "pattern": "^(?:[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/](?:[ \\t]*[-‐‑‒–—―+/.])*[ \\t]*[\\p{L}\\p{N}]|\\.[\\p{L}\\p{N}]|\\.(?:[ \\t]*[-‐‑‒–—―+/.])+[ \\t]*[\\p{L}\\p{N}])"
         },
         "validations": [],
         "include_trigger": false
@@ -41972,7 +42072,7 @@
         "label": "passport number",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/.][\\p{L}\\p{N}])"
+          "pattern": "^(?:[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/](?:[ \\t]*[-‐‑‒–—―+/.])*[ \\t]*[\\p{L}\\p{N}]|\\.[\\p{L}\\p{N}]|\\.(?:[ \\t]*[-‐‑‒–—―+/.])+[ \\t]*[\\p{L}\\p{N}])"
         },
         "validations": [],
         "include_trigger": false
@@ -45878,7 +45978,7 @@
         "label": "passport number",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:(?=[A-Za-z0-9]{0,8}\\d)[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/.][\\p{L}\\p{N}])"
+          "pattern": "^(?:(?=[A-Za-z0-9]{0,8}\\d)[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/](?:[ \\t]*[-‐‑‒–—―+/.])*[ \\t]*[\\p{L}\\p{N}]|\\.[\\p{L}\\p{N}]|\\.(?:[ \\t]*[-‐‑‒–—―+/.])+[ \\t]*[\\p{L}\\p{N}])"
         },
         "validations": [],
         "include_trigger": false
@@ -45888,7 +45988,27 @@
         "label": "passport number",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:(?=[A-Za-z0-9]{0,8}\\d)[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/.][\\p{L}\\p{N}])"
+          "pattern": "^(?:(?=[A-Za-z0-9]{0,8}\\d)[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/](?:[ \\t]*[-‐‑‒–—―+/.])*[ \\t]*[\\p{L}\\p{N}]|\\.[\\p{L}\\p{N}]|\\.(?:[ \\t]*[-‐‑‒–—―+/.])+[ \\t]*[\\p{L}\\p{N}])"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
+        "trigger": "útlevélszám",
+        "label": "passport number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^(?:(?=[A-Za-z0-9]{0,8}\\d)[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/](?:[ \\t]*[-‐‑‒–—―+/.])*[ \\t]*[\\p{L}\\p{N}]|\\.[\\p{L}\\p{N}]|\\.(?:[ \\t]*[-‐‑‒–—―+/.])+[ \\t]*[\\p{L}\\p{N}])"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
+        "trigger": "útlevél száma",
+        "label": "passport number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^(?:(?=[A-Za-z0-9]{0,8}\\d)[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/](?:[ \\t]*[-‐‑‒–—―+/.])*[ \\t]*[\\p{L}\\p{N}]|\\.[\\p{L}\\p{N}]|\\.(?:[ \\t]*[-‐‑‒–—―+/.])+[ \\t]*[\\p{L}\\p{N}])"
         },
         "validations": [],
         "include_trigger": false
@@ -46309,7 +46429,7 @@
         "label": "passport number",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:(?=[A-Za-z0-9]{0,8}\\d)[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/.][\\p{L}\\p{N}])"
+          "pattern": "^(?:(?=[A-Za-z0-9]{0,8}\\d)[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/](?:[ \\t]*[-‐‑‒–—―+/.])*[ \\t]*[\\p{L}\\p{N}]|\\.[\\p{L}\\p{N}]|\\.(?:[ \\t]*[-‐‑‒–—―+/.])+[ \\t]*[\\p{L}\\p{N}])"
         },
         "validations": [],
         "include_trigger": false
@@ -46319,7 +46439,7 @@
         "label": "passport number",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:(?=[A-Za-z0-9]{0,8}\\d)[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/.][\\p{L}\\p{N}])"
+          "pattern": "^(?:(?=[A-Za-z0-9]{0,8}\\d)[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/](?:[ \\t]*[-‐‑‒–—―+/.])*[ \\t]*[\\p{L}\\p{N}]|\\.[\\p{L}\\p{N}]|\\.(?:[ \\t]*[-‐‑‒–—―+/.])+[ \\t]*[\\p{L}\\p{N}])"
         },
         "validations": [],
         "include_trigger": false
@@ -46329,7 +46449,7 @@
         "label": "passport number",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:(?=[A-Za-z0-9]{0,8}\\d)[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/.][\\p{L}\\p{N}])"
+          "pattern": "^(?:(?=[A-Za-z0-9]{0,8}\\d)[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/](?:[ \\t]*[-‐‑‒–—―+/.])*[ \\t]*[\\p{L}\\p{N}]|\\.[\\p{L}\\p{N}]|\\.(?:[ \\t]*[-‐‑‒–—―+/.])+[ \\t]*[\\p{L}\\p{N}])"
         },
         "validations": [],
         "include_trigger": false
@@ -46896,7 +47016,7 @@
         "label": "passport number",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:(?=[A-Za-z0-9]{0,8}\\d)[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/.][\\p{L}\\p{N}])"
+          "pattern": "^(?:(?=[A-Za-z0-9]{0,8}\\d)[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/](?:[ \\t]*[-‐‑‒–—―+/.])*[ \\t]*[\\p{L}\\p{N}]|\\.[\\p{L}\\p{N}]|\\.(?:[ \\t]*[-‐‑‒–—―+/.])+[ \\t]*[\\p{L}\\p{N}])"
         },
         "validations": [],
         "include_trigger": false
@@ -46906,7 +47026,7 @@
         "label": "passport number",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:(?=[A-Za-z0-9]{0,8}\\d)[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/.][\\p{L}\\p{N}])"
+          "pattern": "^(?:(?=[A-Za-z0-9]{0,8}\\d)[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/](?:[ \\t]*[-‐‑‒–—―+/.])*[ \\t]*[\\p{L}\\p{N}]|\\.[\\p{L}\\p{N}]|\\.(?:[ \\t]*[-‐‑‒–—―+/.])+[ \\t]*[\\p{L}\\p{N}])"
         },
         "validations": [],
         "include_trigger": false
@@ -46916,7 +47036,17 @@
         "label": "passport number",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:(?=[A-Za-z0-9]{0,8}\\d)[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/.][\\p{L}\\p{N}])"
+          "pattern": "^(?:(?=[A-Za-z0-9]{0,8}\\d)[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/](?:[ \\t]*[-‐‑‒–—―+/.])*[ \\t]*[\\p{L}\\p{N}]|\\.[\\p{L}\\p{N}]|\\.(?:[ \\t]*[-‐‑‒–—―+/.])+[ \\t]*[\\p{L}\\p{N}])"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
+        "trigger": "paszport nr.",
+        "label": "passport number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^(?:(?=[A-Za-z0-9]{0,8}\\d)[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/](?:[ \\t]*[-‐‑‒–—―+/.])*[ \\t]*[\\p{L}\\p{N}]|\\.[\\p{L}\\p{N}]|\\.(?:[ \\t]*[-‐‑‒–—―+/.])+[ \\t]*[\\p{L}\\p{N}])"
         },
         "validations": [],
         "include_trigger": false
@@ -49548,7 +49678,7 @@
         "label": "passport number",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:(?=[A-Za-z0-9]{0,8}\\d)[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/.][\\p{L}\\p{N}])"
+          "pattern": "^(?:(?=[A-Za-z0-9]{0,8}\\d)[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/](?:[ \\t]*[-‐‑‒–—―+/.])*[ \\t]*[\\p{L}\\p{N}]|\\.[\\p{L}\\p{N}]|\\.(?:[ \\t]*[-‐‑‒–—―+/.])+[ \\t]*[\\p{L}\\p{N}])"
         },
         "validations": [],
         "include_trigger": false
@@ -49558,7 +49688,27 @@
         "label": "passport number",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:(?=[A-Za-z0-9]{0,8}\\d)[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/.][\\p{L}\\p{N}])"
+          "pattern": "^(?:(?=[A-Za-z0-9]{0,8}\\d)[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/](?:[ \\t]*[-‐‑‒–—―+/.])*[ \\t]*[\\p{L}\\p{N}]|\\.[\\p{L}\\p{N}]|\\.(?:[ \\t]*[-‐‑‒–—―+/.])+[ \\t]*[\\p{L}\\p{N}])"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
+        "trigger": "numărul pașaportului",
+        "label": "passport number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^(?:(?=[A-Za-z0-9]{0,8}\\d)[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/](?:[ \\t]*[-‐‑‒–—―+/.])*[ \\t]*[\\p{L}\\p{N}]|\\.[\\p{L}\\p{N}]|\\.(?:[ \\t]*[-‐‑‒–—―+/.])+[ \\t]*[\\p{L}\\p{N}])"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
+        "trigger": "număr pașaport",
+        "label": "passport number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^(?:(?=[A-Za-z0-9]{0,8}\\d)[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/](?:[ \\t]*[-‐‑‒–—―+/.])*[ \\t]*[\\p{L}\\p{N}]|\\.[\\p{L}\\p{N}]|\\.(?:[ \\t]*[-‐‑‒–—―+/.])+[ \\t]*[\\p{L}\\p{N}])"
         },
         "validations": [],
         "include_trigger": false
@@ -50047,7 +50197,7 @@
         "label": "passport number",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:(?=[A-Za-z0-9]{0,8}\\d)[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/.][\\p{L}\\p{N}])"
+          "pattern": "^(?:(?=[A-Za-z0-9]{0,8}\\d)[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/](?:[ \\t]*[-‐‑‒–—―+/.])*[ \\t]*[\\p{L}\\p{N}]|\\.[\\p{L}\\p{N}]|\\.(?:[ \\t]*[-‐‑‒–—―+/.])+[ \\t]*[\\p{L}\\p{N}])"
         },
         "validations": [],
         "include_trigger": false
@@ -50057,7 +50207,27 @@
         "label": "passport number",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:(?=[A-Za-z0-9]{0,8}\\d)[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/.][\\p{L}\\p{N}])"
+          "pattern": "^(?:(?=[A-Za-z0-9]{0,8}\\d)[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/](?:[ \\t]*[-‐‑‒–—―+/.])*[ \\t]*[\\p{L}\\p{N}]|\\.[\\p{L}\\p{N}]|\\.(?:[ \\t]*[-‐‑‒–—―+/.])+[ \\t]*[\\p{L}\\p{N}])"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
+        "trigger": "číslo pasu",
+        "label": "passport number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^(?:(?=[A-Za-z0-9]{0,8}\\d)[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/](?:[ \\t]*[-‐‑‒–—―+/.])*[ \\t]*[\\p{L}\\p{N}]|\\.[\\p{L}\\p{N}]|\\.(?:[ \\t]*[-‐‑‒–—―+/.])+[ \\t]*[\\p{L}\\p{N}])"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
+        "trigger": "číslo cestovného pasu",
+        "label": "passport number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^(?:(?=[A-Za-z0-9]{0,8}\\d)[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/](?:[ \\t]*[-‐‑‒–—―+/.])*[ \\t]*[\\p{L}\\p{N}]|\\.[\\p{L}\\p{N}]|\\.(?:[ \\t]*[-‐‑‒–—―+/.])+[ \\t]*[\\p{L}\\p{N}])"
         },
         "validations": [],
         "include_trigger": false
@@ -54688,7 +54858,7 @@
         "label": "passport number",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:(?=[A-Za-z0-9]{0,8}\\d)[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/.][\\p{L}\\p{N}])"
+          "pattern": "^(?:(?=[A-Za-z0-9]{0,8}\\d)[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/](?:[ \\t]*[-‐‑‒–—―+/.])*[ \\t]*[\\p{L}\\p{N}]|\\.[\\p{L}\\p{N}]|\\.(?:[ \\t]*[-‐‑‒–—―+/.])+[ \\t]*[\\p{L}\\p{N}])"
         },
         "validations": [],
         "include_trigger": false
@@ -54698,7 +54868,17 @@
         "label": "passport number",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^(?:(?=[A-Za-z0-9]{0,8}\\d)[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/.][\\p{L}\\p{N}])"
+          "pattern": "^(?:(?=[A-Za-z0-9]{0,8}\\d)[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/](?:[ \\t]*[-‐‑‒–—―+/.])*[ \\t]*[\\p{L}\\p{N}]|\\.[\\p{L}\\p{N}]|\\.(?:[ \\t]*[-‐‑‒–—―+/.])+[ \\t]*[\\p{L}\\p{N}])"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
+        "trigger": "pass nr.",
+        "label": "passport number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^(?:(?=[A-Za-z0-9]{0,8}\\d)[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/](?:[ \\t]*[-‐‑‒–—―+/.])*[ \\t]*[\\p{L}\\p{N}]|\\.[\\p{L}\\p{N}]|\\.(?:[ \\t]*[-‐‑‒–—―+/.])+[ \\t]*[\\p{L}\\p{N}])"
         },
         "validations": [],
         "include_trigger": false
@@ -120213,7 +120393,7 @@
     },
     "triggers": {
       "start": 1407,
-      "end": 3199
+      "end": 3211
     },
     "deny_list": {
       "start": 0,

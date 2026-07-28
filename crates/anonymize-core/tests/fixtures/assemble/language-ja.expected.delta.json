@@ -233,8 +233,8 @@
       "segments": [
         {
           "type": "copy",
-          "start": 0,
-          "end": 220
+          "start": 154,
+          "end": 163
         }
       ]
     },
@@ -557,8 +557,8 @@
         },
         {
           "type": "copy",
-          "start": 3132,
-          "end": 3173
+          "start": 3144,
+          "end": 3185
         }
       ]
     },
@@ -607,8 +607,8 @@
         },
         {
           "type": "copy",
-          "start": 1727,
-          "end": 1729
+          "start": 1739,
+          "end": 1741
         },
         {
           "type": "values",
@@ -647,8 +647,8 @@
         },
         {
           "type": "copy",
-          "start": 1731,
-          "end": 1766
+          "start": 1743,
+          "end": 1778
         }
       ]
     },
@@ -1182,11 +1182,6 @@
       "type": "set",
       "path": ["slices", "triggers", "end"],
       "value": 1421
-    },
-    {
-      "type": "array",
-      "path": ["address_seed_data", "boundary_words"],
-      "segments": [{ "type": "copy", "start": 154, "end": 163 }]
     }
   ]
 }

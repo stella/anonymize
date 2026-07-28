@@ -4,9 +4,14 @@
     "label": "passport number",
     "strategy": {
       "type": "match-pattern",
-      "pattern": "^(?:(?=[A-Za-z0-9]{0,8}\\d)[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/.][\\p{L}\\p{N}])"
+      "pattern": "^(?:(?=[A-Za-z0-9]{0,8}\\d)[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![-‐‑‒–—―+/](?:[ \\t]*[-‐‑‒–—―+/.])*[ \\t]*[\\p{L}\\p{N}]|\\.[\\p{L}\\p{N}]|\\.(?:[ \\t]*[-‐‑‒–—―+/.])+[ \\t]*[\\p{L}\\p{N}])"
     },
-    "triggers": ["útlevélszám", "útlevél száma"]
+    "triggers": [
+      "útlevélszám",
+      "útlevél száma",
+      "u\u0301tleve\u0301lsza\u0301m",
+      "u\u0301tleve\u0301l sza\u0301ma"
+    ]
   },
   {
     "id": "hu-tax-id",

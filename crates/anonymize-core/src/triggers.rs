@@ -1041,9 +1041,12 @@ fn extract_match_pattern(
   value_start_byte: usize,
   regex: &BoundedRegex,
 ) -> Result<Option<ByteValue>> {
-  let line = value_text
+  let candidate = value_text.trim_start_matches(is_match_pattern_opener);
+  let opener_bytes = value_text.len().saturating_sub(candidate.len());
+  let candidate_start_byte = value_start_byte.saturating_add(opener_bytes);
+  let line = candidate
     .split_once('\n')
-    .map_or(value_text, |(head, _)| head);
+    .map_or(candidate, |(head, _)| head);
   // A backtrack-budget failure propagates as a typed error rather than
   // reading as "no match": silently dropping the trigger would report a
   // successful redaction while the triggered value stayed uncovered.
@@ -1054,9 +1057,13 @@ fn extract_match_pattern(
     return Ok(None);
   }
   Ok(Some(ByteValue {
-    start_byte: value_start_byte.saturating_add(found.start),
-    end_byte: value_start_byte.saturating_add(found.end),
+    start_byte: candidate_start_byte.saturating_add(found.start),
+    end_byte: candidate_start_byte.saturating_add(found.end),
   }))
+}
+
+const fn is_match_pattern_opener(ch: char) -> bool {
+  is_identifier_quote(ch) || matches!(ch, '(' | '[' | '{')
 }
 
 #[derive(Clone, Copy)]
@@ -2815,6 +2822,24 @@ mod tests {
   use crate::search::{SearchIndex, SearchOptions, SearchPattern};
 
   use super::*;
+
+  #[test]
+  fn match_pattern_skips_localized_opening_delimiters() {
+    let regex =
+      BoundedRegex::new(r"^[A-Z]\d{7}").expect("passport pattern compiles");
+    for (value, expected_start) in [
+      ("\"A1234567\"", 1),
+      ("„A1234567“", "„".len()),
+      ("«A1234567»", "«".len()),
+      ("(A1234567)", 1),
+    ] {
+      let extracted = extract_match_pattern(value, 10, &regex)
+        .expect("match does not fail")
+        .expect("quoted passport matches");
+      assert_eq!(extracted.start_byte, 10 + expected_start);
+      assert_eq!(extracted.end_byte, 10 + expected_start + "A1234567".len());
+    }
+  }
 
   #[test]
   fn court_trigger_includes_trigger_span() {
