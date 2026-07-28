@@ -126,6 +126,13 @@ const SEPARATOR_CONTINUATION_FIXTURES = POSITIVE_FIXTURES.flatMap(
       language,
       text.replace(passportNumber, `${passportNumber}\u{202f}/\u{a0}99`),
     ] as const,
+    [language, text.replace(passportNumber, `${passportNumber}:99`)] as const,
+    [language, text.replace(passportNumber, `${passportNumber}(99)`)] as const,
+    [language, text.replace(passportNumber, `${passportNumber}：99`)] as const,
+    [
+      language,
+      text.replace(passportNumber, `${passportNumber}［99］`),
+    ] as const,
     [language, text.replace(passportNumber, `${passportNumber}--99`)] as const,
     [
       language,
@@ -151,6 +158,12 @@ const QUOTE_WRAPPERS = [
   ["«", "»"],
   ["‹", "›"],
   ["(", ")"],
+  ["「", "」"],
+  ["『", "』"],
+  ["【", "】"],
+  ["〔", "〕"],
+  ["《", "》"],
+  ["（", "）"],
 ] as const;
 
 const INNER_DELIMITER_SPACES = [" ", "\u{a0}", "\u{202f}", "\t"] as const;
@@ -192,10 +205,26 @@ const PUNCTUATED_ABBREVIATION_FIXTURES = [
   ["sv", "pass nr. 12345678", "12345678"],
 ] as const;
 
+const ROMANIAN_CEDILLA_FIXTURES = [
+  ["😀 numărul paşaportului AB123456", "AB123456"],
+  ["😀 număr paşaport AB123456", "AB123456"],
+  ["😀 numa\u{306}rul pas\u{327}aportului AB123456", "AB123456"],
+  ["😀 numa\u{306}r pas\u{327}aport AB123456", "AB123456"],
+] as const;
+
 const LANGUAGE_ISOLATION_FIXTURES = POSITIVE_FIXTURES.flatMap(([language]) =>
   POSITIVE_FIXTURES.flatMap(([foreignLanguage, foreignText]) =>
     language === foreignLanguage ? [] : [[language, foreignText] as const],
   ),
+);
+
+const ROMANIAN_CEDILLA_ISOLATION_FIXTURES = SUPPORTED_LANGUAGES.flatMap(
+  (language) =>
+    language === "ro"
+      ? []
+      : ROMANIAN_CEDILLA_FIXTURES.map(
+          ([foreignText]) => [language, foreignText] as const,
+        ),
 );
 
 describe("localized passport-number triggers", () => {
@@ -329,6 +358,28 @@ describe("localized passport-number triggers", () => {
           }),
         ]),
       );
+    },
+  );
+
+  test.each(ROMANIAN_CEDILLA_FIXTURES)(
+    "ro detects a legacy cedilla passport trigger",
+    async (text, expected) => {
+      const entities = await detect("ro", text);
+      const passport = entities.find(
+        (entity) => entity.label === "passport number",
+      );
+
+      expect(passport?.text).toBe(expected);
+      expect(passport && text.slice(passport.start, passport.end)).toBe(
+        expected,
+      );
+    },
+  );
+
+  test.each(ROMANIAN_CEDILLA_ISOLATION_FIXTURES)(
+    "%s excludes legacy Romanian passport triggers",
+    async (language, foreignText) => {
+      expect(await detect(language, foreignText)).toEqual([]);
     },
   );
 

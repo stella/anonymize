@@ -4,13 +4,17 @@
     "label": "passport number",
     "strategy": {
       "type": "match-pattern",
-      "pattern": "^(?:(?=[A-Za-z0-9]{0,8}\\d)[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![\\p{Zs}\\t]{0,8}(?:[-‐‑‒–—―+/](?:[\\p{Zs}\\t]{0,8}[-‐‑‒–—―+/.])*[\\p{Zs}\\t]{0,8}[\\p{L}\\p{N}]|\\.[\\p{L}\\p{N}]|\\.(?:[\\p{Zs}\\t]{0,8}[-‐‑‒–—―+/.])+[\\p{Zs}\\t]{0,8}[\\p{L}\\p{N}]))"
+      "pattern": "^(?:(?=[A-Za-z0-9]{0,8}\\d)[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b(?![\\p{Zs}\\t]{0,8}(?:[-‐‑‒–—―+/:：(\\[{（［｛](?:[\\p{Zs}\\t]{0,8}[-‐‑‒–—―+/.:：(\\[{（［｛])*[\\p{Zs}\\t]{0,8}[\\p{L}\\p{N}]|\\.[\\p{L}\\p{N}]|\\.(?:[\\p{Zs}\\t]{0,8}[-‐‑‒–—―+/.:：(\\[{（［｛])+[\\p{Zs}\\t]{0,8}[\\p{L}\\p{N}]))"
     },
     "triggers": [
       "numărul pașaportului",
       "număr pașaport",
       "numa\u0306rul pas\u0326aportului",
-      "numa\u0306r pas\u0326aport"
+      "numa\u0306r pas\u0326aport",
+      "numărul paşaportului",
+      "număr paşaport",
+      "numa\u0306rul pas\u0327aportului",
+      "numa\u0306r pas\u0327aport"
     ]
   },
   {

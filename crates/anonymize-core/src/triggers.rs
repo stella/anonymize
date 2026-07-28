@@ -1068,7 +1068,26 @@ fn extract_match_pattern(
 }
 
 const fn is_match_pattern_opener(ch: char) -> bool {
-  is_identifier_quote(ch) || matches!(ch, '(' | '[' | '{')
+  is_identifier_quote(ch)
+    || matches!(
+      ch,
+      '('
+        | '['
+        | '{'
+        | '（'
+        | '［'
+        | '｛'
+        | '｟'
+        | '〈'
+        | '《'
+        | '「'
+        | '『'
+        | '【'
+        | '〔'
+        | '〖'
+        | '〘'
+        | '〚'
+    )
 }
 
 const fn is_horizontal_whitespace(ch: char) -> bool {
@@ -2846,6 +2865,9 @@ mod tests {
       ("« A1234567 »", "« ".len()),
       ("«\u{202f}A1234567\u{202f}»", "«\u{202f}".len()),
       ("(A1234567)", 1),
+      ("「A1234567」", "「".len()),
+      ("【 A1234567 】", "【 ".len()),
+      ("（\u{3000}A1234567\u{3000}）", "（\u{3000}".len()),
     ] {
       let extracted =
         extract_match_pattern(value, 10, &regex).unwrap().unwrap();
