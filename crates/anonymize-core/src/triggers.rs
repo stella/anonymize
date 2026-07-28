@@ -532,10 +532,7 @@ fn extract_value(
     && remaining
       .get(..trimmed_offset)
       .is_some_and(|pad| pad.contains('\n'))
-    && stripped
-      .chars()
-      .next()
-      .is_some_and(|ch| ch.is_lowercase())
+    && stripped.chars().next().is_some_and(|ch| ch.is_lowercase())
   {
     return Ok(None);
   }
@@ -3416,9 +3413,8 @@ mod tests {
   fn organization_to_next_comma_keeps_lowercase_value_on_same_line() {
     // Same-line values are gated by optional starts-uppercase validation,
     // not by the cross-line guard.
-    let texts = run_institution_suffix_trigger(
-      "foundation river valley trust, Region",
-    );
+    let texts =
+      run_institution_suffix_trigger("foundation river valley trust, Region");
     assert_eq!(texts, vec![String::from("river valley trust")]);
   }
 
