@@ -94,6 +94,22 @@ const POSITIVE_FIXTURES = [
   ["sv", "passnummer 12345678", "12345678"],
 ] as const;
 
+const PASSPORT_SHAPES = [
+  "C01X00T47",
+  "PAA123456",
+  "AB123456",
+  "12AB12345",
+  "12345678",
+] as const;
+
+const PASSPORT_SHAPE_FIXTURES = POSITIVE_FIXTURES.flatMap(
+  ([language, text, passportNumber]) =>
+    PASSPORT_SHAPES.map(
+      (shape) =>
+        [language, shape, text.replace(passportNumber, shape)] as const,
+    ),
+);
+
 const NEGATIVE_FIXTURES = [
   ["cs", "cestovní pas ABC12345"],
   ["de", "Reisepass ABC12345"],
@@ -121,6 +137,16 @@ const PUNCTUATED_CONTINUATION_FIXTURES = POSITIVE_FIXTURES.map(
 
 const SEPARATOR_CONTINUATION_FIXTURES = POSITIVE_FIXTURES.flatMap(
   ([language, text, passportNumber]) => [
+    [language, text.replace(passportNumber, `${passportNumber}: 99`)] as const,
+    [language, text.replace(passportNumber, `${passportNumber} - 99`)] as const,
+    [
+      language,
+      text.replace(passportNumber, `${passportNumber}：\u{a0}99`),
+    ] as const,
+    [
+      language,
+      text.replace(passportNumber, `${passportNumber}\u{202f}—\t99`),
+    ] as const,
     [language, text.replace(passportNumber, `${passportNumber} / 99`)] as const,
     [
       language,
@@ -317,9 +343,9 @@ describe("localized passport-number triggers", () => {
     }
   });
 
-  test.each(POSITIVE_FIXTURES)(
-    "%s detects the localized passport value",
-    async (language, text, expected) => {
+  test.each(PASSPORT_SHAPE_FIXTURES)(
+    "%s detects supported passport shape %s",
+    async (language, expected, text) => {
       const entities = await detect(language, text);
 
       expect(entities).toEqual(
@@ -329,6 +355,12 @@ describe("localized passport-number triggers", () => {
             text: expected,
           }),
         ]),
+      );
+      const passport = entities.find(
+        (entity) => entity.label === "passport number",
+      );
+      expect(passport && text.slice(passport.start, passport.end)).toBe(
+        expected,
       );
     },
   );
