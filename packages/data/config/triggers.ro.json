@@ -1,5 +1,14 @@
 [
   {
+    "id": "ro-passport-number",
+    "label": "passport number",
+    "strategy": {
+      "type": "match-pattern",
+      "pattern": "^(?:[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b"
+    },
+    "triggers": ["numărul pașaportului", "număr pașaport"]
+  },
+  {
     "id": "ro-address",
     "label": "address",
     "strategy": { "type": "to-next-comma" },
