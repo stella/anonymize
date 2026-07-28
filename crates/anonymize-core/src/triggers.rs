@@ -1048,10 +1048,17 @@ fn extract_match_pattern(
   if let Some(value) =
     extract_anchored_pattern(value_text, value_start_byte, regex)?
   {
-    return Ok(Some(value));
+    if pattern_boundary_is_valid_after_closers(
+      value_text,
+      value_start_byte,
+      &value,
+      regex,
+    )? {
+      return Ok(Some(value));
+    }
+    return Ok(None);
   }
   let mut candidate = value_text;
-  let mut wrapper_depth = 0_usize;
   loop {
     let Some(opener) = candidate
       .chars()
@@ -1063,18 +1070,16 @@ fn extract_match_pattern(
     let Some(after_opener) = candidate.get(opener.len_utf8()..) else {
       return Ok(None);
     };
-    wrapper_depth = wrapper_depth.saturating_add(1);
     candidate = after_opener.trim_start_matches(is_horizontal_whitespace);
     let opener_bytes = value_text.len().saturating_sub(candidate.len());
     let candidate_start_byte = value_start_byte.saturating_add(opener_bytes);
     if let Some(value) =
       extract_anchored_pattern(candidate, candidate_start_byte, regex)?
     {
-      if wrapped_pattern_boundary_is_valid(
+      if pattern_boundary_is_valid_after_closers(
         candidate,
         candidate_start_byte,
         &value,
-        wrapper_depth,
         regex,
       )? {
         return Ok(Some(value));
@@ -1084,11 +1089,10 @@ fn extract_match_pattern(
   }
 }
 
-fn wrapped_pattern_boundary_is_valid(
+fn pattern_boundary_is_valid_after_closers(
   candidate: &str,
   candidate_start_byte: usize,
   value: &ByteValue,
-  wrapper_depth: usize,
   regex: &BoundedRegex,
 ) -> Result<bool> {
   let Some(relative_end) = value.end_byte.checked_sub(candidate_start_byte)
@@ -1099,9 +1103,9 @@ fn wrapped_pattern_boundary_is_valid(
     return Ok(false);
   };
   let mut consumed_closer = false;
-  // Quote pairings vary by locale. Remove only the bounded run of
+  // Quote pairings vary by locale. Remove the adjacent bounded run of
   // recognized closers, then let the original pattern validate the suffix.
-  for _ in 0..wrapper_depth {
+  loop {
     tail = tail.trim_start_matches(is_horizontal_whitespace);
     let Some(actual) = tail.chars().next() else {
       break;
@@ -1114,14 +1118,6 @@ fn wrapped_pattern_boundary_is_valid(
       return Ok(false);
     };
     tail = after_closer;
-  }
-  if tail
-    .trim_start_matches(is_horizontal_whitespace)
-    .chars()
-    .next()
-    .is_some_and(is_match_pattern_closer)
-  {
-    return Ok(false);
   }
   if !consumed_closer {
     return Ok(true);
