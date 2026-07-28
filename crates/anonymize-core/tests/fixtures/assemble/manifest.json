@@ -9,7 +9,7 @@
   "fixtures": [
     {
       "name": "baseline-all-on",
-      "packageDigest": "8a45933ed95c619369f2dc37957504f529867a4463ca41e56a1b203412dd18cc",
+      "packageDigest": "909d7740bdfef092e37d97f4a9f2206dd7e8561bebc014e66621c5b00ccaf624",
       "hasDictionaries": false,
       "gazetteerCount": 0
     },
@@ -21,73 +21,73 @@
     },
     {
       "name": "toggle-off-enableRegex",
-      "packageDigest": "23dc31d0973f5efb6eb029bb75b0c47a6ec89bceea6902571b39582c25a76685",
+      "packageDigest": "8f2e4644a94cdc89ac65b3215cd2866188a3aadfe823dbe37f47c6a2eca93203",
       "hasDictionaries": false,
       "gazetteerCount": 0
     },
     {
       "name": "toggle-off-enableLegalForms",
-      "packageDigest": "aa3fe1e7df6e3b320154b922cad8197b751e0e29236583c4654dda30801020de",
+      "packageDigest": "24e1672b452872c812110257683bff3b70168d2da378b40c346ac3de0086d1eb",
       "hasDictionaries": false,
       "gazetteerCount": 0
     },
     {
       "name": "toggle-off-enableNameCorpus",
-      "packageDigest": "bdb248566d5235e3312c22dc1d078fcab5d9df4149b3853a28122572e0e7d86d",
+      "packageDigest": "771acf2da51aa8055a49bc02b4db87e0d3e67664c2dd34215867fc57159963f5",
       "hasDictionaries": false,
       "gazetteerCount": 0
     },
     {
       "name": "toggle-off-enableDenyList",
-      "packageDigest": "63c13838945e3d26bf401137b1683a19e1a017ee901ffbc54c30046ac6c3e88f",
+      "packageDigest": "71b44e8c59da4c84d788dedf852fbb6be6d1bc23131bcc23171bfa53dae68340",
       "hasDictionaries": false,
       "gazetteerCount": 0
     },
     {
       "name": "toggle-off-enableGazetteer",
-      "packageDigest": "8a45933ed95c619369f2dc37957504f529867a4463ca41e56a1b203412dd18cc",
+      "packageDigest": "909d7740bdfef092e37d97f4a9f2206dd7e8561bebc014e66621c5b00ccaf624",
       "hasDictionaries": false,
       "gazetteerCount": 0
     },
     {
       "name": "toggle-off-enableCountries",
-      "packageDigest": "02186e1fd9a239ef8490893798411b8859f201e0567c9a2b70f3ce26354402ea",
+      "packageDigest": "a775c94ac6dbed1f46821915523b8abfe289bfe10bbdd6dd63b7e824d2cd1b5a",
       "hasDictionaries": false,
       "gazetteerCount": 0
     },
     {
       "name": "toggle-off-enableNer",
-      "packageDigest": "8a45933ed95c619369f2dc37957504f529867a4463ca41e56a1b203412dd18cc",
+      "packageDigest": "909d7740bdfef092e37d97f4a9f2206dd7e8561bebc014e66621c5b00ccaf624",
       "hasDictionaries": false,
       "gazetteerCount": 0
     },
     {
       "name": "toggle-off-enableConfidenceBoost",
-      "packageDigest": "ea3d3d94ba871d772650b1c118f8c380e2684fecdf367a200266f670b9d931ce",
+      "packageDigest": "98d21f72ab319384596b3d706993071deaabdddb9784661e1854ce5bf8f00aa4",
       "hasDictionaries": false,
       "gazetteerCount": 0
     },
     {
       "name": "toggle-off-enableCoreference",
-      "packageDigest": "0673eed2abefc7fec81c0b8f73653f62189b66f0ad3a6f2271a6070bd56d5cb1",
+      "packageDigest": "14f8a97eb1c5627bda8b2851869df3c042a7731d3d9dd4ab9b29f89bb018c877",
       "hasDictionaries": false,
       "gazetteerCount": 0
     },
     {
       "name": "toggle-off-enableZoneClassification",
-      "packageDigest": "20b033f69a1fa07d7a34bad26a02160e1964ded226ca539dd8291ebe0345bcf6",
+      "packageDigest": "29ede072375fa00350ace05a3a0b67a341933b8a4a5415f0a287a7443779ad81",
       "hasDictionaries": false,
       "gazetteerCount": 0
     },
     {
       "name": "toggle-off-enableHotwordRules",
-      "packageDigest": "8678641095ea63a034043d015b576b1f53c5077534636b04e2a61bd1b273dded",
+      "packageDigest": "01deb4ae7e076b064d972b3e2c450d706a64136003b53079b0b9f254103da394",
       "hasDictionaries": false,
       "gazetteerCount": 0
     },
     {
       "name": "isolate-enableTriggerPhrases",
-      "packageDigest": "8343280c3ed1acebbdacb1b1c90e6d818e6e7bb091870f894dc60d5cd1b0b4b4",
+      "packageDigest": "afd934a9c2a92af9cd9673a2ca3ab8c44d48f4f99d5def686ab0d8609c08e827",
       "hasDictionaries": false,
       "gazetteerCount": 0
     },
@@ -135,25 +135,25 @@
     },
     {
       "name": "language-all",
-      "packageDigest": "8a45933ed95c619369f2dc37957504f529867a4463ca41e56a1b203412dd18cc",
+      "packageDigest": "909d7740bdfef092e37d97f4a9f2206dd7e8561bebc014e66621c5b00ccaf624",
       "hasDictionaries": false,
       "gazetteerCount": 0
     },
     {
       "name": "language-cs",
-      "packageDigest": "658499ac1705e3743cc31c43443a3601d38411a56f7fcc866a2dd495856560d3",
+      "packageDigest": "d88ba4eed961a90827df8961705449c0ecba08c3a5fcb35f30cf30eaf34d9d3d",
       "hasDictionaries": false,
       "gazetteerCount": 0
     },
     {
       "name": "language-de",
-      "packageDigest": "985b6ba02e9f086e380324f3bbfe230f315ec446e980024f7dee9d117d5cf0c1",
+      "packageDigest": "6e5592d2db0fe8052ec411da09d5e817a105ebf1741c916265d14e9cdb799b31",
       "hasDictionaries": false,
       "gazetteerCount": 0
     },
     {
       "name": "language-en",
-      "packageDigest": "9b70cf3b3d55f8d358aabbc75ff10c4f4460e7cf9421815ce0ecbffa5b09425d",
+      "packageDigest": "527aa257d459420563ccb40dc42327e873d25c27cc2add87a934d50264dbe57e",
       "hasDictionaries": false,
       "gazetteerCount": 0
     },
@@ -165,73 +165,73 @@
     },
     {
       "name": "language-cs-sk",
-      "packageDigest": "417174492ced41d64f6e862800af8b63aa7194fb84b14484338013666b39622b",
+      "packageDigest": "6cd8b7fe899fd3b1f1e0a2ce1a178335ee01d347491e1c41f5ef10a2bfe5d0d3",
       "hasDictionaries": false,
       "gazetteerCount": 0
     },
     {
       "name": "custom-regex-basic",
-      "packageDigest": "02afa3bfa2ab9d842987e3b35231ad7a317773bb21f72c1b4225ec1e073e0921",
+      "packageDigest": "db3468100ffa648645c77a9b5c8c0ae1c67e281a6906d8fbc1f243e74f765876",
       "hasDictionaries": false,
       "gazetteerCount": 0
     },
     {
       "name": "custom-regex-prepared-omit",
-      "packageDigest": "03ede380720d856870c9cbada8236c63d39766e6ddd32bf9119db6e6ed221613",
+      "packageDigest": "7c72a1a6b70a33252e1140cb25fec5d707cece94de8654bbdafd14a62ebdf705",
       "hasDictionaries": false,
       "gazetteerCount": 0
     },
     {
       "name": "custom-regex-prepared-include",
-      "packageDigest": "2671c1ffef8773f97d23971f3c5c283d3892379cd62dbb06812e935bf97221ef",
+      "packageDigest": "656872e1d851c4122b94bb8214e40b192db54818e088ef0828e154c912d52400",
       "hasDictionaries": false,
       "gazetteerCount": 0
     },
     {
       "name": "custom-regex-label-filtered",
-      "packageDigest": "bbef6c59035f96a34e96936f28d67d6df9d7717df6a2dcf3855911d2c7a586dd",
+      "packageDigest": "e223aff1c4b0c89574d9c1807c538200cb7558e17d0bf37a703aa5c17ed713c0",
       "hasDictionaries": false,
       "gazetteerCount": 0
     },
     {
       "name": "custom-regex-disabled",
-      "packageDigest": "23dc31d0973f5efb6eb029bb75b0c47a6ec89bceea6902571b39582c25a76685",
+      "packageDigest": "8f2e4644a94cdc89ac65b3215cd2866188a3aadfe823dbe37f47c6a2eca93203",
       "hasDictionaries": false,
       "gazetteerCount": 0
     },
     {
       "name": "custom-deny-boundary-override",
-      "packageDigest": "d46c5ee9faa9d2a6f5c1110ae90204f3bb0bf20a3d981fc08936de977cf6535e",
+      "packageDigest": "14ac75c3f34b791f376b75d1dbb324f668de977d92fe8eee45e64dff936820c2",
       "hasDictionaries": false,
       "gazetteerCount": 0
     },
     {
       "name": "custom-deny-non-override",
-      "packageDigest": "9e77725e333ac72b2a9dfd1034328a9564d8beb4cf0a3b87db4a362df8efa3d6",
+      "packageDigest": "7eb4e0ebdb6167dc9fbc55dea233c2c1fdcd885511578d368dd31dea062876e5",
       "hasDictionaries": false,
       "gazetteerCount": 0
     },
     {
       "name": "gazetteer-fuzzy",
-      "packageDigest": "0b6bc25a4375285e0e7ad722c39220fb5772095fd6b0a31a1bfd3911efd210ad",
+      "packageDigest": "7e482ededbecef1f976367f598ced4f16f302e8d5bc3e379052925f40fb1e685",
       "hasDictionaries": false,
       "gazetteerCount": 1
     },
     {
       "name": "labels-and-threshold",
-      "packageDigest": "c085738c0d861b212863623f35397034fef15ca6ea7721be43fa758169d8a2ff",
+      "packageDigest": "d5e13269648ceabbd8cf67b79d433d3737d697def7afcc0083d31c64d9ca1e32",
       "hasDictionaries": false,
       "gazetteerCount": 0
     },
     {
       "name": "confidence-boost-off",
-      "packageDigest": "ea3d3d94ba871d772650b1c118f8c380e2684fecdf367a200266f670b9d931ce",
+      "packageDigest": "98d21f72ab319384596b3d706993071deaabdddb9784661e1854ce5bf8f00aa4",
       "hasDictionaries": false,
       "gazetteerCount": 0
     },
     {
       "name": "custom-regex-hotword-reclassify",
-      "packageDigest": "7e07b897346012575b5432869a744f9c4c156564e0846c35700e15f692456a82",
+      "packageDigest": "1f5a5348481b10b06280feb1a88c32f312be4f43060eb4279471f797e63ad931",
       "hasDictionaries": false,
       "gazetteerCount": 0
     },
@@ -243,13 +243,13 @@
     },
     {
       "name": "legal-forms-multilang",
-      "packageDigest": "42fd0a18f66ff06d8727f59b72416cc250c773fa7fcb775cfce85443ad6189ca",
+      "packageDigest": "e3328682a3087e5e0a1877db98dfa9459223ef462567aad0b2a0cefeefd96fa0",
       "hasDictionaries": false,
       "gazetteerCount": 0
     },
     {
       "name": "with-test-dictionaries",
-      "packageDigest": "812b645f3272685bad498dd43f49fb88db04ce0333c6051624fff0bb2fe5cbbe",
+      "packageDigest": "d85f95ad3f87d21ee831babe98769f1717f39a134492df5060eaa07278180a53",
       "hasDictionaries": true,
       "gazetteerCount": 0
     }
