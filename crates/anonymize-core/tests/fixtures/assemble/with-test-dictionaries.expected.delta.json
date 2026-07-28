@@ -598,12 +598,12 @@
         {
           "type": "copy",
           "start": 1039,
-          "end": 1731
+          "end": 1733
         },
         {
           "type": "copy",
-          "start": 3148,
-          "end": 3194
+          "start": 3178,
+          "end": 3224
         }
       ]
     },
@@ -614,12 +614,12 @@
         {
           "type": "copy",
           "start": 0,
-          "end": 324
+          "end": 326
         },
         {
           "type": "copy",
-          "start": 1741,
-          "end": 1787
+          "start": 1771,
+          "end": 1817
         }
       ]
     },
@@ -5514,7 +5514,7 @@
     {
       "type": "set",
       "path": ["slices", "triggers", "end"],
-      "value": 1751
+      "value": 1753
     },
     {
       "type": "set",

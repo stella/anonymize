@@ -1041,14 +1041,32 @@ fn extract_match_pattern(
   value_start_byte: usize,
   regex: &BoundedRegex,
 ) -> Result<Option<ByteValue>> {
-  let after_openers = value_text.trim_start_matches(is_match_pattern_opener);
-  let candidate = if after_openers.len() == value_text.len() {
-    after_openers
-  } else {
-    after_openers.trim_start_matches(is_horizontal_whitespace)
-  };
+  if let Some(value) =
+    extract_anchored_pattern(value_text, value_start_byte, regex)?
+  {
+    return Ok(Some(value));
+  }
+  let mut candidate = value_text;
+  loop {
+    let after_openers = candidate.trim_start_matches(is_match_pattern_opener);
+    if after_openers.len() == candidate.len() {
+      break;
+    }
+    candidate = after_openers.trim_start_matches(is_horizontal_whitespace);
+  }
+  if candidate.len() == value_text.len() {
+    return Ok(None);
+  }
   let opener_bytes = value_text.len().saturating_sub(candidate.len());
   let candidate_start_byte = value_start_byte.saturating_add(opener_bytes);
+  extract_anchored_pattern(candidate, candidate_start_byte, regex)
+}
+
+fn extract_anchored_pattern(
+  candidate: &str,
+  candidate_start_byte: usize,
+  regex: &BoundedRegex,
+) -> Result<Option<ByteValue>> {
   let line = candidate
     .split_once('\n')
     .map_or(candidate, |(head, _)| head);
@@ -2868,6 +2886,7 @@ mod tests {
       ("「A1234567」", "「".len()),
       ("【 A1234567 】", "【 ".len()),
       ("（\u{3000}A1234567\u{3000}）", "（\u{3000}".len()),
+      ("« ( A1234567 ) »", "« ( ".len()),
     ] {
       let extracted =
         extract_match_pattern(value, 10, &regex).unwrap().unwrap();
@@ -2879,6 +2898,16 @@ mod tests {
         .unwrap()
         .is_none()
     );
+  }
+
+  #[test]
+  fn match_pattern_preserves_consumed_opening_delimiter() {
+    let regex = BoundedRegex::new(r"^\(?\d{3}\)").unwrap();
+    let extracted = extract_match_pattern("(212) 555-0142", 10, &regex)
+      .unwrap()
+      .unwrap();
+    assert_eq!(extracted.start_byte, 10);
+    assert_eq!(extracted.end_byte, 15);
   }
 
   #[test]

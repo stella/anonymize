@@ -582,17 +582,17 @@
         {
           "type": "copy",
           "start": 1039,
-          "end": 1731
+          "end": 1733
         },
         {
           "type": "copy",
-          "start": 2758,
-          "end": 3108
+          "start": 2780,
+          "end": 3138
         },
         {
           "type": "copy",
-          "start": 3148,
-          "end": 3196
+          "start": 3178,
+          "end": 3226
         }
       ]
     },
@@ -603,17 +603,17 @@
         {
           "type": "copy",
           "start": 0,
-          "end": 324
+          "end": 326
         },
         {
           "type": "copy",
-          "start": 1351,
-          "end": 1701
+          "start": 1373,
+          "end": 1731
         },
         {
           "type": "copy",
-          "start": 1741,
-          "end": 1789
+          "start": 1771,
+          "end": 1819
         }
       ]
     },
@@ -1424,7 +1424,7 @@
     {
       "type": "set",
       "path": ["slices", "triggers", "end"],
-      "value": 2104
+      "value": 2114
     },
     {
       "type": "set",

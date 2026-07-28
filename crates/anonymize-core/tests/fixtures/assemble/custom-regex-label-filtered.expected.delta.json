@@ -81,7 +81,7 @@
         {
           "type": "copy",
           "start": 118,
-          "end": 3215
+          "end": 3245
         }
       ]
     },
@@ -118,7 +118,7 @@
     {
       "type": "set",
       "path": ["slices", "triggers", "end"],
-      "value": 3100
+      "value": 3130
     },
     {
       "type": "set",

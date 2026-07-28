@@ -151,6 +151,21 @@ const SENTENCE_PUNCTUATION_FIXTURES = POSITIVE_FIXTURES.map(
     ] as const,
 );
 
+const PARENTHETICAL_METADATA_FIXTURES = POSITIVE_FIXTURES.flatMap(
+  ([language, text, passportNumber]) => [
+    [
+      language,
+      text.replace(passportNumber, `${passportNumber} (issued 2020)`),
+      passportNumber,
+    ] as const,
+    [
+      language,
+      text.replace(passportNumber, `${passportNumber} [valid until 2030]`),
+      passportNumber,
+    ] as const,
+  ],
+);
+
 const QUOTE_WRAPPERS = [
   ['"', '"'],
   ["„", "“"],
@@ -191,12 +206,47 @@ const QUOTED_FIXTURES = POSITIVE_FIXTURES.map(
   },
 );
 
-const CANONICALLY_DECOMPOSED_FIXTURES = POSITIVE_FIXTURES.flatMap(
+const canonicalVariants = (text: string): string[] => {
+  const clusters: string[] = [];
+  for (const char of text.normalize("NFD")) {
+    if (!/\p{M}/u.test(char)) {
+      clusters.push(char);
+      continue;
+    }
+    const previous = clusters.at(-1);
+    if (previous === undefined) {
+      throw new TypeError("canonical variant starts with a combining mark");
+    }
+    clusters[clusters.length - 1] = `${previous}${char}`;
+  }
+
+  let variants = [""];
+  for (const cluster of clusters) {
+    const composed = cluster.normalize("NFC");
+    const choices = composed === cluster ? [cluster] : [composed, cluster];
+    const next: string[] = [];
+    for (const variant of variants) {
+      for (const choice of choices) {
+        next.push(`${variant}${choice}`);
+      }
+    }
+    variants = next;
+  }
+  return [...new Set(variants)];
+};
+
+const CANONICAL_POSITIVE_FIXTURES = POSITIVE_FIXTURES.flatMap(
+  ([language, text, passportNumber]) =>
+    canonicalVariants(text).map(
+      (variant) => [language, variant, passportNumber] as const,
+    ),
+);
+
+const CANONICALLY_EQUIVALENT_FIXTURES = CANONICAL_POSITIVE_FIXTURES.flatMap(
   ([language, text, passportNumber]) => {
-    const decomposed = text.normalize("NFD");
-    return decomposed === text
+    return text === text.normalize("NFC")
       ? []
-      : [[language, `😀 ${decomposed}`, passportNumber] as const];
+      : [[language, `😀 ${text}`, passportNumber] as const];
   },
 );
 
@@ -206,14 +256,12 @@ const PUNCTUATED_ABBREVIATION_FIXTURES = [
 ] as const;
 
 const ROMANIAN_CEDILLA_FIXTURES = [
-  ["😀 numărul paşaportului AB123456", "AB123456"],
-  ["😀 număr paşaport AB123456", "AB123456"],
-  ["😀 numa\u{306}rul pas\u{327}aportului AB123456", "AB123456"],
-  ["😀 numa\u{306}r pas\u{327}aport AB123456", "AB123456"],
-] as const;
+  ...canonicalVariants("😀 numărul paşaportului AB123456"),
+  ...canonicalVariants("😀 număr paşaport AB123456"),
+].map((text) => [text, "AB123456"] as const);
 
-const LANGUAGE_ISOLATION_FIXTURES = POSITIVE_FIXTURES.flatMap(([language]) =>
-  POSITIVE_FIXTURES.flatMap(([foreignLanguage, foreignText]) =>
+const LANGUAGE_ISOLATION_FIXTURES = SUPPORTED_LANGUAGES.flatMap((language) =>
+  CANONICAL_POSITIVE_FIXTURES.flatMap(([foreignLanguage, foreignText]) =>
     language === foreignLanguage ? [] : [[language, foreignText] as const],
   ),
 );
@@ -305,6 +353,21 @@ describe("localized passport-number triggers", () => {
     },
   );
 
+  test.each(PARENTHETICAL_METADATA_FIXTURES)(
+    "%s keeps parenthetical metadata outside the passport",
+    async (language, text, expected) => {
+      const entities = await detect(language, text);
+      const passport = entities.find(
+        (entity) => entity.label === "passport number",
+      );
+
+      expect(passport?.text).toBe(expected);
+      expect(passport && text.slice(passport.start, passport.end)).toBe(
+        expected,
+      );
+    },
+  );
+
   test.each(QUOTED_FIXTURES)(
     "%s detects a passport value after an opening delimiter",
     async (language, text, expected) => {
@@ -326,8 +389,8 @@ describe("localized passport-number triggers", () => {
     },
   );
 
-  test.each(CANONICALLY_DECOMPOSED_FIXTURES)(
-    "%s detects canonically decomposed passport triggers",
+  test.each(CANONICALLY_EQUIVALENT_FIXTURES)(
+    "%s detects every canonical passport-trigger form",
     async (language, text, expected) => {
       const entities = await detect(language, text);
       expect(entities).toEqual(
