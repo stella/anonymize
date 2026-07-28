@@ -1041,7 +1041,12 @@ fn extract_match_pattern(
   value_start_byte: usize,
   regex: &BoundedRegex,
 ) -> Result<Option<ByteValue>> {
-  let candidate = value_text.trim_start_matches(is_match_pattern_opener);
+  let after_openers = value_text.trim_start_matches(is_match_pattern_opener);
+  let candidate = if after_openers.len() == value_text.len() {
+    after_openers
+  } else {
+    after_openers.trim_start_matches(is_horizontal_whitespace)
+  };
   let opener_bytes = value_text.len().saturating_sub(candidate.len());
   let candidate_start_byte = value_start_byte.saturating_add(opener_bytes);
   let line = candidate
@@ -1064,6 +1069,14 @@ fn extract_match_pattern(
 
 const fn is_match_pattern_opener(ch: char) -> bool {
   is_identifier_quote(ch) || matches!(ch, '(' | '[' | '{')
+}
+
+const fn is_horizontal_whitespace(ch: char) -> bool {
+  matches!(
+    ch,
+    '\t' | ' ' | '\u{a0}' | '\u{1680}' | '\u{2000}'
+      ..='\u{200a}' | '\u{202f}' | '\u{205f}' | '\u{3000}'
+  )
 }
 
 #[derive(Clone, Copy)]
@@ -2830,6 +2843,8 @@ mod tests {
       ("\"A1234567\"", 1),
       ("„A1234567“", "„".len()),
       ("«A1234567»", "«".len()),
+      ("« A1234567 »", "« ".len()),
+      ("«\u{202f}A1234567\u{202f}»", "«\u{202f}".len()),
       ("(A1234567)", 1),
     ] {
       let extracted =
@@ -2837,6 +2852,11 @@ mod tests {
       assert_eq!(extracted.start_byte, 10 + expected_start);
       assert_eq!(extracted.end_byte, 10 + expected_start + "A1234567".len());
     }
+    assert!(
+      extract_match_pattern("«\nA1234567»", 10, &regex)
+        .unwrap()
+        .is_none()
+    );
   }
 
   #[test]

@@ -30,15 +30,15 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
 const isTriggerEntry = (value: unknown): value is TriggerEntry => {
-  if (!isRecord(value) || !isRecord(value.strategy)) {
+  if (!isRecord(value) || !isRecord(value["strategy"])) {
     return false;
   }
   return (
-    (value.id === undefined || typeof value.id === "string") &&
-    typeof value.label === "string" &&
-    typeof value.strategy.type === "string" &&
-    Array.isArray(value.triggers) &&
-    value.triggers.every((trigger) => typeof trigger === "string")
+    (value["id"] === undefined || typeof value["id"] === "string") &&
+    typeof value["label"] === "string" &&
+    typeof value["strategy"]["type"] === "string" &&
+    Array.isArray(value["triggers"]) &&
+    value["triggers"].every((trigger) => typeof trigger === "string")
   );
 };
 
@@ -122,6 +122,10 @@ const PUNCTUATED_CONTINUATION_FIXTURES = POSITIVE_FIXTURES.map(
 const SEPARATOR_CONTINUATION_FIXTURES = POSITIVE_FIXTURES.flatMap(
   ([language, text, passportNumber]) => [
     [language, text.replace(passportNumber, `${passportNumber} / 99`)] as const,
+    [
+      language,
+      text.replace(passportNumber, `${passportNumber}\u{202f}/\u{a0}99`),
+    ] as const,
     [language, text.replace(passportNumber, `${passportNumber}--99`)] as const,
     [
       language,
@@ -149,16 +153,26 @@ const QUOTE_WRAPPERS = [
   ["(", ")"],
 ] as const;
 
+const INNER_DELIMITER_SPACES = [" ", "\u{a0}", "\u{202f}", "\t"] as const;
+
 const QUOTED_FIXTURES = POSITIVE_FIXTURES.map(
   ([language, text, passportNumber], index) => {
     const wrapper = QUOTE_WRAPPERS[index % QUOTE_WRAPPERS.length];
+    const innerSpace =
+      INNER_DELIMITER_SPACES[index % INNER_DELIMITER_SPACES.length];
     if (!wrapper) {
       throw new TypeError("passport quote fixture is missing");
+    }
+    if (innerSpace === undefined) {
+      throw new TypeError("passport inner-space fixture is missing");
     }
     const [open, close] = wrapper;
     return [
       language,
-      `😀 ${text.replace(passportNumber, `${open}${passportNumber}${close}`)}`,
+      `😀 ${text.replace(
+        passportNumber,
+        `${open}${innerSpace}${passportNumber}${innerSpace}${close}`,
+      )}`,
       passportNumber,
     ] as const;
   },
