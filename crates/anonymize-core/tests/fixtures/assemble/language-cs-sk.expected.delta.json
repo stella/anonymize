@@ -493,7 +493,9 @@
               "pattern": "\\bECLI:[A-Z]{2}:[A-Za-z0-9.]+:\\d{4}:[A-Za-z0-9._]+\\b",
               "case_insensitive": null,
               "lazy": true,
-              "prefilter_any": ["ECLI:"],
+              "prefilter_any": [
+                "ECLI:"
+              ],
               "prefilter_case_insensitive": false,
               "prefilter_window_bytes": null,
               "prepared_artifact_policy": null
@@ -576,13 +578,13 @@
         },
         {
           "type": "copy",
-          "start": 2726,
-          "end": 3072
+          "start": 2745,
+          "end": 3093
         },
         {
           "type": "copy",
-          "start": 3109,
-          "end": 3157
+          "start": 3132,
+          "end": 3180
         }
       ]
     },
@@ -597,13 +599,13 @@
         },
         {
           "type": "copy",
-          "start": 1319,
-          "end": 1665
+          "start": 1338,
+          "end": 1686
         },
         {
           "type": "copy",
-          "start": 1702,
-          "end": 1750
+          "start": 1725,
+          "end": 1773
         }
       ]
     },
@@ -1404,7 +1406,7 @@
     {
       "type": "set",
       "path": ["slices", "triggers", "end"],
-      "value": 2098
+      "value": 2100
     },
     {
       "type": "set",

@@ -302,17 +302,17 @@
         {
           "type": "copy",
           "start": 1815,
-          "end": 1907
+          "end": 1910
         },
         {
           "type": "copy",
-          "start": 3109,
-          "end": 3150
+          "start": 3132,
+          "end": 3173
         },
         {
           "type": "copy",
-          "start": 3161,
-          "end": 3162
+          "start": 3184,
+          "end": 3185
         }
       ]
     },
@@ -323,7 +323,7 @@
         {
           "type": "copy",
           "start": 408,
-          "end": 449
+          "end": 452
         },
         {
           "type": "values",
@@ -346,8 +346,8 @@
         },
         {
           "type": "copy",
-          "start": 450,
-          "end": 457
+          "start": 453,
+          "end": 460
         },
         {
           "type": "values",
@@ -384,8 +384,8 @@
         },
         {
           "type": "copy",
-          "start": 459,
-          "end": 500
+          "start": 462,
+          "end": 503
         },
         {
           "type": "values",
@@ -424,8 +424,8 @@
         },
         {
           "type": "copy",
-          "start": 1704,
-          "end": 1706
+          "start": 1727,
+          "end": 1729
         },
         {
           "type": "values",
@@ -464,13 +464,13 @@
         },
         {
           "type": "copy",
-          "start": 1708,
-          "end": 1743
+          "start": 1731,
+          "end": 1766
         },
         {
           "type": "copy",
-          "start": 1754,
-          "end": 1755
+          "start": 1777,
+          "end": 1778
         }
       ]
     },
@@ -1291,7 +1291,7 @@
     {
       "type": "set",
       "path": ["slices", "triggers", "end"],
-      "value": 1534
+      "value": 1537
     },
     {
       "type": "set",

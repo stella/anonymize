@@ -655,43 +655,38 @@
         },
         {
           "type": "copy",
-          "start": 2154,
-          "end": 2416
+          "start": 2163,
+          "end": 2425
         },
         {
           "type": "copy",
-          "start": 1767,
-          "end": 1768
+          "start": 2513,
+          "end": 2703
         },
         {
           "type": "copy",
-          "start": 2500,
-          "end": 2686
+          "start": 3132,
+          "end": 3173
         },
         {
           "type": "copy",
-          "start": 3109,
-          "end": 3150
+          "start": 3180,
+          "end": 3184
         },
         {
           "type": "copy",
-          "start": 3157,
-          "end": 3161
+          "start": 3185,
+          "end": 3187
         },
         {
           "type": "copy",
-          "start": 3162,
-          "end": 3164
+          "start": 3173,
+          "end": 3176
         },
         {
           "type": "copy",
-          "start": 3150,
-          "end": 3153
-        },
-        {
-          "type": "copy",
-          "start": 3167,
-          "end": 3169
+          "start": 3190,
+          "end": 3192
         }
       ]
     },
@@ -706,8 +701,13 @@
         },
         {
           "type": "copy",
-          "start": 747,
-          "end": 1009
+          "start": 756,
+          "end": 1018
+        },
+        {
+          "type": "copy",
+          "start": 1106,
+          "end": 1109
         },
         {
           "type": "copy",
@@ -716,33 +716,33 @@
         },
         {
           "type": "copy",
-          "start": 1093,
-          "end": 1279
+          "start": 1110,
+          "end": 1296
         },
         {
           "type": "copy",
-          "start": 1702,
-          "end": 1743
+          "start": 1725,
+          "end": 1766
         },
         {
           "type": "copy",
-          "start": 1750,
-          "end": 1754
+          "start": 1773,
+          "end": 1777
         },
         {
           "type": "copy",
-          "start": 1755,
-          "end": 1757
+          "start": 1778,
+          "end": 1780
         },
         {
           "type": "copy",
-          "start": 1743,
-          "end": 1746
+          "start": 1766,
+          "end": 1769
         },
         {
           "type": "copy",
-          "start": 1760,
-          "end": 1762
+          "start": 1783,
+          "end": 1785
         }
       ]
     },
@@ -1908,7 +1908,7 @@
     {
       "type": "set",
       "path": ["slices", "triggers", "end"],
-      "value": 1970
+      "value": 1973
     },
     {
       "type": "set",

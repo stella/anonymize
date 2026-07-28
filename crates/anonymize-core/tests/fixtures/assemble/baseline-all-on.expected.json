@@ -25190,6 +25190,21 @@
     },
     {
       "kind": "literal-with-options",
+      "pattern": "passport number",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "passport no.",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "passport no",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
       "pattern": "represented by",
       "case_insensitive": true
     },
@@ -25646,6 +25661,21 @@
     {
       "kind": "literal-with-options",
       "pattern": "insurance card number: ",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "número do passaporte",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "passaporte nº",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "passaporte n.º",
       "case_insensitive": true
     },
     {
@@ -26576,6 +26606,21 @@
     {
       "kind": "literal-with-options",
       "pattern": "número do cartão de saúde: ",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "número de pasaporte",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "n.º de pasaporte",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "nº de pasaporte",
       "case_insensitive": true
     },
     {
@@ -28195,6 +28240,16 @@
     },
     {
       "kind": "literal-with-options",
+      "pattern": "útlevélszám",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "útlevél száma",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
       "pattern": "adószám",
       "case_insensitive": true
     },
@@ -28361,6 +28416,21 @@
     {
       "kind": "literal-with-options",
       "pattern": "társadalombiztosítási azonosító jel: ",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "numero di passaporto",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "numero del passaporto",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "passaporto n.",
       "case_insensitive": true
     },
     {
@@ -28606,6 +28676,21 @@
     {
       "kind": "literal-with-options",
       "pattern": "codice tessera sanitaria: ",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "numer paszportu",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "seria i numer paszportu",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "paszport nr",
       "case_insensitive": true
     },
     {
@@ -29545,6 +29630,16 @@
     },
     {
       "kind": "literal-with-options",
+      "pattern": "numărul pașaportului",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "număr pașaport",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
       "pattern": "domiciliat în",
       "case_insensitive": true
     },
@@ -29741,6 +29836,16 @@
     {
       "kind": "literal-with-options",
       "pattern": "număr card de asigurat: ",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "číslo pasu",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "číslo cestovného pasu",
       "case_insensitive": true
     },
     {
@@ -31471,6 +31576,16 @@
     {
       "kind": "literal-with-options",
       "pattern": "číslo kartičky poistenca: ",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "passnummer",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "pass nr",
       "case_insensitive": true
     },
     {
@@ -37237,6 +37352,36 @@
         "include_trigger": false
       },
       {
+        "trigger": "passport number",
+        "label": "passport number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^(?:[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
+        "trigger": "passport no.",
+        "label": "passport number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^(?:[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
+        "trigger": "passport no",
+        "label": "passport number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^(?:[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
         "trigger": "represented by",
         "label": "person",
         "strategy": {
@@ -38461,6 +38606,36 @@
             "type": "has-digits"
           }
         ],
+        "include_trigger": false
+      },
+      {
+        "trigger": "número do passaporte",
+        "label": "passport number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^(?:[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
+        "trigger": "passaporte nº",
+        "label": "passport number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^(?:[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
+        "trigger": "passaporte n.º",
+        "label": "passport number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^(?:[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b"
+        },
+        "validations": [],
         "include_trigger": false
       },
       {
@@ -40747,6 +40922,36 @@
             "type": "has-digits"
           }
         ],
+        "include_trigger": false
+      },
+      {
+        "trigger": "número de pasaporte",
+        "label": "passport number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^(?:[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
+        "trigger": "n.º de pasaporte",
+        "label": "passport number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^(?:[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
+        "trigger": "nº de pasaporte",
+        "label": "passport number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^(?:[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b"
+        },
+        "validations": [],
         "include_trigger": false
       },
       {
@@ -45669,6 +45874,26 @@
         "include_trigger": false
       },
       {
+        "trigger": "útlevélszám",
+        "label": "passport number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^(?:[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
+        "trigger": "útlevél száma",
+        "label": "passport number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^(?:[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
         "trigger": "adószám",
         "label": "tax identification number",
         "strategy": {
@@ -46077,6 +46302,36 @@
             "type": "has-digits"
           }
         ],
+        "include_trigger": false
+      },
+      {
+        "trigger": "numero di passaporto",
+        "label": "passport number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^(?:[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
+        "trigger": "numero del passaporto",
+        "label": "passport number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^(?:[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
+        "trigger": "passaporto n.",
+        "label": "passport number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^(?:[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b"
+        },
+        "validations": [],
         "include_trigger": false
       },
       {
@@ -46634,6 +46889,36 @@
             "type": "has-digits"
           }
         ],
+        "include_trigger": false
+      },
+      {
+        "trigger": "numer paszportu",
+        "label": "passport number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^(?:[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
+        "trigger": "seria i numer paszportu",
+        "label": "passport number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^(?:[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
+        "trigger": "paszport nr",
+        "label": "passport number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^(?:[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b"
+        },
+        "validations": [],
         "include_trigger": false
       },
       {
@@ -49259,6 +49544,26 @@
         "include_trigger": false
       },
       {
+        "trigger": "numărul pașaportului",
+        "label": "passport number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^(?:[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
+        "trigger": "număr pașaport",
+        "label": "passport number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^(?:[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
         "trigger": "domiciliat în",
         "label": "address",
         "strategy": {
@@ -49735,6 +50040,26 @@
             "type": "has-digits"
           }
         ],
+        "include_trigger": false
+      },
+      {
+        "trigger": "číslo pasu",
+        "label": "passport number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^(?:[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
+        "trigger": "číslo cestovného pasu",
+        "label": "passport number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^(?:[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b"
+        },
+        "validations": [],
         "include_trigger": false
       },
       {
@@ -54356,6 +54681,26 @@
             "type": "has-digits"
           }
         ],
+        "include_trigger": false
+      },
+      {
+        "trigger": "passnummer",
+        "label": "passport number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^(?:[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
+        "trigger": "pass nr",
+        "label": "passport number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^(?:[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b"
+        },
+        "validations": [],
         "include_trigger": false
       },
       {
@@ -119868,7 +120213,7 @@
     },
     "triggers": {
       "start": 1407,
-      "end": 3176
+      "end": 3199
     },
     "deny_list": {
       "start": 0,
