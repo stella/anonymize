@@ -1115,6 +1115,14 @@ fn wrapped_pattern_boundary_is_valid(
     };
     tail = after_closer;
   }
+  if tail
+    .trim_start_matches(is_horizontal_whitespace)
+    .chars()
+    .next()
+    .is_some_and(is_match_pattern_closer)
+  {
+    return Ok(false);
+  }
   if !consumed_closer {
     return Ok(true);
   }

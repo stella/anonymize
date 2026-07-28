@@ -319,6 +319,23 @@ const WRAPPED_CONTINUATION_FIXTURES = POSITIVE_FIXTURES.flatMap(
   },
 );
 
+const EXCESS_CLOSER_CONTINUATION_FIXTURES = POSITIVE_FIXTURES.map(
+  ([language, text, passportNumber], index) => {
+    const wrapper = QUOTE_WRAPPERS[index % QUOTE_WRAPPERS.length];
+    if (!wrapper) {
+      throw new TypeError("passport excess-closer wrapper is missing");
+    }
+    const [open, close] = wrapper;
+    return [
+      language,
+      text.replace(
+        passportNumber,
+        `${open}${passportNumber}${close}${close}/99`,
+      ),
+    ] as const;
+  },
+);
+
 const WRAPPED_METADATA_FIXTURES = POSITIVE_FIXTURES.map(
   ([language, text, passportNumber], index) => {
     const wrapper = QUOTE_WRAPPERS[index % QUOTE_WRAPPERS.length];
@@ -595,6 +612,13 @@ describe("localized passport-number triggers", () => {
 
   test.each(WRAPPED_CONTINUATION_FIXTURES)(
     "%s rejects a compound suffix after the closing wrapper",
+    async (language, text) => {
+      expect(await detect(language, text)).toEqual([]);
+    },
+  );
+
+  test.each(EXCESS_CLOSER_CONTINUATION_FIXTURES)(
+    "%s rejects a compound suffix after excess closing wrappers",
     async (language, text) => {
       expect(await detect(language, text)).toEqual([]);
     },
