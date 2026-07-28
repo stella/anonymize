@@ -612,6 +612,9 @@ fn passport_separator_variants_share_placeholders() {
     "Passport X—12345678 was repeated.\n",
     "Passport X―12345678 was repeated.\n",
     "Passport X / 12345678 was copied.\n",
+    "Passport X. 12345678 was copied.\n",
+    "Passport X .12345678 was copied.\n",
+    "Passport X . 12345678 was copied.\n",
     "Passport X.12345678 was listed."
   );
   let entities = vec![
@@ -624,6 +627,9 @@ fn passport_separator_variants_share_placeholders() {
     entity(text, "passport number", "X—12345678"),
     entity(text, "passport number", "X―12345678"),
     entity(text, "passport number", "X / 12345678"),
+    entity(text, "passport number", "X. 12345678"),
+    entity(text, "passport number", "X .12345678"),
+    entity(text, "passport number", "X . 12345678"),
     entity(text, "passport number", "X.12345678"),
   ];
 

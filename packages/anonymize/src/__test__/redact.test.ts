@@ -99,6 +99,9 @@ describe("redactText / deanonymise round-trip", () => {
       "X—12345678 was repeated",
       "X―12345678 was repeated",
       "X / 12345678 was copied",
+      "X. 12345678 was copied",
+      "X .12345678 was copied",
+      "X . 12345678 was copied",
       "X.12345678 was listed",
       "Y‑12345678 was distinct",
     ].join("; ");
@@ -112,6 +115,9 @@ describe("redactText / deanonymise round-trip", () => {
       at(text, "passport number", "X—12345678"),
       at(text, "passport number", "X―12345678"),
       at(text, "passport number", "X / 12345678"),
+      at(text, "passport number", "X. 12345678"),
+      at(text, "passport number", "X .12345678"),
+      at(text, "passport number", "X . 12345678"),
       at(text, "passport number", "X.12345678"),
       at(text, "passport number", "Y‑12345678"),
     ];

@@ -123,6 +123,9 @@ const SEPARATED_IDENTIFIER_FIXTURES = POSITIVE_FIXTURES.flatMap(
       "Y 12345678",
       "Z/12345678",
       "Q.12345678",
+      "Q. 12345678",
+      "Q .12345678",
+      "Q . 12345678",
       "R\u{a0}12345678",
       "S / 12345678",
     ].map(
@@ -333,9 +336,11 @@ const WRAPPED_METADATA_FIXTURES = POSITIVE_FIXTURES.map(
   },
 );
 
-const ALTERNATE_QUOTE_CONTINUATION_FIXTURES = POSITIVE_FIXTURES.map(
+const ALTERNATE_QUOTE_CONTINUATION_FIXTURES = POSITIVE_FIXTURES.flatMap(
   ([language, text, passportNumber]) =>
-    [language, text.replace(passportNumber, `„${passportNumber}”/99`)] as const,
+    [`„${passportNumber}”/99`, `»${passportNumber}«/99`].map(
+      (wrapped) => [language, text.replace(passportNumber, wrapped)] as const,
+    ),
 );
 
 const NESTED_WRAPPER_CONTINUATION_FIXTURES = POSITIVE_FIXTURES.map(
