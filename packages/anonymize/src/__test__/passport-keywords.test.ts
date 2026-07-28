@@ -134,6 +134,18 @@ const SEPARATED_IDENTIFIER_FIXTURES = POSITIVE_FIXTURES.flatMap(
     ),
 );
 
+const FULLWIDTH_FIELD_SEPARATOR_FIXTURES = POSITIVE_FIXTURES.flatMap(
+  ([language, text, passportNumber]) =>
+    ["：", "；", "＃", "＝"].map(
+      (separator) =>
+        [
+          language,
+          text.replace(passportNumber, `${separator}${passportNumber}`),
+          passportNumber,
+        ] as const,
+    ),
+);
+
 const SEPARATED_CONTINUATION_FIXTURES = POSITIVE_FIXTURES.flatMap(
   ([language, text, passportNumber]) =>
     [
@@ -515,6 +527,17 @@ describe("localized passport-number triggers", () => {
       expect(passport && text.slice(passport.start, passport.end)).toBe(
         expected,
       );
+    },
+  );
+
+  test.each(FULLWIDTH_FIELD_SEPARATOR_FIXTURES)(
+    "%s recognizes a passport after a fullwidth field separator",
+    async (language, text, expected) => {
+      const entities = await detect(language, text);
+      const passport = entities.find(
+        (entity) => entity.label === "passport number",
+      );
+      expect(passport?.text).toBe(expected);
     },
   );
 

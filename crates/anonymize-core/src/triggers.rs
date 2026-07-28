@@ -19,6 +19,8 @@ const LINE_TRIGGER_LOOKAHEAD: usize = 2_048;
 const MATCH_PATTERN_LOOKAHEAD: usize = 512;
 const MAX_IDENTIFIER_VALUE_CHARS: usize = 128;
 const MAX_IDENTIFIER_ALPHA_RUN: usize = 12;
+const TRIGGER_FIELD_SEPARATORS: [char; 8] =
+  [':', ';', '#', '=', '：', '；', '＃', '＝'];
 pub const PERSON_OR_ORGANIZATION_TRIGGER_LABEL: &str = "person-or-organization";
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
@@ -518,7 +520,7 @@ fn extract_value(
     .get(trigger_end_byte..lookahead_end)
     .unwrap_or_default();
   let stripped = remaining.trim_start_matches(|ch: char| {
-    ch.is_whitespace() || matches!(ch, ':' | ';' | '#' | '=')
+    ch.is_whitespace() || TRIGGER_FIELD_SEPARATORS.contains(&ch)
   });
   let trimmed_offset = remaining.len().saturating_sub(stripped.len());
   let value_start_byte = trigger_end_byte.saturating_add(trimmed_offset);
