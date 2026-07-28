@@ -1492,21 +1492,26 @@ fn push_extended_person_hit(
   score: f64,
   filters: &DenyListFilterData,
 ) -> Result<()> {
-  if let Some(address) = person_span_as_street_address(
-    full_text,
-    offsets,
-    person_start,
-    &extended,
-    filters,
-  )? {
-    results.push(PipelineEntity::detected(
-      address.start,
-      address.end,
-      ADDRESS_LABEL,
-      address.text,
-      score.max(0.9),
-      DetectionSource::DenyList,
-    ));
+  if person_text_ends_with_street_type(&extended.text, filters) {
+    // Do not create standalone street addresses here: that path is gated by
+    // `standaloneStreetDetection`. Only reclassify when a nearby city/ZIP
+    // cue shows this is an address block; otherwise drop the person FP.
+    if let Some(address) = person_span_as_street_address(
+      full_text,
+      offsets,
+      person_start,
+      &extended,
+      filters,
+    )? {
+      results.push(PipelineEntity::detected(
+        address.start,
+        address.end,
+        ADDRESS_LABEL,
+        address.text,
+        score.max(0.9),
+        DetectionSource::DenyList,
+      ));
+    }
     return Ok(());
   }
 
@@ -2256,8 +2261,9 @@ struct StreetAddressSpan {
 }
 
 /// Deny-list first-name hits can absorb a following street type (`Hartmann
-/// Drive`). Reclassify those spans as addresses and pull in a same-line house
-/// number when present (`305 Hartmann Drive`).
+/// Drive`). Reclassify those spans as addresses only when a nearby city/ZIP
+/// cue shows this is an address block, and pull in a same-line house number
+/// when present (`305 Hartmann Drive`).
 fn person_span_as_street_address(
   full_text: &str,
   offsets: &ByteOffsets<'_>,
@@ -2271,6 +2277,12 @@ fn person_span_as_street_address(
     return Ok(None);
   }
   let start = absorb_leading_house_number(full_text, offsets, person_start)?;
+  let window = adjacent_text_window(full_text, start, extended.end)?;
+  // Street type is already inside the span; require city/ZIP/state shape so
+  // this does not recreate opt-in standalone street detection.
+  if !has_address_format(&window) {
+    return Ok(None);
+  }
   Ok(Some(StreetAddressSpan {
     start,
     end: extended.end,
@@ -3490,6 +3502,40 @@ mod tests {
     assert_eq!(entities.len(), 1);
     assert_eq!(entities[0].label, "address");
     assert_eq!(entities[0].text, "305 Hartmann Drive");
+  }
+
+  #[test]
+  fn deny_list_drops_bare_street_type_person_without_city_cue() {
+    // Standalone street detection stays opt-in: a deny-list first-name hit
+    // that absorbed a street type must not become an address on its own.
+    let text = "123 Main Street";
+    let main_start = u32::try_from(text.find("Main").unwrap()).unwrap();
+    let main_end = main_start.saturating_add(4);
+    let mut filters = DenyListFilterData::default();
+    filters.first_names.insert(String::from("main"));
+    filters.street_types.insert(String::from("street"));
+    let data = DenyListMatchData {
+      labels: vec![vec![String::from("person")]].into(),
+      custom_labels: vec![vec![]].into(),
+      originals: vec![String::from("Main")],
+      pattern_meta: DenyListPatternMetaSet::default(),
+      sources: vec![vec![String::from("first-name")]].into(),
+      filters: Some(filters),
+    };
+
+    let entities = process_deny_list_matches(
+      &[SearchMatch::Literal {
+        pattern: 0,
+        start: main_start,
+        end: main_end,
+      }],
+      PatternSlice { start: 0, end: 1 },
+      text,
+      &data,
+    )
+    .unwrap();
+
+    assert!(entities.is_empty());
   }
 
   #[test]
