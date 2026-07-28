@@ -24805,12 +24805,12 @@
     },
     {
       "kind": "literal-with-options",
-      "pattern": "Reisepass Nr.",
+      "pattern": "reisepass nr.",
       "case_insensitive": true
     },
     {
       "kind": "literal-with-options",
-      "pattern": "Reisepass",
+      "pattern": "reisepass",
       "case_insensitive": true
     },
     {
