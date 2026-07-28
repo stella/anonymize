@@ -91,6 +91,16 @@ const NEGATIVE_FIXTURES = [
   ["sv", "passnummer ABC12345"],
 ] as const;
 
+const ALL_LETTER_FIXTURES = POSITIVE_FIXTURES.map(
+  ([language, text, passportNumber]) =>
+    [language, text.replace(passportNumber, "requested")] as const,
+);
+
+const PUNCTUATED_CONTINUATION_FIXTURES = POSITIVE_FIXTURES.map(
+  ([language, text, passportNumber]) =>
+    [language, text.replace(passportNumber, `${passportNumber}-OLD`)] as const,
+);
+
 const LANGUAGE_ISOLATION_FIXTURES = POSITIVE_FIXTURES.map(
   ([language], index) => {
     const foreign = POSITIVE_FIXTURES[(index + 1) % POSITIVE_FIXTURES.length];
@@ -139,6 +149,20 @@ describe("localized passport-number triggers", () => {
       const entities = await detect(language, text);
 
       expect(entities).toEqual([]);
+    },
+  );
+
+  test.each(ALL_LETTER_FIXTURES)(
+    "%s rejects an all-letter value",
+    async (language, text) => {
+      expect(await detect(language, text)).toEqual([]);
+    },
+  );
+
+  test.each(PUNCTUATED_CONTINUATION_FIXTURES)(
+    "%s rejects a punctuated continuation",
+    async (language, text) => {
+      expect(await detect(language, text)).toEqual([]);
     },
   );
 
