@@ -521,6 +521,24 @@ fn extract_value(
   if stripped.is_empty() {
     return Ok(None);
   }
+  // Form layouts put the next field on the line after a suffix-style
+  // organization cue (`… příspěvková organizace\nse sídlem: …`). Leading
+  // whitespace trim would otherwise cross that newline and treat the next
+  // field as the org value. Reject lowercase-led org values that only
+  // appear after crossing a line break; same-line values and next-line
+  // proper names (uppercase) stay eligible.
+  if matches!(strategy, PreparedTriggerStrategy::ToNextComma { .. })
+    && label == crate::labels::ORGANIZATION_LABEL
+    && remaining
+      .get(..trimmed_offset)
+      .is_some_and(|pad| pad.contains('\n'))
+    && stripped
+      .chars()
+      .next()
+      .is_some_and(|ch| ch.is_lowercase())
+  {
+    return Ok(None);
+  }
 
   let extracted = match strategy {
     PreparedTriggerStrategy::ToNextComma {
@@ -3325,6 +3343,83 @@ mod tests {
       texts,
       vec![(String::from("organization"), String::from("LAFURNI"))]
     );
+  }
+
+  fn institution_suffix_trigger_data() -> PreparedTriggerData {
+    PreparedTriggerData::new(TriggerData {
+      rules: vec![TriggerRule {
+        // Generic institution cue without starts-uppercase validation so the
+        // cross-line lowercase guard is exercised on its own.
+        trigger: String::from("foundation"),
+        label: String::from(crate::labels::ORGANIZATION_LABEL),
+        strategy: TriggerStrategy::ToNextComma {
+          stop_words: Vec::new(),
+          max_length: None,
+        },
+        validations: Vec::new(),
+        include_trigger: false,
+      }],
+      address_stop_keywords: Vec::new(),
+      party_position_terms: Vec::new(),
+      legal_form_suffixes: Vec::new(),
+      post_nominals: Vec::new(),
+      sentence_terminal_currency_terms: Vec::new(),
+      phone_extension_labels: Vec::new(),
+      number_markers: Vec::new(),
+      number_labels: Vec::new(),
+      person_field_labels: Vec::new(),
+    })
+    .unwrap()
+  }
+
+  fn run_institution_suffix_trigger(text: &str) -> Vec<String> {
+    let data = institution_suffix_trigger_data();
+    let Some(start) = text.to_lowercase().find("foundation") else {
+      return Vec::new();
+    };
+    let end = start.saturating_add("foundation".len());
+    process_trigger_matches(
+      &[SearchMatch::Literal {
+        pattern: 0,
+        start: u32::try_from(start).unwrap(),
+        end: u32::try_from(end).unwrap(),
+      }],
+      PatternSlice { start: 0, end: 1 },
+      text,
+      &data,
+      &BTreeSet::new(),
+      None,
+    )
+    .unwrap()
+    .into_iter()
+    .map(|entity| entity.text)
+    .collect()
+  }
+
+  #[test]
+  fn organization_to_next_comma_rejects_lowercase_value_after_newline() {
+    let texts = run_institution_suffix_trigger(
+      "Acme Trust, foundation\nregistered office: 12 Oak Street, 110 00 City",
+    );
+    assert!(texts.is_empty(), "{texts:?}");
+  }
+
+  #[test]
+  fn organization_to_next_comma_keeps_uppercase_value_after_newline() {
+    let texts = run_institution_suffix_trigger(
+      "Donor agreement with foundation\nRiver Valley Trust, Region",
+    );
+    assert_eq!(texts, vec![String::from("River Valley Trust")]);
+  }
+
+  #[test]
+  fn organization_to_next_comma_keeps_lowercase_value_on_same_line() {
+    // Same-line values are gated by optional starts-uppercase validation,
+    // not by the cross-line guard.
+    let texts = run_institution_suffix_trigger(
+      "foundation river valley trust, Region",
+    );
+    assert_eq!(texts, vec![String::from("river valley trust")]);
   }
 
   #[test]

@@ -386,7 +386,13 @@ const buildPipelineConfig = async (
     enableNameCorpus: true,
     ...(opts.languages === undefined
       ? {}
-      : { nameCorpusLanguages: [...opts.languages] }),
+      : {
+          // Content languages scope assemble-time legal-form short suffixes,
+          // institutional heads, and other language-keyed detectors. Name
+          // corpus languages remain an explicit parallel field.
+          languages: [...opts.languages],
+          nameCorpusLanguages: [...opts.languages],
+        }),
     enableDenyList: true,
     ...(opts.countries === undefined
       ? {}

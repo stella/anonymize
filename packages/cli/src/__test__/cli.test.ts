@@ -738,3 +738,34 @@ test("DOCX create mode refuses an existing session archive before runtime setup"
   expect(result.err).toContain("refuses to overwrite");
   expect(await Bun.file(outputPath).exists()).toBeFalse();
 });
+
+test("--languages scopes short legal-form suffixes away from foreign LP", async () => {
+  // Without content-language scoping, bare ASCII `LP` (US/GB limited
+  // partnership) matches Czech license-terms prose such as `Znění LP`.
+  const dir = await mkdtemp(join(tmpdir(), "anonymize-cli-lp-"));
+  const inputPath = join(dir, "lp.txt");
+  await writeFile(
+    inputPath,
+    "LP jsou nedílnou součástí Smlouvy. Znění LP může Poskytovatel měnit.\n",
+    "utf8",
+  );
+  const result = await run([
+    "--json",
+    "--quiet",
+    "--countries",
+    "CZ",
+    "--languages",
+    "cs",
+    inputPath,
+  ]);
+  expect(result.code).toBe(0);
+  const payload = JSON.parse(result.out) as {
+    entities: { label: string; text: string }[];
+  };
+  expect(
+    payload.entities.some(
+      (entity) =>
+        entity.label === "organization" && /\bLP\b/u.test(entity.text),
+    ),
+  ).toBe(false);
+});
