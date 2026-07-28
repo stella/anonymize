@@ -2825,17 +2825,15 @@ mod tests {
 
   #[test]
   fn match_pattern_skips_localized_opening_delimiters() {
-    let regex =
-      BoundedRegex::new(r"^[A-Z]\d{7}").expect("passport pattern compiles");
+    let regex = BoundedRegex::new(r"^[A-Z]\d{7}").unwrap();
     for (value, expected_start) in [
       ("\"A1234567\"", 1),
       ("„A1234567“", "„".len()),
       ("«A1234567»", "«".len()),
       ("(A1234567)", 1),
     ] {
-      let extracted = extract_match_pattern(value, 10, &regex)
-        .expect("match does not fail")
-        .expect("quoted passport matches");
+      let extracted =
+        extract_match_pattern(value, 10, &regex).unwrap().unwrap();
       assert_eq!(extracted.start_byte, 10 + expected_start);
       assert_eq!(extracted.end_byte, 10 + expected_start + "A1234567".len());
     }
