@@ -495,9 +495,7 @@
               "pattern": "\\bECLI:[A-Z]{2}:[A-Za-z0-9.]+:\\d{4}:[A-Za-z0-9._]+\\b",
               "case_insensitive": null,
               "lazy": true,
-              "prefilter_any": [
-                "ECLI:"
-              ],
+              "prefilter_any": ["ECLI:"],
               "prefilter_case_insensitive": false,
               "prefilter_window_bytes": null,
               "prepared_artifact_policy": null
