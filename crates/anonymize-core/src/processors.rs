@@ -1460,7 +1460,6 @@ fn append_person_name_hits(
       person_field_labels,
       document,
     )?;
-    let score = extended_person_score(chain.len(), single_name_context);
     if let SingleNameContext::KnownUppercaseSurname { end } =
       single_name_context
       && end > extended.end
@@ -1470,17 +1469,55 @@ fn append_person_name_hits(
         text: offsets.slice(first.start, end)?,
       };
     }
-
-    results.push(PipelineEntity::detected(
+    push_extended_person_hit(
+      results,
+      full_text,
+      &offsets,
       first.start,
-      extended.end,
-      PERSON_LABEL,
-      extended.text,
-      score,
-      DetectionSource::DenyList,
-    ));
+      extended,
+      extended_person_score(chain.len(), single_name_context),
+      filters,
+    )?;
   }
 
+  Ok(())
+}
+
+fn push_extended_person_hit(
+  results: &mut Vec<PipelineEntity>,
+  full_text: &str,
+  offsets: &ByteOffsets<'_>,
+  person_start: u32,
+  extended: ExtendedName,
+  score: f64,
+  filters: &DenyListFilterData,
+) -> Result<()> {
+  if let Some(address) = person_span_as_street_address(
+    full_text,
+    offsets,
+    person_start,
+    &extended,
+    filters,
+  )? {
+    results.push(PipelineEntity::detected(
+      address.start,
+      address.end,
+      ADDRESS_LABEL,
+      address.text,
+      score.max(0.9),
+      DetectionSource::DenyList,
+    ));
+    return Ok(());
+  }
+
+  results.push(PipelineEntity::detected(
+    person_start,
+    extended.end,
+    PERSON_LABEL,
+    extended.text,
+    score,
+    DetectionSource::DenyList,
+  ));
   Ok(())
 }
 
@@ -2210,6 +2247,98 @@ fn slice_from<'a>(
 struct ExtendedName {
   end: u32,
   text: String,
+}
+
+struct StreetAddressSpan {
+  start: u32,
+  end: u32,
+  text: String,
+}
+
+/// Deny-list first-name hits can absorb a following street type (`Hartmann
+/// Drive`). Reclassify those spans as addresses and pull in a same-line house
+/// number when present (`305 Hartmann Drive`).
+fn person_span_as_street_address(
+  full_text: &str,
+  offsets: &ByteOffsets<'_>,
+  person_start: u32,
+  extended: &ExtendedName,
+  filters: &DenyListFilterData,
+) -> Result<Option<StreetAddressSpan>> {
+  if extended.text.split_whitespace().count() < 2
+    || !person_text_ends_with_street_type(&extended.text, filters)
+  {
+    return Ok(None);
+  }
+  let start = absorb_leading_house_number(full_text, offsets, person_start)?;
+  Ok(Some(StreetAddressSpan {
+    start,
+    end: extended.end,
+    text: offsets.slice(start, extended.end)?,
+  }))
+}
+
+fn person_text_ends_with_street_type(
+  text: &str,
+  filters: &DenyListFilterData,
+) -> bool {
+  let Some(last) = text.split_whitespace().next_back() else {
+    return false;
+  };
+  let token = last.trim_end_matches(['.', ',', ';', ':']);
+  if token.is_empty() {
+    return false;
+  }
+  let lower = token.to_lowercase();
+  filters.street_types.contains(&lower)
+    || filters.street_types.contains(&format!("{lower}."))
+}
+
+fn absorb_leading_house_number(
+  full_text: &str,
+  offsets: &ByteOffsets<'_>,
+  person_start: u32,
+) -> Result<u32> {
+  let start_byte = offsets.validate_offset(person_start)?;
+  let before = full_text.get(..start_byte).unwrap_or_default();
+  let mut cursor = before.len();
+  while let Some((prev, ch)) = before
+    .get(..cursor)
+    .and_then(|prefix| prefix.char_indices().next_back())
+  {
+    if matches!(ch, ' ' | '\t') {
+      cursor = prev;
+      continue;
+    }
+    break;
+  }
+  let after_space = cursor;
+  while let Some((prev, ch)) = before
+    .get(..cursor)
+    .and_then(|prefix| prefix.char_indices().next_back())
+  {
+    if ch.is_ascii_digit() || ch.is_ascii_alphabetic() || ch == '-' {
+      cursor = prev;
+      continue;
+    }
+    break;
+  }
+  if cursor == after_space {
+    return Ok(person_start);
+  }
+  let token = before.get(cursor..after_space).unwrap_or_default();
+  if !token.chars().next().is_some_and(|ch| ch.is_ascii_digit())
+    || !token.chars().any(|ch| ch.is_ascii_digit())
+  {
+    return Ok(person_start);
+  }
+  if char_before_byte(before, cursor).is_some_and(char::is_alphanumeric) {
+    return Ok(person_start);
+  }
+  Ok(
+    person_start
+      .saturating_sub(byte_len(before.get(cursor..).unwrap_or_default())),
+  )
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -3325,6 +3454,42 @@ mod tests {
     .unwrap();
     assert_eq!(field_entities.len(), 1);
     assert_eq!(field_entities[0].text, "Alan Qwxyz\nZyxwv");
+  }
+
+  #[test]
+  fn deny_list_reclassifies_street_type_person_as_address() {
+    // Cracker Barrel transition agreement (2026-07-27): first-name corpus
+    // hit `Hartmann` absorbed street type `Drive` as a person surname.
+    let text = "305 Hartmann Drive\nLebanon, TN 37088-0787";
+    let hartmann_start = u32::try_from(text.find("Hartmann").unwrap()).unwrap();
+    let hartmann_end = hartmann_start.saturating_add(8);
+    let mut filters = DenyListFilterData::default();
+    filters.first_names.insert(String::from("hartmann"));
+    filters.street_types.insert(String::from("drive"));
+    let data = DenyListMatchData {
+      labels: vec![vec![String::from("person")]].into(),
+      custom_labels: vec![vec![]].into(),
+      originals: vec![String::from("Hartmann")],
+      pattern_meta: DenyListPatternMetaSet::default(),
+      sources: vec![vec![String::from("first-name")]].into(),
+      filters: Some(filters),
+    };
+
+    let entities = process_deny_list_matches(
+      &[SearchMatch::Literal {
+        pattern: 0,
+        start: hartmann_start,
+        end: hartmann_end,
+      }],
+      PatternSlice { start: 0, end: 1 },
+      text,
+      &data,
+    )
+    .unwrap();
+
+    assert_eq!(entities.len(), 1);
+    assert_eq!(entities[0].label, "address");
+    assert_eq!(entities[0].text, "305 Hartmann Drive");
   }
 
   #[test]

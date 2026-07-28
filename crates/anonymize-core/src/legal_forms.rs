@@ -624,6 +624,11 @@ fn allows_soft_wrap_continuation(
   data: &PreparedLegalFormData,
 ) -> bool {
   comma_before_soft_wrap(text, newline_start, suffix_is_the_continuation)
+    || ampersand_firm_before_suffix_soft_wrap(
+      text,
+      newline_start,
+      suffix_is_the_continuation,
+    )
     || single_token_name_soft_wrap(text, newline_start, data)
 }
 
@@ -671,6 +676,38 @@ fn comma_before_soft_wrap(
       )
     });
   segment_count >= 3 && all_name_shaped
+}
+
+/// EDGAR also wraps after a finished ampersand firm line with no trailing
+/// comma (`Paul, Weiss, Rifkind, Wharton & Garrison\nLLP`). The comma-before
+/// path only covers `...,\nLLP`; this path requires a comma list plus `&`
+/// and rejects digit/colon address or label shapes.
+fn ampersand_firm_before_suffix_soft_wrap(
+  text: &str,
+  newline_start: usize,
+  suffix_is_the_continuation: bool,
+) -> bool {
+  if !suffix_is_the_continuation {
+    return false;
+  }
+  let before_newline = text.get(..newline_start).unwrap_or_default();
+  let line_start = before_newline
+    .rfind('\n')
+    .map_or(0, |index| index.saturating_add(1));
+  let line = before_newline.get(line_start..).unwrap_or_default().trim();
+  if line.is_empty() || line.ends_with(',') {
+    return false;
+  }
+  if !(line.contains(',') && line.contains('&')) {
+    return false;
+  }
+  if line
+    .chars()
+    .any(|character| character.is_numeric() || matches!(character, ':' | '：'))
+  {
+    return false;
+  }
+  line.chars().any(char::is_lowercase) && line.chars().any(char::is_uppercase)
 }
 
 /// EDGAR often wraps a one-token issuer head onto the next line before the
@@ -1960,7 +1997,12 @@ fn has_disallowed_line_break(text: &str, data: &PreparedLegalFormData) -> bool {
     let allowed = (comma_continuation_before && upper_name_after)
       || single_token_name_continuation
       || (dotted_designator_before
-        && (legal_suffix_after || all_caps_suffix_after));
+        && (legal_suffix_after || all_caps_suffix_after))
+      || ampersand_firm_before_suffix_soft_wrap(
+        text,
+        index,
+        legal_suffix_after || all_caps_suffix_after,
+      );
     if !allowed {
       return true;
     }
@@ -4365,6 +4407,17 @@ mod tests {
   #[test]
   fn short_connector_complete_firm_can_wrap_before_legal_suffix() {
     let text = "Smith, Gambrell & Russell,\nLLP";
+    let texts = org_texts_for(text, "LLP");
+    assert_eq!(texts, vec![String::from(text)]);
+  }
+
+  #[test]
+  fn ampersand_complete_firm_can_wrap_before_suffix_without_trailing_comma() {
+    // Cracker Barrel transition agreement (2026-07-27): EDGAR wrapped LLP
+    // onto the next line after a finished comma-list firm with no trailing
+    // comma, so Wharton/Garrison leaked as address fragments.
+    let text = "Paul, Weiss, Rifkind, Wharton & Garrison
+LLP";
     let texts = org_texts_for(text, "LLP");
     assert_eq!(texts, vec![String::from(text)]);
   }
