@@ -110,6 +110,35 @@ const PASSPORT_SHAPE_FIXTURES = POSITIVE_FIXTURES.flatMap(
     ),
 );
 
+const SEPARATED_IDENTIFIER_FIXTURES = POSITIVE_FIXTURES.flatMap(
+  ([language, text, passportNumber]) =>
+    [
+      "X-12345678",
+      "Y 12345678",
+      "Z/12345678",
+      "Q.12345678",
+      "R\u{a0}12345678",
+      "S / 12345678",
+    ].map(
+      (separated) =>
+        [language, text.replace(passportNumber, separated), separated] as const,
+    ),
+);
+
+const SEPARATED_CONTINUATION_FIXTURES = POSITIVE_FIXTURES.flatMap(
+  ([language, text, passportNumber]) =>
+    [
+      "X-123456789",
+      "Y 123456789",
+      "X-12345678/99",
+      "Y 12345678-OLD",
+      "X / 12345678 / 99",
+    ].map(
+      (candidate) =>
+        [language, text.replace(passportNumber, candidate)] as const,
+    ),
+);
+
 const NEGATIVE_FIXTURES = [
   ["cs", "cestovní pas ABC12345"],
   ["de", "Reisepass ABC12345"],
@@ -257,6 +286,44 @@ const QUOTED_FIXTURES = POSITIVE_FIXTURES.map(
   },
 );
 
+const WRAPPED_CONTINUATION_FIXTURES = POSITIVE_FIXTURES.flatMap(
+  ([language, text, passportNumber], index) => {
+    const wrapper = QUOTE_WRAPPERS[index % QUOTE_WRAPPERS.length];
+    if (!wrapper) {
+      throw new TypeError("passport continuation wrapper is missing");
+    }
+    const [open, close] = wrapper;
+    return ["/99", " / 99", "-OLD"].map(
+      (continuation) =>
+        [
+          language,
+          text.replace(
+            passportNumber,
+            `${open}${passportNumber}${close}${continuation}`,
+          ),
+        ] as const,
+    );
+  },
+);
+
+const WRAPPED_METADATA_FIXTURES = POSITIVE_FIXTURES.map(
+  ([language, text, passportNumber], index) => {
+    const wrapper = QUOTE_WRAPPERS[index % QUOTE_WRAPPERS.length];
+    if (!wrapper) {
+      throw new TypeError("passport metadata wrapper is missing");
+    }
+    const [open, close] = wrapper;
+    return [
+      language,
+      text.replace(
+        passportNumber,
+        `${open}${passportNumber}${close}. The holder`,
+      ),
+      passportNumber,
+    ] as const;
+  },
+);
+
 const canonicalVariants = (text: string): string[] => {
   const clusters: string[] = [];
   for (const char of text.normalize("NFD")) {
@@ -365,6 +432,28 @@ describe("localized passport-number triggers", () => {
     },
   );
 
+  test.each(SEPARATED_IDENTIFIER_FIXTURES)(
+    "%s detects an internally separated passport value",
+    async (language, text, expected) => {
+      const entities = await detect(language, text);
+      const passport = entities.find(
+        (entity) => entity.label === "passport number",
+      );
+
+      expect(passport?.text).toBe(expected);
+      expect(passport && text.slice(passport.start, passport.end)).toBe(
+        expected,
+      );
+    },
+  );
+
+  test.each(SEPARATED_CONTINUATION_FIXTURES)(
+    "%s rejects an overlong or compound separated passport value",
+    async (language, text) => {
+      expect(await detect(language, text)).toEqual([]);
+    },
+  );
+
   test.each(NEGATIVE_FIXTURES)(
     "%s rejects an invalid passport shape",
     async (language, text) => {
@@ -455,6 +544,28 @@ describe("localized passport-number triggers", () => {
       const passport = entities.find(
         (entity) => entity.label === "passport number",
       );
+      expect(passport && text.slice(passport.start, passport.end)).toBe(
+        expected,
+      );
+    },
+  );
+
+  test.each(WRAPPED_CONTINUATION_FIXTURES)(
+    "%s rejects a compound suffix after the closing wrapper",
+    async (language, text) => {
+      expect(await detect(language, text)).toEqual([]);
+    },
+  );
+
+  test.each(WRAPPED_METADATA_FIXTURES)(
+    "%s keeps punctuation after the closing wrapper outside the passport",
+    async (language, text, expected) => {
+      const entities = await detect(language, text);
+      const passport = entities.find(
+        (entity) => entity.label === "passport number",
+      );
+
+      expect(passport?.text).toBe(expected);
       expect(passport && text.slice(passport.start, passport.end)).toBe(
         expected,
       );

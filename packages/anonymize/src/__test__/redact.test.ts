@@ -88,6 +88,30 @@ describe("redactText / deanonymise round-trip", () => {
     expect([...result.redactionMap.keys()]).toEqual(["[PHONE_NUMBER_1]"]);
   });
 
+  test("passport separators normalize without collapsing prefixes", () => {
+    const text = [
+      "Passport X12345678 was inspected",
+      "X-12345678 was repeated",
+      "X / 12345678 was copied",
+      "X.12345678 was listed",
+      "Y 12345678 was distinct",
+    ].join("; ");
+    const entities = [
+      at(text, "passport number", "X12345678"),
+      at(text, "passport number", "X-12345678"),
+      at(text, "passport number", "X / 12345678"),
+      at(text, "passport number", "X.12345678"),
+      at(text, "passport number", "Y 12345678"),
+    ];
+
+    const result = redactText(text, entities);
+    expect(result.redactionMap.size).toBe(2);
+    expect([...result.redactionMap.keys()]).toEqual([
+      "[PASSPORT_NUMBER_1]",
+      "[PASSPORT_NUMBER_2]",
+    ]);
+  });
+
   test("literal placeholder-like source text is not deanonymised", () => {
     const text = "Keep [PERSON_1]; Alice Smith signs.";
     const entities = [at(text, "person", "Alice Smith")];
