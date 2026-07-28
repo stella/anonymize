@@ -133,6 +133,7 @@ const SEPARATED_CONTINUATION_FIXTURES = POSITIVE_FIXTURES.flatMap(
       "X-12345678/99",
       "Y 12345678-OLD",
       "X / 12345678 / 99",
+      "Nr. 12345678",
     ].map(
       (candidate) =>
         [language, text.replace(passportNumber, candidate)] as const,

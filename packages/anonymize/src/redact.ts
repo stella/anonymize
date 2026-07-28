@@ -23,7 +23,7 @@ const BASE58_ADDRESS_RE = /\b[13][a-km-zA-HJ-NP-Z1-9]{25,34}\b/;
 const NHS_NUMBER_CUE_RE = /\b(?:NHS|National\s+Health\s+Service)\b/i;
 const PLACEHOLDER_TOKEN_RE = /\[[^\s[\]]+_[1-9]\d*\]/g;
 const PASSPORT_IDENTIFIER_RE =
-  /\b(?:[A-Za-z]{1,2}(?:[\p{Zs}\t]{1,8}|[\p{Zs}\t]{0,8}[-/.][\p{Zs}\t]{0,8})?\d{6,8}|\d{2}[A-Za-z]{2}\d{5}|\d{7,9})\b/u;
+  /\b(?:[A-Za-z]{1,2}(?:[\p{Zs}\t]{1,8}|[\p{Zs}\t]{0,8}[-/][\p{Zs}\t]{0,8}|[.])?\d{6,8}|\d{2}[A-Za-z]{2}\d{5}|\d{7,9})\b/u;
 // Strip all separators the ID detectors accept so the
 // same real-world value canonicalises to one placeholder:
 //   - whitespace and `-` for IBAN, NIP, REGON, etc.
