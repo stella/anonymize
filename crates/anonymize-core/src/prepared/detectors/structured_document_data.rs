@@ -14,6 +14,7 @@ use super::timed_entities;
 const SCORE: f64 = 1.0;
 const TD1_LINE_BYTES: usize = 30;
 const TD3_LINE_BYTES: usize = 44;
+const MIN_PAN_BYTES: usize = 13;
 const MAX_PAN_BYTES: usize = 19;
 const MAX_TRACK_ONE_NAME_BYTES: usize = 26;
 const MAX_TRACK_SUFFIX_BYTES: usize = 64;
@@ -158,7 +159,6 @@ fn valid_td3(first: &[u8], second: &[u8]) -> bool {
       .is_some_and(|byte| byte.is_ascii_uppercase() || *byte == b'<')
     && is_mrz_alpha(first)
     && is_mrz_alphanumeric(second)
-    && second.get(0..9).is_some_and(is_mrz_alphanumeric)
     && second.get(10..13).is_some_and(is_mrz_alpha)
     && second.get(13..20).is_some_and(all_digits)
     && second
@@ -200,7 +200,11 @@ fn valid_td1(first: &[u8], second: &[u8], third: &[u8]) -> bool {
       .is_some_and(|byte| matches!(byte, b'M' | b'F' | b'<'))
     && second.get(8..15).is_some_and(all_digits)
     && second.get(15..18).is_some_and(is_mrz_alpha)
-    && digit_matches(first.get(5..14), first.get(14))
+    && document_number_digit_matches(
+      first.get(5..14),
+      first.get(14),
+      first.get(15..30),
+    )
     && digit_matches(second.get(0..6), second.get(6))
     && digit_matches(second.get(8..14), second.get(14))
     && composite_digit_matches(
@@ -234,6 +238,44 @@ fn digit_matches(field: Option<&[u8]>, digit: Option<&u8>) -> bool {
   field
     .and_then(check_digit)
     .is_some_and(|expected| Some(&expected) == digit)
+}
+
+fn document_number_digit_matches(
+  primary: Option<&[u8]>,
+  primary_digit: Option<&u8>,
+  optional_data: Option<&[u8]>,
+) -> bool {
+  if primary_digit != Some(&b'<') {
+    return digit_matches(primary, primary_digit);
+  }
+  let (Some(primary), Some(optional_data)) = (primary, optional_data) else {
+    return false;
+  };
+  let Some(check_position) = optional_data.iter().rposition(|byte| *byte != b'<')
+  else {
+    return false;
+  };
+  let Some(continuation) = optional_data.get(..check_position) else {
+    return false;
+  };
+  let Some(check_digit) = optional_data.get(check_position) else {
+    return false;
+  };
+  let Some(fillers) = optional_data.get(check_position.saturating_add(1)..)
+  else {
+    return false;
+  };
+  !continuation.is_empty()
+    && continuation
+      .iter()
+      .all(|byte| byte.is_ascii_uppercase() || byte.is_ascii_digit())
+    && check_digit.is_ascii_digit()
+    && !fillers.is_empty()
+    && fillers.iter().all(|byte| *byte == b'<')
+    && composite_digit_matches(
+      &[Some(primary), Some(continuation)],
+      Some(check_digit),
+    )
 }
 
 fn optional_digit_matches(field: Option<&[u8]>, digit: Option<&u8>) -> bool {
@@ -315,7 +357,11 @@ fn track_one_end(bytes: &[u8], start: usize) -> Option<usize> {
     return None;
   }
   let suffix_start = name_start.checked_add(name_length)?.checked_add(1)?;
-  track_suffix_end(bytes, suffix_start)
+  let (end, suffix) = track_suffix(bytes, suffix_start)?;
+  suffix
+    .iter()
+    .all(|byte| (b' '..=b'_').contains(byte))
+    .then_some(end)
 }
 
 fn valid_track_one_name(bytes: &[u8]) -> bool {
@@ -333,7 +379,8 @@ fn track_two_end(bytes: &[u8], start: usize) -> Option<usize> {
   if !valid_pan(pan) {
     return None;
   }
-  track_suffix_end(bytes, pan_end.checked_add(1)?)
+  let (end, suffix) = track_suffix(bytes, pan_end.checked_add(1)?)?;
+  all_digits(suffix).then_some(end)
 }
 
 fn digits_until(bytes: &[u8], start: usize, delimiter: u8) -> Option<usize> {
@@ -344,11 +391,12 @@ fn digits_until(bytes: &[u8], start: usize, delimiter: u8) -> Option<usize> {
   let length = search.iter().position(|byte| *byte == delimiter)?;
   let end = start.checked_add(length)?;
   let value = bytes.get(start..end)?;
-  ((13..=MAX_PAN_BYTES).contains(&value.len()) && all_digits(value))
+  ((MIN_PAN_BYTES..=MAX_PAN_BYTES).contains(&value.len())
+    && all_digits(value))
     .then_some(end)
 }
 
-fn track_suffix_end(bytes: &[u8], start: usize) -> Option<usize> {
+fn track_suffix(bytes: &[u8], start: usize) -> Option<(usize, &[u8])> {
   let search_end = start.checked_add(MAX_TRACK_SUFFIX_BYTES)?.min(bytes.len());
   let search = bytes.get(start..search_end)?;
   let prefix = search.get(..7)?;
@@ -363,14 +411,14 @@ fn track_suffix_end(bytes: &[u8], start: usize) -> Option<usize> {
   }
   let terminator = search.iter().position(|byte| *byte == b'?')?;
   let data = search.get(..terminator)?;
-  if !data.iter().all(u8::is_ascii_graphic) {
-    return None;
-  }
-  start.checked_add(terminator)?.checked_add(1)
+  let end = start.checked_add(terminator)?.checked_add(1)?;
+  Some((end, data))
 }
 
 fn valid_pan(pan: &[u8]) -> bool {
-  if !(13..=MAX_PAN_BYTES).contains(&pan.len()) || !all_digits(pan) {
+  if !(MIN_PAN_BYTES..=MAX_PAN_BYTES).contains(&pan.len())
+    || !all_digits(pan)
+  {
     return false;
   }
   let mut sum = 0u32;
@@ -429,7 +477,7 @@ fn entity(
 mod tests {
   use proptest::prelude::*;
 
-  use super::{detect, optional_digit_matches};
+  use super::{check_digit, detect, optional_digit_matches};
 
   const TD3: &str = "P<UTOERIKSSON<<ANNA<MARIA<<<<<<<<<<<<<<<<<<<\nL898902C36UTO7408122F1204159ZE184226B<<<<<10";
   const TD1: &str = "I<UTOD231458907<<<<<<<<<<<<<<<\n7408122F1204159UTO<<<<<<<<<<<6\nERIKSSON<<ANNA<MARIA<<<<<<<<<<";
@@ -478,6 +526,33 @@ mod tests {
   }
 
   #[test]
+  fn detects_td1_with_an_extended_document_number() {
+    let mut lines = TD1
+      .split('\n')
+      .map(|line| line.as_bytes().to_vec())
+      .collect::<Vec<_>>();
+    let first = &mut lines[0];
+    first[14] = b'<';
+    first[15..17].copy_from_slice(b"AB");
+    first[17] = check_digit(b"D23145890AB").unwrap();
+
+    let mut composite = first[5..30].to_vec();
+    composite.extend_from_slice(&lines[1][0..7]);
+    composite.extend_from_slice(&lines[1][8..15]);
+    composite.extend_from_slice(&lines[1][18..29]);
+    lines[1][29] = check_digit(&composite).unwrap();
+
+    let extended = lines
+      .into_iter()
+      .map(|line| String::from_utf8(line).unwrap())
+      .collect::<Vec<_>>()
+      .join("\n");
+    let entities = detect(&extended, &[]).unwrap();
+    assert_eq!(entities.len(), 1);
+    assert_eq!(entities[0].label, "identity card number");
+  }
+
+  #[test]
   fn preserves_utf8_byte_offsets_and_honors_label_filtering() {
     let text = format!("ž {TD3}\n{TRACK1}");
     let allowed = vec![String::from("credit card number")];
@@ -499,7 +574,12 @@ mod tests {
       "0".repeat(super::MAX_TRACK_SUFFIX_BYTES)
     );
     let repeated_sentinels = "%B".repeat(8_192);
-    let text = format!("{malformed_suffix}{late_terminator}{repeated_sentinels}");
+    let track_one_lowercase =
+      "%B4111111111111111^DOE/JOHN^2512101password?";
+    let track_two_non_numeric = ";4111111111111111=2512101PASSWORD?";
+    let text = format!(
+      "{malformed_suffix}{late_terminator}{repeated_sentinels}{track_one_lowercase}{track_two_non_numeric}"
+    );
     assert!(detect(&text, &[]).unwrap().is_empty());
   }
 
