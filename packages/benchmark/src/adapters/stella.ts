@@ -1,6 +1,7 @@
 import { createRequire } from "node:module";
 
 import {
+  availableDefaultNativePipelineLanguages,
   DEFAULT_ENTITY_LABELS,
   getDefaultNativePipeline,
   loadNativeAnonymizeBinding,
@@ -21,7 +22,7 @@ const stellaVersion = (
   require("@stll/anonymize/package.json") as { version: string }
 ).version;
 const STELLA_BENCHMARK_NOTES =
-  "shipped language-scoped prepared packages; product-default rules and dictionaries; NER disabled";
+  "shipped prepared packages (language-scoped when available); product-default rules and dictionaries; NER disabled";
 
 /**
  * Caller-owned config used by assisted and config-assembly benchmark lanes.
@@ -77,6 +78,20 @@ const normalizeDocumentLanguage = (language: string): string => {
   return normalized;
 };
 
+const scopedPipelineLanguage = (
+  availableLanguages: ReadonlySet<string>,
+  language: string,
+): string | undefined => {
+  if (availableLanguages.has(language)) {
+    return language;
+  }
+  const baseLanguage = language.split("-").at(0);
+  if (baseLanguage !== undefined && availableLanguages.has(baseLanguage)) {
+    return baseLanguage;
+  }
+  return undefined;
+};
+
 /**
  * Initialize every language-specific pipeline before either measured corpus pass.
  * Sorting makes construction order independent of document order; both passes
@@ -122,20 +137,30 @@ export const createStllAdapter = (): Adapter => ({
   run: async (docs: readonly GroundTruthDocument[]) => {
     // Init boundary (fairness): everything a competitor loads in its own
     // one-time setup is timed here too. The released stella package ships
-    // language-scoped prepared pipelines, so benchmark the normal product path:
-    // load each trusted artifact instead of rebuilding it from dictionaries.
+    // prepared pipelines, so benchmark the normal product path: load each
+    // trusted artifact instead of rebuilding it from dictionaries. Languages
+    // without a scoped artifact use the shipped all-language package.
     // Lazy regex compilation remains in the first measured corpus pass.
     const outcome = await runStllAdapterWithInitializer(docs, () => {
       const binding = loadNativeAnonymizeBinding();
-      return Promise.resolve((language: string) =>
-        Promise.resolve(
+      const availableLanguages = new Set(
+        availableDefaultNativePipelineLanguages(),
+      );
+      return Promise.resolve((language: string) => {
+        const scopedLanguage = scopedPipelineLanguage(
+          availableLanguages,
+          language,
+        );
+        return Promise.resolve(
           getDefaultNativePipeline({
             binding,
-            language,
+            ...(scopedLanguage === undefined
+              ? {}
+              : { language: scopedLanguage }),
             warmup: "none",
           }),
-        ),
-      );
+        );
+      });
     });
     return outcome.status === "ok"
       ? { ...outcome, notes: STELLA_BENCHMARK_NOTES }

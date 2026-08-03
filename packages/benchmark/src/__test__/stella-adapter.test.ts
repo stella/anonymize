@@ -48,6 +48,14 @@ describe("stella benchmark adapter language scoping", () => {
     );
   });
 
+  test("uses the all-language package when no scoped package is shipped", async () => {
+    const outcome = await createStllAdapter().run([
+      document("es-1", "es", "Paciente Ana García"),
+    ]);
+
+    expect(outcome.status).toBe("ok");
+  });
+
   test("an English corpus builds and reuses only an English pipeline", async () => {
     const builtLanguages: string[] = [];
     const processedLanguages: string[] = [];
