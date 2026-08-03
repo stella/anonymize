@@ -17,7 +17,8 @@ const TD3_LINE_BYTES: usize = 44;
 const MIN_PAN_BYTES: usize = 13;
 const MAX_PAN_BYTES: usize = 19;
 const MAX_TRACK_ONE_NAME_BYTES: usize = 26;
-const MAX_TRACK_SUFFIX_BYTES: usize = 64;
+const MAX_TRACK_ONE_BYTES: usize = 79;
+const MAX_TRACK_TWO_BYTES: usize = 40;
 
 static_detector_rules! {
   pub(in crate::prepared) const RULES;
@@ -357,7 +358,9 @@ fn track_one_end(bytes: &[u8], start: usize) -> Option<usize> {
     return None;
   }
   let suffix_start = name_start.checked_add(name_length)?.checked_add(1)?;
-  let (end, suffix) = track_suffix(bytes, suffix_start)?;
+  let record_end = start.checked_add(MAX_TRACK_ONE_BYTES)?.min(bytes.len());
+  let (end, suffix) =
+    track_suffix(bytes.get(suffix_start..record_end)?, suffix_start)?;
   suffix
     .iter()
     .all(|byte| (b' '..=b'_').contains(byte))
@@ -379,7 +382,10 @@ fn track_two_end(bytes: &[u8], start: usize) -> Option<usize> {
   if !valid_pan(pan) {
     return None;
   }
-  let (end, suffix) = track_suffix(bytes, pan_end.checked_add(1)?)?;
+  let suffix_start = pan_end.checked_add(1)?;
+  let record_end = start.checked_add(MAX_TRACK_TWO_BYTES)?.min(bytes.len());
+  let (end, suffix) =
+    track_suffix(bytes.get(suffix_start..record_end)?, suffix_start)?;
   all_digits(suffix).then_some(end)
 }
 
@@ -396,9 +402,7 @@ fn digits_until(bytes: &[u8], start: usize, delimiter: u8) -> Option<usize> {
     .then_some(end)
 }
 
-fn track_suffix(bytes: &[u8], start: usize) -> Option<(usize, &[u8])> {
-  let search_end = start.checked_add(MAX_TRACK_SUFFIX_BYTES)?.min(bytes.len());
-  let search = bytes.get(start..search_end)?;
+fn track_suffix(search: &[u8], start: usize) -> Option<(usize, &[u8])> {
   let prefix = search.get(..7)?;
   if !all_digits(prefix) {
     return None;
@@ -521,6 +525,41 @@ mod tests {
   }
 
   #[test]
+  fn accepts_maximum_length_payment_tracks_and_rejects_one_byte_over() {
+    let track_one_prefix =
+      "%B4111111111111111^DOE/JOHN Q^2512101";
+    let track_one_padding = super::MAX_TRACK_ONE_BYTES
+      .checked_sub(track_one_prefix.len())
+      .and_then(|remaining| remaining.checked_sub(1))
+      .unwrap();
+    let track_one =
+      format!("{track_one_prefix}{}?", "A".repeat(track_one_padding));
+    let track_two_prefix = ";4111111111111111=2512101";
+    let track_two_padding = super::MAX_TRACK_TWO_BYTES
+      .checked_sub(track_two_prefix.len())
+      .and_then(|remaining| remaining.checked_sub(1))
+      .unwrap();
+    let track_two =
+      format!("{track_two_prefix}{}?", "1".repeat(track_two_padding));
+
+    assert_eq!(
+      detect(&format!("{track_one}\n{track_two}"), &[])
+        .unwrap()
+        .len(),
+      2
+    );
+    let overlong_track_one =
+      format!("{}A?", track_one.strip_suffix('?').unwrap());
+    let overlong_track_two =
+      format!("{}1?", track_two.strip_suffix('?').unwrap());
+    assert!(
+      detect(&format!("{overlong_track_one}\n{overlong_track_two}"), &[])
+        .unwrap()
+        .is_empty()
+    );
+  }
+
+  #[test]
   fn accepts_icao_filler_for_an_unused_td3_personal_number() {
     assert!(optional_digit_matches(Some(b"<<<<<<<<<<<<<<"), Some(&b'<')));
   }
@@ -571,7 +610,7 @@ mod tests {
       "%B4111111111111111^DOE/JOHN^25X21010000000000000?";
     let late_terminator = format!(
       ";4111111111111111=2512101{}?",
-      "0".repeat(super::MAX_TRACK_SUFFIX_BYTES)
+      "0".repeat(super::MAX_TRACK_TWO_BYTES)
     );
     let repeated_sentinels = "%B".repeat(8_192);
     let track_one_lowercase =
