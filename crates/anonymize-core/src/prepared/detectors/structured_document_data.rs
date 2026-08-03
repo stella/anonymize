@@ -161,7 +161,7 @@ fn valid_td3(first: &[u8], second: &[u8]) -> bool {
     && is_mrz_alpha(first)
     && is_mrz_alphanumeric(second)
     && second.get(10..13).is_some_and(is_mrz_alpha)
-    && second.get(13..20).is_some_and(all_digits)
+    && second.get(13..19).is_some_and(is_mrz_numeric)
     && second
       .get(20)
       .is_some_and(|byte| matches!(byte, b'M' | b'F' | b'<'))
@@ -195,7 +195,7 @@ fn valid_td1(first: &[u8], second: &[u8], third: &[u8]) -> bool {
     && is_mrz_alpha(third)
     && first.get(2..5).is_some_and(is_mrz_alpha)
     && first.get(5..14).is_some_and(is_mrz_alphanumeric)
-    && second.get(0..7).is_some_and(all_digits)
+    && second.get(0..6).is_some_and(is_mrz_numeric)
     && second
       .get(7)
       .is_some_and(|byte| matches!(byte, b'M' | b'F' | b'<'))
@@ -235,6 +235,12 @@ fn is_mrz_alphanumeric(bytes: &[u8]) -> bool {
   })
 }
 
+fn is_mrz_numeric(bytes: &[u8]) -> bool {
+  bytes
+    .iter()
+    .all(|byte| byte.is_ascii_digit() || *byte == b'<')
+}
+
 fn digit_matches(field: Option<&[u8]>, digit: Option<&u8>) -> bool {
   field
     .and_then(check_digit)
@@ -271,7 +277,6 @@ fn document_number_digit_matches(
       .iter()
       .all(|byte| byte.is_ascii_uppercase() || byte.is_ascii_digit())
     && check_digit.is_ascii_digit()
-    && !fillers.is_empty()
     && fillers.iter().all(|byte| *byte == b'<')
     && composite_digit_matches(
       &[Some(primary), Some(continuation)],
@@ -589,6 +594,71 @@ mod tests {
     let entities = detect(&extended, &[]).unwrap();
     assert_eq!(entities.len(), 1);
     assert_eq!(entities[0].label, "identity card number");
+  }
+
+  #[test]
+  fn detects_td1_when_the_extended_document_number_fills_optional_data() {
+    let mut lines = TD1
+      .split('\n')
+      .map(|line| line.as_bytes().to_vec())
+      .collect::<Vec<_>>();
+    let first = &mut lines[0];
+    first[14] = b'<';
+    first[15..29].copy_from_slice(b"ABCDEFGHIJKLMN");
+    let mut document_number = first[5..14].to_vec();
+    document_number.extend_from_slice(&first[15..29]);
+    first[29] = check_digit(&document_number).unwrap();
+
+    let mut composite = first[5..30].to_vec();
+    composite.extend_from_slice(&lines[1][0..7]);
+    composite.extend_from_slice(&lines[1][8..15]);
+    composite.extend_from_slice(&lines[1][18..29]);
+    lines[1][29] = check_digit(&composite).unwrap();
+
+    let extended = lines
+      .into_iter()
+      .map(|line| String::from_utf8(line).unwrap())
+      .collect::<Vec<_>>()
+      .join("\n");
+    assert_eq!(detect(&extended, &[]).unwrap().len(), 1);
+  }
+
+  #[test]
+  fn detects_icao_records_with_unknown_birth_date_components() {
+    let mut td3_lines = TD3
+      .split('\n')
+      .map(|line| line.as_bytes().to_vec())
+      .collect::<Vec<_>>();
+    td3_lines[1][13..19].copy_from_slice(b"74<<<<");
+    td3_lines[1][19] = check_digit(&td3_lines[1][13..19]).unwrap();
+    let mut td3_composite = td3_lines[1][0..10].to_vec();
+    td3_composite.extend_from_slice(&td3_lines[1][13..20]);
+    td3_composite.extend_from_slice(&td3_lines[1][21..43]);
+    td3_lines[1][43] = check_digit(&td3_composite).unwrap();
+    let td3 = td3_lines
+      .into_iter()
+      .map(|line| String::from_utf8(line).unwrap())
+      .collect::<Vec<_>>()
+      .join("\n");
+
+    let mut td1_lines = TD1
+      .split('\n')
+      .map(|line| line.as_bytes().to_vec())
+      .collect::<Vec<_>>();
+    td1_lines[1][0..6].copy_from_slice(b"74<<<<");
+    td1_lines[1][6] = check_digit(&td1_lines[1][0..6]).unwrap();
+    let mut td1_composite = td1_lines[0][5..30].to_vec();
+    td1_composite.extend_from_slice(&td1_lines[1][0..7]);
+    td1_composite.extend_from_slice(&td1_lines[1][8..15]);
+    td1_composite.extend_from_slice(&td1_lines[1][18..29]);
+    td1_lines[1][29] = check_digit(&td1_composite).unwrap();
+    let td1 = td1_lines
+      .into_iter()
+      .map(|line| String::from_utf8(line).unwrap())
+      .collect::<Vec<_>>()
+      .join("\n");
+
+    assert_eq!(detect(&format!("{td3}\n{td1}"), &[]).unwrap().len(), 2);
   }
 
   #[test]
