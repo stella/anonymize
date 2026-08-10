@@ -20,7 +20,13 @@
  *   - `bun run build:wasm-assets`
  */
 import { spawnSync } from "node:child_process";
-import { cpSync, existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -50,14 +56,21 @@ try {
       "if (result.resolvedEntities.length === 0) {",
       '  throw new Error("compiled binary resolved no entities");',
       "}",
-      'console.log(JSON.stringify({ ok: true, entities: result.resolvedEntities.length }));',
+      "console.log(JSON.stringify({ ok: true, entities: result.resolvedEntities.length }));",
     ].join("\n"),
   );
 
   const binaryPath = join(workDir, "consumer");
   const compile = spawnSync(
     "bun",
-    ["build", "--compile", "--target=bun", "--outfile", binaryPath, consumerPath],
+    [
+      "build",
+      "--compile",
+      "--target=bun",
+      "--outfile",
+      binaryPath,
+      consumerPath,
+    ],
     { stdio: "inherit" },
   );
   if (compile.status !== 0) {
@@ -95,7 +108,11 @@ try {
   }
 
   console.log(
-    JSON.stringify({ event: "smoke-wasm-compiled", ok: true, entities: parsed.entities }),
+    JSON.stringify({
+      event: "smoke-wasm-compiled",
+      ok: true,
+      entities: parsed.entities,
+    }),
   );
 } finally {
   rmSync(workDir, { force: true, recursive: true });
