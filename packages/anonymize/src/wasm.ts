@@ -177,26 +177,45 @@ const isNodeRuntime = (): boolean => {
 };
 
 /**
- * Base URL the native assets (glue module, wasm, prepared packages) resolve
- * against. Defaults to the `native/` directory next to this module.
- *
- * `STLL_ANONYMIZE_ASSET_DIR` overrides the base for single-binary
- * deployments (e.g. `bun build --compile`): there `import.meta.url` points
- * into the binary's embedded filesystem, which dynamic `import()` never
- * escapes, so relative resolution cannot reach assets installed on disk.
- * Point the override at a real directory holding the contents of
- * `dist/native/`; it accepts an absolute POSIX path or a `file:` URL.
- * Browsers never define `process`, so the override is inert there.
+ * `STLL_ANONYMIZE_ASSET_DIR` overrides the native-asset base for
+ * single-binary deployments (e.g. `bun build --compile`): there
+ * `import.meta.url` points into the binary's embedded filesystem, which
+ * dynamic `import()` never escapes, so relative resolution cannot reach
+ * assets installed on disk. Point the override at a real directory holding
+ * the contents of `dist/native/`; it accepts an absolute POSIX path or a
+ * `file:` URL. Browsers never define `process`, so the override is inert
+ * there.
  */
-const assetBaseUrl = (): URL => {
+const assetDirOverrideUrl = (): URL | undefined => {
   const globals: RuntimeGlobals = globalThis;
   const override = globals.process?.env?.[ASSET_DIR_ENV];
-  if (override !== undefined && override !== "") {
-    const base = override.startsWith("file:") ? override : `file://${override}`;
-    return new URL(base.endsWith("/") ? base : `${base}/`);
+  if (override === undefined || override === "") {
+    return undefined;
   }
-  return new URL(`./${NATIVE_ASSET_DIR}/`, import.meta.url);
+  if (override.startsWith("file:")) {
+    return new URL(override.endsWith("/") ? override : `${override}/`);
+  }
+  if (!override.startsWith("/")) {
+    throw new Error(
+      `${ASSET_DIR_ENV} must be an absolute path or a file: URL, got ${JSON.stringify(override)}`,
+    );
+  }
+  // pathToFileURL semantics without importing node:url (this module also
+  // ships to browsers): encode each segment so characters like `#`, `?`,
+  // and `%` stay path data instead of URL syntax.
+  const encoded = override.split("/").map(encodeURIComponent).join("/");
+  return new URL(`file://${encoded.endsWith("/") ? encoded : `${encoded}/`}`);
 };
+
+/**
+ * Base URL the native assets (glue module, wasm, prepared packages) resolve
+ * against: the override when set, otherwise the `native/` directory next to
+ * this module. The default stays a single verbatim expression — the Vite
+ * plugin (vite.ts) anchors on its exact emitted text to re-point browser
+ * builds at emitted assets.
+ */
+const assetBaseUrl = (): URL =>
+  assetDirOverrideUrl() ?? new URL(`./${NATIVE_ASSET_DIR}/`, import.meta.url);
 
 const assetUrl = (fileName: string): URL => new URL(fileName, assetBaseUrl());
 
