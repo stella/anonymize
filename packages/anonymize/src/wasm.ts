@@ -125,6 +125,7 @@ const GLUE_MODULE = "index.js";
 const WASM_MODULE = "index_bg.wasm";
 const NODE_FS_MODULE = "node:fs/promises";
 const NATIVE_ASSET_DIR = "native";
+const ASSET_DIR_ENV = "STLL_ANONYMIZE_ASSET_DIR";
 const DEFAULT_PACKAGE_FILE = "native-pipeline.stlanonpkg";
 const LANGUAGE_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 const DEFAULT_PIPELINE_CACHE_KEY = "<default>";
@@ -160,7 +161,10 @@ const loadWasmBinding = async (): Promise<NativeAnonymizeBinding> => {
 };
 
 type RuntimeGlobals = {
-  process?: { versions?: { node?: string } };
+  process?: {
+    env?: Record<string, string | undefined>;
+    versions?: { node?: string };
+  };
   window?: unknown;
 };
 
@@ -172,8 +176,29 @@ const isNodeRuntime = (): boolean => {
   );
 };
 
-const assetUrl = (fileName: string): URL =>
-  new URL(`./${NATIVE_ASSET_DIR}/${fileName}`, import.meta.url);
+/**
+ * Base URL the native assets (glue module, wasm, prepared packages) resolve
+ * against. Defaults to the `native/` directory next to this module.
+ *
+ * `STLL_ANONYMIZE_ASSET_DIR` overrides the base for single-binary
+ * deployments (e.g. `bun build --compile`): there `import.meta.url` points
+ * into the binary's embedded filesystem, which dynamic `import()` never
+ * escapes, so relative resolution cannot reach assets installed on disk.
+ * Point the override at a real directory holding the contents of
+ * `dist/native/`; it accepts an absolute POSIX path or a `file:` URL.
+ * Browsers never define `process`, so the override is inert there.
+ */
+const assetBaseUrl = (): URL => {
+  const globals: RuntimeGlobals = globalThis;
+  const override = globals.process?.env?.[ASSET_DIR_ENV];
+  if (override !== undefined && override !== "") {
+    const base = override.startsWith("file:") ? override : `file://${override}`;
+    return new URL(base.endsWith("/") ? base : `${base}/`);
+  }
+  return new URL(`./${NATIVE_ASSET_DIR}/`, import.meta.url);
+};
+
+const assetUrl = (fileName: string): URL => new URL(fileName, assetBaseUrl());
 
 const resolveBinding = (
   options?: WasmBindingOptions,
