@@ -34,8 +34,20 @@ pub struct CurrencyData {
 )]
 pub struct AmountWordsData {
   pub written_amount_patterns: Vec<WrittenAmountPatternData>,
+  pub number_words: Vec<NumberWordData>,
   pub magnitude_suffixes: Vec<MagnitudeSuffixData>,
   pub share_quantity_terms: Vec<ShareQuantityTermData>,
+}
+
+/// Number vocabulary for free-standing written-out amounts
+/// (`twenty-five million dollars`): number words plus the joiners that may
+/// sit between them (`one hundred and fifty`).
+#[derive(
+  Clone, Debug, Default, Eq, PartialEq, serde::Deserialize, serde::Serialize,
+)]
+pub struct NumberWordData {
+  pub words: Vec<String>,
+  pub joiners: Vec<String>,
 }
 
 #[derive(
@@ -134,6 +146,8 @@ struct MonetaryRule {
   magnitudes: Vec<MagnitudeTerm>,
   quantity_followers: Vec<String>,
   written_amount_keywords: Vec<String>,
+  number_words: BTreeSet<String>,
+  number_joiners: BTreeSet<String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -196,6 +210,21 @@ impl MonetaryRule {
     }
     written_amount_keywords.sort_by_key(|term| std::cmp::Reverse(term.len()));
 
+    let mut number_words = BTreeSet::new();
+    let mut number_joiners = BTreeSet::new();
+    for entry in data.amount_words.number_words {
+      number_words.extend(
+        clean_terms(entry.words)
+          .into_iter()
+          .map(|w| w.to_lowercase()),
+      );
+      number_joiners.extend(
+        clean_terms(entry.joiners)
+          .into_iter()
+          .map(|w| w.to_lowercase()),
+      );
+    }
+
     Self {
       codes,
       symbols,
@@ -203,6 +232,8 @@ impl MonetaryRule {
       magnitudes,
       quantity_followers,
       written_amount_keywords,
+      number_words,
+      number_joiners,
     }
   }
 
@@ -361,7 +392,7 @@ impl MonetaryRule {
     }
 
     let number_start = skip_horizontal_ws_limit(text, anchor.end, 2);
-    let number = parse_number_forward(text, number_start)?;
+    let number = parse_amount_forward(text, number_start)?;
     let end = self
       .parse_magnitude_forward(text, number.end)
       .map_or(number.end, |magnitude| magnitude.end);
@@ -391,7 +422,7 @@ impl MonetaryRule {
         continue;
       }
       let number_start = scan_start.saturating_add(offset);
-      let number = parse_number_forward(text, number_start)?;
+      let number = parse_amount_forward(text, number_start)?;
       let magnitude = self.parse_magnitude_forward(text, number.end);
       let has_magnitude = magnitude.is_some();
       let after_number = magnitude.map_or(number.end, |found| {
@@ -426,7 +457,84 @@ impl MonetaryRule {
       }
     }
 
+    if best.is_none() && kind != AnchorKind::Symbol {
+      best = self.written_number_span(text, anchor);
+    }
+
     best
+  }
+
+  /// `twenty-five million dollars`: number words, joiners, and magnitude
+  /// words walked back from a trailing currency name or code. At least one
+  /// number word is required, so `million dollars` alone is not an amount.
+  fn written_number_span(
+    &self,
+    text: &str,
+    anchor: AnchorSpan,
+  ) -> Option<(usize, usize)> {
+    if self.number_words.is_empty() {
+      return None;
+    }
+    let mut cursor = anchor.start;
+    let mut start = None;
+    let mut number_word_count = 0usize;
+    loop {
+      let word_end = skip_horizontal_ws_backward_limit(text, cursor, 2);
+      if word_end == cursor && cursor != anchor.start {
+        break;
+      }
+      let Some((word_start, word)) = word_before(text, word_end) else {
+        break;
+      };
+      let folded = word.to_lowercase();
+      let is_joiner = self.number_joiners.contains(&folded);
+      let is_number = !is_joiner && self.is_written_number_word(&folded);
+      if !is_joiner && !is_number {
+        break;
+      }
+      if is_joiner && start.is_none() {
+        // A joiner directly before the currency is prose, not part of an
+        // amount ("and dollars").
+        break;
+      }
+      if is_number {
+        if self.has_number_word_part(&folded) {
+          number_word_count = number_word_count.saturating_add(1);
+        }
+        start = Some(word_start);
+      }
+      cursor = word_start;
+    }
+    let start = start?;
+    if number_word_count == 0
+      || !left_money_boundary(text, start, AnchorKind::LocalName)
+    {
+      return None;
+    }
+    Some((start, self.extend_written_amount(text, anchor.end)))
+  }
+
+  /// A number word, a magnitude word, or a dash-joined compound of them
+  /// (`twenty-five`, `one-hundred`).
+  fn is_written_number_word(&self, folded: &str) -> bool {
+    folded.split(is_dash).all(|part| {
+      !part.is_empty()
+        && (self.number_words.contains(part) || self.is_magnitude_word(part))
+    })
+  }
+
+  fn has_number_word_part(&self, folded: &str) -> bool {
+    folded
+      .split(is_dash)
+      .any(|part| self.number_words.contains(part))
+  }
+
+  fn is_magnitude_word(&self, folded: &str) -> bool {
+    self.magnitudes.iter().any(|term| {
+      !term.abbreviation
+        && term.case == MagnitudeCase::Insensitive
+        && term.folded == folded
+    })
   }
 
   fn parse_magnitude_forward(
@@ -629,6 +737,56 @@ fn parse_number_forward(text: &str, index: usize) -> Option<NumberSpan> {
     start: index,
     end: value_end.max(end),
   })
+}
+
+/// A number or a dash-joined range of two numbers (`10-15`, `10 – 15`),
+/// so `USD 10-15 million` is one amount.
+fn parse_amount_forward(text: &str, index: usize) -> Option<NumberSpan> {
+  let first = parse_number_forward(text, index)?;
+  let mut cursor = first.end;
+  let ends_with_dash = str_head(text, cursor)
+    .and_then(|head| head.chars().next_back())
+    .is_some_and(is_dash);
+  if !ends_with_dash {
+    let after_space = skip_horizontal_ws_limit(text, cursor, 1);
+    let Some((dash_start, dash)) = str_tail(text, after_space)
+      .and_then(|tail| tail.chars().next())
+      .map(|ch| (after_space, ch))
+    else {
+      return Some(first);
+    };
+    if !is_dash(dash) {
+      return Some(first);
+    }
+    cursor = dash_start.saturating_add(dash.len_utf8());
+  }
+  let second_start = skip_horizontal_ws_limit(text, cursor, 1);
+  let starts_digit = str_tail(text, second_start)
+    .and_then(|tail| tail.chars().next())
+    .is_some_and(|ch| ch.is_ascii_digit());
+  if !starts_digit {
+    return Some(first);
+  }
+  let second = parse_number_forward(text, second_start)?;
+  Some(NumberSpan {
+    start: first.start,
+    end: second.end,
+  })
+}
+
+/// The letter-or-dash word ending at `end`, if any.
+fn word_before(text: &str, end: usize) -> Option<(usize, &str)> {
+  let mut start = end;
+  while let Some((char_start, ch)) = previous_char(text, start) {
+    if !ch.is_alphabetic() && !is_dash(ch) {
+      break;
+    }
+    start = char_start;
+  }
+  if start >= end {
+    return None;
+  }
+  str_slice(text, start, end).map(|word| (start, word))
 }
 
 fn digit_run_after_separator(

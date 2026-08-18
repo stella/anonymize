@@ -165,12 +165,67 @@ describe("monetary amounts with magnitude suffix", () => {
     expect(trailingCode.map((e) => e.text)).toEqual(["640m EUR"]);
   });
 
-  test("attached abbreviations still require a word boundary ('$25km', '$25mm')", async () => {
+  test("attached abbreviations still require a word boundary ('$25km')", async () => {
     const km = findMoney(await detect("The site is $25km from town."));
     expect(km).toHaveLength(0);
+  });
 
-    const mm = findMoney(await detect("Valued at $25mm by the bank."));
-    expect(mm).toHaveLength(0);
+  test("'mm' and 'MM' are English million shorthand ('$25mm', '$25 MM')", async () => {
+    const attached = findMoney(await detect("Valued at $25mm by the bank."));
+    expect(attached.map((e) => e.text)).toEqual(["$25mm"]);
+
+    const upper = findMoney(await detect("Valued at $25 MM by the bank."));
+    expect(upper.map((e) => e.text)).toEqual(["$25 MM"]);
+
+    // Spaced lowercase `mm` is a length unit.
+    const length = findMoney(await detect("A $25 mm bolt."));
+    expect(length.map((e) => e.text)).toEqual(["$25"]);
+  });
+
+  test("dash-joined ranges are one amount ('USD 10-15 million', '$10 – 15 million')", async () => {
+    const tight = findMoney(await detect("The fee is USD 10-15 million."));
+    expect(tight.map((e) => e.text)).toEqual(["USD 10-15 million"]);
+
+    const spaced = findMoney(await detect("The fee is $10 – 15 million."));
+    expect(spaced.map((e) => e.text)).toEqual(["$10 – 15 million"]);
+
+    const trailing = findMoney(await detect("A fee of 10-15 million EUR."));
+    expect(trailing.map((e) => e.text)).toEqual(["10-15 million EUR"]);
+
+    // The Czech `,-` suffix is not a range dash.
+    const czech = findMoney(await detect("Pokuta 500.000,- Kč je splatná."));
+    expect(czech.map((e) => e.text)).toEqual(["500.000,- Kč"]);
+  });
+
+  test("free-standing written-out amounts before a currency name are amounts", async () => {
+    const compound = findMoney(
+      await detect(
+        "A purchase price of twenty-five million dollars was agreed.",
+      ),
+    );
+    expect(compound.map((e) => e.text)).toEqual([
+      "twenty-five million dollars",
+    ]);
+
+    const joined = findMoney(
+      await detect(
+        "Damages of one hundred and fifty thousand euros were paid.",
+      ),
+    );
+    expect(joined.map((e) => e.text)).toEqual([
+      "one hundred and fifty thousand euros",
+    ]);
+
+    const article = findMoney(await detect("He owed a million dollars."));
+    expect(article.map((e) => e.text)).toEqual(["a million dollars"]);
+
+    // A magnitude word alone, or prose before the currency, is not enough.
+    const bare = findMoney(
+      await detect("Several million dollars changed hands."),
+    );
+    expect(bare).toHaveLength(0);
+    const prose = findMoney(await detect("Payments in dollars and cents."));
+    expect(prose).toHaveLength(0);
   });
 
   test("uppercase 'B' is an English billion abbreviation ('$1.5B')", async () => {

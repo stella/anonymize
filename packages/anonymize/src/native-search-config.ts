@@ -161,6 +161,18 @@ export type NativeLegalFormData = {
   institutional_complement_connectors: string[];
   institutional_generic_words: string[];
   institutional_prefix_generic_words: string[];
+  lowercase_bridge: NativeLowercaseBridge;
+};
+
+/**
+ * Whether the legal-form name walk may cross arbitrary lowercase words once a
+ * capitalized word is in the span (`open`), or only a closed connector set
+ * (`closed`).
+ */
+export type NativeLowercaseBridge = {
+  policy: "open" | "closed";
+  /** Connector words admitted between capitalized name words (`closed`). */
+  words: string[];
 };
 
 export type NativeDateMonthData = Record<string, string[]>;
@@ -181,6 +193,10 @@ export type NativeMonetaryData = {
   amount_words: {
     written_amount_patterns: Array<{
       keywords: string[];
+    }>;
+    number_words: Array<{
+      words: string[];
+      joiners: string[];
     }>;
     magnitude_suffixes: Array<{
       words: string[];

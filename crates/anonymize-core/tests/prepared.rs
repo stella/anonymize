@@ -2154,6 +2154,7 @@ fn prepared_engine_extracts_money_from_anchored_data() {
       },
       amount_words: AmountWordsData {
         written_amount_patterns: vec![],
+        number_words: vec![],
         magnitude_suffixes: vec![MagnitudeSuffixData {
           words: vec![String::from("million")],
           abbreviations_case_insensitive: vec![],
@@ -2209,6 +2210,7 @@ fn anchored_date_and_money_output_digest_is_stable() {
       },
       amount_words: AmountWordsData {
         written_amount_patterns: vec![],
+        number_words: vec![],
         magnitude_suffixes: vec![],
         share_quantity_terms: vec![],
       },
@@ -2243,6 +2245,7 @@ fn prepared_engine_rejects_long_ungrouped_money_numbers() {
       },
       amount_words: AmountWordsData {
         written_amount_patterns: vec![],
+        number_words: vec![],
         magnitude_suffixes: vec![],
         share_quantity_terms: vec![],
       },
@@ -2280,6 +2283,7 @@ fn prepared_engine_extends_money_to_written_amount_parenthetical() {
         local_names: vec![String::from("Kč")],
       },
       amount_words: AmountWordsData {
+        number_words: vec![],
         written_amount_patterns: vec![WrittenAmountPatternData {
           keywords: vec![String::from("slovy")],
         }],

@@ -14,7 +14,7 @@ use super::AssembleContext;
 use super::js::utf16_cmp;
 use crate::{
   BindingAmountWordsData, BindingCurrencyData, BindingMagnitudeSuffixData,
-  BindingMonetaryData, BindingShareQuantityTermData,
+  BindingMonetaryData, BindingNumberWordData, BindingShareQuantityTermData,
   BindingWrittenAmountPatternData,
 };
 
@@ -32,6 +32,8 @@ struct CurrenciesData {
 struct AmountWordsData {
   #[serde(default)]
   patterns: Vec<WrittenAmountPattern>,
+  #[serde(rename = "numberWords", default)]
+  number_words: Vec<NumberWords>,
   #[serde(rename = "magnitudeSuffixes", default)]
   magnitude_suffixes: Vec<MagnitudeSuffix>,
   #[serde(rename = "shareQuantityTerms", default)]
@@ -42,6 +44,14 @@ struct AmountWordsData {
 struct WrittenAmountPattern {
   #[serde(default)]
   keywords: Vec<String>,
+}
+
+#[derive(Deserialize)]
+struct NumberWords {
+  #[serde(default)]
+  words: Vec<String>,
+  #[serde(default)]
+  joiners: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -126,6 +136,14 @@ pub(super) fn build_monetary_data(
         .into_iter()
         .map(|entry| BindingWrittenAmountPatternData {
           keywords: entry.keywords,
+        })
+        .collect(),
+      number_words: amount_words
+        .number_words
+        .into_iter()
+        .map(|entry| BindingNumberWordData {
+          words: entry.words,
+          joiners: entry.joiners,
         })
         .collect(),
       magnitude_suffixes: amount_words

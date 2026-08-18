@@ -388,6 +388,7 @@
         "Cent",
         "euros",
         "centimes",
+        "dollar",
         "dollars",
         "cents",
         "zł",
@@ -439,6 +440,42 @@
         },
         {
           "keywords": ["en letras"]
+        }
+      ],
+      "number_words": [
+        {
+          "words": [
+            "a",
+            "zero",
+            "one",
+            "two",
+            "three",
+            "four",
+            "five",
+            "six",
+            "seven",
+            "eight",
+            "nine",
+            "ten",
+            "eleven",
+            "twelve",
+            "thirteen",
+            "fourteen",
+            "fifteen",
+            "sixteen",
+            "seventeen",
+            "eighteen",
+            "nineteen",
+            "twenty",
+            "thirty",
+            "forty",
+            "fifty",
+            "sixty",
+            "seventy",
+            "eighty",
+            "ninety"
+          ],
+          "joiners": ["and"]
         }
       ],
       "magnitude_suffixes": [
@@ -501,8 +538,8 @@
             "quadrillions"
           ],
           "abbreviations_case_insensitive": ["bn", "bln", "tn", "trn"],
-          "abbreviations_case_sensitive": ["K", "M", "B"],
-          "abbreviations_attached": ["k", "m"]
+          "abbreviations_case_sensitive": ["K", "M", "MM", "B"],
+          "abbreviations_attached": ["k", "m", "mm"]
         },
         {
           "words": [
@@ -16463,7 +16500,11 @@
       "financial",
       "st",
       "trade"
-    ]
+    ],
+    "lowercase_bridge": {
+      "policy": "open",
+      "words": []
+    }
   },
   "regex_meta": [
     {
@@ -56562,6 +56603,7 @@
       "bani",
       "centimes",
       "cents",
+      "dollar",
       "dollars",
       "euros",
       "fillér",

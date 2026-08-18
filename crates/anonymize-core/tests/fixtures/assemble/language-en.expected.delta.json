@@ -1349,6 +1349,53 @@
         { "type": "copy", "start": 176, "end": 177 },
         { "type": "copy", "start": 220, "end": 308 }
       ]
+    },
+    {
+      "type": "set",
+      "path": ["legal_form_data", "lowercase_bridge"],
+      "value": {
+        "policy": "closed",
+        "words": [
+          "of",
+          "the",
+          "and",
+          "for",
+          "&",
+          "de",
+          "del",
+          "della",
+          "delle",
+          "dei",
+          "degli",
+          "di",
+          "da",
+          "du",
+          "des",
+          "la",
+          "le",
+          "les",
+          "el",
+          "los",
+          "las",
+          "y",
+          "e",
+          "et",
+          "von",
+          "van",
+          "der",
+          "den",
+          "die",
+          "das",
+          "dem",
+          "zur",
+          "zum",
+          "für",
+          "und",
+          "op",
+          "aan",
+          "het"
+        ]
+      }
     }
   ]
 }
