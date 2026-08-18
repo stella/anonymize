@@ -33,6 +33,9 @@ same label so that a rate can be censored together with the principal.
 | `The deal values the company at $3.4bn, or $52.50 per share.`                              | `The deal values the company at [MONETARY_AMOUNT_1], or [MONETARY_AMOUNT_2] per share.`                    | `$3.4bn`, `$52.50`               |
 | `The facility comprises a term loan of £250m and a revolver of £50m.`                      | `The facility comprises a term loan of [MONETARY_AMOUNT_1] and a revolver of [MONETARY_AMOUNT_2].`         | `£250m`, `£50m`                  |
 | `Revenue was $1.5B and EBITDA was $300M.`                                                  | `Revenue was [MONETARY_AMOUNT_1] and EBITDA was [MONETARY_AMOUNT_2].`                                      | `$1.5B`, `$300M`                 |
+| `The fee is USD 10-15 million, or $25mm at the option of the lender.`                      | `The fee is [MONETARY_AMOUNT_1], or [MONETARY_AMOUNT_2] at the option of the lender.`                      | `USD 10-15 million`, `$25mm`     |
+| `The parties agreed a purchase price of twenty-five million dollars.`                      | `The parties agreed a purchase price of [MONETARY_AMOUNT_1].`                                              | `twenty-five million dollars`    |
+| `Northwind Ventures LLC invested USD 45,000,000 in Acme Holdings Ltd.`                     | `[ORGANIZATION_1] invested [MONETARY_AMOUNT_1] in [ORGANIZATION_2]`                                        | `USD 45,000,000`                 |
 | `A fee in the amount of USD 500,000 is payable within 30 days.`                            | `A fee in the amount of [MONETARY_AMOUNT_1] is payable within 30 days.`                                    | `USD 500,000`                    |
 | `Consideration: 40,000,000 shares plus cash of $60 million and a $15 million vendor note.` | `Consideration: 40,000,000 shares plus cash of [MONETARY_AMOUNT_1] and a [MONETARY_AMOUNT_2] vendor note.` | `$60 million`, `$15 million`     |
 | `The rent is USD 12,500 per month; the deposit equals three months' rent (USD 37,500).`    | `The rent is [MONETARY_AMOUNT_1] per month; the deposit equals three months' rent ([MONETARY_AMOUNT_2]).`  | `USD 12,500`, `USD 37,500`       |
@@ -197,26 +200,27 @@ is a caller-side step over the detected span.
 The rows below are current output for shapes the detector does not handle
 well.
 
-| Input                                                                 | Output                                                                | Monetary amounts     |
-| --------------------------------------------------------------------- | --------------------------------------------------------------------- | -------------------- |
-| `The fee is between $10 and $20 million.`                             | `The fee is between [MONETARY_AMOUNT_1] and [MONETARY_AMOUNT_2].`     | `$10`, `$20 million` |
-| `The fee is USD 10-15 million.`                                       | `The fee is USD 10-15 million.`                                       | none                 |
-| `The parties agreed a purchase price of twenty-five million dollars.` | `The parties agreed a purchase price of twenty-five million dollars.` | none                 |
-| `Valued at $25mm by the lender.`                                      | `Valued at $25mm by the lender.`                                      | none                 |
-| `Northwind invested USD 45,000,000 in Acme Holdings Ltd.`             | `Northwind invested USD 45,000,[ORGANIZATION_1]`                      | none                 |
+| Input                                                  | Output                                                            | Monetary amounts     |
+| ------------------------------------------------------ | ----------------------------------------------------------------- | -------------------- |
+| `The fee is between $10 and $20 million.`              | `The fee is between [MONETARY_AMOUNT_1] and [MONETARY_AMOUNT_2].` | `$10`, `$20 million` |
+| `Der Kaufpreis beträgt fünfundzwanzig Millionen Euro.` | `Der Kaufpreis beträgt fünfundzwanzig Millionen Euro.`            | none                 |
 
-- Written-out amounts are only captured when a keyword such as `in words:` or
-  `slovy:` introduces them; free-standing `twenty-five million dollars` is
-  not an amount.
+- Free-standing written-out amounts (`twenty-five million dollars`,
+  `a million dollars`) are captured for English number words. Other
+  languages write compound numerals as inflected single words and are covered
+  through the keyword forms (`in Worten:`, `slovy:`, `en lettres:`).
 - Lowercase magnitude shorthand counts only when attached to the digits
-  (`$25m`, `£500k`); `$25 m` reads as metres and `$25mm` is not a magnitude.
-- A legal-form organization that follows an amount and a connector word
-  (`in`, `to`, `from`) can absorb the tail of the grouped number into the
-  organization span and leave the head of the amount exposed.
-- Ranges (`USD 10-15 million`, `between $10 and $20 million`) are handled per
-  number; the shared magnitude is not distributed to the first figure.
+  (`$25m`, `£500k`, `$25mm`); `$25 m` and `$25 mm` read as length units.
+- `between $10 and $20 million` yields two amounts; the shared magnitude is
+  not distributed to the first figure.
 - Consistency is by normalized surface form: `$25,000,000`, `USD 25,000,000`,
   and `$25m` are three placeholders, not one.
+- With the all-language package an organization name may absorb prose between
+  two capitalized words (`Northwind Ventures LLC invested in Acme Holdings
+Ltd.` becomes one organization) because languages such as Czech or French
+  capitalize only the first word of a name. The `en` package closes that
+  bridge to a connector set (`of`, `the`, `and`, `for`, `&`, `de`, `von`, …),
+  so English prose between two organizations is left in place.
 - No detector catches everything. Review the entity list when a missed figure
   would matter, and use `redactTextWithCallerDetections()` to add spans from a
   model or a document-specific rule.
