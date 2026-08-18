@@ -330,6 +330,8 @@ pub struct BindingMagnitudeSuffixData {
   pub abbreviations_case_insensitive: Vec<String>,
   #[serde(default)]
   pub abbreviations_case_sensitive: Vec<String>,
+  #[serde(default)]
+  pub abbreviations_attached: Vec<String>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]

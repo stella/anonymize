@@ -2158,6 +2158,7 @@ fn prepared_engine_extracts_money_from_anchored_data() {
           words: vec![String::from("million")],
           abbreviations_case_insensitive: vec![],
           abbreviations_case_sensitive: vec![],
+          abbreviations_attached: vec![],
         }],
         share_quantity_terms: vec![],
       },

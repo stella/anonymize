@@ -135,13 +135,66 @@ describe("monetary amounts with magnitude suffix", () => {
   });
 
   test("'$25 m cable' is not extended (lowercase m = metre, not million)", async () => {
-    // Single-letter K/M are case-sensitive: lowercase
-    // `m` after a price is overwhelmingly metres, not
-    // million ("$25 m cable", "$10 m above sea level").
-    // Finance/journalism shorthand always capitalises.
+    // Uppercase K/M are case-sensitive abbreviations. A
+    // lowercase `m` separated by a space reads as metres
+    // ("$25 m cable", "$10 m above sea level"), so it only
+    // counts when attached to the digits.
     const money = findMoney(await detect("Need a $25 m cable for the rig."));
     expect(money).toHaveLength(1);
     expect(money[0]!.text).toBe("$25");
+  });
+
+  test("attached lowercase 'm' and 'k' are magnitudes ('$25m', '£250m', '€1.2m', '$500k')", async () => {
+    const dollars = findMoney(await detect("Buyer shall pay $25m at Closing."));
+    expect(dollars.map((e) => e.text)).toEqual(["$25m"]);
+
+    const pounds = findMoney(
+      await detect("A term loan of £250m and a revolver of £50m."),
+    );
+    expect(pounds.map((e) => e.text)).toEqual(["£250m", "£50m"]);
+
+    const euros = findMoney(await detect("The fee is €1.2m."));
+    expect(euros.map((e) => e.text)).toEqual(["€1.2m"]);
+
+    const thousands = findMoney(await detect("Seed round of $500k closed."));
+    expect(thousands.map((e) => e.text)).toEqual(["$500k"]);
+
+    const trailingCode = findMoney(
+      await detect("Consideration of approximately 640m EUR."),
+    );
+    expect(trailingCode.map((e) => e.text)).toEqual(["640m EUR"]);
+  });
+
+  test("attached abbreviations still require a word boundary ('$25km', '$25mm')", async () => {
+    const km = findMoney(await detect("The site is $25km from town."));
+    expect(km).toHaveLength(0);
+
+    const mm = findMoney(await detect("Valued at $25mm by the bank."));
+    expect(mm).toHaveLength(0);
+  });
+
+  test("uppercase 'B' is an English billion abbreviation ('$1.5B')", async () => {
+    const money = findMoney(
+      await detect("Revenue was $1.5B and EBITDA $300M."),
+    );
+    expect(money.map((e) => e.text)).toEqual(["$1.5B", "$300M"]);
+  });
+
+  test("an abbreviated magnitude may end in a period before the currency ('12,5 Mio. Euro')", async () => {
+    const dotted = findMoney(
+      await detect("Die Gesellschaft wurde für 12,5 Mio. Euro übernommen."),
+    );
+    expect(dotted.map((e) => e.text)).toEqual(["12,5 Mio. Euro"]);
+
+    const code = findMoney(await detect("Der Preis beträgt 25 Mio. EUR."));
+    expect(code.map((e) => e.text)).toEqual(["25 Mio. EUR"]);
+
+    // A full magnitude word followed by a period is a
+    // sentence end, not part of the amount.
+    const sentence = findMoney(
+      await detect("It cost 25 million. EUR is the reporting currency."),
+    );
+    expect(sentence.map((e) => e.text)).not.toContain("25 million. EUR");
   });
 
   test("short PT-BR abbreviations do not apply globally", async () => {

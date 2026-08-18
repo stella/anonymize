@@ -52,6 +52,10 @@ pub struct MagnitudeSuffixData {
   pub words: Vec<String>,
   pub abbreviations_case_insensitive: Vec<String>,
   pub abbreviations_case_sensitive: Vec<String>,
+  /// Case-sensitive abbreviations that count only when written directly
+  /// after the digits (`$25m`, `£500k`); separated by whitespace they read
+  /// as units (`$25 m cable`).
+  pub abbreviations_attached: Vec<String>,
 }
 
 #[derive(
@@ -100,11 +104,27 @@ enum AnchorKind {
   LocalName,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum MagnitudeCase {
+  Insensitive,
+  Sensitive,
+  /// Case-sensitive and only valid without whitespace before it.
+  Attached,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct MagnitudeTerm {
   text: String,
   folded: String,
-  case_insensitive: bool,
+  case: MagnitudeCase,
+  /// Abbreviations may carry a trailing period (`12,5 Mio. EUR`).
+  abbreviation: bool,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct MagnitudeMatch {
+  end: usize,
+  abbreviation: bool,
 }
 
 struct MonetaryRule {
@@ -139,20 +159,22 @@ impl MonetaryRule {
     local_names.sort_by_key(|name| std::cmp::Reverse(name.text.len()));
     let mut magnitudes = Vec::new();
     for entry in data.amount_words.magnitude_suffixes {
-      magnitudes.extend(
-        clean_terms(entry.words)
-          .into_iter()
-          .map(|text| magnitude_term(text, true)),
-      );
+      magnitudes
+        .extend(clean_terms(entry.words).into_iter().map(magnitude_word));
       magnitudes.extend(
         clean_terms(entry.abbreviations_case_insensitive)
           .into_iter()
-          .map(|text| magnitude_term(text, true)),
+          .map(|text| magnitude_abbreviation(text, MagnitudeCase::Insensitive)),
       );
       magnitudes.extend(
         clean_terms(entry.abbreviations_case_sensitive)
           .into_iter()
-          .map(|text| magnitude_term(text, false)),
+          .map(|text| magnitude_abbreviation(text, MagnitudeCase::Sensitive)),
+      );
+      magnitudes.extend(
+        clean_terms(entry.abbreviations_attached)
+          .into_iter()
+          .map(|text| magnitude_abbreviation(text, MagnitudeCase::Attached)),
       );
     }
     magnitudes.sort_by_key(|term| std::cmp::Reverse(term.text.len()));
@@ -340,9 +362,9 @@ impl MonetaryRule {
 
     let number_start = skip_horizontal_ws_limit(text, anchor.end, 2);
     let number = parse_number_forward(text, number_start)?;
-    let (end, _) = self
+    let end = self
       .parse_magnitude_forward(text, number.end)
-      .unwrap_or((number.end, false));
+      .map_or(number.end, |magnitude| magnitude.end);
     right_money_boundary(text, end)
       .then(|| (anchor.start, self.extend_written_amount(text, end)))
   }
@@ -370,9 +392,17 @@ impl MonetaryRule {
       }
       let number_start = scan_start.saturating_add(offset);
       let number = parse_number_forward(text, number_start)?;
-      let (after_number, has_magnitude) = self
-        .parse_magnitude_forward(text, number.end)
-        .unwrap_or((number.end, false));
+      let magnitude = self.parse_magnitude_forward(text, number.end);
+      let has_magnitude = magnitude.is_some();
+      let after_number = magnitude.map_or(number.end, |found| {
+        // `12,5 Mio. EUR`: an abbreviated magnitude may end in a period
+        // before the currency; a full word never does.
+        if found.abbreviation {
+          skip_abbreviation_period(text, found.end)
+        } else {
+          found.end
+        }
+      });
       let after_gap = skip_horizontal_ws_limit(text, after_number, 4);
       if after_gap != anchor.start {
         continue;
@@ -403,24 +433,32 @@ impl MonetaryRule {
     &self,
     text: &str,
     index: usize,
-  ) -> Option<(usize, bool)> {
+  ) -> Option<MagnitudeMatch> {
     let start = skip_horizontal_ws_limit(text, index, 8);
-    self.match_magnitude_at(text, start).map(|end| (end, true))
+    self.match_magnitude_at(text, start, start == index)
   }
 
-  fn match_magnitude_at(&self, text: &str, index: usize) -> Option<usize> {
+  fn match_magnitude_at(
+    &self,
+    text: &str,
+    index: usize,
+    attached: bool,
+  ) -> Option<MagnitudeMatch> {
     for term in &self.magnitudes {
       let end = index.saturating_add(term.text.len());
       let Some(candidate) = str_slice(text, index, end) else {
         continue;
       };
-      let matches = if term.case_insensitive {
-        candidate.to_lowercase() == term.folded
-      } else {
-        candidate == term.text
+      let matches = match term.case {
+        MagnitudeCase::Insensitive => candidate.to_lowercase() == term.folded,
+        MagnitudeCase::Sensitive => candidate == term.text,
+        MagnitudeCase::Attached => attached && candidate == term.text,
       };
       if matches && right_word_boundary(text, end) {
-        return Some(end);
+        return Some(MagnitudeMatch {
+          end,
+          abbreviation: term.abbreviation,
+        });
       }
     }
     None
@@ -675,11 +713,28 @@ fn currency_name(text: String) -> CurrencyName {
   }
 }
 
-fn magnitude_term(text: String, case_insensitive: bool) -> MagnitudeTerm {
+fn magnitude_word(text: String) -> MagnitudeTerm {
   MagnitudeTerm {
     folded: text.to_lowercase(),
     text,
-    case_insensitive,
+    case: MagnitudeCase::Insensitive,
+    abbreviation: false,
+  }
+}
+
+fn magnitude_abbreviation(text: String, case: MagnitudeCase) -> MagnitudeTerm {
+  MagnitudeTerm {
+    folded: text.to_lowercase(),
+    text,
+    case,
+    abbreviation: true,
+  }
+}
+
+fn skip_abbreviation_period(text: &str, index: usize) -> usize {
+  match str_tail(text, index).and_then(|tail| tail.chars().next()) {
+    Some('.') => index.saturating_add('.'.len_utf8()),
+    _ => index,
   }
 }
 

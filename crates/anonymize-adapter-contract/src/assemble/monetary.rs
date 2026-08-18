@@ -52,6 +52,8 @@ struct MagnitudeSuffix {
   abbreviations_case_insensitive: Vec<String>,
   #[serde(rename = "abbreviationsCaseSensitive", default)]
   abbreviations_case_sensitive: Vec<String>,
+  #[serde(rename = "abbreviationsAttached", default)]
+  abbreviations_attached: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -133,6 +135,7 @@ pub(super) fn build_monetary_data(
           words: entry.words,
           abbreviations_case_insensitive: entry.abbreviations_case_insensitive,
           abbreviations_case_sensitive: entry.abbreviations_case_sensitive,
+          abbreviations_attached: entry.abbreviations_attached,
         })
         .collect(),
       share_quantity_terms: amount_words

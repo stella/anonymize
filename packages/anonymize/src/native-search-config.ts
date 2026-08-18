@@ -186,6 +186,7 @@ export type NativeMonetaryData = {
       words: string[];
       abbreviations_case_insensitive: string[];
       abbreviations_case_sensitive: string[];
+      abbreviations_attached: string[];
     }>;
     share_quantity_terms: Array<{
       modifiers: string[];

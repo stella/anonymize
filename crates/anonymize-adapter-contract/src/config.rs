@@ -328,6 +328,7 @@ fn monetary_data_from_binding(data: BindingMonetaryData) -> MonetaryData {
           words: entry.words,
           abbreviations_case_insensitive: entry.abbreviations_case_insensitive,
           abbreviations_case_sensitive: entry.abbreviations_case_sensitive,
+          abbreviations_attached: entry.abbreviations_attached,
         })
         .collect(),
       share_quantity_terms: data
