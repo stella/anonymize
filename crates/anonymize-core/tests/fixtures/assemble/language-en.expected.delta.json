@@ -1396,6 +1396,21 @@
           "het"
         ]
       }
+    },
+    {
+      "type": "array",
+      "path": ["monetary_data", "amount_words", "written_amount_patterns"],
+      "segments": [{ "type": "copy", "start": 3, "end": 4 }]
+    },
+    {
+      "type": "array",
+      "path": ["monetary_data", "amount_words", "magnitude_suffixes"],
+      "segments": [{ "type": "copy", "start": 2, "end": 3 }]
+    },
+    {
+      "type": "array",
+      "path": ["monetary_data", "amount_words", "share_quantity_terms"],
+      "segments": [{ "type": "copy", "start": 2, "end": 3 }]
     }
   ]
 }

@@ -71,6 +71,28 @@ describe("amount-prefix triggers stop after the amount", () => {
     ).toEqual(["USD 1.5 million"]);
   });
 
+  test("a bare number keeps its magnitude word and a trailing currency", async () => {
+    expect(
+      await moneyTexts("A reserve in the amount of 1.5 million is kept."),
+    ).toEqual(["1.5 million"]);
+    expect(
+      await moneyTexts("A reserve in the amount of 1.5 million EUR is kept."),
+    ).toEqual(["1.5 million EUR"]);
+    // A share count is not an amount.
+    expect(
+      await moneyTexts("Holdings in the amount of 100 million shares."),
+    ).toEqual(["100"]);
+  });
+
+  test("a signed value after the trigger is still an amount", async () => {
+    expect(
+      await moneyTexts("An adjustment in the amount of -500 was booked."),
+    ).toEqual(["-500"]);
+    expect(
+      await moneyTexts("An adjustment in the amount of −1,250.50 was booked."),
+    ).toEqual(["−1,250.50"]);
+  });
+
   test("a percentage after the trigger keeps its percent sign", async () => {
     expect(
       await moneyTexts("Úrok ve výši 0,5 % z dlužné částky za každý den."),

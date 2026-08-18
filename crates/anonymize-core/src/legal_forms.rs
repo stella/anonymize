@@ -948,12 +948,31 @@ fn is_acceptable_token(token: &str, data: &PreparedLegalFormData) -> bool {
     || contains_lowercase(&data.connector_words, token)
 }
 
-/// A digit-only token that a `,` or `.` joins to another digit run: one group
-/// of a grouped number such as `45,000,000` or `3.750.000`.
+/// A grouped number, or one group of it: `45,000,000` splits into digit
+/// tokens at the skipped commas, while `3.750.000` stays one token because
+/// `.` is a token character. Either way it is an amount, not a name word.
 fn is_grouped_number_fragment(text: &str, token: &Token<'_>) -> bool {
   if token.text.is_empty()
-    || !token.text.bytes().all(|byte| byte.is_ascii_digit())
+    || !token
+      .text
+      .bytes()
+      .all(|byte| byte.is_ascii_digit() || matches!(byte, b'.' | b','))
+    || !token.text.bytes().any(|byte| byte.is_ascii_digit())
   {
+    return false;
+  }
+  // A separator between two digits inside the token ("3.750.000").
+  let grouped_inside = token.text.as_bytes().windows(3).any(|window| {
+    matches!(
+      window,
+      [left, b'.' | b',', right]
+        if left.is_ascii_digit() && right.is_ascii_digit()
+    )
+  });
+  if grouped_inside {
+    return true;
+  }
+  if !token.text.bytes().all(|byte| byte.is_ascii_digit()) {
     return false;
   }
   let joined_before = previous_char(text, token.start)

@@ -1,17 +1,19 @@
 //! `monetary_data`: ports `getMonetaryData` / `loadMonetaryData`
 //! (`detectors/regex.ts`).
 //!
-//! Pure copy-through of `currencies.json` and `amount-words.json` with the
-//! camelCase-to-snake_case key rename the TypeScript loader performs. Emitted
-//! when `enableTriggerPhrases` is on or the "monetary amount" regex is active.
+//! Copy-through of `currencies.json` and the `amount-words.json` entries whose
+//! `lang` matches the configured content-language scope (every entry when no
+//! scope is set), with the camelCase-to-snake_case key rename the TypeScript
+//! loader performed. Emitted when `enableTriggerPhrases` is on or the
+//! "monetary amount" regex is active.
 
 use std::collections::HashSet;
 
 use serde::Deserialize;
 use stella_anonymize_core::assemble::{AssembleError, parse_data_file};
 
-use super::AssembleContext;
 use super::js::utf16_cmp;
+use super::{AssembleContext, language};
 use crate::{
   BindingAmountWordsData, BindingCurrencyData, BindingMagnitudeSuffixData,
   BindingMonetaryData, BindingNumberWordData, BindingShareQuantityTermData,
@@ -42,12 +44,14 @@ struct AmountWordsData {
 
 #[derive(Deserialize)]
 struct WrittenAmountPattern {
+  lang: String,
   #[serde(default)]
   keywords: Vec<String>,
 }
 
 #[derive(Deserialize)]
 struct NumberWords {
+  lang: String,
   #[serde(default)]
   words: Vec<String>,
   #[serde(default)]
@@ -56,6 +60,7 @@ struct NumberWords {
 
 #[derive(Deserialize)]
 struct MagnitudeSuffix {
+  lang: String,
   #[serde(default)]
   words: Vec<String>,
   #[serde(rename = "abbreviationsCaseInsensitive", default)]
@@ -68,6 +73,7 @@ struct MagnitudeSuffix {
 
 #[derive(Deserialize)]
 struct ShareQuantityTerm {
+  lang: String,
   #[serde(default)]
   modifiers: Vec<String>,
   #[serde(default)]
@@ -123,6 +129,9 @@ pub(super) fn build_monetary_data(
   }
   let currencies: CurrenciesData = parse_data_file("currencies.json")?;
   let amount_words: AmountWordsData = parse_data_file("amount-words.json")?;
+  let languages = ctx.content_languages.as_deref();
+  let selected =
+    |lang: &str| language::language_config_matches(lang, languages);
 
   Ok(Some(BindingMonetaryData {
     currencies: BindingCurrencyData {
@@ -134,6 +143,7 @@ pub(super) fn build_monetary_data(
       written_amount_patterns: amount_words
         .patterns
         .into_iter()
+        .filter(|entry| selected(&entry.lang))
         .map(|entry| BindingWrittenAmountPatternData {
           keywords: entry.keywords,
         })
@@ -141,6 +151,7 @@ pub(super) fn build_monetary_data(
       number_words: amount_words
         .number_words
         .into_iter()
+        .filter(|entry| selected(&entry.lang))
         .map(|entry| BindingNumberWordData {
           words: entry.words,
           joiners: entry.joiners,
@@ -149,6 +160,7 @@ pub(super) fn build_monetary_data(
       magnitude_suffixes: amount_words
         .magnitude_suffixes
         .into_iter()
+        .filter(|entry| selected(&entry.lang))
         .map(|entry| BindingMagnitudeSuffixData {
           words: entry.words,
           abbreviations_case_insensitive: entry.abbreviations_case_insensitive,
@@ -159,6 +171,7 @@ pub(super) fn build_monetary_data(
       share_quantity_terms: amount_words
         .share_quantity_terms
         .into_iter()
+        .filter(|entry| selected(&entry.lang))
         .map(|entry| BindingShareQuantityTermData {
           modifiers: entry.modifiers,
           nouns: entry.nouns,

@@ -235,7 +235,7 @@ describe("monetary amounts with magnitude suffix", () => {
     expect(money.map((e) => e.text)).toEqual(["$1.5B", "$300M"]);
   });
 
-  test("an abbreviated magnitude may end in a period before the currency ('12,5 Mio. Euro')", async () => {
+  test("dotted abbreviations are explicit data ('12,5 Mio. Euro'), a sentence period is not", async () => {
     const dotted = findMoney(
       await detect("Die Gesellschaft wurde für 12,5 Mio. Euro übernommen."),
     );
@@ -244,12 +244,48 @@ describe("monetary amounts with magnitude suffix", () => {
     const code = findMoney(await detect("Der Preis beträgt 25 Mio. EUR."));
     expect(code.map((e) => e.text)).toEqual(["25 Mio. EUR"]);
 
-    // A full magnitude word followed by a period is a
-    // sentence end, not part of the amount.
+    // Abbreviations without a dotted form ('M', 'bn') and full words never
+    // consume a sentence period before a currency token.
     const sentence = findMoney(
       await detect("It cost 25 million. EUR is the reporting currency."),
     );
     expect(sentence.map((e) => e.text)).not.toContain("25 million. EUR");
+    const abbreviated = findMoney(
+      await detect("The price was $25 M. EUR is the reporting currency."),
+    );
+    expect(abbreviated.map((e) => e.text)).toEqual(["$25 M"]);
+  });
+
+  test("magnitude vocabulary follows the content-language scope", async () => {
+    // `B` and `mm` are English shorthand; a German-only scope does not
+    // detect them, and an English-only scope does not know `Mio.`.
+    const german = (
+      await detectNative(
+        { ...CONFIG, languages: ["de"] },
+        "Umsatz von $1.5B und $25mm.",
+      )
+    )
+      .filter((e) => e.label === "monetary amount")
+      .map((e) => e.text);
+    expect(german).toEqual([]);
+    const englishGerman = (
+      await detectNative(
+        { ...CONFIG, languages: ["en"] },
+        "Ein Preis von 25 Mio. EUR.",
+      )
+    )
+      .filter((e) => e.label === "monetary amount")
+      .map((e) => e.text);
+    expect(englishGerman).toEqual([]);
+    const english = (
+      await detectNative(
+        { ...CONFIG, languages: ["en"] },
+        "Revenue of $1.5B and $25mm.",
+      )
+    )
+      .filter((e) => e.label === "monetary amount")
+      .map((e) => e.text);
+    expect(english).toEqual(["$1.5B", "$25mm"]);
   });
 
   test("short PT-BR abbreviations do not apply globally", async () => {

@@ -131,6 +131,15 @@ describe("grouped numbers before an organization", () => {
     ]);
   });
 
+  test("a dot-grouped amount is not a name fragment either", async () => {
+    expect(
+      await orgs("Northwind invested EUR 45.000.000 in Acme Holdings Ltd."),
+    ).toEqual(["Acme Holdings Ltd."]);
+    expect(
+      await money("Northwind invested EUR 45.000.000 in Acme Holdings Ltd."),
+    ).toEqual(["EUR 45.000.000"]);
+  });
+
   test("a thousands separator is not a leading-clause comma", async () => {
     expect(
       await orgs("Paid 45,000,000 to Acme Holdings Ltd. at closing.", ["en"]),

@@ -1,5 +1,5 @@
 {
-  "_comment": "Patterns for written-out monetary amounts, number words, magnitude suffixes, and share-quantity guards, by language.",
+  "_comment": "Patterns for written-out monetary amounts, number words, magnitude suffixes, and share-quantity guards, by language. Only entries whose lang is in the configured content-language scope are assembled. Abbreviations that are conventionally written with a period list the dotted form explicitly ('mio.', 'mld.') so a sentence period after any other abbreviation is never consumed.",
   "patterns": [
     { "lang": "cs", "keywords": ["slovy", "slovně"] },
     { "lang": "sk", "keywords": ["slovom", "slovami"] },
@@ -81,7 +81,7 @@
         "biliony",
         "bilionů"
       ],
-      "abbreviationsCaseInsensitive": ["mld"],
+      "abbreviationsCaseInsensitive": ["mld", "mld."],
       "abbreviationsCaseSensitive": ["K", "M"],
       "abbreviationsAttached": ["k", "m"]
     },
@@ -99,7 +99,7 @@
         "billion",
         "billionen"
       ],
-      "abbreviationsCaseInsensitive": ["mio", "mrd"],
+      "abbreviationsCaseInsensitive": ["mio", "mio.", "mrd", "mrd."],
       "abbreviationsCaseSensitive": ["K", "M"],
       "abbreviationsAttached": ["k", "m"]
     },
@@ -134,7 +134,7 @@
         "billón",
         "billones"
       ],
-      "abbreviationsCaseInsensitive": ["mln"],
+      "abbreviationsCaseInsensitive": ["mln", "mln."],
       "abbreviationsCaseSensitive": ["K", "M"],
       "abbreviationsAttached": ["k", "m"]
     },
@@ -153,7 +153,14 @@
         "billion",
         "billions"
       ],
-      "abbreviationsCaseInsensitive": ["mio", "md", "mrd"],
+      "abbreviationsCaseInsensitive": [
+        "mio",
+        "mio.",
+        "md",
+        "md.",
+        "mrd",
+        "mrd."
+      ],
       "abbreviationsCaseSensitive": ["K", "M"],
       "abbreviationsAttached": ["k", "m"]
     },
@@ -171,7 +178,7 @@
         "bilione",
         "bilioni"
       ],
-      "abbreviationsCaseInsensitive": ["mln", "mld"],
+      "abbreviationsCaseInsensitive": ["mln", "mln.", "mld", "mld."],
       "abbreviationsCaseSensitive": ["K", "M"],
       "abbreviationsAttached": ["k", "m"]
     },
@@ -197,7 +204,7 @@
         "biliony",
         "bilionów"
       ],
-      "abbreviationsCaseInsensitive": ["mln", "mld"],
+      "abbreviationsCaseInsensitive": ["mln", "mln.", "mld", "mld."],
       "abbreviationsCaseSensitive": ["K", "M"],
       "abbreviationsAttached": ["k", "m"]
     },
@@ -243,7 +250,7 @@
         "bilióny",
         "biliónov"
       ],
-      "abbreviationsCaseInsensitive": ["mld"],
+      "abbreviationsCaseInsensitive": ["mld", "mld."],
       "abbreviationsCaseSensitive": ["K", "M"],
       "abbreviationsAttached": ["k", "m"]
     }

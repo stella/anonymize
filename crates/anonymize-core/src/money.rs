@@ -129,13 +129,7 @@ struct MagnitudeTerm {
   text: String,
   folded: String,
   case: MagnitudeCase,
-  /// Abbreviations may carry a trailing period (`12,5 Mio. EUR`).
-  abbreviation: bool,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct MagnitudeMatch {
-  end: usize,
+  /// Abbreviations never stand in for a written number word.
   abbreviation: bool,
 }
 
@@ -326,6 +320,15 @@ impl MonetaryRule {
     }
 
     let mut end = usize::try_from(entity.end).unwrap_or(usize::MAX);
+    // A trigger value is a bare number ("in the amount of 1.5 million"); the
+    // magnitude word after it belongs to the amount unless it counts shares.
+    if entity.source == DetectionSource::Trigger
+      && ends_with_digit(&entity.text)
+      && let Some(magnitude_end) = self.parse_magnitude_forward(full_text, end)
+      && !self.has_quantity_follower(full_text, magnitude_end)
+    {
+      end = magnitude_end;
+    }
     if !ends_with_letter(&entity.text)
       && let Some(currency_end) = self.trailing_currency_end(full_text, end)
     {
@@ -395,7 +398,7 @@ impl MonetaryRule {
     let number = parse_amount_forward(text, number_start)?;
     let end = self
       .parse_magnitude_forward(text, number.end)
-      .map_or(number.end, |magnitude| magnitude.end);
+      .unwrap_or(number.end);
     right_money_boundary(text, end)
       .then(|| (anchor.start, self.extend_written_amount(text, end)))
   }
@@ -425,15 +428,7 @@ impl MonetaryRule {
       let number = parse_amount_forward(text, number_start)?;
       let magnitude = self.parse_magnitude_forward(text, number.end);
       let has_magnitude = magnitude.is_some();
-      let after_number = magnitude.map_or(number.end, |found| {
-        // `12,5 Mio. EUR`: an abbreviated magnitude may end in a period
-        // before the currency; a full word never does.
-        if found.abbreviation {
-          skip_abbreviation_period(text, found.end)
-        } else {
-          found.end
-        }
-      });
+      let after_number = magnitude.unwrap_or(number.end);
       let after_gap = skip_horizontal_ws_limit(text, after_number, 4);
       if after_gap != anchor.start {
         continue;
@@ -537,11 +532,7 @@ impl MonetaryRule {
     })
   }
 
-  fn parse_magnitude_forward(
-    &self,
-    text: &str,
-    index: usize,
-  ) -> Option<MagnitudeMatch> {
+  fn parse_magnitude_forward(&self, text: &str, index: usize) -> Option<usize> {
     let start = skip_horizontal_ws_limit(text, index, 8);
     self.match_magnitude_at(text, start, start == index)
   }
@@ -551,7 +542,7 @@ impl MonetaryRule {
     text: &str,
     index: usize,
     attached: bool,
-  ) -> Option<MagnitudeMatch> {
+  ) -> Option<usize> {
     for term in &self.magnitudes {
       let end = index.saturating_add(term.text.len());
       let Some(candidate) = str_slice(text, index, end) else {
@@ -563,10 +554,7 @@ impl MonetaryRule {
         MagnitudeCase::Attached => attached && candidate == term.text,
       };
       if matches && right_word_boundary(text, end) {
-        return Some(MagnitudeMatch {
-          end,
-          abbreviation: term.abbreviation,
-        });
+        return Some(end);
       }
     }
     None
@@ -889,13 +877,6 @@ fn magnitude_abbreviation(text: String, case: MagnitudeCase) -> MagnitudeTerm {
   }
 }
 
-fn skip_abbreviation_period(text: &str, index: usize) -> usize {
-  match str_tail(text, index).and_then(|tail| tail.chars().next()) {
-    Some('.') => index.saturating_add('.'.len_utf8()),
-    _ => index,
-  }
-}
-
 fn clean_terms(values: Vec<String>) -> Vec<String> {
   values
     .into_iter()
@@ -937,6 +918,13 @@ fn right_alnum_boundary(text: &str, index: usize) -> bool {
   str_tail(text, index)
     .and_then(|value| value.chars().next())
     .is_none_or(|ch| !ch.is_alphanumeric())
+}
+
+fn ends_with_digit(text: &str) -> bool {
+  text
+    .chars()
+    .next_back()
+    .is_some_and(|ch| ch.is_ascii_digit())
 }
 
 fn ends_with_letter(text: &str) -> bool {
