@@ -57,6 +57,7 @@ import {
   type PdfPipelineRequest,
   runPdfCommand,
 } from "./pdf";
+import { publishNewPrivateFile } from "./private-file";
 
 /**
  * The pipeline functions the CLI needs, backed by the
@@ -657,10 +658,10 @@ const runAnonymiseSingle = async (
   }
 
   if (opts.keyPath !== undefined) {
-    await writeFile(
+    await publishNewPrivateFile(
       opts.keyPath,
       api.exportRedactionKey(redaction.redactionMap, redaction.operatorMap),
-      "utf8",
+      "--key",
     );
   }
 
