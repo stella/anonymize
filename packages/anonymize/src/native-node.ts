@@ -26,6 +26,7 @@ import {
   redact_text_stream_json as redactTextStreamJsonWithBinding,
   summary_diagnostics_json as summaryDiagnosticsJsonWithBinding,
 } from "./native";
+import { assertSupportedBunRuntime } from "./bun-version";
 
 export * from "./native";
 export {
@@ -132,6 +133,7 @@ export const setNativeBindingOverride = (
 export const loadNativeAnonymizeBinding = (
   options: LoadNativeBindingOptions = {},
 ): NativeAnonymizeBinding => {
+  assertSupportedBunRuntime();
   if (nativeBindingOverride !== undefined) {
     if (options.expectedVersion !== undefined) {
       assertNativeBindingVersion({

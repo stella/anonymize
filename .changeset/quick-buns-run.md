@@ -4,5 +4,5 @@
 "@stll/anonymize-mcp": patch
 ---
 
-Use the native N-API binding on Bun 1.4 and stop installing the browser WASM
-runtime with Node.js and Bun packages.
+Require Bun 1.4 or newer, use its native N-API binding, and stop installing the
+browser WASM runtime with Node.js and Bun packages.

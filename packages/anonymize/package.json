@@ -74,6 +74,10 @@
   },
   "homepage": "https://github.com/stella/anonymize",
   "license": "Apache-2.0",
+  "engines": {
+    "bun": ">=1.4.0",
+    "node": ">=20"
+  },
   "scripts": {
     "build": "bun run build:native-wasm && tsdown && bun scripts/build-native-node.mjs && bun run build:wasm-assets",
     "prepublishOnly": "bun run build",

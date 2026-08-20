@@ -1,6 +1,13 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import {
+  basename,
+  dirname,
+  isAbsolute,
+  join,
+  relative,
+  resolve,
+} from "node:path";
 import { fileURLToPath } from "node:url";
 
 const MEBIBYTE = 1024 * 1024;
@@ -23,11 +30,22 @@ if (Object.keys(packageManifest.dependencies ?? {}).length > 0) {
   );
 }
 
-const sidecarName = nativeSidecarName();
-const rootBytes = packedUnpackedBytes(packageRoot);
-const sidecarBytes = packedUnpackedBytes(
-  join(repoRoot, "packages", sidecarName),
+const sidecarDirectory = resolveSidecarDirectory(process.argv.at(2));
+const sidecarManifest = JSON.parse(
+  readFileSync(join(sidecarDirectory, "package.json"), "utf8"),
 );
+if (
+  typeof sidecarManifest.name !== "string" ||
+  packageManifest.optionalDependencies?.[sidecarManifest.name] === undefined
+) {
+  throw new Error(
+    `${sidecarDirectory} is not a native optional dependency of @stll/anonymize`,
+  );
+}
+
+const sidecarName = basename(sidecarDirectory);
+const rootBytes = packedUnpackedBytes(packageRoot);
+const sidecarBytes = packedUnpackedBytes(sidecarDirectory);
 const installedBytes = rootBytes + sidecarBytes;
 
 if (installedBytes > MAX_NATIVE_INSTALL_BYTES) {
@@ -78,6 +96,26 @@ function nativeSidecarName() {
   throw new Error(
     `native install footprint is unsupported on ${process.platform}-${process.arch}`,
   );
+}
+
+function resolveSidecarDirectory(requestedDirectory) {
+  const packagesRoot = join(repoRoot, "packages");
+  const directory =
+    requestedDirectory === undefined
+      ? join(packagesRoot, nativeSidecarName())
+      : resolve(repoRoot, requestedDirectory);
+  const relativeDirectory = relative(packagesRoot, directory);
+  if (
+    relativeDirectory.length === 0 ||
+    isAbsolute(relativeDirectory) ||
+    relativeDirectory.startsWith("..") ||
+    basename(relativeDirectory) !== relativeDirectory
+  ) {
+    throw new Error(
+      `native sidecar must be a direct child of ${packagesRoot}: ${directory}`,
+    );
+  }
+  return directory;
 }
 
 function formatMebibytes(bytes) {

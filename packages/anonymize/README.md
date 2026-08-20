@@ -16,8 +16,9 @@ bun add @stll/anonymize
 bun add @stll/anonymize-data
 ```
 
-The Node.js and Bun package is Rust-native. Browser/WASM support is maintained
-through `@stll/anonymize-wasm`, which wraps the same native core.
+The Node.js and Bun package is Rust-native and requires Node.js 20 or newer or
+Bun 1.4 or newer. Browser/WASM support is maintained through
+`@stll/anonymize-wasm`, which wraps the same native core.
 
 ## Usage: Node.js native SDK
 

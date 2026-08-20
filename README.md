@@ -237,9 +237,10 @@ package graph and parity boundaries.
 
 Platform-specific Node.js binary packages are installed automatically as
 optional dependencies of `@stll/anonymize`. Node.js and Bun use the same native
-binding. A clean macOS arm64 npm install from the packed artifacts uses about
-63 MiB on disk; CI caps the packed SDK plus native sidecar at 70 MiB. Install
-`@stll/anonymize-wasm` separately only when you need the browser runtime.
+binding; Bun 1.4 or newer is required. A clean macOS arm64 npm install from the
+packed artifacts uses about 63 MiB on disk; CI caps the packed SDK plus every
+native sidecar at 70 MiB. Install `@stll/anonymize-wasm` separately only when
+you need the browser runtime.
 
 ## Benchmarks
 
