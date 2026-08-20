@@ -69,9 +69,9 @@ export const publishNewPrivateFile = async ({
   flag,
   afterPublish,
 }: PublishNewPrivateFileOptions): Promise<void> => {
-  if (process.platform === "win32") {
+  if (process.platform !== "linux") {
     throw new UsageError(
-      `${flag} is unavailable on Windows because owner-only file ACLs cannot be verified`,
+      `${flag} is unavailable on ${process.platform} because owner-only file ACLs cannot be verified`,
     );
   }
 

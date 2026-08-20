@@ -18,9 +18,9 @@ import {
   writeFileWithoutIdentityCollision,
 } from "../private-file";
 
-const describeOnPosix = describe.skipIf(process.platform === "win32");
+const describeOnLinux = describe.skipIf(process.platform !== "linux");
 
-describeOnPosix("private file publication", () => {
+describeOnLinux("private file publication", () => {
   test("creates a new file with owner-only permissions", async () => {
     const directory = await mkdtemp(join(tmpdir(), "anonymize-private-file-"));
     const target = join(directory, "key.json");
@@ -175,8 +175,8 @@ describeOnPosix("private file publication", () => {
   });
 });
 
-test.skipIf(process.platform !== "win32")(
-  "fails closed before creating a private file on Windows",
+test.skipIf(process.platform === "linux")(
+  "fails closed before creating a private file on unsupported platforms",
   async () => {
     const directory = await mkdtemp(join(tmpdir(), "anonymize-private-file-"));
     const target = join(directory, "key.json");

@@ -126,6 +126,9 @@ npx @stll/anonymize-cli -k contract.key.json -o contract.anon.txt contract.txt
 npx @stll/anonymize-cli -d contract.key.json contract.anon.txt
 ```
 
+Raw `--key` export is Linux-only and fails closed on other platforms because
+the CLI cannot verify owner-only filesystem ACLs.
+
 See the [CLI reference](packages/cli/README.md) for batch processing, selective
 restoration, document commands, JSON output, and exit codes.
 
