@@ -290,16 +290,40 @@ describe("sealed aggregate report contract", () => {
       }
     }
 
-    const expectedCorpusIds = BENCHMARK_CORPORA.filter(
+    const expectedCorpora = BENCHMARK_CORPORA.filter(
       ({ execution, policy, runnable }) =>
         runnable && policy === "evaluation-only" && execution !== undefined,
-    )
-      .map(({ id }) => id)
-      .toSorted();
+    );
+    const expectedByCorpus = new Map(
+      expectedCorpora.map((corpus) => [corpus.id, corpus]),
+    );
+    const expectedCorpusIds = [...expectedByCorpus.keys()].toSorted();
     expect([...latestByCorpus.keys()].toSorted()).toEqual(expectedCorpusIds);
 
     for (const corpusId of expectedCorpusIds) {
       const current = latestByCorpus.get(corpusId);
+      const expected = expectedByCorpus.get(corpusId);
+      if (expected?.artifact === undefined) {
+        throw new Error(`${corpusId} has no pinned registry artifact`);
+      }
+      if (expected.artifact.split !== "test") {
+        throw new Error(`${corpusId} does not pin the evaluation test split`);
+      }
+      expect(current?.corpus.source, `${corpusId} uses a stale source`).toBe(
+        expected.source,
+      );
+      expect(current?.corpus.version, `${corpusId} uses a stale version`).toBe(
+        expected.version,
+      );
+      expect(current?.corpus.file, `${corpusId} uses a stale artifact`).toBe(
+        expected.artifact.file,
+      );
+      expect(current?.corpus.sha256, `${corpusId} uses a stale checksum`).toBe(
+        expected.artifact.sha256,
+      );
+      expect(current?.corpus.split, `${corpusId} uses a stale split`).toBe(
+        expected.artifact.split,
+      );
       const stella = current?.libraries.find(({ name }) => name === "stella");
       expect(stella?.status, `${corpusId} must include stella`).toBe("ok");
       expect(stella?.version, `${corpusId} uses a stale stella version`).toBe(
