@@ -1,8 +1,19 @@
 import { expect, test } from "bun:test";
 
-import { loadDefaultNativeBinding } from "../native-runtime";
+import {
+  isBunRuntime,
+  loadDefaultNativeBinding,
+  preloadNativeBinding,
+} from "../native-runtime";
 
-test("Bun validates the requested WASM binding version", async () => {
+test("Bun loads the native binding", async () => {
+  expect(isBunRuntime()).toBe(true);
+  const binding = await loadDefaultNativeBinding();
+  expect(binding.nativePackageVersion()).not.toHaveLength(0);
+  await preloadNativeBinding();
+});
+
+test("native runtime validates the requested binding version", async () => {
   let failure: unknown;
   try {
     await loadDefaultNativeBinding({
