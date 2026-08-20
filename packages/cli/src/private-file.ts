@@ -18,7 +18,49 @@ type PublishNewPrivateFileOptions = {
   target: string;
   content: string | Uint8Array;
   flag: string;
-  afterPublish?: () => Promise<void>;
+  afterPublish?: (identity: FileIdentity) => Promise<void>;
+};
+
+export type FileIdentity = {
+  readonly device: bigint;
+  readonly inode: bigint;
+};
+
+type WriteFileWithoutIdentityCollisionOptions = {
+  target: string;
+  content: string | Uint8Array;
+  targetFlag: string;
+  forbiddenFlag: string;
+  forbiddenIdentity: FileIdentity;
+};
+
+/**
+ * Open an output before truncating it, then reject aliases to a protected
+ * descriptor. Path replacement after open cannot redirect descriptor writes.
+ */
+export const writeFileWithoutIdentityCollision = async ({
+  target,
+  content,
+  targetFlag,
+  forbiddenFlag,
+  forbiddenIdentity,
+}: WriteFileWithoutIdentityCollisionOptions): Promise<void> => {
+  const handle = await open(target, constants.O_WRONLY | constants.O_CREAT);
+  try {
+    const stats = await handle.stat({ bigint: true });
+    if (
+      stats.dev === forbiddenIdentity.device &&
+      stats.ino === forbiddenIdentity.inode
+    ) {
+      throw new UsageError(
+        `${targetFlag} "${target}" aliases ${forbiddenFlag}`,
+      );
+    }
+    await handle.truncate(0);
+    await handle.writeFile(content);
+  } finally {
+    await handle.close().catch(() => undefined);
+  }
 };
 
 export const publishNewPrivateFile = async ({
@@ -54,7 +96,8 @@ export const publishNewPrivateFile = async ({
 
   let committed = false;
   try {
-    if (!(await handle.stat()).isFile()) {
+    const stats = await handle.stat({ bigint: true });
+    if (!stats.isFile()) {
       throw new Error("private file destination is not a regular file");
     }
 
@@ -62,7 +105,7 @@ export const publishNewPrivateFile = async ({
     await handle.sync();
     await handle.chmod(0o600);
     await handle.sync();
-    await afterPublish?.();
+    await afterPublish?.({ device: stats.dev, inode: stats.ino });
     committed = true;
   } finally {
     if (!committed) {

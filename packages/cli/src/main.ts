@@ -57,7 +57,11 @@ import {
   type PdfPipelineRequest,
   runPdfCommand,
 } from "./pdf";
-import { publishNewPrivateFile } from "./private-file";
+import type { FileIdentity } from "./private-file";
+import {
+  publishNewPrivateFile,
+  writeFileWithoutIdentityCollision,
+} from "./private-file";
 
 /**
  * The pipeline functions the CLI needs, backed by the
@@ -419,10 +423,17 @@ const buildOperatorConfig = (opts: CliOptions): NativeOperatorConfig => {
   return { operators, redactString: opts.redactString };
 };
 
-const writeOutput = async (
-  path: string | undefined,
-  content: string,
-): Promise<void> => {
+type WriteOutputOptions = {
+  path: string | undefined;
+  content: string;
+  forbiddenIdentity?: FileIdentity;
+};
+
+const writeOutput = async ({
+  path,
+  content,
+  forbiddenIdentity,
+}: WriteOutputOptions): Promise<void> => {
   if (path === undefined) {
     await new Promise<void>((complete, reject) => {
       process.stdout.write(content, (error) => {
@@ -432,6 +443,16 @@ const writeOutput = async (
         }
         complete();
       });
+    });
+    return;
+  }
+  if (forbiddenIdentity !== undefined) {
+    await writeFileWithoutIdentityCollision({
+      target: path,
+      content,
+      targetFlag: "--output",
+      forbiddenFlag: "--key",
+      forbiddenIdentity,
     });
     return;
   }
@@ -571,7 +592,10 @@ const runDeanonymise = async (
       { path: opts.output, flag: "--output" },
     ]);
   }
-  await writeOutput(opts.output, api.deanonymise(input.text, redactionMap));
+  await writeOutput({
+    path: opts.output,
+    content: api.deanonymise(input.text, redactionMap),
+  });
 };
 
 /**
@@ -671,10 +695,15 @@ const runAnonymiseSingle = async (
         redaction.operatorMap,
       ),
       flag: "--key",
-      afterPublish: () => writeOutput(input.outputPath, outputContent),
+      afterPublish: (identity) =>
+        writeOutput({
+          path: input.outputPath,
+          content: outputContent,
+          forbiddenIdentity: identity,
+        }),
     });
   } else {
-    await writeOutput(input.outputPath, outputContent);
+    await writeOutput({ path: input.outputPath, content: outputContent });
   }
 
   if (!opts.quiet) {

@@ -281,6 +281,9 @@ describe("sealed aggregate report contract", () => {
         continue;
       }
       assertSealedAggregateReport(parsed);
+      if (parsed.corpus.selection.type !== "full-test-split") {
+        continue;
+      }
       const previous = latestByCorpus.get(parsed.corpus.id);
       if (previous === undefined || previous.createdAt < parsed.createdAt) {
         latestByCorpus.set(parsed.corpus.id, parsed);

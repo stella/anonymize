@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   lstat,
+  link,
   mkdtemp,
   readFile,
   readdir,
@@ -12,7 +13,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { UsageError } from "../args";
-import { publishNewPrivateFile } from "../private-file";
+import {
+  publishNewPrivateFile,
+  writeFileWithoutIdentityCollision,
+} from "../private-file";
 
 const describeOnPosix = describe.skipIf(process.platform === "win32");
 
@@ -115,6 +119,59 @@ describeOnPosix("private file publication", () => {
       expect((await stat(target)).mode & 0o777).toBe(0o000);
     }
     expect(await readdir(directory)).toEqual(["key.json"]);
+  });
+
+  test("refuses an output symlink alias to the private file", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "anonymize-private-file-"));
+    const target = join(directory, "key.json");
+    const output = join(directory, "output.txt");
+    await symlink(target, output);
+
+    await expect(
+      publishNewPrivateFile({
+        target,
+        content: "sensitive",
+        flag: "--key",
+        afterPublish: (identity) =>
+          writeFileWithoutIdentityCollision({
+            target: output,
+            content: "redacted",
+            targetFlag: "--output",
+            forbiddenFlag: "--key",
+            forbiddenIdentity: identity,
+          }),
+      }),
+    ).rejects.toBeInstanceOf(UsageError);
+
+    expect((await lstat(output)).isSymbolicLink()).toBe(true);
+    expect((await stat(target)).size).toBe(0);
+  });
+
+  test("refuses an output hard-link alias to the private file", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "anonymize-private-file-"));
+    const target = join(directory, "key.json");
+    const output = join(directory, "output.txt");
+
+    await expect(
+      publishNewPrivateFile({
+        target,
+        content: "sensitive",
+        flag: "--key",
+        afterPublish: async (identity) => {
+          await link(target, output);
+          await writeFileWithoutIdentityCollision({
+            target: output,
+            content: "redacted",
+            targetFlag: "--output",
+            forbiddenFlag: "--key",
+            forbiddenIdentity: identity,
+          });
+        },
+      }),
+    ).rejects.toBeInstanceOf(UsageError);
+
+    expect((await stat(target)).size).toBe(0);
+    expect((await stat(output)).size).toBe(0);
   });
 });
 
