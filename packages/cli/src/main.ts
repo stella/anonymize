@@ -424,7 +424,15 @@ const writeOutput = async (
   content: string,
 ): Promise<void> => {
   if (path === undefined) {
-    process.stdout.write(content);
+    await new Promise<void>((complete, reject) => {
+      process.stdout.write(content, (error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+        complete();
+      });
+    });
     return;
   }
   await writeFile(path, content, "utf8");

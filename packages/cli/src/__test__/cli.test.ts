@@ -6,6 +6,7 @@ import {
   mkdir,
   mkdtemp,
   readFile,
+  stat,
   symlink,
   unlink,
   writeFile,
@@ -127,6 +128,44 @@ test("redaction key round-trips losslessly", async () => {
   expect(restored.code).toBe(0);
   expect(restored.out).toBe(SAMPLE);
 });
+
+test.skipIf(process.platform === "win32")(
+  "does not commit a key before stdout completes",
+  async () => {
+    const dir = await mkdtemp(join(tmpdir(), "anonymize-cli-"));
+    const inputPath = join(dir, "input.txt");
+    const keyPath = join(dir, "key.json");
+    await writeFile(inputPath, "x".repeat(2 * 1024 * 1024), "utf8");
+
+    const proc = Bun.spawn(
+      [
+        "bash",
+        "-o",
+        "pipefail",
+        "-c",
+        'exec "$@" | head -c 0',
+        "anonymize-stdout-test",
+        "bun",
+        CLI,
+        ...SCOPE,
+        "--quiet",
+        "-k",
+        keyPath,
+        inputPath,
+      ],
+      { stdout: "ignore", stderr: "pipe" },
+    );
+    const [code] = await Promise.all([
+      proc.exited,
+      new Response(proc.stderr).text(),
+    ]);
+
+    expect(code).not.toBe(0);
+    const key = await stat(keyPath);
+    expect(key.size).toBe(0);
+    expect(key.mode & 0o777).toBe(0o000);
+  },
+);
 
 test("redact mode is irreversible and uses the redact string", async () => {
   const { out, code } = await run(

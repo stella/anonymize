@@ -4,6 +4,13 @@ use super::common::{entity_len, is_caller_owned};
 use super::sanitize::sanitize_entities;
 use super::{DetectionSource, PipelineEntity, SourceDetail};
 
+#[cfg(test)]
+std::thread_local! {
+  static INCREMENTAL_SORT_CALLS: std::cell::Cell<usize> = const {
+    std::cell::Cell::new(0)
+  };
+}
+
 #[must_use]
 pub fn merge_and_dedup(entities: &[PipelineEntity]) -> Vec<PipelineEntity> {
   if entities.is_empty() {
@@ -113,6 +120,8 @@ impl MergeFrontier {
   }
 
   fn sort_by_start(&mut self) {
+    #[cfg(test)]
+    INCREMENTAL_SORT_CALLS.set(INCREMENTAL_SORT_CALLS.get().saturating_add(1));
     let mut entities = std::mem::take(&mut self.slots)
       .into_iter()
       .flatten()
@@ -957,6 +966,14 @@ mod tests {
     frontier.candidate_checks.get()
   }
 
+  fn merge_with_incremental_sort_count(
+    entities: &[PipelineEntity],
+  ) -> (Vec<PipelineEntity>, usize) {
+    INCREMENTAL_SORT_CALLS.set(0);
+    let resolved = merge_and_dedup(entities);
+    (resolved, INCREMENTAL_SORT_CALLS.get())
+  }
+
   fn output_digest(entities: &[PipelineEntity]) -> String {
     let mut digest = Sha256::new();
     for entity in entities {
@@ -1013,7 +1030,9 @@ mod tests {
     assert_eq!(small_checks, SMALL_GROUPS);
     assert_eq!(large_checks, LARGE_GROUPS);
 
-    let resolved = merge_and_dedup(&large);
+    let (resolved, incremental_sorts) =
+      merge_with_incremental_sort_count(&large);
     assert_eq!(resolved.len(), LARGE_GROUPS);
+    assert_eq!(incremental_sorts, 0);
   }
 }
