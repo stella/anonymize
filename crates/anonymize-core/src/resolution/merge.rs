@@ -9,6 +9,9 @@ pub fn merge_and_dedup(entities: &[PipelineEntity]) -> Vec<PipelineEntity> {
   if entities.is_empty() {
     return Vec::new();
   }
+  // Valid pipeline entities can be sorted once after merging. Preserve the
+  // legacy incremental ordering for malformed spans passed by direct callers.
+  let can_defer_sort = entities.iter().all(|entity| entity.start < entity.end);
 
   let mut sorted = entities.to_vec();
   sorted.sort_by_key(|entity| entity.start);
@@ -41,7 +44,9 @@ pub fn merge_and_dedup(entities: &[PipelineEntity]) -> Vec<PipelineEntity> {
 
       let Some(index) = same_label_index else {
         merged.push(entity);
-        merged.sort_by_start();
+        if !can_defer_sort {
+          merged.sort_by_start();
+        }
         continue;
       };
 
@@ -68,7 +73,7 @@ pub fn merge_and_dedup(entities: &[PipelineEntity]) -> Vec<PipelineEntity> {
     merged.replace_overlaps(insert_at, &overlaps, entity);
   }
 
-  let merged = merged.into_entities();
+  let merged = merged.into_entities(can_defer_sort);
   resolve_same_span_label_conflicts(&sanitize_entities(&merged))
 }
 
@@ -199,8 +204,12 @@ impl MergeFrontier {
       .collect()
   }
 
-  fn into_entities(self) -> Vec<PipelineEntity> {
-    self.slots.into_iter().flatten().collect()
+  fn into_entities(self, sort_by_start: bool) -> Vec<PipelineEntity> {
+    let mut entities = self.slots.into_iter().flatten().collect::<Vec<_>>();
+    if sort_by_start {
+      entities.sort_by_key(|entity| entity.start);
+    }
+    entities
   }
 }
 
@@ -849,10 +858,30 @@ mod tests {
       })
   }
 
+  fn valid_entity_strategy() -> impl Strategy<Value = PipelineEntity> {
+    entity_strategy().prop_map(|mut entity| {
+      if entity.start >= entity.end {
+        entity.end = entity.start.saturating_add(1);
+        entity.text = String::from("x");
+      }
+      entity
+    })
+  }
+
   proptest! {
     #[test]
     fn frontier_merge_matches_legacy_resolution(
       entities in prop::collection::vec(entity_strategy(), 0..96),
+    ) {
+      prop_assert_eq!(
+        merge_and_dedup(&entities),
+        legacy_merge_and_dedup(&entities),
+      );
+    }
+
+    #[test]
+    fn deferred_sort_matches_legacy_resolution(
+      entities in prop::collection::vec(valid_entity_strategy(), 0..96),
     ) {
       prop_assert_eq!(
         merge_and_dedup(&entities),
@@ -884,6 +913,45 @@ mod tests {
     let mut frontier = MergeFrontier::new(first);
     for entity in entities.iter().skip(1).cloned() {
       assert!(frontier.overlapping_slots(&entity).is_empty());
+      frontier.push(entity);
+    }
+    frontier.candidate_checks.get()
+  }
+
+  fn equal_span_label_pairs(count: usize) -> Vec<PipelineEntity> {
+    let mut entities = Vec::with_capacity(count.saturating_mul(2));
+    for index in 0..count {
+      let start = u32::try_from(index.saturating_mul(3)).unwrap_or(u32::MAX);
+      for label in ["person", "address"] {
+        entities.push(PipelineEntity::detected(
+          start,
+          start.saturating_add(1),
+          label,
+          "x",
+          0.9,
+          DetectionSource::Regex,
+        ));
+      }
+    }
+    entities
+  }
+
+  fn equal_span_candidate_checks(entities: &[PipelineEntity]) -> usize {
+    let Some(first) = entities.first().cloned() else {
+      return 0;
+    };
+    let mut frontier = MergeFrontier::new(first);
+    for entity in entities.iter().skip(1).cloned() {
+      let overlaps = frontier.overlapping_slots(&entity);
+      if overlaps.is_empty() {
+        frontier.push(entity);
+        continue;
+      }
+      assert!(overlaps.iter().all(|index| {
+        frontier.get(*index).is_some_and(|existing| {
+          existing.start == entity.start && existing.end == entity.end
+        })
+      }));
       frontier.push(entity);
     }
     frontier.candidate_checks.get()
@@ -930,5 +998,22 @@ mod tests {
       "ceca76ca0c2d23ab459a0bc3ec3d532b21ccf00d509479d1b98f33e635713c85",
     );
     std::hint::black_box(elapsed);
+  }
+
+  #[test]
+  #[ignore = "release-mode scaling regression check"]
+  fn equal_span_distinct_label_groups_keep_frontier_work_linear() {
+    const SMALL_GROUPS: usize = 4_096;
+    const LARGE_GROUPS: usize = 0x4000;
+    let small = equal_span_label_pairs(SMALL_GROUPS);
+    let large = equal_span_label_pairs(LARGE_GROUPS);
+
+    let small_checks = equal_span_candidate_checks(&small);
+    let large_checks = equal_span_candidate_checks(&large);
+    assert_eq!(small_checks, SMALL_GROUPS);
+    assert_eq!(large_checks, LARGE_GROUPS);
+
+    let resolved = merge_and_dedup(&large);
+    assert_eq!(resolved.len(), LARGE_GROUPS);
   }
 }
