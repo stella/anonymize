@@ -95,7 +95,7 @@ describe("private file publication", () => {
     expect(await readdir(directory)).toEqual(["key.json"]);
   });
 
-  test("removes the published file when the dependent write fails", async () => {
+  test("leaves an inert reservation when the dependent write fails", async () => {
     const directory = await mkdtemp(join(tmpdir(), "anonymize-private-file-"));
     const target = join(directory, "key.json");
 
@@ -108,6 +108,10 @@ describe("private file publication", () => {
       }),
     ).rejects.toThrow("output failed");
 
-    expect(await readdir(directory)).toEqual([]);
+    expect((await stat(target)).size).toBe(0);
+    if (process.platform !== "win32") {
+      expect((await stat(target)).mode & 0o777).toBe(0o000);
+    }
+    expect(await readdir(directory)).toEqual(["key.json"]);
   });
 });
