@@ -68,7 +68,11 @@ function packedUnpackedBytes(directory) {
   const output = execFileSync(
     npmExecutable,
     ["pack", "--dry-run", "--json", "--ignore-scripts"],
-    { cwd: directory, encoding: "utf8" },
+    {
+      cwd: directory,
+      encoding: "utf8",
+      shell: process.platform === "win32",
+    },
   );
   const pack = JSON.parse(output).at(0);
   if (!pack || typeof pack.unpackedSize !== "number") {
