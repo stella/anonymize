@@ -14,7 +14,9 @@ import { join } from "node:path";
 import { UsageError } from "../args";
 import { publishNewPrivateFile } from "../private-file";
 
-describe("private file publication", () => {
+const describeOnPosix = describe.skipIf(process.platform === "win32");
+
+describeOnPosix("private file publication", () => {
   test("creates a new file with owner-only permissions", async () => {
     const directory = await mkdtemp(join(tmpdir(), "anonymize-private-file-"));
     const target = join(directory, "key.json");
@@ -115,3 +117,21 @@ describe("private file publication", () => {
     expect(await readdir(directory)).toEqual(["key.json"]);
   });
 });
+
+test.skipIf(process.platform !== "win32")(
+  "fails closed before creating a private file on Windows",
+  async () => {
+    const directory = await mkdtemp(join(tmpdir(), "anonymize-private-file-"));
+    const target = join(directory, "key.json");
+
+    await expect(
+      publishNewPrivateFile({
+        target,
+        content: "sensitive",
+        flag: "--key",
+      }),
+    ).rejects.toThrow("owner-only file ACLs cannot be verified");
+
+    expect(await readdir(directory)).toEqual([]);
+  },
+);

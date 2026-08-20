@@ -46,6 +46,9 @@ anonymize -d key.json reply.txt
 | `--capabilities`          | Emit the versioned capability manifest as JSON   |
 | `--quiet`                 | Suppress the stderr summary                      |
 
+`--key` fails closed on Windows because the CLI cannot verify owner-only NTFS
+ACLs. Key-file export is supported on POSIX systems.
+
 Run `anonymize --help` for the full reference, including the
 `--json` schema and exit codes.
 
