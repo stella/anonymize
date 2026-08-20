@@ -9,6 +9,26 @@ const isNodeError = (
 ): error is NodeJS.ErrnoException =>
   error instanceof Error && "code" in error && error.code === code;
 
+const FILE_PERMISSION_MASK = 0o777n;
+
+type AssertFilePermissionsOptions = {
+  actual: bigint;
+  expected: bigint;
+  flag: string;
+};
+
+const assertFilePermissions = ({
+  actual,
+  expected,
+  flag,
+}: AssertFilePermissionsOptions): void => {
+  if ((actual & FILE_PERMISSION_MASK) !== expected) {
+    throw new UsageError(
+      `${flag} cannot verify owner-only file permissions on this filesystem`,
+    );
+  }
+};
+
 /**
  * Create sensitive content at a new path through one descriptor. Failed
  * dependent work leaves an empty mode-000 reservation: pathname cleanup could
@@ -100,10 +120,17 @@ export const publishNewPrivateFile = async ({
     if (!stats.isFile()) {
       throw new Error("private file destination is not a regular file");
     }
+    assertFilePermissions({ actual: stats.mode, expected: 0o000n, flag });
 
     await handle.writeFile(content);
     await handle.sync();
     await handle.chmod(0o600);
+    const privateStats = await handle.stat({ bigint: true });
+    assertFilePermissions({
+      actual: privateStats.mode,
+      expected: 0o600n,
+      flag,
+    });
     await handle.sync();
     await afterPublish?.({ device: stats.dev, inode: stats.ino });
     committed = true;

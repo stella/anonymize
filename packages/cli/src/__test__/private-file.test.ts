@@ -29,6 +29,9 @@ describeOnLinux("private file publication", () => {
       target,
       content: '{"secret":"value"}',
       flag: "--key",
+      afterPublish: async () => {
+        expect((await stat(target)).mode & 0o777).toBe(0o600);
+      },
     });
 
     expect(await readFile(target, "utf8")).toBe('{"secret":"value"}');
