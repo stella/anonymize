@@ -2,7 +2,9 @@
 
 Command-line PII detection and anonymization powered by
 [`@stll/anonymize`](https://github.com/stella/anonymize).
-Fully offline: no network calls, ever.
+Processing is local and makes no network calls. `bunx` and `npx` may contact a
+package registry to download the CLI; use an existing local or global install
+when the invocation itself must remain offline.
 
 ## Usage
 
