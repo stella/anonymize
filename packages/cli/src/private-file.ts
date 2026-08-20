@@ -24,11 +24,19 @@ const isNodeError = (
  * private from creation, the destination must not already exist, and inode
  * checks make path replacement during publication fail closed.
  */
-export const publishNewPrivateFile = async (
-  target: string,
-  content: string | Uint8Array,
-  flag: string,
-): Promise<void> => {
+type PublishNewPrivateFileOptions = {
+  target: string;
+  content: string | Uint8Array;
+  flag: string;
+  afterPublish?: () => Promise<void>;
+};
+
+export const publishNewPrivateFile = async ({
+  target,
+  content,
+  flag,
+  afterPublish,
+}: PublishNewPrivateFileOptions): Promise<void> => {
   const temporary = join(
     dirname(target),
     `.${basename(target)}.${randomUUID()}.tmp`,
@@ -89,6 +97,7 @@ export const publishNewPrivateFile = async (
 
     await handle.chmod(0o600);
     await handle.sync();
+    await afterPublish?.();
     committed = true;
   } finally {
     if (!committed) {

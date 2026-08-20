@@ -19,7 +19,11 @@ describe("private file publication", () => {
     const directory = await mkdtemp(join(tmpdir(), "anonymize-private-file-"));
     const target = join(directory, "key.json");
 
-    await publishNewPrivateFile(target, '{"secret":"value"}', "--key");
+    await publishNewPrivateFile({
+      target,
+      content: '{"secret":"value"}',
+      flag: "--key",
+    });
 
     expect(await readFile(target, "utf8")).toBe('{"secret":"value"}');
     if (process.platform !== "win32") {
@@ -33,7 +37,11 @@ describe("private file publication", () => {
     await writeFile(target, "existing", { mode: 0o600 });
 
     await expect(
-      publishNewPrivateFile(target, "replacement", "--key"),
+      publishNewPrivateFile({
+        target,
+        content: "replacement",
+        flag: "--key",
+      }),
     ).rejects.toBeInstanceOf(UsageError);
 
     expect(await readFile(target, "utf8")).toBe("existing");
@@ -48,7 +56,11 @@ describe("private file publication", () => {
     await symlink(referent, target);
 
     await expect(
-      publishNewPrivateFile(target, "replacement", "--key"),
+      publishNewPrivateFile({
+        target,
+        content: "replacement",
+        flag: "--key",
+      }),
     ).rejects.toBeInstanceOf(UsageError);
 
     expect((await lstat(target)).isSymbolicLink()).toBe(true);
@@ -66,7 +78,7 @@ describe("private file publication", () => {
 
     const results = await Promise.allSettled(
       contents.map((content) =>
-        publishNewPrivateFile(target, content, "--key"),
+        publishNewPrivateFile({ target, content, flag: "--key" }),
       ),
     );
 
@@ -81,5 +93,21 @@ describe("private file publication", () => {
     const published = await readFile(target, "utf8");
     expect(published === "first" || published === "second").toBe(true);
     expect(await readdir(directory)).toEqual(["key.json"]);
+  });
+
+  test("removes the published file when the dependent write fails", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "anonymize-private-file-"));
+    const target = join(directory, "key.json");
+
+    await expect(
+      publishNewPrivateFile({
+        target,
+        content: "sensitive",
+        flag: "--key",
+        afterPublish: () => Promise.reject(new Error("output failed")),
+      }),
+    ).rejects.toThrow("output failed");
+
+    expect(await readdir(directory)).toEqual([]);
   });
 });

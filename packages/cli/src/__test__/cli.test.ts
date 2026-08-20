@@ -192,6 +192,31 @@ test("refuses a key path that collides with the output", async () => {
   expect(err).toContain("collides");
 });
 
+test("refuses an occupied key path before replacing output", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "anonymize-cli-"));
+  const inputPath = join(dir, "input.txt");
+  const outputPath = join(dir, "output.txt");
+  const keyPath = join(dir, "key.json");
+  await writeFile(inputPath, SAMPLE, "utf8");
+  await writeFile(outputPath, "existing output", "utf8");
+  await writeFile(keyPath, "existing key", { mode: 0o600 });
+
+  const { code, err } = await run([
+    ...SCOPE,
+    "--quiet",
+    "-o",
+    outputPath,
+    "-k",
+    keyPath,
+    inputPath,
+  ]);
+
+  expect(code).toBe(2);
+  expect(err).toContain("refuses to overwrite");
+  expect(await readFile(outputPath, "utf8")).toBe("existing output");
+  expect(await readFile(keyPath, "utf8")).toBe("existing key");
+});
+
 test("refuses batch inputs with colliding basenames", async () => {
   const dir = await mkdtemp(join(tmpdir(), "anonymize-cli-"));
   const a = join(dir, "a");

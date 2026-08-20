@@ -628,6 +628,7 @@ const runAnonymiseSingle = async (
     buildOperatorConfig(opts),
   );
 
+  let outputContent: string;
   if (opts.json) {
     // In redact mode the user chose irreversibility, so the
     // JSON must not carry any detected text. Whitelist the
@@ -649,20 +650,23 @@ const runAnonymiseSingle = async (
       entities: jsonEntities,
       redactedText: redaction.redactedText,
     };
-    await writeOutput(
-      input.outputPath,
-      `${JSON.stringify(payload, null, 2)}\n`,
-    );
+    outputContent = `${JSON.stringify(payload, null, 2)}\n`;
   } else {
-    await writeOutput(input.outputPath, redaction.redactedText);
+    outputContent = redaction.redactedText;
   }
 
   if (opts.keyPath !== undefined) {
-    await publishNewPrivateFile(
-      opts.keyPath,
-      api.exportRedactionKey(redaction.redactionMap, redaction.operatorMap),
-      "--key",
-    );
+    await publishNewPrivateFile({
+      target: opts.keyPath,
+      content: api.exportRedactionKey(
+        redaction.redactionMap,
+        redaction.operatorMap,
+      ),
+      flag: "--key",
+      afterPublish: () => writeOutput(input.outputPath, outputContent),
+    });
+  } else {
+    await writeOutput(input.outputPath, outputContent);
   }
 
   if (!opts.quiet) {
