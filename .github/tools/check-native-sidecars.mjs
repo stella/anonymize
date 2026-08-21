@@ -5,10 +5,13 @@ import { runInNewContext } from "node:vm";
 
 const ROOT_PACKAGE = "packages/anonymize";
 const NATIVE_BINARY = "stella_anonymize_napi.node";
+const NATIVE_TURBO_OUTPUT = `$TURBO_ROOT$/packages/anonymize-*/${NATIVE_BINARY}`;
 const SIDECAR_PREFIX = "anonymize-";
 const SIDECAR_SCOPE = "@stll/anonymize-";
 
 const rootPackage = readJson(join(ROOT_PACKAGE, "package.json"));
+const rootTurboConfig = readJson("turbo.json");
+const nativeTurboConfig = readJson(join(ROOT_PACKAGE, "turbo.json"));
 const nativeLoader = readFileSync(join(ROOT_PACKAGE, "index.cjs"), "utf8");
 const releaseWorkflow = readFileSync(".github/workflows/release.yml", "utf8");
 const packlistTool = readFileSync(".github/tools/check-packlist.mjs", "utf8");
@@ -36,6 +39,7 @@ for (const sidecar of sidecars) {
   assertReleaseMatrix(sidecar);
 }
 assertUnsupportedNativeLoaderTarget();
+assertNativeBuildArtifactPolicy();
 
 if (!packlistTool.includes(`forbidden: ["${NATIVE_BINARY}"]`)) {
   fail(`Root packlist check must forbid ${NATIVE_BINARY}`);
@@ -131,6 +135,27 @@ function assertUnsupportedNativeLoaderTarget() {
     if (!String(error).includes("No native anonymize binding is published")) {
       throw error;
     }
+  }
+}
+
+function assertNativeBuildArtifactPolicy() {
+  assertArrayEqual(
+    nativeTurboConfig.extends,
+    ["//"],
+    `${ROOT_PACKAGE}/turbo.json extends`,
+  );
+  const nativeBuildOutputs = nativeTurboConfig.tasks?.build?.outputs ?? [];
+  if (!nativeBuildOutputs.includes("$TURBO_EXTENDS$")) {
+    fail(`${ROOT_PACKAGE}/turbo.json must preserve shared build outputs`);
+  }
+  if (!nativeBuildOutputs.includes(NATIVE_TURBO_OUTPUT)) {
+    fail(`Turbo must cache native sidecars via ${NATIVE_TURBO_OUTPUT}`);
+  }
+  const sharedBuildOutputs = rootTurboConfig.tasks?.build?.outputs ?? [];
+  if (sharedBuildOutputs.includes(NATIVE_BINARY)) {
+    fail(
+      `Turbo must not claim the removed ${ROOT_PACKAGE}/${NATIVE_BINARY} output`,
+    );
   }
 }
 
