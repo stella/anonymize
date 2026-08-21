@@ -129,7 +129,10 @@ const runStandaloneSmoke = async () => {
 
   try {
     const entrypoint = path.join(buildDir, "entry.mjs");
-    const executable = path.join(buildDir, "anonymize-smoke");
+    const executable = path.join(
+      buildDir,
+      process.platform === "win32" ? "anonymize-smoke.exe" : "anonymize-smoke",
+    );
     const distEntrypoint = path.resolve(
       import.meta.dirname,
       "../dist/index.mjs",

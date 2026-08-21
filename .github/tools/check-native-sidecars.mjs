@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import process from "node:process";
+import { runInNewContext } from "node:vm";
 
 const ROOT_PACKAGE = "packages/anonymize";
 const NATIVE_BINARY = "stella_anonymize_napi.node";
@@ -8,6 +9,7 @@ const SIDECAR_PREFIX = "anonymize-";
 const SIDECAR_SCOPE = "@stll/anonymize-";
 
 const rootPackage = readJson(join(ROOT_PACKAGE, "package.json"));
+const nativeLoader = readFileSync(join(ROOT_PACKAGE, "index.cjs"), "utf8");
 const releaseWorkflow = readFileSync(".github/workflows/release.yml", "utf8");
 const packlistTool = readFileSync(".github/tools/check-packlist.mjs", "utf8");
 const sidecars = discoverSidecars();
@@ -30,8 +32,10 @@ assertExactObject(
 
 for (const sidecar of sidecars) {
   assertSidecarPackage(sidecar);
+  assertNativeLoader(sidecar);
   assertReleaseMatrix(sidecar);
 }
+assertUnsupportedNativeLoaderTarget();
 
 if (!packlistTool.includes(`forbidden: ["${NATIVE_BINARY}"]`)) {
   fail(`Root packlist check must forbid ${NATIVE_BINARY}`);
@@ -77,6 +81,56 @@ function assertSidecarPackage(sidecar) {
     }
   } else {
     assertArrayEqual(packageJson.libc, [target.libc], `${directory} libc`);
+  }
+}
+
+function assertNativeLoader(sidecar) {
+  const packageName = sidecar.packageJson.name;
+  const literalRequire = `require(${JSON.stringify(packageName)})`;
+  if (!nativeLoader.includes(literalRequire)) {
+    fail(
+      `${ROOT_PACKAGE}/index.cjs must load ${packageName} with a literal require`,
+    );
+  }
+
+  const loadedSpecifiers = [];
+  const loaderExports = {};
+  runInNewContext(nativeLoader, {
+    exports: loaderExports,
+    process: {
+      arch: sidecar.target.cpu,
+      platform: sidecar.target.os,
+    },
+    require: (specifier) => {
+      loadedSpecifiers.push(specifier);
+      return specifier;
+    },
+  });
+  const loaded = loaderExports.loadNativeBinding();
+  assertEqual(loaded, packageName, `${sidecar.directory} loader result`);
+  assertArrayEqual(
+    loadedSpecifiers,
+    [packageName],
+    `${sidecar.directory} loader specifiers`,
+  );
+}
+
+function assertUnsupportedNativeLoaderTarget() {
+  const loaderExports = {};
+  runInNewContext(nativeLoader, {
+    exports: loaderExports,
+    process: { arch: "x64", platform: "freebsd" },
+    require: () => {
+      throw new Error("Unsupported targets must not load a sidecar");
+    },
+  });
+  try {
+    loaderExports.loadNativeBinding();
+    fail("Native loader must reject unsupported targets");
+  } catch (error) {
+    if (!String(error).includes("No native anonymize binding is published")) {
+      throw error;
+    }
   }
 }
 

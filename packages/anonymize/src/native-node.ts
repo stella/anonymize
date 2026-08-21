@@ -143,10 +143,6 @@ export const loadNativeAnonymizeBinding = (
     }
     return nativeBindingOverride;
   }
-  const usesDefaultTarget =
-    options.platform === undefined &&
-    options.arch === undefined &&
-    options.libc === undefined;
   const requireModule = options.requireModule ?? createRequire(import.meta.url);
   const platform = options.platform ?? process.platform;
   const arch = options.arch ?? process.arch;
@@ -160,7 +156,7 @@ export const loadNativeAnonymizeBinding = (
     const loadModule =
       options.requireModule === undefined &&
       specifier === platformPackage &&
-      usesDefaultTarget
+      isHostNativeTarget({ arch, libc, platform })
         ? loadDefaultPlatformNativePackage
         : () => requireModule(specifier);
     const binding = tryLoadNativeBinding({
@@ -840,6 +836,15 @@ const detectNativeLibc = (platform: string): NativeLibc | undefined => {
       : null;
   return typeof header?.["glibcVersionRuntime"] === "string" ? "gnu" : "musl";
 };
+
+const isHostNativeTarget = ({
+  arch,
+  libc,
+  platform,
+}: NativeBindingPackageNameOptions): boolean =>
+  platform === process.platform &&
+  arch === process.arch &&
+  (platform !== "linux" || libc === detectNativeLibc(process.platform));
 
 type TryLoadNativeBindingOptions = {
   specifier: string;

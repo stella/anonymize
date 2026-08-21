@@ -66,6 +66,16 @@ const MISMATCHED_PACKAGE_VERSION =
   PACKAGE_VERSION === "0.0.0" ? "999.999.999" : "0.0.0";
 
 describe("native node loader", () => {
+  test("uses the embedded loader for explicit host target values", () => {
+    const loaded = loadNativeAnonymizeBinding({
+      arch: process.arch,
+      expectedVersion: PACKAGE_VERSION,
+      platform: process.platform,
+    });
+
+    expect(loaded.nativePackageVersion()).toBe(PACKAGE_VERSION);
+  });
+
   test("unwraps the selected platform package", () => {
     const calls: string[] = [];
     const binding = fakeNativeBinding(PACKAGE_VERSION);
