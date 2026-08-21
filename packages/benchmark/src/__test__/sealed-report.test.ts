@@ -103,6 +103,33 @@ describe("sealed aggregate report contract", () => {
       currentVersion: "2.8.1",
       reportVersion: "unknown",
     });
+    expect(
+      assessSealedReportVersionFreshness({
+        currentVersion: "2.9.0-rc.1",
+        reportVersion: "2.9.0-rc.1",
+      }),
+    ).toEqual({ status: "current" });
+    expect(
+      assessSealedReportVersionFreshness({
+        currentVersion: "2.9.0-rc.1",
+        reportVersion: "2.9.0-beta.2",
+      }),
+    ).toEqual({
+      status: "stale",
+      currentVersion: "2.9.0-rc.1",
+      reportVersion: "2.9.0-beta.2",
+    });
+    expect(
+      assessSealedReportVersionFreshness({
+        currentVersion: "2.9.0-beta.2",
+        reportVersion: "2.9.0-rc.1",
+      }),
+    ).toEqual({
+      status: "blocked",
+      reason: "newer-report-version",
+      currentVersion: "2.9.0-beta.2",
+      reportVersion: "2.9.0-rc.1",
+    });
   });
 
   test("serializes one explicit aggregate-only schema", () => {
