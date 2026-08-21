@@ -2,6 +2,7 @@ import { createRequire } from "node:module";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import process from "node:process";
+import { loadNativeBinding as loadDefaultPlatformNativePackage } from "../index.cjs";
 
 import {
   assertNativeBindingVersion,
@@ -95,7 +96,6 @@ export type DefaultNativePipelinePackageFileOptions = {
   language?: string;
 };
 
-const LOCAL_NATIVE_LOADER = "../index.cjs";
 const PACKAGE_SPECIFIC_NATIVE_PATH = "STELLA_ANONYMIZE_NATIVE_LIBRARY_PATH";
 const DEFAULT_NATIVE_PIPELINE_PACKAGE_URL = new URL(
   "../native-pipeline.stlanonpkg",
@@ -143,18 +143,29 @@ export const loadNativeAnonymizeBinding = (
     }
     return nativeBindingOverride;
   }
+  const usesDefaultTarget =
+    options.platform === undefined &&
+    options.arch === undefined &&
+    options.libc === undefined;
   const requireModule = options.requireModule ?? createRequire(import.meta.url);
   const platform = options.platform ?? process.platform;
   const arch = options.arch ?? process.arch;
   const libc = options.libc ?? detectNativeLibc(platform);
   const env = options.env ?? process.env;
   const specifiers = nativeBindingSpecifiers({ arch, env, libc, platform });
+  const platformPackage = nativeBindingPackageName({ arch, libc, platform });
   const errors: string[] = [];
 
   for (const specifier of specifiers) {
+    const loadModule =
+      options.requireModule === undefined &&
+      specifier === platformPackage &&
+      usesDefaultTarget
+        ? loadDefaultPlatformNativePackage
+        : () => requireModule(specifier);
     const binding = tryLoadNativeBinding({
       specifier,
-      requireModule,
+      loadModule,
       errors,
     });
     if (!binding) {
@@ -727,7 +738,6 @@ const nativeBindingSpecifiers = ({
   if (overridePath) {
     specifiers.push(overridePath);
   }
-  specifiers.push(LOCAL_NATIVE_LOADER);
   const platformPackage = nativeBindingPackageName({ arch, libc, platform });
   if (platformPackage !== null) {
     specifiers.push(platformPackage);
@@ -833,17 +843,17 @@ const detectNativeLibc = (platform: string): NativeLibc | undefined => {
 
 type TryLoadNativeBindingOptions = {
   specifier: string;
-  requireModule: NativeRequire;
+  loadModule: () => unknown;
   errors: string[];
 };
 
 const tryLoadNativeBinding = ({
   specifier,
-  requireModule,
+  loadModule,
   errors,
 }: TryLoadNativeBindingOptions): NativeAnonymizeBinding | null => {
   try {
-    const loaded = requireModule(specifier);
+    const loaded = loadModule();
     const binding = toNativeAnonymizeBinding(loaded);
     if (binding) {
       return binding;

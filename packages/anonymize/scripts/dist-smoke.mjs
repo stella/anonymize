@@ -8,7 +8,15 @@
  *
  * Run after `bun run build`: `bun run smoke:dist`.
  */
-import { getDefaultNativePipeline, redactDefaultText } from "../dist/index.mjs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+
+import {
+  createPipelineContext,
+  getDefaultNativePipeline,
+  redactDefaultText,
+} from "../dist/index.mjs";
 import { CAPABILITY_MANIFEST } from "../dist/capabilities.mjs";
 import { createNativeAnonymizerFromPackage } from "../dist/native.mjs";
 import {
@@ -43,6 +51,12 @@ if (typeof redactDefaultText !== "function") {
   throw new TypeError(
     "dist root entrypoint is missing native redaction helper",
   );
+}
+if (typeof createPipelineContext !== "function") {
+  throw new TypeError("dist root entrypoint is missing its pipeline context");
+}
+if (createPipelineContext().nativePipelinePackage !== null) {
+  throw new TypeError("dist pipeline context did not start empty");
 }
 if (
   CAPABILITY_MANIFEST.schemaVersion !== 2 ||
@@ -108,3 +122,71 @@ console.log(
     sessionMappingCount: session.mappingCount(),
   }),
 );
+
+const runStandaloneSmoke = async () => {
+  const buildDir = mkdtempSync(path.join(tmpdir(), "anonymize-bun-build-"));
+  const runDir = mkdtempSync(path.join(tmpdir(), "anonymize-bun-run-"));
+
+  try {
+    const entrypoint = path.join(buildDir, "entry.mjs");
+    const executable = path.join(buildDir, "anonymize-smoke");
+    const distEntrypoint = path.resolve(
+      import.meta.dirname,
+      "../dist/index.mjs",
+    );
+
+    writeFileSync(
+      entrypoint,
+      `
+        import {
+          createPipelineContext,
+          loadNativeAnonymizeBinding,
+        } from ${JSON.stringify(distEntrypoint)};
+
+        const context = createPipelineContext();
+        const version = loadNativeAnonymizeBinding().nativePackageVersion();
+        if (context.nativePipelinePackage !== null || version.length === 0) {
+          throw new Error("standalone native contract failed");
+        }
+        console.log(version);
+      `,
+    );
+
+    const standaloneBuild = await Bun.build({
+      compile: { outfile: executable },
+      entrypoints: [entrypoint],
+      target: "bun",
+    });
+    if (!standaloneBuild.success) {
+      throw new Error(
+        `standalone compile failed: ${standaloneBuild.logs.join("\n")}`,
+      );
+    }
+
+    const subprocess = Bun.spawn([executable], {
+      cwd: runDir,
+      env: { PATH: process.env.PATH ?? "" },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const [stdout, stderr, exitCode] = await Promise.all([
+      new Response(subprocess.stdout).text(),
+      new Response(subprocess.stderr).text(),
+      subprocess.exited,
+    ]);
+    if (exitCode !== 0) {
+      throw new Error(`standalone native smoke failed: ${stderr.trim()}`);
+    }
+    if (stdout.trim() !== nativePackageVersion) {
+      throw new Error(
+        `standalone native smoke returned ${stdout.trim()}; expected ${nativePackageVersion}`,
+      );
+    }
+    console.log(`Bun standalone native smoke ok: ${stdout.trim()}`);
+  } finally {
+    rmSync(buildDir, { force: true, recursive: true });
+    rmSync(runDir, { force: true, recursive: true });
+  }
+};
+
+await runStandaloneSmoke();

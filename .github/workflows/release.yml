@@ -143,6 +143,9 @@ jobs:
       - name: Build
         run: bun run build
 
+      - name: Smoke built native package
+        run: bun run --cwd packages/anonymize smoke:dist
+
       - name: Lint
         run: bun run lint
 
