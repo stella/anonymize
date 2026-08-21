@@ -264,7 +264,7 @@ describe("sealed aggregate report contract", () => {
     ) {
       throw new Error("anonymize package version is invalid");
     }
-    const currentStellaVersion = normalizeSealedProviderVersion(
+    const currentReleaseVersion = normalizeSealedProviderVersion(
       packageJson.version,
     );
 
@@ -351,7 +351,7 @@ describe("sealed aggregate report contract", () => {
       expect(stella?.status, `${corpusId} must include stella`).toBe("ok");
       if (stella?.status !== "ok") continue;
       const freshness = assessSealedReportVersionFreshness({
-        currentVersion: currentStellaVersion,
+        currentVersion: currentReleaseVersion,
         reportVersion: stella.version,
       });
       if (freshness.status === "stale") {
