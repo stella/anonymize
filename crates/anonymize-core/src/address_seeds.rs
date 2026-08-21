@@ -255,7 +255,7 @@ pub(crate) struct PreparedAddressSeedData {
 
 struct BoundaryPhraseSearch {
   first_token_search: SearchIndex,
-  patterns_by_first_token: Vec<Vec<BoundaryPhrasePattern>>,
+  patterns_by_first_token: Vec<BoundaryPhrasePattern>,
   word_character_re: Regex,
 }
 
@@ -1202,27 +1202,30 @@ fn boundary_searches(
 
 impl BoundaryPhraseSearch {
   fn new(patterns: Vec<String>) -> Result<Option<Self>> {
-    let mut patterns_by_first_token =
-      BTreeMap::<String, Vec<BoundaryPhrasePattern>>::new();
+    let mut patterns_by_first_token = BTreeMap::<String, Vec<String>>::new();
     for pattern in patterns {
       let Some(first_token) = pattern.split_whitespace().next() else {
-        continue;
-      };
-      let Some(prepared) = boundary_phrase_pattern(&pattern)? else {
         continue;
       };
       patterns_by_first_token
         .entry(first_token.to_lowercase())
         .or_default()
-        .push(prepared);
+        .push(pattern);
     }
     if patterns_by_first_token.is_empty() {
       return Ok(None);
     }
 
-    let first_tokens = patterns_by_first_token
-      .keys()
-      .cloned()
+    let prepared = patterns_by_first_token
+      .into_iter()
+      .map(|(first_token, bucket_patterns)| {
+        boundary_phrase_pattern(&bucket_patterns)
+          .map(|pattern| (first_token, pattern))
+      })
+      .collect::<Result<Vec<_>>>()?;
+    let first_tokens = prepared
+      .iter()
+      .map(|(first_token, _)| first_token.clone())
       .map(|pattern| SearchPattern::LiteralWithOptions {
         pattern,
         case_insensitive: Some(true),
@@ -1234,7 +1237,10 @@ impl BoundaryPhraseSearch {
         first_tokens,
         SearchOptions::default(),
       )?,
-      patterns_by_first_token: patterns_by_first_token.into_values().collect(),
+      patterns_by_first_token: prepared
+        .into_iter()
+        .map(|(_, pattern)| pattern)
+        .collect(),
       word_character_re: compile_regex(r"(?u)\A\w\z")?,
     }))
   }
@@ -1255,7 +1261,7 @@ impl BoundaryPhraseSearch {
           engine: SearchEngine::Literal,
           reason: String::from("boundary phrase offset overflow"),
         })?;
-      let Some(patterns) = self.patterns_by_first_token.get(pattern_index)
+      let Some(pattern) = self.patterns_by_first_token.get(pattern_index)
       else {
         return Err(Error::Search {
           engine: SearchEngine::Literal,
@@ -1270,20 +1276,17 @@ impl BoundaryPhraseSearch {
           ),
         });
       };
-      for pattern in patterns {
-        #[cfg(test)]
-        {
-          candidate_checks = candidate_checks.saturating_add(1);
-        }
-        if pattern.requires_leading_boundary
-          && !self.has_leading_word_boundary(full_text, start)
-        {
-          continue;
-        }
-        if pattern.anchored_re.is_match(suffix) {
-          starts.push(start);
-          break;
-        }
+      #[cfg(test)]
+      {
+        candidate_checks = candidate_checks.saturating_add(1);
+      }
+      if pattern.requires_leading_boundary
+        && !self.has_leading_word_boundary(full_text, start)
+      {
+        continue;
+      }
+      if pattern.anchored_re.is_match(suffix) {
+        starts.push(start);
       }
     }
     starts.sort_unstable();
@@ -1310,32 +1313,49 @@ impl BoundaryPhraseSearch {
 }
 
 fn boundary_phrase_pattern(
-  pattern: &str,
-) -> Result<Option<BoundaryPhrasePattern>> {
-  let tokens = pattern.split_whitespace().collect::<Vec<_>>();
-  let Some((first, last)) = tokens
+  patterns: &[String],
+) -> Result<BoundaryPhrasePattern> {
+  let Some(first) = patterns
     .first()
+    .and_then(|pattern| pattern.split_whitespace().next())
     .and_then(|token| token.chars().next())
-    .zip(tokens.last().and_then(|token| token.chars().next_back()))
   else {
-    return Ok(None);
+    return Err(Error::Search {
+      engine: SearchEngine::Regex,
+      reason: String::from("boundary phrase bucket is empty"),
+    });
   };
-  let body = tokens
-    .into_iter()
-    .map(regex::escape)
-    .collect::<Vec<_>>()
-    .join(r"\s+");
-  let trailing_boundary = if is_regex_word_character(last) {
-    r"\b"
-  } else {
-    r"(?:$|[^\w])"
-  };
-  Ok(Some(BoundaryPhrasePattern {
+  let alternatives = patterns
+    .iter()
+    .filter_map(|pattern| {
+      let tokens = pattern.split_whitespace().collect::<Vec<_>>();
+      let last = tokens.last()?.chars().next_back()?;
+      let body = tokens
+        .into_iter()
+        .map(regex::escape)
+        .collect::<Vec<_>>()
+        .join(r"\s+");
+      let trailing_boundary = if is_regex_word_character(last) {
+        r"\b"
+      } else {
+        r"(?:$|[^\w])"
+      };
+      Some(format!(r"(?:{body}){trailing_boundary}"))
+    })
+    .collect::<Vec<_>>();
+  if alternatives.is_empty() {
+    return Err(Error::Search {
+      engine: SearchEngine::Regex,
+      reason: String::from("boundary phrase bucket has no valid patterns"),
+    });
+  }
+  Ok(BoundaryPhrasePattern {
     requires_leading_boundary: is_regex_word_character(first),
     anchored_re: compile_regex(&format!(
-      r"(?iu)\A(?:{body}){trailing_boundary}"
+      r"(?iu)\A(?:{})",
+      alternatives.join("|")
     ))?,
-  }))
+  })
 }
 
 #[cfg(test)]
@@ -3008,25 +3028,39 @@ mod tests {
 
   #[test]
   fn boundary_phrase_candidate_checks_scale_with_candidates() -> Result<()> {
-    let patterns = (0..128)
+    let shared_prefix_patterns = (0..128)
       .map(|index| format!("marker {index} terminus"))
       .collect::<Vec<_>>();
-    let search =
-      BoundaryPhraseSearch::new(patterns)?.ok_or_else(|| Error::Search {
-        engine: SearchEngine::Literal,
-        reason: String::from("missing boundary phrase index"),
+    let shared_prefix_search =
+      BoundaryPhraseSearch::new(shared_prefix_patterns)?.ok_or_else(|| {
+        Error::Search {
+          engine: SearchEngine::Literal,
+          reason: String::from("missing boundary phrase index"),
+        }
       })?;
+    let single_pattern_search =
+      BoundaryPhraseSearch::new(vec![String::from("marker 127 terminus")])?
+        .ok_or_else(|| Error::Search {
+          engine: SearchEngine::Literal,
+          reason: String::from("missing boundary phrase index"),
+        })?;
     let fixture = "ordinary legal prose marker\r\n127\tterminus follows.\n";
     let small = fixture.repeat(64);
     let large = fixture.repeat(256);
-    let small_result = search.find_starts(&small)?;
-    let large_result = search.find_starts(&large)?;
+    let small_result = shared_prefix_search.find_starts(&small)?;
+    let large_result = shared_prefix_search.find_starts(&large)?;
+    let single_pattern_result = single_pattern_search.find_starts(&small)?;
 
     assert_eq!(small_result.starts.len(), 64);
     assert_eq!(large_result.starts.len(), 256);
+    assert_eq!(small_result.candidate_checks, 64);
     assert_eq!(
       large_result.candidate_checks,
       small_result.candidate_checks.saturating_mul(4)
+    );
+    assert_eq!(
+      small_result.candidate_checks,
+      single_pattern_result.candidate_checks
     );
     Ok(())
   }

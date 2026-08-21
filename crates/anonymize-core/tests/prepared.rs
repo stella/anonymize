@@ -1248,6 +1248,46 @@ fn prepared_engine_accepts_validated_second_alias_and_rejects_generic_role() {
 }
 
 #[test]
+fn prepared_engine_requires_compact_aliases_to_follow_word_initials() {
+  let prepared = PreparedEngine::new(prepared_config! {
+    regex_patterns: vec![SearchPattern::Regex(String::from(
+      r"Intercontinental Exchange, Inc\.|Acme Corporation|The Acme Manufacturing Company",
+    ))],
+    regex_meta: vec![RegexMatchMeta::new("organization", 1.0)],
+    slices: PreparedEngineSlices {
+      regex: PatternSlice { start: 0, end: 1 },
+      ..PreparedEngineSlices::default()
+    },
+    threshold: 0.5,
+    allowed_labels: vec![String::from("organization")],
+    coreference_data: Some(coreference_data()),
+    name_corpus_data: None,
+    ..empty_config(PreparedEngineSlices::default())
+  })
+  .unwrap();
+
+  let result = prepared
+    .redact_static_entities(
+      "Intercontinental Exchange, Inc. (the \"ICE\") filed. ICE responded. \
+       Acme Corporation licensed a painting (the \"Artwork\" or \"ART\"). \
+       ART remained on display. The Acme Manufacturing Company (the \"AMC\") \
+       signed. AMC performed.",
+      &OperatorConfig::default(),
+    )
+    .unwrap();
+
+  assert!(result.resolved_entities.iter().any(|entity| {
+    entity.source == DetectionSource::Coreference && entity.text == "ICE"
+  }));
+  assert!(!result.resolved_entities.iter().any(|entity| {
+    entity.source == DetectionSource::Coreference && entity.text == "ART"
+  }));
+  assert!(result.resolved_entities.iter().any(|entity| {
+    entity.source == DetectionSource::Coreference && entity.text == "AMC"
+  }));
+}
+
+#[test]
 fn prepared_engine_bounds_aliases_extracted_from_one_definition() {
   let mut data = coreference_data();
   data.definition_patterns = vec![CoreferencePatternData {

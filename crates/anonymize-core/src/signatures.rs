@@ -212,7 +212,7 @@ fn detect_labelled_names_in_line(
 ) {
   let mut cursor = 0usize;
   let mut field_label_starts = None::<FieldLabelStarts>;
-  let mut next_line_has_contact_field = None::<bool>;
+  let mut following_contact_fields = [None::<bool>; 2];
   while let Some(label) = find_label(line, cursor, data) {
     let mut value_start = label.value_start;
     if let Some(after_slash) = slash_s_prefix_end(line, value_start) {
@@ -251,14 +251,20 @@ fn detect_labelled_names_in_line(
       .is_some_and(|value| value.contains(';'))
       || (next_contact_start.is_some()
         && next_contact_start == next_field_start);
+    let following_line_index = usize::from(value_is_empty);
     let has_following_contact_field = label.requires_list_structure
-      && *next_line_has_contact_field.get_or_insert_with(|| {
-        next_non_empty_line_starts_with_field(
-          full_text,
-          line_start.saturating_add(line.len()),
-          &data.contact_field_labels,
-        )
-      });
+      && following_contact_fields
+        .get_mut(following_line_index)
+        .is_some_and(|cached| {
+          *cached.get_or_insert_with(|| {
+            following_non_empty_line_starts_with_field(
+              full_text,
+              line_start.saturating_add(line.len()),
+              following_line_index,
+              &data.contact_field_labels,
+            )
+          })
+        });
     if label.requires_list_structure
       && !has_same_line_structure
       && !has_following_contact_field
@@ -668,8 +674,9 @@ fn label_end_at(
     .map(|label| (label, false))
     .chain(data.person_list_labels.iter().map(|label| (label, true)))
   {
-    if starts_with_ascii_ci(tail, label) {
-      let end = start.saturating_add(label.len());
+    if let Some(relative_end) = unicode_case_insensitive_prefix_end(tail, label)
+    {
+      let end = start.saturating_add(relative_end);
       if label_tail_is_valid(line, end) {
         return Some((end, requires_list_structure));
       }
@@ -701,10 +708,12 @@ fn collect_field_label_starts(
         break;
       };
       for label in labels {
-        if !starts_with_ascii_ci(tail, label) {
+        let Some(relative_end) =
+          unicode_case_insensitive_prefix_end(tail, label)
+        else {
           continue;
-        }
-        let after_label = cursor.saturating_add(label.len());
+        };
+        let after_label = cursor.saturating_add(relative_end);
         let after_spaces = skip_horizontal_ws(line, after_label);
         if line
           .get(after_spaces..)
@@ -723,12 +732,14 @@ fn collect_field_label_starts(
   starts
 }
 
-fn next_non_empty_line_starts_with_field(
+fn following_non_empty_line_starts_with_field(
   text: &str,
   current_line_end: usize,
+  skip_non_empty_lines: usize,
   labels: &[String],
 ) -> bool {
   let mut line_start = current_line_end;
+  let mut skipped = 0_usize;
   while line_start < text.len() {
     if text
       .get(line_start..)
@@ -739,6 +750,11 @@ fn next_non_empty_line_starts_with_field(
     let line_end = find_line_end(text, line_start);
     let line = text.get(line_start..line_end).unwrap_or_default().trim();
     if !line.is_empty() {
+      if skipped < skip_non_empty_lines {
+        skipped = skipped.saturating_add(1);
+        line_start = line_end;
+        continue;
+      }
       return line_starts_with_field(line, labels);
     }
     if line_end >= text.len() {
@@ -751,14 +767,36 @@ fn next_non_empty_line_starts_with_field(
 
 fn line_starts_with_field(line: &str, labels: &[String]) -> bool {
   labels.iter().any(|label| {
-    if !starts_with_ascii_ci(line, label) {
+    let Some(after_label) = unicode_case_insensitive_prefix_end(line, label)
+    else {
       return false;
-    }
-    let after_label = skip_horizontal_ws(line, label.len());
+    };
+    let after_label = skip_horizontal_ws(line, after_label);
     line
       .get(after_label..)
       .is_some_and(|remainder| remainder.starts_with(':'))
   })
+}
+
+fn unicode_case_insensitive_prefix_end(
+  text: &str,
+  prefix: &str,
+) -> Option<usize> {
+  let mut expected = prefix.chars().flat_map(char::to_lowercase).peekable();
+  if expected.peek().is_none() {
+    return Some(0);
+  }
+  for (start, character) in text.char_indices() {
+    for folded in character.to_lowercase() {
+      if expected.next() != Some(folded) {
+        return None;
+      }
+    }
+    if expected.peek().is_none() {
+      return Some(start.saturating_add(character.len_utf8()));
+    }
+  }
+  None
 }
 
 fn label_tail_is_valid(line: &str, end: usize) -> bool {
@@ -974,6 +1012,8 @@ fn non_empty_compact_lowercase(values: Vec<String>) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
+  use proptest::prelude::*;
+
   use super::{PreparedSignatureData, SignatureData, detect_signatures};
 
   fn detect(text: &str) -> Vec<crate::resolution::PipelineEntity> {
@@ -983,10 +1023,17 @@ mod tests {
   fn test_data() -> PreparedSignatureData {
     PreparedSignatureData::new(SignatureData {
       labels: vec![String::from("name")],
-      person_list_labels: vec![String::from("attention")],
+      person_list_labels: vec![
+        String::from("attention"),
+        String::from("do rąk własnych"),
+      ],
       witness_phrases: vec![String::from("in witness whereof")],
       form_field_labels: Vec::new(),
-      contact_field_labels: vec![String::from("email"), String::from("tel")],
+      contact_field_labels: vec![
+        String::from("email"),
+        String::from("tel"),
+        String::from("téléphone"),
+      ],
       signature_stamp_phrases: Vec::new(),
       name_particles: Vec::new(),
       post_nominal_suffixes: Vec::new(),
@@ -1094,6 +1141,73 @@ mod tests {
         .collect::<Vec<_>>(),
       vec!["Mark Bonham", "Sam Gardiner"]
     );
+  }
+
+  #[test]
+  fn detects_unicode_case_variants_of_localized_labels() {
+    let entities = detect(
+      "DO RĄK WŁASNYCH: Anna Kowalska; Piotr Nowak\n\
+       Attention: Élodie Martin TÉLÉPHONE: +33 1 23 45 67 89",
+    );
+
+    assert_eq!(
+      entities
+        .iter()
+        .map(|entity| entity.text.as_str())
+        .collect::<Vec<_>>(),
+      vec!["Anna Kowalska", "Piotr Nowak", "Élodie Martin"]
+    );
+  }
+
+  #[test]
+  fn detects_person_value_before_a_following_contact_line() {
+    let entities = detect("Attention:\nJane Doe\nEmail: jane@example.test");
+
+    assert_eq!(
+      entities
+        .iter()
+        .map(|entity| entity.text.as_str())
+        .collect::<Vec<_>>(),
+      vec!["Jane Doe"]
+    );
+  }
+
+  proptest! {
+    #[test]
+    fn person_list_structure_gates_generated_name_fields(
+      first_index in 0_usize..3,
+      second_index in 0_usize..3,
+      shape in 0_u8..5,
+    ) {
+      let names = ["Jane Doe", "Priya Raman", "Élodie Martin"];
+      let first = names.get(first_index).copied().unwrap_or("Jane Doe");
+      let second = names.get(second_index).copied().unwrap_or("Jane Doe");
+      let (text, expected) = match shape {
+        0 => (
+          format!("Attention: {first}; {second}"),
+          vec![first, second],
+        ),
+        1 => (
+          format!("Attention: {first} Email: notices@example.test"),
+          vec![first],
+        ),
+        2 => (
+          format!("Attention: {first}\nEmail: notices@example.test"),
+          vec![first],
+        ),
+        3 => (
+          format!("Attention:\n{first}\nEmail: notices@example.test"),
+          vec![first],
+        ),
+        _ => (format!("Attention: {first}"), Vec::new()),
+      };
+      let actual = detect(&text)
+        .into_iter()
+        .map(|entity| entity.text)
+        .collect::<Vec<_>>();
+
+      prop_assert_eq!(actual, expected);
+    }
   }
 
   #[test]

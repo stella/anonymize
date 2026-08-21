@@ -493,25 +493,43 @@ fn has_compact_organization_similarity(alias: &str, entity_text: &str) -> bool {
     return false;
   }
 
-  let alias_lower = alias.to_lowercase();
-  let mut alias_chars = alias_lower.chars();
-  let Some(first_alias_char) = alias_chars.next() else {
-    return false;
-  };
-  let mut entity_chars = entity_text
-    .chars()
-    .filter(|ch| ch.is_alphabetic())
-    .flat_map(char::to_lowercase);
-  if entity_chars.next() != Some(first_alias_char) {
-    return false;
+  let alias_chars = alias.to_lowercase().chars().collect::<Vec<_>>();
+  let entity_lower = entity_text.to_lowercase();
+  let entity_words = split_similarity_words(&entity_lower);
+  let mut states = BTreeSet::from([(0_usize, 0_usize)]);
+  for word in entity_words {
+    let word_chars = word.chars().collect::<Vec<_>>();
+    let mut next = states.clone();
+    for (consumed, contributing_words) in &states {
+      let Some(expected_first) = alias_chars.get(*consumed) else {
+        continue;
+      };
+      if word_chars.first() != Some(expected_first) {
+        continue;
+      }
+      let mut matched = 1_usize;
+      next.insert((
+        consumed.saturating_add(matched),
+        contributing_words.saturating_add(1),
+      ));
+      for word_char in word_chars.iter().skip(1) {
+        if alias_chars.get(consumed.saturating_add(matched)) != Some(word_char)
+        {
+          continue;
+        }
+        matched = matched.saturating_add(1);
+        next.insert((
+          consumed.saturating_add(matched),
+          contributing_words.saturating_add(1),
+        ));
+      }
+    }
+    states = next;
   }
 
-  for alias_char in alias_chars {
-    if !entity_chars.any(|entity_char| entity_char == alias_char) {
-      return false;
-    }
-  }
-  true
+  states.iter().any(|(consumed, contributing_words)| {
+    *consumed == alias_chars.len() && *contributing_words >= 2
+  })
 }
 
 fn split_similarity_words(text: &str) -> Vec<String> {
