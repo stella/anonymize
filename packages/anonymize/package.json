@@ -59,6 +59,8 @@
   },
   "files": [
     "ATTRIBUTION.md",
+    "LICENSE",
+    "NOTICE",
     "dist",
     "index.cjs",
     "native-pipeline.stlanonpkg",
@@ -102,7 +104,7 @@
     "format": "oxfmt ."
   },
   "peerDependencies": {
-    "@stll/anonymize-data": "^0.0.9"
+    "@stll/anonymize-data": "^0.0.10"
   },
   "peerDependenciesMeta": {
     "@stll/anonymize-data": {

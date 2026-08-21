@@ -1,10 +1,17 @@
 import process from "node:process";
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 import {
   assertWasmArtifactSize,
   WASM_RUNTIME_ARTIFACTS,
 } from "../../packages/anonymize/scripts/wasm-artifact-policy.mjs";
+
+const LEGAL_FILES = ["LICENSE", "NOTICE"];
+const ROOT_LEGAL_FILE_CONTENTS = new Map(
+  LEGAL_FILES.map((file) => [file, readFileSync(file, "utf8")]),
+);
 
 const PACKAGES = [
   {
@@ -23,6 +30,7 @@ const PACKAGES = [
       "native-pipeline.en.stlanonpkg",
       "README.md",
       "LICENSE",
+      "NOTICE",
       "ATTRIBUTION.md",
       "package.json",
     ],
@@ -35,6 +43,7 @@ const PACKAGES = [
       "dist/index.mjs",
       "README.md",
       "LICENSE",
+      "NOTICE",
       "ATTRIBUTION.md",
       "CHANGELOG.md",
       "package.json",
@@ -59,6 +68,7 @@ const PACKAGES = [
       "dist/index.mjs",
       "README.md",
       "LICENSE",
+      "NOTICE",
       "ATTRIBUTION.md",
       "package.json",
     ],
@@ -70,6 +80,7 @@ const PACKAGES = [
       "dist/index.mjs",
       "README.md",
       "LICENSE",
+      "NOTICE",
       "ATTRIBUTION.md",
       "package.json",
     ],
@@ -83,6 +94,7 @@ const PACKAGES = [
       "dist/server.mjs",
       "README.md",
       "LICENSE",
+      "NOTICE",
       "package.json",
     ],
   },
@@ -107,12 +119,19 @@ const PACKAGES = [
       "dist/native/native-pipeline.en.stlanonpkg",
       "README.md",
       "LICENSE",
+      "NOTICE",
       "package.json",
     ],
   },
   {
     dir: "packages/cli",
-    expected: ["dist/cli.mjs", "README.md", "LICENSE", "package.json"],
+    expected: [
+      "dist/cli.mjs",
+      "README.md",
+      "LICENSE",
+      "NOTICE",
+      "package.json",
+    ],
   },
 ];
 
@@ -141,6 +160,13 @@ for (const {
   if (missing.length > 0) {
     console.error(`${dir}: missing pack files: ${missing.join(", ")}`);
     process.exit(1);
+  }
+  for (const [file, rootContents] of ROOT_LEGAL_FILE_CONTENTS) {
+    const packageContents = readFileSync(join(dir, file), "utf8");
+    if (packageContents !== rootContents) {
+      console.error(`${dir}/${file} must match the repository root ${file}`);
+      process.exit(1);
+    }
   }
   const presentForbidden = forbidden.filter((file) => files.has(file));
   if (presentForbidden.length > 0) {
