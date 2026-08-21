@@ -119,14 +119,74 @@ export type SealedReportVersionFreshness =
       readonly status: "stale";
       readonly currentVersion: string;
       readonly reportVersion: string;
+    }
+  | {
+      readonly status: "blocked";
+      readonly reason:
+        | "invalid-current-version"
+        | "invalid-report-version"
+        | "newer-report-version";
+      readonly currentVersion: string;
+      readonly reportVersion: string;
     };
+
+const STABLE_RELEASE_VERSION = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/u;
+
+const parseStableReleaseVersion = (
+  version: string,
+): readonly [bigint, bigint, bigint] | undefined => {
+  const match = STABLE_RELEASE_VERSION.exec(version);
+  const major = match?.at(1);
+  const minor = match?.at(2);
+  const patch = match?.at(3);
+  if (major === undefined || minor === undefined || patch === undefined) {
+    return undefined;
+  }
+  return [BigInt(major), BigInt(minor), BigInt(patch)];
+};
+
+const compareStableReleaseVersions = (
+  left: readonly [bigint, bigint, bigint],
+  right: readonly [bigint, bigint, bigint],
+): -1 | 0 | 1 => {
+  for (const index of [0, 1, 2] as const) {
+    if (left[index] < right[index]) return -1;
+    if (left[index] > right[index]) return 1;
+  }
+  return 0;
+};
 
 export const assessSealedReportVersionFreshness = ({
   currentVersion,
   reportVersion,
 }: SealedReportVersionFreshnessOptions): SealedReportVersionFreshness => {
-  if (currentVersion === reportVersion) return { status: "current" };
-  return { status: "stale", currentVersion, reportVersion };
+  const current = parseStableReleaseVersion(currentVersion);
+  if (current === undefined) {
+    return {
+      status: "blocked",
+      reason: "invalid-current-version",
+      currentVersion,
+      reportVersion,
+    };
+  }
+  const report = parseStableReleaseVersion(reportVersion);
+  if (report === undefined) {
+    return {
+      status: "blocked",
+      reason: "invalid-report-version",
+      currentVersion,
+      reportVersion,
+    };
+  }
+  const order = compareStableReleaseVersions(report, current);
+  if (order === 0) return { status: "current" };
+  if (order === -1) return { status: "stale", currentVersion, reportVersion };
+  return {
+    status: "blocked",
+    reason: "newer-report-version",
+    currentVersion,
+    reportVersion,
+  };
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>

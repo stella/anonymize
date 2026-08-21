@@ -64,7 +64,7 @@ const report = (): SealedAggregateReport => ({
 });
 
 describe("sealed aggregate report contract", () => {
-  test("models report freshness without treating stale results as invalid", () => {
+  test("models report freshness and fails closed on unusable versions", () => {
     expect(
       assessSealedReportVersionFreshness({
         currentVersion: "2.8.1",
@@ -80,6 +80,28 @@ describe("sealed aggregate report contract", () => {
       status: "stale",
       currentVersion: "2.8.1",
       reportVersion: "2.8.0",
+    });
+    expect(
+      assessSealedReportVersionFreshness({
+        currentVersion: "2.8.1",
+        reportVersion: "2.9.0",
+      }),
+    ).toEqual({
+      status: "blocked",
+      reason: "newer-report-version",
+      currentVersion: "2.8.1",
+      reportVersion: "2.9.0",
+    });
+    expect(
+      assessSealedReportVersionFreshness({
+        currentVersion: "2.8.1",
+        reportVersion: "unknown",
+      }),
+    ).toEqual({
+      status: "blocked",
+      reason: "invalid-report-version",
+      currentVersion: "2.8.1",
+      reportVersion: "unknown",
     });
   });
 
@@ -355,8 +377,13 @@ describe("sealed aggregate report contract", () => {
         reportVersion: stella.version,
       });
       if (freshness.status === "stale") {
-        process.stderr.write(
+        process.stdout.write(
           `::warning title=Stale sealed benchmark::${corpusId} report uses stella ${freshness.reportVersion}; current release is ${freshness.currentVersion}\n`,
+        );
+      }
+      if (freshness.status === "blocked") {
+        throw new Error(
+          `${corpusId} sealed benchmark version is unusable: ${freshness.reason}`,
         );
       }
     }
