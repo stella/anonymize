@@ -79,6 +79,19 @@ fn written_email_vocabulary_is_language_scoped() {
 }
 
 #[test]
+fn ordinary_at_prose_does_not_activate_written_email_detection() {
+  let engine = prepared("en");
+  assert!(
+    texts(
+      &engine,
+      "The tenant may resume at reasonable times after written notice.",
+      "email address"
+    )
+    .is_empty()
+  );
+}
+
+#[test]
 fn detects_00_international_and_valid_nanp_phones() {
   let engine = prepared("en");
   for phone in [

@@ -16,6 +16,9 @@ enum CandidateContext {
 pub struct SignatureData {
   #[serde(default)]
   pub labels: Vec<String>,
+  /// Language-scoped labels that introduce people in legal notice blocks.
+  #[serde(default)]
+  pub person_list_labels: Vec<String>,
   #[serde(default)]
   pub witness_phrases: Vec<String>,
   #[serde(default)]
@@ -30,6 +33,9 @@ pub struct SignatureData {
   /// start the next field of a signature grid, so they terminate the span
   /// that precedes them instead of joining it.
   pub form_field_labels: Vec<String>,
+  /// Language-scoped contact fields that terminate a preceding person name.
+  #[serde(default)]
+  pub contact_field_labels: Vec<String>,
   /// Fixed strings PDF signing software stamps onto a page ("Digitally
   /// signed by", "Digitálně podepsal"). They sit immediately after a name
   /// and must terminate the person span rather than extend it.
@@ -39,8 +45,10 @@ pub struct SignatureData {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct PreparedSignatureData {
   labels: Vec<String>,
+  person_list_labels: Vec<String>,
   witness_phrases: Vec<String>,
   form_field_labels: Vec<String>,
+  contact_field_labels: Vec<String>,
   signature_stamp_phrases: Vec<String>,
   name_particles: Vec<String>,
   post_nominal_suffixes: Vec<String>,
@@ -51,10 +59,20 @@ pub(crate) struct PreparedSignatureData {
 impl PreparedSignatureData {
   #[must_use]
   pub(crate) fn new(data: SignatureData) -> Self {
+    let mut contact_field_labels =
+      non_empty_lowercase(data.contact_field_labels);
+    contact_field_labels.sort_unstable();
+    contact_field_labels.dedup();
+    let mut form_field_labels = non_empty_lowercase(data.form_field_labels);
+    form_field_labels.extend(contact_field_labels.iter().cloned());
+    form_field_labels.sort_unstable();
+    form_field_labels.dedup();
     Self {
       labels: non_empty_lowercase(data.labels),
+      person_list_labels: non_empty_lowercase(data.person_list_labels),
       witness_phrases: non_empty_lowercase(data.witness_phrases),
-      form_field_labels: non_empty_lowercase(data.form_field_labels),
+      form_field_labels,
+      contact_field_labels,
       signature_stamp_phrases: non_empty_lowercase(
         data.signature_stamp_phrases,
       ),
@@ -193,17 +211,34 @@ fn detect_labelled_names_in_line(
   results: &mut Vec<PipelineEntity>,
 ) {
   let mut cursor = 0usize;
+  let mut field_label_starts = None::<FieldLabelStarts>;
+  let mut next_line_has_contact_field = None::<bool>;
   while let Some(label) = find_label(line, cursor, data) {
     let mut value_start = label.value_start;
     if let Some(after_slash) = slash_s_prefix_end(line, value_start) {
       value_start = after_slash;
     }
-    let value_end = value_start.saturating_add(
-      line
-        .get(value_start..)
-        .and_then(first_column_end)
-        .unwrap_or_else(|| line.len().saturating_sub(value_start)),
-    );
+    let remaining = line.get(value_start..).unwrap_or_default();
+    let column_end = first_column_end(remaining).unwrap_or(remaining.len());
+    let starts = field_label_starts.get_or_insert_with(|| {
+      collect_field_label_starts(
+        line,
+        &data.form_field_labels,
+        &data.contact_field_labels,
+      )
+    });
+    let next_field_start = starts
+      .all
+      .get(starts.all.partition_point(|start| *start < value_start))
+      .copied();
+    let next_contact_start = starts
+      .contact
+      .get(starts.contact.partition_point(|start| *start < value_start))
+      .copied();
+    let field_end = next_field_start
+      .unwrap_or(line.len())
+      .saturating_sub(value_start);
+    let value_end = value_start.saturating_add(column_end.min(field_end));
     let global_start = line_start.saturating_add(value_start);
     let global_end = line_start.saturating_add(value_end);
     let value_is_empty = line
@@ -211,6 +246,26 @@ fn detect_labelled_names_in_line(
       .unwrap_or_default()
       .trim()
       .is_empty();
+    let has_same_line_structure = line
+      .get(value_start..value_end)
+      .is_some_and(|value| value.contains(';'))
+      || (next_contact_start.is_some()
+        && next_contact_start == next_field_start);
+    let has_following_contact_field = label.requires_list_structure
+      && *next_line_has_contact_field.get_or_insert_with(|| {
+        next_non_empty_line_starts_with_field(
+          full_text,
+          line_start.saturating_add(line.len()),
+          &data.contact_field_labels,
+        )
+      });
+    if label.requires_list_structure
+      && !has_same_line_structure
+      && !has_following_contact_field
+    {
+      cursor = value_end.max(label.next_cursor);
+      continue;
+    }
     if value_is_empty {
       try_emit_forward_lines(
         results,
@@ -222,7 +277,7 @@ fn detect_labelled_names_in_line(
         CandidateContext::LabelledField,
       );
     } else {
-      try_emit(
+      try_emit_semicolon_list(
         results,
         full_text,
         data,
@@ -234,6 +289,43 @@ fn detect_labelled_names_in_line(
     }
     cursor = value_end.max(label.next_cursor);
   }
+}
+
+fn try_emit_semicolon_list(
+  results: &mut Vec<PipelineEntity>,
+  full_text: &str,
+  data: &PreparedSignatureData,
+  start: usize,
+  end: usize,
+  score: f64,
+  context: CandidateContext,
+) {
+  let value = full_text.get(start..end).unwrap_or_default();
+  let mut segment_start = 0usize;
+  for (relative, ch) in value.char_indices() {
+    if ch != ';' {
+      continue;
+    }
+    try_emit(
+      results,
+      full_text,
+      data,
+      start.saturating_add(segment_start),
+      start.saturating_add(relative),
+      score,
+      context,
+    );
+    segment_start = relative.saturating_add(ch.len_utf8());
+  }
+  try_emit(
+    results,
+    full_text,
+    data,
+    start.saturating_add(segment_start),
+    end,
+    score,
+    context,
+  );
 }
 
 fn detect_witness_blocks(
@@ -529,6 +621,7 @@ fn next_slash_s_offset(text: &str) -> Option<usize> {
 struct LabelMatch {
   value_start: usize,
   next_cursor: usize,
+  requires_list_structure: bool,
 }
 
 fn find_label(
@@ -542,13 +635,16 @@ fn find_label(
       cursor = cursor.saturating_add(1);
       continue;
     }
-    if let Some(after_label) = label_end_at(line, cursor, data) {
+    if let Some((after_label, requires_list_structure)) =
+      label_end_at(line, cursor, data)
+    {
       let mut after_spaces = skip_horizontal_ws(line, after_label);
       if line.get(after_spaces..)?.starts_with(':') {
         after_spaces = skip_horizontal_ws(line, after_spaces.saturating_add(1));
         return Some(LabelMatch {
           value_start: after_spaces,
           next_cursor: after_spaces.saturating_add(1),
+          requires_list_structure,
         });
       }
     }
@@ -561,20 +657,108 @@ fn label_end_at(
   line: &str,
   start: usize,
   data: &PreparedSignatureData,
-) -> Option<usize> {
+) -> Option<(usize, bool)> {
   if !boundary_before(line, start) {
     return None;
   }
   let tail = line.get(start..)?;
-  for label in &data.labels {
+  for (label, requires_list_structure) in data
+    .labels
+    .iter()
+    .map(|label| (label, false))
+    .chain(data.person_list_labels.iter().map(|label| (label, true)))
+  {
     if starts_with_ascii_ci(tail, label) {
       let end = start.saturating_add(label.len());
       if label_tail_is_valid(line, end) {
-        return Some(end);
+        return Some((end, requires_list_structure));
       }
     }
   }
   None
+}
+
+#[derive(Default)]
+struct FieldLabelStarts {
+  all: Vec<usize>,
+  contact: Vec<usize>,
+}
+
+fn collect_field_label_starts(
+  line: &str,
+  labels: &[String],
+  contact_labels: &[String],
+) -> FieldLabelStarts {
+  let mut starts = FieldLabelStarts::default();
+  let mut cursor = 0usize;
+  while cursor < line.len() {
+    if !line.is_char_boundary(cursor) {
+      cursor = cursor.saturating_add(1);
+      continue;
+    }
+    if boundary_before(line, cursor) {
+      let Some(tail) = line.get(cursor..) else {
+        break;
+      };
+      for label in labels {
+        if !starts_with_ascii_ci(tail, label) {
+          continue;
+        }
+        let after_label = cursor.saturating_add(label.len());
+        let after_spaces = skip_horizontal_ws(line, after_label);
+        if line
+          .get(after_spaces..)
+          .is_some_and(|remainder| remainder.starts_with(':'))
+        {
+          starts.all.push(cursor);
+          if contact_labels.binary_search(label).is_ok() {
+            starts.contact.push(cursor);
+          }
+          break;
+        }
+      }
+    }
+    cursor = cursor.saturating_add(1);
+  }
+  starts
+}
+
+fn next_non_empty_line_starts_with_field(
+  text: &str,
+  current_line_end: usize,
+  labels: &[String],
+) -> bool {
+  let mut line_start = current_line_end;
+  while line_start < text.len() {
+    if text
+      .get(line_start..)
+      .is_some_and(|tail| tail.starts_with('\n'))
+    {
+      line_start = line_start.saturating_add(1);
+    }
+    let line_end = find_line_end(text, line_start);
+    let line = text.get(line_start..line_end).unwrap_or_default().trim();
+    if !line.is_empty() {
+      return line_starts_with_field(line, labels);
+    }
+    if line_end >= text.len() {
+      return false;
+    }
+    line_start = line_end;
+  }
+  false
+}
+
+fn line_starts_with_field(line: &str, labels: &[String]) -> bool {
+  labels.iter().any(|label| {
+    if !starts_with_ascii_ci(line, label) {
+      return false;
+    }
+    let after_label = skip_horizontal_ws(line, label.len());
+    line
+      .get(after_label..)
+      .is_some_and(|remainder| remainder.starts_with(':'))
+  })
 }
 
 fn label_tail_is_valid(line: &str, end: usize) -> bool {
@@ -799,8 +983,10 @@ mod tests {
   fn test_data() -> PreparedSignatureData {
     PreparedSignatureData::new(SignatureData {
       labels: vec![String::from("name")],
+      person_list_labels: vec![String::from("attention")],
       witness_phrases: vec![String::from("in witness whereof")],
       form_field_labels: Vec::new(),
+      contact_field_labels: vec![String::from("email"), String::from("tel")],
       signature_stamp_phrases: Vec::new(),
       name_particles: Vec::new(),
       post_nominal_suffixes: Vec::new(),
@@ -881,6 +1067,39 @@ mod tests {
         .collect::<Vec<_>>(),
       vec!["Priya Ramanathan", "Jonathan H. Whitaker"]
     );
+  }
+
+  #[test]
+  fn detects_attention_name_lists_before_contact_fields() {
+    let entities =
+      detect("Attention: Steven Patch; Spencer Ho Email: contact@example.test");
+
+    assert_eq!(
+      entities
+        .iter()
+        .map(|entity| entity.text.as_str())
+        .collect::<Vec<_>>(),
+      vec!["Steven Patch", "Spencer Ho"]
+    );
+  }
+
+  #[test]
+  fn detects_attention_name_lists_at_line_end() {
+    let entities = detect("Attention: Mark Bonham; Sam Gardiner");
+
+    assert_eq!(
+      entities
+        .iter()
+        .map(|entity| entity.text.as_str())
+        .collect::<Vec<_>>(),
+      vec!["Mark Bonham", "Sam Gardiner"]
+    );
+  }
+
+  #[test]
+  fn rejects_unstructured_attention_prose_and_contact_departments() {
+    assert!(detect("Attention: General Terms").is_empty());
+    assert!(detect("Customer Service Tel: +1 555 0100").is_empty());
   }
 
   #[test]
