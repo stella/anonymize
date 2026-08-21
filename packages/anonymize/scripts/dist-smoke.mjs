@@ -8,7 +8,7 @@
  *
  * Run after `bun run build`: `bun run smoke:dist`.
  */
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -192,4 +192,104 @@ const runStandaloneSmoke = async () => {
   }
 };
 
+const runPrunedBundleSmoke = async () => {
+  const buildDir = mkdtempSync(path.join(tmpdir(), "anonymize-bun-bundle-"));
+  const runDir = mkdtempSync(path.join(tmpdir(), "anonymize-bun-run-"));
+
+  try {
+    const packageRoot = path.resolve(import.meta.dirname, "..");
+    const scopeRoot = path.join(buildDir, "node_modules", "@stll");
+    const installedPackage = path.join(scopeRoot, "anonymize");
+    const sidecarDirectory = hostSidecarDirectory();
+    const installedSidecar = path.join(scopeRoot, sidecarDirectory);
+    mkdirSync(installedPackage, { recursive: true });
+    mkdirSync(installedSidecar, { recursive: true });
+    for (const entry of ["dist", "index.cjs", "package.json"]) {
+      cpSync(
+        path.join(packageRoot, entry),
+        path.join(installedPackage, entry),
+        {
+          recursive: true,
+        },
+      );
+    }
+    const sidecarRoot = path.resolve(packageRoot, "..", sidecarDirectory);
+    for (const entry of [
+      "index.cjs",
+      "package.json",
+      "stella_anonymize_napi.node",
+    ]) {
+      cpSync(path.join(sidecarRoot, entry), path.join(installedSidecar, entry));
+    }
+
+    const entrypoint = path.join(buildDir, "entry.mjs");
+    const outputDirectory = path.join(buildDir, "output");
+    writeFileSync(
+      entrypoint,
+      `
+        import { loadNativeAnonymizeBinding } from "@stll/anonymize/native-node";
+
+        console.log(loadNativeAnonymizeBinding().nativePackageVersion());
+      `,
+    );
+    const bundleBuild = await Bun.build({
+      entrypoints: [entrypoint],
+      outdir: outputDirectory,
+      target: "bun",
+    });
+    if (!bundleBuild.success) {
+      throw new Error(`ordinary bundle failed: ${bundleBuild.logs.join("\n")}`);
+    }
+
+    const subprocess = Bun.spawn(
+      [process.execPath, path.join(outputDirectory, "entry.js")],
+      {
+        cwd: runDir,
+        env: { PATH: process.env.PATH ?? "" },
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+    const [stdout, stderr, exitCode] = await Promise.all([
+      new Response(subprocess.stdout).text(),
+      new Response(subprocess.stderr).text(),
+      subprocess.exited,
+    ]);
+    if (exitCode !== 0) {
+      throw new Error(`ordinary bundle smoke failed: ${stderr.trim()}`);
+    }
+    if (stdout.trim() !== nativePackageVersion) {
+      throw new Error(
+        `ordinary bundle returned ${stdout.trim()}; expected ${nativePackageVersion}`,
+      );
+    }
+    console.log(`Bun pruned-install bundle smoke ok: ${stdout.trim()}`);
+  } finally {
+    rmSync(buildDir, { force: true, recursive: true });
+    rmSync(runDir, { force: true, recursive: true });
+  }
+};
+
+const hostSidecarDirectory = () => {
+  if (process.platform === "darwin" && process.arch === "arm64") {
+    return "anonymize-darwin-arm64";
+  }
+  if (process.platform === "darwin" && process.arch === "x64") {
+    return "anonymize-darwin-x64";
+  }
+  if (process.platform === "linux" && process.arch === "arm64") {
+    return "anonymize-linux-arm64-gnu";
+  }
+  if (process.platform === "linux" && process.arch === "x64") {
+    return "anonymize-linux-x64-gnu";
+  }
+  if (process.platform === "win32" && process.arch === "x64") {
+    return "anonymize-win32-x64-msvc";
+  }
+  throw new Error(
+    `No native anonymize sidecar exists for ${process.platform}-${process.arch}`,
+  );
+};
+
 await runStandaloneSmoke();
+await runPrunedBundleSmoke();
