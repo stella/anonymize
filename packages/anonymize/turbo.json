@@ -2,10 +2,7 @@
   "extends": ["//"],
   "tasks": {
     "build": {
-      "outputs": [
-        "$TURBO_EXTENDS$",
-        "$TURBO_ROOT$/packages/anonymize-*/stella_anonymize_napi.node"
-      ]
+      "cache": false
     }
   }
 }

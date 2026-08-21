@@ -168,7 +168,7 @@ const runStandaloneSmoke = async () => {
 
     const subprocess = Bun.spawn([executable], {
       cwd: runDir,
-      env: { PATH: process.env.PATH ?? "" },
+      env: childEnvironment(),
       stdout: "pipe",
       stderr: "pipe",
     });
@@ -187,8 +187,7 @@ const runStandaloneSmoke = async () => {
     }
     console.log(`Bun standalone native smoke ok: ${stdout.trim()}`);
   } finally {
-    rmSync(buildDir, { force: true, recursive: true });
-    rmSync(runDir, { force: true, recursive: true });
+    cleanupTemporaryDirectories([buildDir, runDir]);
   }
 };
 
@@ -245,7 +244,7 @@ const runPrunedBundleSmoke = async () => {
       [process.execPath, path.join(outputDirectory, "entry.js")],
       {
         cwd: runDir,
-        env: { PATH: process.env.PATH ?? "" },
+        env: childEnvironment(),
         stdout: "pipe",
         stderr: "pipe",
       },
@@ -265,8 +264,7 @@ const runPrunedBundleSmoke = async () => {
     }
     console.log(`Bun pruned-install bundle smoke ok: ${stdout.trim()}`);
   } finally {
-    rmSync(buildDir, { force: true, recursive: true });
-    rmSync(runDir, { force: true, recursive: true });
+    cleanupTemporaryDirectories([buildDir, runDir]);
   }
 };
 
@@ -289,6 +287,29 @@ const hostSidecarDirectory = () => {
   throw new Error(
     `No native anonymize sidecar exists for ${process.platform}-${process.arch}`,
   );
+};
+
+const childEnvironment = () => {
+  const environment = { ...process.env };
+  delete environment.STELLA_ANONYMIZE_NATIVE_LIBRARY_PATH;
+  return environment;
+};
+
+const cleanupTemporaryDirectories = (directories) => {
+  for (const directory of directories) {
+    try {
+      rmSync(directory, {
+        force: true,
+        maxRetries: 10,
+        recursive: true,
+        retryDelay: 100,
+      });
+    } catch (error) {
+      console.warn(
+        `Could not remove temporary directory ${directory}: ${String(error)}`,
+      );
+    }
+  }
 };
 
 await runStandaloneSmoke();

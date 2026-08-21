@@ -42,6 +42,10 @@ exports.loadNativeBinding = () => {
 };
 
 const nativeSidecarLoadError = (packageName, cause) =>
-  new Error(`Failed to load native anonymize sidecar ${packageName}`, {
-    cause,
-  });
+  new Error(
+    `Failed to load native anonymize sidecar ${packageName}: ${causeMessage(cause)}`,
+    { cause },
+  );
+
+const causeMessage = (cause) =>
+  cause instanceof Error ? cause.message : String(cause);
