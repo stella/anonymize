@@ -6,6 +6,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   assertSealedAggregateReport,
+  assessSealedReportVersionFreshness,
   normalizeSealedProviderVersion,
   renderSealedAggregateMarkdown,
   SEALED_AGGREGATE_REPORT_SCHEMA_VERSION,
@@ -63,6 +64,25 @@ const report = (): SealedAggregateReport => ({
 });
 
 describe("sealed aggregate report contract", () => {
+  test("models report freshness without treating stale results as invalid", () => {
+    expect(
+      assessSealedReportVersionFreshness({
+        currentVersion: "2.8.1",
+        reportVersion: "2.8.1",
+      }),
+    ).toEqual({ status: "current" });
+    expect(
+      assessSealedReportVersionFreshness({
+        currentVersion: "2.8.1",
+        reportVersion: "2.8.0",
+      }),
+    ).toEqual({
+      status: "stale",
+      currentVersion: "2.8.1",
+      reportVersion: "2.8.0",
+    });
+  });
+
   test("serializes one explicit aggregate-only schema", () => {
     const serialized = serializeSealedAggregateReport(report());
     const parsed: unknown = JSON.parse(serialized);
@@ -226,7 +246,7 @@ describe("sealed aggregate report contract", () => {
     expect(aggregateReportCount).toBeGreaterThan(0);
   });
 
-  test("latest held-out reports measure the current stella release", () => {
+  test("latest held-out reports match current inputs and warn when stale", () => {
     const rootResult = Bun.spawnSync(["git", "rev-parse", "--show-toplevel"]);
     if (!rootResult.success || rootResult.exitCode !== 0) {
       throw new Error("benchmark tests must run inside a Git repository");
@@ -244,6 +264,9 @@ describe("sealed aggregate report contract", () => {
     ) {
       throw new Error("anonymize package version is invalid");
     }
+    const currentStellaVersion = normalizeSealedProviderVersion(
+      packageJson.version,
+    );
 
     const reportsResult = Bun.spawnSync(
       [
@@ -326,9 +349,16 @@ describe("sealed aggregate report contract", () => {
       );
       const stella = current?.libraries.find(({ name }) => name === "stella");
       expect(stella?.status, `${corpusId} must include stella`).toBe("ok");
-      expect(stella?.version, `${corpusId} uses a stale stella version`).toBe(
-        packageJson.version,
-      );
+      if (stella?.status !== "ok") continue;
+      const freshness = assessSealedReportVersionFreshness({
+        currentVersion: currentStellaVersion,
+        reportVersion: stella.version,
+      });
+      if (freshness.status === "stale") {
+        process.stderr.write(
+          `::warning title=Stale sealed benchmark::${corpusId} report uses stella ${freshness.reportVersion}; current release is ${freshness.currentVersion}\n`,
+        );
+      }
     }
   });
 

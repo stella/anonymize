@@ -108,6 +108,27 @@ export type SealedAggregateReport = {
   readonly libraries: readonly SealedLibraryResult[];
 };
 
+type SealedReportVersionFreshnessOptions = {
+  readonly currentVersion: string;
+  readonly reportVersion: string;
+};
+
+export type SealedReportVersionFreshness =
+  | { readonly status: "current" }
+  | {
+      readonly status: "stale";
+      readonly currentVersion: string;
+      readonly reportVersion: string;
+    };
+
+export const assessSealedReportVersionFreshness = ({
+  currentVersion,
+  reportVersion,
+}: SealedReportVersionFreshnessOptions): SealedReportVersionFreshness => {
+  if (currentVersion === reportVersion) return { status: "current" };
+  return { status: "stale", currentVersion, reportVersion };
+};
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === "object" && !Array.isArray(value);
 
