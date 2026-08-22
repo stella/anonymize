@@ -21,7 +21,10 @@ test("development Markdown ends with exactly one newline", () => {
     libraries: [],
   } as const satisfies BenchResult;
 
-  expect(renderMarkdown(result)).toMatch(/[^\n]\n$/);
+  const markdown = renderMarkdown(result);
+  expect(markdown).toMatch(/[^\n]\n$/);
+  expect(markdown).not.toContain("scrubadub and redact-pii");
+  expect(markdown).not.toContain("DataFog's base structured rules");
 });
 
 test("tracked development evidence comes from a clean worktree", () => {
@@ -35,6 +38,6 @@ test("tracked development evidence comes from a clean worktree", () => {
     expect(
       readFileSync(join(resultsDirectory, path), "utf8"),
       path,
-    ).not.toMatch(/(?:"gitSha": "[^"]*|- Commit: .*?)-dirty/u);
+    ).not.toMatch(/(?:"gitSha":\s*"[^"]*|- Commit: .*?)-dirty/u);
   }
 });

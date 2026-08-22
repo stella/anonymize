@@ -188,12 +188,21 @@ export const renderMarkdown = (result: BenchResult): string => {
     lines.push(`| ${lib.name} | ${cells.join(" | ")} |`);
   }
   lines.push("");
-  lines.push(
-    "scrubadub and redact-pii are English-only libraries; their cs/de scores are",
-    "expected to be low and are reported as-is. DataFog's base structured rules",
-    "run for every language, with its upstream German locale enabled only for de.",
-    "",
+  const okNames = new Set(ok.map(({ name }) => name));
+  const englishOnlyLibraries = ["scrubadub", "redact-pii"].filter((name) =>
+    okNames.has(name),
   );
+  if (englishOnlyLibraries.length > 0) {
+    lines.push(
+      `${englishOnlyLibraries.join(" and ")} ${englishOnlyLibraries.length === 1 ? "is an English-only library; its" : "are English-only libraries; their"} cs/de scores are expected to be low and are reported as-is.`,
+    );
+  }
+  if (okNames.has("datafog")) {
+    lines.push(
+      "DataFog's base structured rules run for every language, with its upstream German locale enabled only for de.",
+    );
+  }
+  lines.push("");
 
   lines.push("## Throughput");
   lines.push("");

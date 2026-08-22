@@ -33821,7 +33821,7 @@
         "label": "identity card number",
         "strategy": {
           "type": "match-pattern",
-          "pattern": "^\\d{9}\\b"
+          "pattern": "^(?:[1-9]\\d{8}|[A-Za-z]{2}(?:\\d{2})?\\d{6})\\b"
         },
         "validations": [],
         "include_trigger": false

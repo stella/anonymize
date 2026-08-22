@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { loadGroundTruth } from "../ground-truth";
+import { FIXTURES_DIR, loadGroundTruth } from "../ground-truth";
 
 export const PERFORMANCE_INPUT_SOURCE =
   "versioned performance scenarios and packages/benchmark/fixtures/*.json";
@@ -53,14 +53,13 @@ const truncateUtf8 = (bytes: Uint8Array, targetBytes: number): string => {
 };
 
 export const performanceInputSourceDigest = (): string => {
-  const fixtures = join(import.meta.dir, "..", "..", "fixtures");
   const hash = createHash("sha256");
-  for (const file of readdirSync(fixtures)
+  for (const file of readdirSync(FIXTURES_DIR)
     .filter((name) => name.endsWith(".json"))
     .sort()) {
     hash.update(file);
     hash.update("\0");
-    hash.update(readFileSync(join(fixtures, file)));
+    hash.update(readFileSync(join(FIXTURES_DIR, file)));
   }
   hash.update(`${PERFORMANCE_SCENARIO_SCHEMA_VERSION}\0`);
   for (const scenario of PERFORMANCE_SCENARIO_IDS) hash.update(`${scenario}\0`);
@@ -110,17 +109,29 @@ const sparseEntitySeed = (): string => {
 };
 
 const scenarioSeed = async (id: PerformanceScenarioId): Promise<string> => {
-  if (id === "negative-prose") return NEGATIVE_PROSE_SEED;
-  if (id === "sparse-entities") return sparseEntitySeed();
-  if (id === "dense-entities") return DENSE_ENTITY_SEED;
-
-  const documents = (await loadGroundTruth()).filter(
-    ({ language }) => language === "en",
-  );
-  if (documents.length === 0) {
-    throw new Error("English synthetic performance fixtures are unavailable");
+  switch (id) {
+    case "negative-prose":
+      return NEGATIVE_PROSE_SEED;
+    case "sparse-entities":
+      return sparseEntitySeed();
+    case "dense-entities":
+      return DENSE_ENTITY_SEED;
+    case "fixture-mixed": {
+      const documents = (await loadGroundTruth()).filter(
+        ({ language }) => language === "en",
+      );
+      if (documents.length === 0) {
+        throw new Error(
+          "English synthetic performance fixtures are unavailable",
+        );
+      }
+      return documents.map(({ text }) => text).join("\n\n") + "\n\n";
+    }
+    default: {
+      const unreachable: never = id;
+      throw new Error(`unhandled performance scenario ${String(unreachable)}`);
+    }
   }
-  return documents.map(({ text }) => text).join("\n\n") + "\n\n";
 };
 
 export const buildPerformanceInput = async (

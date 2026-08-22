@@ -96,9 +96,8 @@ A `0.0` means the library targets the label but scored no correct match.
 | openredaction | 36.0 | 14.1 | 17.9 |
 | redact-pii | 26.8 | 34.0 | 34.3 |
 
-scrubadub and redact-pii are English-only libraries; their cs/de scores are
-expected to be low and are reported as-is. DataFog's base structured rules
-run for every language, with its upstream German locale enabled only for de.
+redact-pii is an English-only library; its cs/de scores are expected to be low
+and are reported as-is.
 
 ## Throughput
 

@@ -24,6 +24,7 @@ import { summarize } from "./statistics";
 
 const KIBIBYTE = 1024;
 const MINIMUM_LOCAL_INPUT_BYTES = KIBIBYTE;
+const MAXIMUM_LOCAL_INPUT_BYTES = 1024 * KIBIBYTE;
 const DEFAULT_INPUT_BYTES = [
   48 * KIBIBYTE,
   256 * KIBIBYTE,
@@ -93,7 +94,7 @@ export const parsePerformanceArgs = (args: readonly string[]): CliOptions => {
   if (
     inputBytes.some(
       (size) =>
-        size < MINIMUM_LOCAL_INPUT_BYTES || size > DEFAULT_INPUT_BYTES[3],
+        size < MINIMUM_LOCAL_INPUT_BYTES || size > MAXIMUM_LOCAL_INPUT_BYTES,
     )
   ) {
     throw new Error("performance sizes must remain between 1 KiB and 1 MiB");

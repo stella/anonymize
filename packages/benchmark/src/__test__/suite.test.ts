@@ -60,7 +60,7 @@ describe("benchmark suite registry", () => {
       ({ policy }) => policy === "evaluation-only",
     )) {
       expect(corpus.access).toBe("verified-download");
-      expect(corpus.artifact?.split).not.toBe("dev");
+      expect(["test", "evaluation"]).toContain(corpus.artifact?.split);
       expect(corpus.artifact?.sha256).toMatch(/^[a-f0-9]{64}$/u);
     }
   });

@@ -802,6 +802,9 @@ fn assemble_parity_matches_typescript() -> Result<(), String> {
     std::env::var(UPDATE_SNAPSHOTS_ENV).is_ok_and(|value| value == "1");
   if update {
     refresh_delta_snapshots(&dir, &inputs)?;
+    return Err(format!(
+      "refreshed derived snapshots; review them and rerun without {UPDATE_SNAPSHOTS_ENV}=1"
+    ));
   }
 
   let mut failures = Vec::new();

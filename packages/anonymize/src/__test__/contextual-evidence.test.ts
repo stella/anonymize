@@ -61,6 +61,18 @@ describe("context-backed identifiers", () => {
       value: "123456789",
     },
     {
+      language: "cs",
+      text: "Číslo občanského průkazu je AB123456.",
+      label: "identity card number",
+      value: "AB123456",
+    },
+    {
+      language: "cs",
+      text: "Číslo občanského průkazu je AB01123456.",
+      label: "identity card number",
+      value: "AB01123456",
+    },
+    {
       language: "de",
       text: "Die Personalausweisnummer lautet T22000123.",
       label: "identity card number",
@@ -105,6 +117,14 @@ describe("context-backed identifiers", () => {
         ),
       ).toBe(false);
     }
+  });
+
+  test("modern Czech identity-card numbers cannot start with zero", async () => {
+    const entities = await detect(
+      "cs",
+      "Číslo občanského průkazu je 012345678.",
+    );
+    expect(textsFor(entities, "identity card number")).toEqual([]);
   });
 
   test("identifier field vocabulary stays language-scoped", async () => {

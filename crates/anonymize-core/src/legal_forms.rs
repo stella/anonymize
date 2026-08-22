@@ -10,6 +10,7 @@ const LEGAL_FORM_SCORE: f64 = 0.95;
 const HEAD_TOKEN_CAP: usize = 20;
 const MAX_LOWER_BRIDGE: usize = 4;
 const MAX_NAME_LOOKBACK: usize = 32;
+const MAX_CONNECTOR_EVIDENCE_LOOKBACK: usize = 160;
 
 #[derive(
   Clone, Debug, Default, Eq, PartialEq, serde::Deserialize, serde::Serialize,
@@ -539,11 +540,6 @@ fn walk_backward(
         .and_connector_words
         .contains(lowercase_lookup(token.text).as_ref())
       {
-        // "Priya Ramanathan, and Northwind Capital Partners LLC": a list
-        // separator directly before the conjunction closes the name.
-        if list_separator_precedes(text, token.start) {
-          break;
-        }
         let upper_before = count_upper_before(text, token.start, data);
         if upper_before <= 2 || has_middle_initial_before(text, token.start) {
           break;
@@ -591,7 +587,8 @@ fn connector_boundary_evidence(
     return Some(ConnectorBoundaryEvidence::ListSeparator);
   }
 
-  let mut window_start = connector_start.saturating_sub(160);
+  let mut window_start =
+    connector_start.saturating_sub(MAX_CONNECTOR_EVIDENCE_LOOKBACK);
   while !text.is_char_boundary(window_start) {
     window_start = window_start.saturating_add(1);
   }

@@ -7,13 +7,14 @@ use proptest::prelude::{ProptestConfig, any};
 use proptest::{collection, prop_assert, prop_assert_eq, proptest, sample};
 use serde::Deserialize;
 use stella_anonymize_adapter_contract::{
-  BindingSearchPattern, assemble_static_search_config,
+  BindingPreparedArtifactPolicy, BindingSearchPattern,
+  assemble_static_search_config,
 };
 use stella_anonymize_core::assemble::{GazetteerEntry, PipelineConfig};
 use stella_anonymize_core::{
-  Error, FuzzySearchOptions, LiteralSearchOptions, RegexArtifactPolicy,
-  RegexSearchOptions, SearchIndex, SearchIndexArtifacts, SearchMatch,
-  SearchOptions, SearchPattern,
+  Error, FuzzySearchOptions, LiteralSearchOptions, PreparedArtifactPolicy,
+  RegexArtifactPolicy, RegexSearchOptions, SearchIndex, SearchIndexArtifacts,
+  SearchMatch, SearchOptions, SearchPattern,
 };
 
 #[derive(Deserialize)]
@@ -77,6 +78,8 @@ fn assembled_obfuscated_email_pattern(
     pattern.prefilter_regex, None,
     "the written-email pattern must not retain a secondary regex"
   );
+  assert_eq!(pattern.prefilter_window_bytes, None);
+  assert_eq!(pattern.prepared_artifact_policy, None);
   pattern
 }
 
@@ -89,8 +92,17 @@ fn written_email_search_pattern(
     prefilter_any: pattern.prefilter_any.unwrap_or_default(),
     prefilter_case_insensitive: pattern.prefilter_case_insensitive,
     prefilter_regex: None,
-    prefilter_window_bytes: None,
-    prepared_artifact_policy: None,
+    prefilter_window_bytes: pattern
+      .prefilter_window_bytes
+      .map(|value| usize::try_from(value).unwrap()),
+    prepared_artifact_policy: pattern.prepared_artifact_policy.map(|policy| {
+      match policy {
+        BindingPreparedArtifactPolicy::Include => {
+          PreparedArtifactPolicy::Include
+        }
+        BindingPreparedArtifactPolicy::Omit => PreparedArtifactPolicy::Omit,
+      }
+    }),
   }
 }
 

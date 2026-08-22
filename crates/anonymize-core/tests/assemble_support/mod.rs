@@ -284,7 +284,7 @@ fn build_changes(
         path.push(key.clone());
         changes.push(ExpectedChange::Set {
           path: path.clone(),
-          value: actual_value.clone(),
+          value: normalized_snapshot_value(actual_value),
         });
         path.pop();
       }

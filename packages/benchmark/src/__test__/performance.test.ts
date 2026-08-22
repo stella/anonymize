@@ -118,6 +118,18 @@ describe("canonical performance statistics", () => {
     expect(() =>
       parsePerformanceArgs(["--scenarios=dense-entities,dense-entities"]),
     ).toThrow("must not contain duplicates");
+    expect(() => parsePerformanceArgs(["--scenarios=unknown"])).toThrow(
+      "unknown performance scenario unknown",
+    );
+    expect(() => parsePerformanceArgs(["--sizes-kib=0"])).toThrow(
+      "positive integer",
+    );
+    expect(() => parsePerformanceArgs(["--sizes-kib=2048"])).toThrow(
+      "between 1 KiB and 1 MiB",
+    );
+    expect(() => parsePerformanceArgs(["--sizes-kib=4,4"])).toThrow(
+      "sizes must not contain duplicates",
+    );
   });
 
   test("pins canonical workers and leaves local workers unpinned", () => {

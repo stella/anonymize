@@ -37,7 +37,7 @@ export type GroundTruthDocument = {
   readonly entities: readonly GoldEntity[];
 };
 
-const FIXTURES_DIR = join(import.meta.dir, "..", "fixtures");
+export const FIXTURES_DIR = join(import.meta.dir, "..", "fixtures");
 
 export const buildGroundTruthDocument = (
   raw: RawDocument,

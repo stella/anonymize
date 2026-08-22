@@ -115,9 +115,10 @@ bun run bench:performance --warmups=1 --samples=2 --sizes-kib=48
 ```
 
 Local coverage runs accept 1–1,024 KiB inputs and four deterministic scenarios:
-the original mixed fixture, entity-negative prose, sparse entities, and dense
-entities. The canonical defaults remain the original mixed scenario and scale
-set.
+the original mixed fixture (`fixture-mixed`), entity-negative prose
+(`negative-prose`), sparse entities (`sparse-entities`), and dense entities
+(`dense-entities`). The canonical defaults remain the original mixed scenario
+and scale set.
 
 ```sh
 bun run bench:performance --warmups=1 --samples=1 \
