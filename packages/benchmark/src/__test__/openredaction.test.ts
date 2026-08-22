@@ -10,9 +10,6 @@ import {
 import { loadGroundTruth } from "../ground-truth";
 import { OPENREDACTION_MAPPING, supportedLabels } from "../taxonomy";
 
-const EXPECTED_PREDICTION_DIGEST =
-  "2df2f4e127f6ed6c718dc4c67250063e47f848b5d0e8bc0297db99b4971cd505";
-
 type StablePrediction = readonly [
   string,
   readonly {
@@ -86,9 +83,11 @@ describe("OpenRedaction benchmark adapter", () => {
       .update(JSON.stringify(predictions))
       .digest("hex");
 
-    expect(predictions).toHaveLength(34);
-    expect(spanCount).toBe(210);
-    expect(digest).toBe(EXPECTED_PREDICTION_DIGEST);
+    expect({
+      digest,
+      documentCount: predictions.length,
+      spanCount,
+    }).toMatchSnapshot();
     const emittedLabels = new Set(
       predictions.flatMap(([, spans]) => spans.map(({ label }) => label)),
     );
