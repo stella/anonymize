@@ -2,7 +2,7 @@
 
 exports[`stella benchmark adapter language scoping pins the shipped product-default prepared pipeline output 1`] = `
 {
-  "digest": "d1f061d64d07a22e76440373b573a68100c39ca5cea6fba6fc3a6e2d4ce3d4b6",
-  "spanCount": 187,
+  "digest": "b580842b9398875d23553913d51e1e11f91994da97761930b568b10eeede7458",
+  "spanCount": 185,
 }
 `;
