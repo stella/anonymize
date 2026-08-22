@@ -525,6 +525,9 @@ fn walk_backward(
     }
 
     if contains_lowercase(&data.connector_words, token.text) {
+      if connector_boundary_evidence(text, token.start, data).is_some() {
+        break;
+      }
       let previous = token_before(text, token.start, false, data);
       if previous
         .as_ref()
@@ -567,6 +570,74 @@ fn walk_backward(
   }
 
   leftmost_cap
+}
+
+/// Evidence that a connector separates parties rather than words inside one
+/// organization name. Keeping this closed prevents a bare conjunction from
+/// becoming an implicit boundary rule: the surrounding syntax must prove the
+/// party-list interpretation.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ConnectorBoundaryEvidence {
+  ListSeparator,
+  PartyRoleWithPersonShapedLeftParty,
+}
+
+fn connector_boundary_evidence(
+  text: &str,
+  connector_start: usize,
+  data: &PreparedLegalFormData,
+) -> Option<ConnectorBoundaryEvidence> {
+  if list_separator_precedes(text, connector_start) {
+    return Some(ConnectorBoundaryEvidence::ListSeparator);
+  }
+
+  let mut window_start = connector_start.saturating_sub(160);
+  while !text.is_char_boundary(window_start) {
+    window_start = window_start.saturating_add(1);
+  }
+  let before = text.get(window_start..connector_start)?;
+  let clause = before
+    .rsplit_once(['.', ';', '\n', '\r'])
+    .map_or(before, |(_, clause)| clause);
+  role_precedes_person_shaped_left_party(clause, data)
+    .then_some(ConnectorBoundaryEvidence::PartyRoleWithPersonShapedLeftParty)
+}
+
+/// A role word alone can label an organization whose name contains a
+/// connector (`Nájemce: Základní škola a Mateřská škola`). Require the
+/// text immediately left of the connector to look like a person's two-word
+/// name before treating the role as evidence for a party-list boundary.
+fn role_precedes_person_shaped_left_party(
+  clause: &str,
+  data: &PreparedLegalFormData,
+) -> bool {
+  let mut tokens = word_tokens(clause, 0, clause.len());
+  let Some(mut previous) = tokens.next() else {
+    return false;
+  };
+  let Some(mut current) = tokens.next() else {
+    return false;
+  };
+  let mut role_before_pair = false;
+
+  for next in tokens {
+    if data
+      .role_heads
+      .contains(lowercase_lookup(previous.text).as_ref())
+    {
+      role_before_pair = true;
+    }
+    previous = current;
+    current = next;
+  }
+
+  role_before_pair
+    && starts_person_name_word(previous.text)
+    && starts_person_name_word(current.text)
+}
+
+fn starts_person_name_word(text: &str) -> bool {
+  starts_upper(text) && text.chars().skip(1).any(char::is_lowercase)
 }
 
 fn preceding_line_is_role_list(
@@ -2125,6 +2196,9 @@ fn extend_backward(
     }
 
     if is_connector {
+      if connector_boundary_evidence(full_text, found.start, data).is_some() {
+        break;
+      }
       let Some(previous) = simple_word_before(full_text, found.start) else {
         break;
       };
@@ -4500,6 +4574,96 @@ mod tests {
       and_connector_words: vec![String::from("and")],
       ..LegalFormData::default()
     })
+  }
+
+  fn czech_party_connector_entities(text: &str) -> Vec<String> {
+    let suffix = "s.r.o.";
+    let suffix_start = text.find(suffix).expect("suffix present");
+    let found = SearchMatch::Literal {
+      pattern: 0,
+      start: u32::try_from(suffix_start).unwrap(),
+      end: u32::try_from(suffix_start.saturating_add(suffix.len())).unwrap(),
+    };
+    let data = PreparedLegalFormData::new(LegalFormData {
+      suffixes: vec![String::from(suffix)],
+      connector_words: vec![String::from("a")],
+      role_heads: vec![
+        String::from("smluvní"),
+        String::from("strany"),
+        String::from("nájemce"),
+      ],
+      ..LegalFormData::default()
+    });
+    process_legal_form_matches(
+      &[found],
+      PatternSlice { start: 0, end: 1 },
+      text,
+      &data,
+    )
+    .unwrap()
+    .into_iter()
+    .map(|entity| entity.text)
+    .collect()
+  }
+
+  #[test]
+  fn language_connector_with_party_role_evidence_closes_name() {
+    let text = "Smluvní strany Filip Sedláček a Orlické strojírny s.r.o.";
+    assert_eq!(
+      czech_party_connector_entities(text),
+      vec![String::from("Orlické strojírny s.r.o.")]
+    );
+  }
+
+  #[test]
+  fn role_label_does_not_split_connector_inside_organization_name() {
+    let text = "Nájemce: Základní škola a Mateřská škola Brno, s.r.o.";
+    assert_eq!(
+      czech_party_connector_entities(text),
+      vec![String::from("Základní škola a Mateřská škola Brno, s.r.o.")]
+    );
+  }
+
+  proptest! {
+    #[test]
+    fn role_labeled_lowercase_bridge_is_not_party_evidence(
+      label_space in prop_oneof![Just(" "), Just("\t"), Just("\u{00a0}"), Just("\u{202f}")],
+      connector_space in prop_oneof![Just(" "), Just("\t"), Just("\u{00a0}"), Just("\u{202f}")],
+    ) {
+      let organization = format!(
+        "Základní škola{connector_space}a{connector_space}Mateřská škola Brno, s.r.o."
+      );
+      let text = format!("Nájemce:{label_space}{organization}");
+      prop_assert_eq!(
+        czech_party_connector_entities(&text),
+        vec![organization]
+      );
+    }
+  }
+
+  #[test]
+  fn language_connector_without_party_evidence_stays_inside_name() {
+    let text = "Masaryk a partneři s.r.o.";
+    assert_eq!(
+      czech_party_connector_entities(text),
+      vec![String::from(text)]
+    );
+  }
+
+  proptest! {
+    #[test]
+    fn list_separator_connector_boundary_is_unicode_whitespace_invariant(
+      separator in prop_oneof![Just(","), Just(";")],
+      whitespace in prop_oneof![Just(" "), Just("\t"), Just("\u{00a0}"), Just("\u{202f}")],
+    ) {
+      let text = format!(
+        "Jan Novák{separator}{whitespace}a Modrá věž s.r.o."
+      );
+      prop_assert_eq!(
+        czech_party_connector_entities(&text),
+        vec![String::from("Modrá věž s.r.o.")]
+      );
+    }
   }
 
   #[test]

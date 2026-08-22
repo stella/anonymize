@@ -9,7 +9,10 @@ import {
   type HostProfile,
   type HostSnapshot,
 } from "../performance/host";
-import { buildPerformanceInput } from "../performance/input";
+import {
+  buildPerformanceInput,
+  PERFORMANCE_SCENARIO_IDS,
+} from "../performance/input";
 import {
   assertCleanCpuNoise,
   cpuNoiseDelta,
@@ -57,6 +60,37 @@ describe("canonical performance statistics", () => {
     expect(first.sha256).toBe(second.sha256);
   });
 
+  test("builds deterministic short inputs for every entity-density scenario", async () => {
+    const inputs = await Promise.all(
+      PERFORMANCE_SCENARIO_IDS.map(async (scenario) => {
+        const first = await buildPerformanceInput(1024, scenario);
+        const second = await buildPerformanceInput(1024, scenario);
+        expect(new TextEncoder().encode(first.text)).toHaveLength(1024);
+        expect(first.sha256).toBe(second.sha256);
+        expect(first.scenario).toEqual({
+          type: "performance-input-scenario",
+          schemaVersion: 1,
+          id: scenario,
+        });
+        return first;
+      }),
+    );
+    expect(new Set(inputs.map(({ sha256 }) => sha256)).size).toBe(
+      PERFORMANCE_SCENARIO_IDS.length,
+    );
+
+    const byScenario = new Map(
+      inputs.map((input) => [input.scenario.id, input.text]),
+    );
+    expect(byScenario.get("negative-prose")).not.toContain("@example.test");
+    const sparseCount =
+      byScenario.get("sparse-entities")?.match(/@example\.test/gu)?.length ?? 0;
+    const denseCount =
+      byScenario.get("dense-entities")?.match(/@example\.test/gu)?.length ?? 0;
+    expect(sparseCount).toBe(1);
+    expect(denseCount).toBeGreaterThan(sparseCount * 5);
+  });
+
   test("enforces the canonical sample floor and scale set", () => {
     expect(() => parsePerformanceArgs(["--canonical", "--samples=19"])).toThrow(
       "at least 3 warmups and 20 samples",
@@ -67,6 +101,23 @@ describe("canonical performance statistics", () => {
     expect(parsePerformanceArgs(["--samples=1", "--warmups=1"]).samples).toBe(
       1,
     );
+    expect(
+      parsePerformanceArgs([
+        "--samples=1",
+        "--warmups=1",
+        "--sizes-kib=1,4,16",
+        "--scenarios=negative-prose,sparse-entities,dense-entities",
+      ]),
+    ).toMatchObject({
+      inputBytes: [1024, 4096, 16_384],
+      scenarios: ["negative-prose", "sparse-entities", "dense-entities"],
+    });
+    expect(() =>
+      parsePerformanceArgs(["--canonical", "--scenarios=negative-prose"]),
+    ).toThrow("standard fixture-mixed scenario");
+    expect(() =>
+      parsePerformanceArgs(["--scenarios=dense-entities,dense-entities"]),
+    ).toThrow("must not contain duplicates");
   });
 
   test("pins canonical workers and leaves local workers unpinned", () => {
@@ -80,11 +131,17 @@ describe("canonical performance statistics", () => {
       "6",
       process.execPath,
     ]);
-    expect(canonical.args.at(-1)).toBe("49152");
+    expect(canonical.args.at(-2)).toBe("49152");
+    expect(canonical.args.at(-1)).toBe("fixture-mixed");
 
-    const local = buildPerformanceWorkerInvocation(49_152, { type: "local" });
+    const local = buildPerformanceWorkerInvocation(
+      49_152,
+      { type: "local" },
+      "negative-prose",
+    );
     expect(local.command).toBe(process.execPath);
     expect(local.args).not.toContain("--cpu-list");
+    expect(local.args.at(-1)).toBe("negative-prose");
   });
 });
 
@@ -430,6 +487,7 @@ describe("canonical performance report schema", () => {
         warmups: 1,
         samples: 1,
         inputBytes: [49_152],
+        scenarios: ["fixture-mixed"],
         processIsolation: "fresh-process-per-sample",
       },
       fixture: {
@@ -452,6 +510,15 @@ describe("canonical performance report schema", () => {
       },
       results: [
         {
+          scenario: {
+            type: "performance-input-scenario",
+            schemaVersion: 1,
+            id: "fixture-mixed",
+          },
+          runtime: {
+            type: "bun-native-binding",
+            version: "1.3.14",
+          },
           inputBytes: 49_152,
           inputCharacters: 49_152,
           inputSha256: "c".repeat(64),
@@ -465,6 +532,8 @@ describe("canonical performance report schema", () => {
         },
       ],
     };
+    const result = report.results.at(0);
+    if (result === undefined) throw new Error("test report result is missing");
     expect(() => assertPerformanceReport(report)).not.toThrow();
     expect(() =>
       assertPerformanceReport({ ...report, mode: "canonical" }),
@@ -479,5 +548,39 @@ describe("canonical performance report schema", () => {
     expect(() =>
       assertPerformanceReport({ ...report, text: "forbidden" }),
     ).toThrow("forbids field text");
+    expect(() =>
+      assertPerformanceReport({
+        ...report,
+        results: [
+          {
+            ...result,
+            scenario: {
+              ...result.scenario,
+              id: "negative-prose",
+            },
+          },
+        ],
+      }),
+    ).toThrow("scenario does not match configuration order");
+    expect(() =>
+      assertPerformanceReport({
+        ...report,
+        results: [
+          {
+            ...result,
+            runtime: {
+              ...result.runtime,
+              version: "different-runtime",
+            },
+          },
+        ],
+      }),
+    ).toThrow("runtime does not match machine Bun version");
+    expect(() =>
+      assertPerformanceReport({
+        ...report,
+        results: [{ ...result, outputDigest: "not-a-digest" }],
+      }),
+    ).toThrow("outputDigest must be a lowercase SHA-256 digest");
   });
 });
