@@ -141,31 +141,31 @@
     },
     {
       "name": "language-cs",
-      "packageDigest": "a489ba9b9220287514fe3ebe0ecd5f1db9e3ce787dea9d1579db3a9f55b53bd2",
+      "packageDigest": "1c9fbcebf1b7c3bf1df1b9849b7445e7a1deae7e85d3d9389b6b9b4b97c775a0",
       "hasDictionaries": false,
       "gazetteerCount": 0
     },
     {
       "name": "language-de",
-      "packageDigest": "2b39ada7e24b2167a1020e82f6ed90395eba54828482d690e3d9e07a92ac4554",
+      "packageDigest": "62e2880eb3b2e853f1500ecc9315ec219c889b5cb5747df49ecc40ae24bfa32f",
       "hasDictionaries": false,
       "gazetteerCount": 0
     },
     {
       "name": "language-en",
-      "packageDigest": "d2c669865c62179d926583130e06ea5b8c2d67becfddfd5e01999edf48a8c312",
+      "packageDigest": "aaf769ff098dfc7ee21936fc7c0e095bd8e13ebb6b954fe6f42777ed3991b0a5",
       "hasDictionaries": false,
       "gazetteerCount": 0
     },
     {
       "name": "language-ja",
-      "packageDigest": "cf2b91e53299f8705d96e2f8306eb670625ed2be9f4efe61059f66d348d2e1dc",
+      "packageDigest": "81cf69e675b504c603facc87a3d5d568e96ab8767b6c72382cdaa078a2ec4b4c",
       "hasDictionaries": false,
       "gazetteerCount": 0
     },
     {
       "name": "language-cs-sk",
-      "packageDigest": "3557c88c68ca4348a8e9fdb77f1bc67c21adb06ba5c977735fd10cbc7437cb66",
+      "packageDigest": "5fd181f00d3ff3ebce4efa2808b6ec2d7a14d8050e5468dc40f0a744a6085eee",
       "hasDictionaries": false,
       "gazetteerCount": 0
     },
@@ -243,13 +243,13 @@
     },
     {
       "name": "legal-forms-multilang",
-      "packageDigest": "cd4c0870f40017a5792a1906e46268ffa87048049a5465768772e8e14d909c10",
+      "packageDigest": "986070dad7a6a2016915a71610b0c0bc3c6c0c06b7b08446fa75abd11586430d",
       "hasDictionaries": false,
       "gazetteerCount": 0
     },
     {
       "name": "with-test-dictionaries",
-      "packageDigest": "f649023c983922886ba489b5369b54480354de9f7f8b94e522eae37c44a8a2d5",
+      "packageDigest": "b823ac5330d123f138877a592e879caca0716d896ae5f3cfd7626d3bb87a7168",
       "hasDictionaries": true,
       "gazetteerCount": 0
     }

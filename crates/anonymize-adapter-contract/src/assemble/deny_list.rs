@@ -250,7 +250,7 @@ pub(super) fn build_deny_list_filter_data(
   // trailingAddressWordExclusions: lowerSortedUnique union, then Set (no-op).
   let mut trailing_union: Vec<String> = Vec::new();
   trailing_union.extend(legal_forms::role_heads(content_languages)?);
-  trailing_union.extend(legal_forms::clause_noun_heads(content_languages)?);
+  trailing_union.extend(legal_forms::clause_noun_heads()?);
   trailing_union.extend(language_word_file("organization-unit-heads.json")?);
   trailing_union
     .extend(language_word_file("document-structure-headings.json")?);

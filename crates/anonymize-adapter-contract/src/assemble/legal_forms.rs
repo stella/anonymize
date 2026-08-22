@@ -527,10 +527,14 @@ pub(super) fn role_heads(
   Ok(out)
 }
 
-/// Loads `clause-noun-heads.json` for the configured content languages,
-/// preserving the English seed order. Reused by `false_positive_filters` for
-/// `trailingAddressWordExclusions`.
-pub(super) fn clause_noun_heads(
+/// Mirrors `getClauseNounHeadsSync` (post-warm): the `clause-noun-heads.json`
+/// union seeded with `CLAUSE_NOUN_HEADS_SEED`, lowercased with insertion-order
+/// dedup. Reused by `false_positive_filters` for `trailingAddressWordExclusions`.
+pub(super) fn clause_noun_heads() -> Result<Vec<String>, AssembleError> {
+  load_lowercase_union("clause-noun-heads.json", CLAUSE_NOUN_HEADS_SEED)
+}
+
+fn scoped_clause_noun_heads(
   selected: Option<&[String]>,
 ) -> Result<Vec<String>, AssembleError> {
   let configured: OrderedMap<Value> =
@@ -778,7 +782,9 @@ pub(super) fn build_legal_form_data(
       "sentence-verb-indicators.json",
       &[],
     )?,
-    clause_noun_heads: clause_noun_heads(ctx.content_languages.as_deref())?,
+    clause_noun_heads: scoped_clause_noun_heads(
+      ctx.content_languages.as_deref(),
+    )?,
     connector_prose_heads: connector_prose_heads()?,
     structural_single_cap_prefixes: load_lowercase_union(
       "structural-single-cap-prefixes.json",
@@ -817,9 +823,10 @@ mod tests {
   #![allow(clippy::unwrap_used)]
 
   use super::{
-    InstitutionalOrganizationData, all_legal_suffixes, clause_noun_heads,
+    InstitutionalOrganizationData, all_legal_suffixes,
     institutional_language_words, non_ascii_name_short_suffixes,
-    organization_detection_suffixes, role_heads, validate_institutional_terms,
+    organization_detection_suffixes, role_heads, scoped_clause_noun_heads,
+    validate_institutional_terms,
   };
 
   #[test]
@@ -850,8 +857,9 @@ mod tests {
 
   #[test]
   fn clause_noun_heads_follow_content_language_scope() {
-    let czech = clause_noun_heads(Some(&[String::from("cs")])).unwrap();
-    let english = clause_noun_heads(Some(&[String::from("en")])).unwrap();
+    let czech = scoped_clause_noun_heads(Some(&[String::from("cs")])).unwrap();
+    let english =
+      scoped_clause_noun_heads(Some(&[String::from("en")])).unwrap();
 
     assert!(czech.iter().any(|word| word == "dohoda"));
     assert!(!english.iter().any(|word| word == "dohoda"));
