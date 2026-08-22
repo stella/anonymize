@@ -23,7 +23,13 @@ use stella_anonymize_adapter_contract::{
 };
 use stella_anonymize_core::assemble::{GazetteerEntry, PipelineConfig};
 
-use assemble_support::read_expected_value;
+use assemble_support::{
+  BASELINE_FIXTURE, read_expected_value, write_expected_delta,
+};
+
+/// Set to `1` to rewrite derived delta snapshots after the independent
+/// baseline oracle has been reviewed and updated manually.
+const UPDATE_SNAPSHOTS_ENV: &str = "ANONYMIZE_UPDATE_ASSEMBLE_SNAPSHOTS";
 
 #[derive(Deserialize)]
 struct FixtureInput {
@@ -59,6 +65,27 @@ fn read_json<T: for<'de> Deserialize<'de>>(path: &Path) -> Result<T, String> {
     .map_err(|error| format!("read {}: {error}", path.display()))?;
   serde_json::from_str(&text)
     .map_err(|error| format!("parse {}: {error}", path.display()))
+}
+
+fn fixture_name(input_path: &Path) -> &str {
+  input_path
+    .file_name()
+    .and_then(|file_name| file_name.to_str())
+    .and_then(|file_name| file_name.strip_suffix(".input.json"))
+    .unwrap_or("<unknown>")
+}
+
+fn assemble_fixture(
+  input_path: &Path,
+) -> Result<BindingPreparedSearchConfig, String> {
+  let name = fixture_name(input_path);
+  let input: FixtureInput = read_json(input_path)?;
+  assemble_static_search_config(
+    &input.config,
+    input.config.dictionaries.as_ref(),
+    &input.gazetteer,
+  )
+  .map_err(|error| format!("{name}: assemble failed: {error}"))
 }
 
 fn first_json_difference(
@@ -708,24 +735,55 @@ fn compare_regex_patterns(
 }
 
 fn check_fixture(input_path: &Path) -> Result<(), String> {
-  let name = input_path
-    .file_name()
-    .and_then(|file_name| file_name.to_str())
-    .and_then(|file_name| file_name.strip_suffix(".input.json"))
-    .unwrap_or("<unknown>");
-  let input: FixtureInput = read_json(input_path)?;
+  let name = fixture_name(input_path);
   let expected: BindingPreparedSearchConfig =
     serde_json::from_value(read_expected_value(&fixtures_dir(), name)?)
       .map_err(|error| {
         format!("{name}: parse reconstructed config: {error}")
       })?;
-  let actual = assemble_static_search_config(
-    &input.config,
-    input.config.dictionaries.as_ref(),
-    &input.gazetteer,
-  )
-  .map_err(|error| format!("{name}: assemble failed: {error}"))?;
+  let actual = assemble_fixture(input_path)?;
   compare_full_config(name, &actual, &expected)
+}
+
+fn refresh_delta_snapshots(
+  dir: &Path,
+  inputs: &[PathBuf],
+) -> Result<(), String> {
+  let baseline_path = inputs
+    .iter()
+    .find(|path| fixture_name(path) == BASELINE_FIXTURE)
+    .ok_or_else(|| String::from("baseline input fixture is missing"))?;
+  let baseline_value = read_expected_value(dir, BASELINE_FIXTURE)?;
+  let baseline_expected: BindingPreparedSearchConfig =
+    serde_json::from_value(baseline_value.clone())
+      .map_err(|error| format!("parse baseline oracle: {error}"))?;
+  let baseline_actual = assemble_fixture(baseline_path)?;
+  compare_full_config(BASELINE_FIXTURE, &baseline_actual, &baseline_expected)
+    .map_err(|error| {
+    format!(
+      "refusing to update derived snapshots because the independent baseline \
+       oracle differs:\n{error}"
+    )
+  })?;
+
+  for input_path in inputs {
+    let name = fixture_name(input_path);
+    if name == BASELINE_FIXTURE {
+      continue;
+    }
+    let actual = assemble_fixture(input_path)?;
+    let current_expected: BindingPreparedSearchConfig = serde_json::from_value(
+      read_expected_value(dir, name)?,
+    )
+    .map_err(|error| format!("{name}: parse reconstructed config: {error}"))?;
+    if actual == current_expected {
+      continue;
+    }
+    let actual_value = serde_json::to_value(actual)
+      .map_err(|error| format!("{name}: serialize config: {error}"))?;
+    write_expected_delta(dir, name, &baseline_value, &actual_value)?;
+  }
+  Ok(())
 }
 
 #[test]
@@ -738,6 +796,12 @@ fn assemble_parity_matches_typescript() -> Result<(), String> {
       inputs.len(),
       dir.display()
     ));
+  }
+
+  let update =
+    std::env::var(UPDATE_SNAPSHOTS_ENV).is_ok_and(|value| value == "1");
+  if update {
+    refresh_delta_snapshots(&dir, &inputs)?;
   }
 
   let mut failures = Vec::new();

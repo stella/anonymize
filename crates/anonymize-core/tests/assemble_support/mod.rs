@@ -1,19 +1,20 @@
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 pub const BASELINE_FIXTURE: &str = "baseline-all-on";
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct ExpectedDelta {
   base: String,
   changes: Vec<ExpectedChange>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 enum ExpectedChange {
   Array {
@@ -29,7 +30,7 @@ enum ExpectedChange {
   },
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 enum ExpectedArraySegment {
   Copy { start: usize, end: usize },
@@ -122,6 +123,222 @@ fn apply_change(
   Ok(())
 }
 
+fn is_omittable_snapshot_default(value: &Value) -> bool {
+  value.is_null()
+    || value.as_array().is_some_and(Vec::is_empty)
+    || value.as_object().is_some_and(Map::is_empty)
+}
+
+fn normalized_snapshot_value(snapshot: &Value) -> Value {
+  match snapshot {
+    Value::Object(object) => Value::Object(
+      object
+        .iter()
+        .filter(|(_, member)| !is_omittable_snapshot_default(member))
+        .map(|(key, member)| (key.clone(), normalized_snapshot_value(member)))
+        .collect(),
+    ),
+    Value::Array(values) => {
+      Value::Array(values.iter().map(normalized_snapshot_value).collect())
+    }
+    Value::Number(number) if number.is_f64() => number
+      .as_f64()
+      .filter(|number_value| number_value.fract() == 0.0)
+      .map(|number_value| format!("{number_value:.0}"))
+      .and_then(|formatted| formatted.parse::<i64>().ok())
+      .map_or_else(|| snapshot.clone(), Value::from),
+    unmatched => unmatched.clone(),
+  }
+}
+
+fn snapshot_values_equal(left: &Value, right: &Value) -> bool {
+  normalized_snapshot_value(left) == normalized_snapshot_value(right)
+}
+
+fn value_key(value: &Value) -> Result<String, String> {
+  serde_json::to_string(&normalized_snapshot_value(value))
+    .map_err(|error| format!("serialize array item: {error}"))
+}
+
+fn push_copy_segment(
+  segments: &mut Vec<ExpectedArraySegment>,
+  start: usize,
+  end: usize,
+) {
+  if let Some(ExpectedArraySegment::Copy {
+    end: previous_end, ..
+  }) = segments.last_mut()
+    && *previous_end == start
+  {
+    *previous_end = end;
+    return;
+  }
+  segments.push(ExpectedArraySegment::Copy { start, end });
+}
+
+fn push_value_segment(segments: &mut Vec<ExpectedArraySegment>, value: Value) {
+  if let Some(ExpectedArraySegment::Values { values }) = segments.last_mut() {
+    values.push(value);
+    return;
+  }
+  segments.push(ExpectedArraySegment::Values {
+    values: vec![value],
+  });
+}
+
+fn array_segments(
+  baseline: &[Value],
+  actual: &[Value],
+) -> Result<Vec<ExpectedArraySegment>, String> {
+  let baseline_keys = baseline
+    .iter()
+    .map(value_key)
+    .collect::<Result<Vec<_>, _>>()?;
+  let mut baseline_indices = HashMap::<String, Vec<usize>>::new();
+  for (index, key) in baseline_keys.iter().enumerate() {
+    baseline_indices.entry(key.clone()).or_default().push(index);
+  }
+  let actual_keys = actual
+    .iter()
+    .map(value_key)
+    .collect::<Result<Vec<_>, _>>()?;
+
+  let mut segments = Vec::new();
+  let mut remaining_actual = actual;
+  let mut remaining_actual_keys = actual_keys.as_slice();
+  let mut baseline_cursor = 0usize;
+  while let (Some(actual_value), Some(key)) =
+    (remaining_actual.first(), remaining_actual_keys.first())
+  {
+    if let Some(candidates) = baseline_indices.get(key)
+      && let Some(&baseline_start) = candidates
+        .get(candidates.partition_point(|index| *index < baseline_cursor))
+        .or_else(|| candidates.first())
+    {
+      let baseline_tail =
+        baseline_keys.get(baseline_start..).ok_or_else(|| {
+          format!("baseline copy start {baseline_start} exceeds array length")
+        })?;
+      let length = baseline_tail
+        .iter()
+        .zip(remaining_actual_keys)
+        .take_while(|(left, right)| left == right)
+        .count();
+      let baseline_end = baseline_start
+        .checked_add(length)
+        .ok_or_else(|| String::from("baseline copy end overflow"))?;
+      push_copy_segment(&mut segments, baseline_start, baseline_end);
+      baseline_cursor = baseline_end;
+      remaining_actual = remaining_actual
+        .get(length..)
+        .ok_or_else(|| String::from("actual array copy exceeds length"))?;
+      remaining_actual_keys = remaining_actual_keys
+        .get(length..)
+        .ok_or_else(|| String::from("actual array key copy exceeds length"))?;
+      continue;
+    }
+    push_value_segment(&mut segments, normalized_snapshot_value(actual_value));
+    remaining_actual = remaining_actual
+      .get(1..)
+      .ok_or_else(|| String::from("actual array advance exceeds length"))?;
+    remaining_actual_keys = remaining_actual_keys
+      .get(1..)
+      .ok_or_else(|| String::from("actual array key advance exceeds length"))?;
+  }
+  Ok(segments)
+}
+
+fn build_changes(
+  baseline: &Value,
+  actual: &Value,
+  path: &mut Vec<String>,
+  changes: &mut Vec<ExpectedChange>,
+) -> Result<(), String> {
+  if snapshot_values_equal(baseline, actual) {
+    return Ok(());
+  }
+
+  match (baseline, actual) {
+    (Value::Object(baseline), Value::Object(actual)) => {
+      for (key, baseline_value) in baseline {
+        if is_omittable_snapshot_default(baseline_value)
+          && !actual.contains_key(key)
+        {
+          continue;
+        }
+        path.push(key.clone());
+        match actual.get(key) {
+          Some(actual_value) => {
+            build_changes(baseline_value, actual_value, path, changes)?;
+          }
+          None => changes.push(ExpectedChange::Remove { path: path.clone() }),
+        }
+        path.pop();
+      }
+      for (key, actual_value) in actual {
+        if baseline.contains_key(key)
+          || is_omittable_snapshot_default(actual_value)
+        {
+          continue;
+        }
+        path.push(key.clone());
+        changes.push(ExpectedChange::Set {
+          path: path.clone(),
+          value: actual_value.clone(),
+        });
+        path.pop();
+      }
+    }
+    (Value::Array(baseline), Value::Array(actual)) => {
+      changes.push(ExpectedChange::Array {
+        path: path.clone(),
+        segments: array_segments(baseline, actual)?,
+      });
+    }
+    (_, actual) => changes.push(ExpectedChange::Set {
+      path: path.clone(),
+      value: normalized_snapshot_value(actual),
+    }),
+  }
+  Ok(())
+}
+
+pub fn write_expected_delta(
+  dir: &Path,
+  name: &str,
+  baseline: &Value,
+  actual: &Value,
+) -> Result<(), String> {
+  if name == BASELINE_FIXTURE {
+    return Err(String::from(
+      "refusing to generate the independent baseline oracle",
+    ));
+  }
+
+  let mut changes = Vec::new();
+  build_changes(baseline, actual, &mut Vec::new(), &mut changes)?;
+  let delta = ExpectedDelta {
+    base: String::from(BASELINE_FIXTURE),
+    changes,
+  };
+  let mut reconstructed = baseline.clone();
+  for change in delta.changes.clone() {
+    apply_change(&mut reconstructed, change)?;
+  }
+  if !snapshot_values_equal(&reconstructed, actual) {
+    return Err(format!(
+      "{name}: generated delta does not reconstruct the actual config"
+    ));
+  }
+
+  let path = expected_path(dir, name);
+  let mut serialized = serde_json::to_string_pretty(&delta)
+    .map_err(|error| format!("serialize {}: {error}", path.display()))?;
+  serialized.push('\n');
+  fs::write(&path, serialized)
+    .map_err(|error| format!("write {}: {error}", path.display()))
+}
+
 pub fn read_expected_value(dir: &Path, name: &str) -> Result<Value, String> {
   if name == BASELINE_FIXTURE {
     return read_value(&expected_path(dir, name));
@@ -193,6 +410,46 @@ mod tests {
         "items": [2, 3, 4]
       })
     );
+    Ok(())
+  }
+
+  #[test]
+  fn generated_delta_round_trips_reordered_and_inserted_arrays()
+  -> Result<(), String> {
+    let baseline = serde_json::json!({
+      "kept": true,
+      "removed": 1,
+      "items": ["a", "b", "c", "d"]
+    });
+    let actual = serde_json::json!({
+      "kept": false,
+      "added": 2,
+      "items": ["c", "d", "new", "a"]
+    });
+    let mut changes = Vec::new();
+    build_changes(&baseline, &actual, &mut Vec::new(), &mut changes)?;
+    let mut reconstructed = baseline;
+    for change in changes {
+      apply_change(&mut reconstructed, change)?;
+    }
+    assert_eq!(reconstructed, actual);
+    Ok(())
+  }
+
+  #[test]
+  fn array_delta_stops_at_a_shared_suffix() -> Result<(), String> {
+    let baseline = vec![Value::from("prefix"), Value::from("suffix")];
+    let actual = vec![Value::from("suffix")];
+    let segments = array_segments(&baseline, &actual)?;
+    let mut reconstructed = serde_json::json!({"items": baseline});
+    apply_change(
+      &mut reconstructed,
+      ExpectedChange::Array {
+        path: vec![String::from("items")],
+        segments,
+      },
+    )?;
+    assert_eq!(reconstructed, serde_json::json!({"items": actual}));
     Ok(())
   }
 }

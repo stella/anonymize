@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use regex::{Regex, RegexBuilder};
 
@@ -323,6 +323,33 @@ pub(crate) fn process_trigger_matches(
 ) -> Result<Vec<PipelineEntity>> {
   let offsets = ByteOffsets::new(full_text);
   let mut results = Vec::new();
+  // Several configured field grammars intentionally share a start
+  // (`passport number` and `passport number is`). The shorter trigger must
+  // not extract the linking word as part of the value and then win conflict
+  // resolution through its broader span. Compute maximum munch once; equal
+  // length alternatives remain available for label/validation differences.
+  let mut maximum_end_by_start = HashMap::<u32, u32>::new();
+  for found in matches {
+    let Some(local_index) = slice.local_index(found.pattern()) else {
+      continue;
+    };
+    let Some(rule) = data.rules.get(local_index) else {
+      continue;
+    };
+    // An overlapping longer literal may only shadow the shorter fallback
+    // when it is itself a valid trigger occurrence. For example, `VAT number`
+    // inside `VAT numbers` fails its right boundary and must not suppress the
+    // valid `VAT` trigger at the same start.
+    if !has_left_boundary(full_text, &offsets, found.start())?
+      || !has_right_boundary(full_text, &offsets, found.end(), &rule.trigger)?
+    {
+      continue;
+    }
+    maximum_end_by_start
+      .entry(found.start())
+      .and_modify(|end| *end = (*end).max(found.end()))
+      .or_insert_with(|| found.end());
+  }
   let extraction_data = TriggerExtractionData {
     address_stop_keywords: &data.address_stop_keywords,
     party_position_terms: &data.party_position_terms,
@@ -340,6 +367,18 @@ pub(crate) fn process_trigger_matches(
     let Some(rule) = data.rules.get(local_index) else {
       continue;
     };
+    if maximum_end_by_start
+      .get(&found.start())
+      .is_some_and(|maximum_end| found.end() < *maximum_end)
+    {
+      record_trigger_rejection(
+        &mut diagnostics,
+        found,
+        rule,
+        "shorter-same-start-trigger",
+      );
+      continue;
+    }
     if !has_left_boundary(full_text, &offsets, found.start())? {
       record_trigger_rejection(&mut diagnostics, found, rule, "left-boundary");
       continue;
@@ -2815,6 +2854,136 @@ mod tests {
   use crate::search::{SearchIndex, SearchOptions, SearchPattern};
 
   use super::*;
+
+  fn trigger_test_data(rules: Vec<TriggerRule>) -> PreparedTriggerData {
+    PreparedTriggerData::new(TriggerData {
+      rules,
+      address_stop_keywords: Vec::new(),
+      party_position_terms: Vec::new(),
+      legal_form_suffixes: Vec::new(),
+      post_nominals: Vec::new(),
+      sentence_terminal_currency_terms: Vec::new(),
+      phone_extension_labels: Vec::new(),
+      number_markers: Vec::new(),
+      number_labels: Vec::new(),
+      person_field_labels: Vec::new(),
+    })
+    .unwrap()
+  }
+
+  fn n_words_rule(trigger: &str, label: &str) -> TriggerRule {
+    TriggerRule {
+      trigger: String::from(trigger),
+      label: String::from(label),
+      strategy: TriggerStrategy::NWords { count: 1 },
+      validations: Vec::new(),
+      include_trigger: false,
+    }
+  }
+
+  #[test]
+  fn longer_same_start_trigger_makes_field_grammar_authoritative() {
+    let text = "passport number is Z12345678";
+    let data = trigger_test_data(vec![
+      n_words_rule("passport number", "passport number"),
+      n_words_rule("passport number is", "passport number"),
+    ]);
+    let entities = process_trigger_matches(
+      &[
+        SearchMatch::Literal {
+          pattern: 0,
+          start: 0,
+          end: u32::try_from("passport number".len()).unwrap(),
+        },
+        SearchMatch::Literal {
+          pattern: 1,
+          start: 0,
+          end: u32::try_from("passport number is".len()).unwrap(),
+        },
+      ],
+      PatternSlice { start: 0, end: 2 },
+      text,
+      &data,
+      &BTreeSet::new(),
+      None,
+    )
+    .unwrap();
+
+    assert_eq!(entities.len(), 1);
+    assert_eq!(entities[0].text, "Z12345678");
+  }
+
+  #[test]
+  fn equal_length_same_start_trigger_alternatives_are_preserved() {
+    let text = "record number 12345";
+    let data = trigger_test_data(vec![
+      n_words_rule("record number", "registration number"),
+      n_words_rule("record number", "case number"),
+    ]);
+    let end = u32::try_from("record number".len()).unwrap();
+    let entities = process_trigger_matches(
+      &[
+        SearchMatch::Literal {
+          pattern: 0,
+          start: 0,
+          end,
+        },
+        SearchMatch::Literal {
+          pattern: 1,
+          start: 0,
+          end,
+        },
+      ],
+      PatternSlice { start: 0, end: 2 },
+      text,
+      &data,
+      &BTreeSet::new(),
+      None,
+    )
+    .unwrap();
+
+    assert_eq!(entities.len(), 2);
+    assert_eq!(entities[0].text, "12345");
+    assert_eq!(entities[1].text, "12345");
+  }
+
+  #[test]
+  fn boundary_invalid_longer_trigger_does_not_shadow_valid_fallback() {
+    let text = "VAT numbers 12345";
+    let data = trigger_test_data(vec![
+      TriggerRule {
+        trigger: String::from("VAT"),
+        label: String::from("tax identification number"),
+        strategy: TriggerStrategy::NWords { count: 2 },
+        validations: Vec::new(),
+        include_trigger: false,
+      },
+      n_words_rule("VAT number", "tax identification number"),
+    ]);
+    let entities = process_trigger_matches(
+      &[
+        SearchMatch::Literal {
+          pattern: 0,
+          start: 0,
+          end: u32::try_from("VAT".len()).unwrap(),
+        },
+        SearchMatch::Literal {
+          pattern: 1,
+          start: 0,
+          end: u32::try_from("VAT number".len()).unwrap(),
+        },
+      ],
+      PatternSlice { start: 0, end: 2 },
+      text,
+      &data,
+      &BTreeSet::new(),
+      None,
+    )
+    .unwrap();
+
+    assert_eq!(entities.len(), 1);
+    assert_eq!(entities[0].text, "numbers 12345");
+  }
 
   #[test]
   fn court_trigger_includes_trigger_span() {

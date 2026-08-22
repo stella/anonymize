@@ -42,9 +42,9 @@ describe("stella benchmark adapter language scoping", () => {
       }
     }
 
-    expect(spanCount).toBe(174);
+    expect(spanCount).toBe(187);
     expect(hash.digest("hex")).toBe(
-      "416dc1eafab50bcd92948c7ec94e10ff19414e68b6a3ed3d3e1aff5344403a5b",
+      "10e3c9a3a28e8a0b6fab170e8071dfd8a553588941cfd72fd8021eaccddbeaba",
     );
   });
 

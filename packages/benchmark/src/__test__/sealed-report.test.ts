@@ -209,6 +209,51 @@ describe("sealed aggregate report contract", () => {
     expect(markdown).toContain("already anonymized before annotation");
   });
 
+  test("keeps MultiGraSCCo direct and indirect identifiers distinct", () => {
+    const base = report();
+    const first = base.libraries.at(0);
+    if (first?.status !== "ok") {
+      throw new Error("test report must be available");
+    }
+    const multigrassco: SealedAggregateReport = {
+      ...base,
+      corpus: {
+        ...base.corpus,
+        id: "multigrassco",
+        split: "evaluation",
+        documentCount: 605,
+        selection: {
+          type: "validated-offset-subset",
+          sourceDocuments: 630,
+          excludedDocuments: 25,
+          reasonCode: "invalid-source-spans",
+        },
+      },
+      libraries: [
+        {
+          ...first,
+          metrics: {
+            type: "multigrassco-direct-indirect-redaction",
+            documents: 605,
+            directSpans: 10,
+            indirectSpans: 20,
+            predictedSpans: 15,
+            directSpanRecall: 0.8,
+            indirectSpanRecall: 0.4,
+            directCharacterRecall: 0.9,
+            indirectCharacterRecall: 0.5,
+            acceptedCharacterPrecision: 0.7,
+          },
+        },
+      ],
+    };
+    const markdown = renderSealedAggregateMarkdown(multigrassco);
+    expect(markdown).toContain("Direct span recall");
+    expect(markdown).toContain("Indirect span recall");
+    expect(markdown).toContain("605 documents");
+    expect(markdown).toContain("spans are never guessed");
+  });
+
   test("rejects missing or invalid phase timing", () => {
     const base = report();
     const first = base.libraries.at(0);
@@ -353,7 +398,7 @@ describe("sealed aggregate report contract", () => {
         continue;
       }
       assertSealedAggregateReport(parsed);
-      if (parsed.corpus.selection.type !== "full-test-split") {
+      if (parsed.corpus.selection.type === "fixed-hash-sample") {
         continue;
       }
       const previous = latestByCorpus.get(parsed.corpus.id);
@@ -378,8 +423,8 @@ describe("sealed aggregate report contract", () => {
       if (expected?.artifact === undefined) {
         throw new Error(`${corpusId} has no pinned registry artifact`);
       }
-      if (expected.artifact.split !== "test") {
-        throw new Error(`${corpusId} does not pin the evaluation test split`);
+      if (expected.artifact.split === "dev") {
+        throw new Error(`${corpusId} does not pin an evaluation artifact`);
       }
       expect(current?.corpus.source, `${corpusId} uses a stale source`).toBe(
         expected.source,

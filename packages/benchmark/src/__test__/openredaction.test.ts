@@ -11,7 +11,7 @@ import { loadGroundTruth } from "../ground-truth";
 import { OPENREDACTION_MAPPING, supportedLabels } from "../taxonomy";
 
 const EXPECTED_PREDICTION_DIGEST =
-  "b7f05e0a2aadcb1d76faaabbe5c26a5e35a64045f16c4bc17c3560a57daa44ff";
+  "2df2f4e127f6ed6c718dc4c67250063e47f848b5d0e8bc0297db99b4971cd505";
 
 type StablePrediction = readonly [
   string,
@@ -52,6 +52,7 @@ describe("OpenRedaction benchmark adapter", () => {
     expect(OPENREDACTION_MAPPING["NAME"]).toBe("person");
     expect(OPENREDACTION_MAPPING["ADDRESS_STREET"]).toBe("address");
     expect(OPENREDACTION_MAPPING["IBAN"]).toBe("id-number");
+    expect(OPENREDACTION_MAPPING["LAB_TEST_ID"]).toBe("id-number");
     expect(OPENREDACTION_MAPPING["USERNAME"]).toBeNull();
     expect(OPENREDACTION_MAPPING["ORGANIZATION"]).toBeUndefined();
   });
@@ -85,8 +86,8 @@ describe("OpenRedaction benchmark adapter", () => {
       .update(JSON.stringify(predictions))
       .digest("hex");
 
-    expect(predictions).toHaveLength(28);
-    expect(spanCount).toBe(199);
+    expect(predictions).toHaveLength(34);
+    expect(spanCount).toBe(210);
     expect(digest).toBe(EXPECTED_PREDICTION_DIGEST);
     const emittedLabels = new Set(
       predictions.flatMap(([, spans]) => spans.map(({ label }) => label)),

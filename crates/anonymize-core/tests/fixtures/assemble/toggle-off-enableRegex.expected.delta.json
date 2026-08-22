@@ -2,8 +2,9 @@
   "base": "baseline-all-on",
   "changes": [
     {
-      "type": "remove",
-      "path": ["date_data"]
+      "type": "set",
+      "path": ["date_data"],
+      "value": null
     },
     {
       "type": "array",
@@ -17,19 +18,9 @@
         {
           "type": "copy",
           "start": 118,
-          "end": 3176
+          "end": 3181
         }
       ]
-    },
-    {
-      "type": "set",
-      "path": ["slices", "regex", "end"],
-      "value": 0
-    },
-    {
-      "type": "set",
-      "path": ["slices", "legal_forms", "start"],
-      "value": 0
     },
     {
       "type": "set",
@@ -38,13 +29,23 @@
     },
     {
       "type": "set",
-      "path": ["slices", "triggers", "start"],
-      "value": 1289
+      "path": ["slices", "legal_forms", "start"],
+      "value": 0
+    },
+    {
+      "type": "set",
+      "path": ["slices", "regex", "end"],
+      "value": 0
     },
     {
       "type": "set",
       "path": ["slices", "triggers", "end"],
-      "value": 3058
+      "value": 3063
+    },
+    {
+      "type": "set",
+      "path": ["slices", "triggers", "start"],
+      "value": 1289
     }
   ]
 }

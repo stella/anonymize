@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 4,
+  "schemaVersion": 5,
   "createdAt": "2026-08-21T11:28:16.695Z",
   "sourceGitSha": "c09298433723081512de7e81cf60742464f8e29d",
   "runtime": "Bun 1.4.0",
