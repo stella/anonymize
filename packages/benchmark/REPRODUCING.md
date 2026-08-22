@@ -60,12 +60,11 @@ and licenses.
 
 ## Hardware / runtime note
 
-The latest held-out reports were produced on Apple M3 (8 cores), 24 GiB RAM,
-macOS, with Bun 1.3.14. The latest development report was produced on Apple M4
-(10 cores), 16 GiB RAM. Older reports used other hosts; each development report
-records its own hardware. Quality-suite throughput comes from a single run and
-is directional, not a speed ranking. Recall and precision are deterministic for
-a fixed commit, corpus, and dependency set.
+Each development report records its hardware and Bun runtime; every held-out
+report records its runtime. Older reports used other hosts. Quality-suite
+throughput comes from a single run and is directional, not a speed ranking.
+Recall and precision are deterministic for a fixed commit, corpus, and
+dependency set.
 
 ### Canonical performance host
 
@@ -188,8 +187,8 @@ input bytes, denominator, and SHA-256 independently. Python virtualenvs default 
 
 | Component                             | Version                           |
 | ------------------------------------- | --------------------------------- |
-| Bun                                   | 1.3.14                            |
-| stella (`@stll/anonymize`)            | 2.7.8 (current workspace release) |
+| Bun                                   | 1.4.0                             |
+| stella (`@stll/anonymize`)            | 2.8.1 (current workspace release) |
 | OpenRedaction (`@openredaction/core`) | 1.1.5                             |
 | redact-pii (npm)                      | 3.4.0                             |
 | Python                                | 3.11.12                           |

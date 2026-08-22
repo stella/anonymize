@@ -2,6 +2,7 @@ import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 
 export const SEALED_AGGREGATE_REPORT_SCHEMA_VERSION = 5 as const;
+export const LEGACY_SEALED_AGGREGATE_REPORT_SCHEMA_VERSION = 4 as const;
 
 const SAFE_PROVIDER_NAME = /^[a-z0-9][a-z0-9._-]{0,63}$/u;
 const SAFE_PROVIDER_VERSION = /^[A-Za-z0-9][A-Za-z0-9 ._+/@():-]{0,127}$/u;
@@ -83,6 +84,11 @@ export type SealedAggregateMetrics =
   | MultiGraSCCoAggregateMetrics
   | GermanLerAggregateMetrics;
 
+export type LegacySealedAggregateMetrics = Exclude<
+  SealedAggregateMetrics,
+  MultiGraSCCoAggregateMetrics
+>;
+
 export type SealedLibraryResult =
   | {
       readonly name: string;
@@ -92,6 +98,22 @@ export type SealedLibraryResult =
       /** Parent-observed adapter wall time; diagnostic, not throughput. */
       readonly adapterWallSeconds: number;
       readonly metrics: SealedAggregateMetrics;
+    }
+  | {
+      readonly name: string;
+      readonly version: string;
+      readonly status: "unavailable";
+      readonly reasonCode: "adapter-unavailable";
+    };
+
+export type LegacySealedLibraryResult =
+  | {
+      readonly name: string;
+      readonly version: string;
+      readonly status: "ok";
+      readonly timing: SealedTiming;
+      readonly adapterWallSeconds: number;
+      readonly metrics: LegacySealedAggregateMetrics;
     }
   | {
       readonly name: string;
@@ -133,6 +155,36 @@ export type SealedAggregateReport = {
   readonly libraries: readonly SealedLibraryResult[];
 };
 
+export type LegacySealedAggregateReport = {
+  readonly schemaVersion: typeof LEGACY_SEALED_AGGREGATE_REPORT_SCHEMA_VERSION;
+  readonly createdAt: string;
+  readonly sourceGitSha: string;
+  readonly runtime: string;
+  readonly policy: "evaluation-only";
+  readonly corpus: {
+    readonly id: "tab-echr" | "redactionbench" | "meddocan" | "german-ler";
+    readonly source: string;
+    readonly version: string;
+    readonly file: string;
+    readonly sha256: string;
+    readonly license: string;
+    readonly split: "test";
+    readonly documentCount: number;
+    readonly selection:
+      | { readonly type: "full-test-split" }
+      | { readonly type: "fixed-hash-sample"; readonly seed: string };
+  };
+  readonly libraries: readonly LegacySealedLibraryResult[];
+};
+
+export type SupportedSealedAggregateReport =
+  | LegacySealedAggregateReport
+  | SealedAggregateReport;
+
+type AvailableSupportedSealedLibraryResult =
+  | Extract<LegacySealedLibraryResult, { status: "ok" }>
+  | Extract<SealedLibraryResult, { status: "ok" }>;
+
 type SealedReportVersionFreshnessOptions = {
   readonly currentVersion: string;
   readonly reportVersion: string;
@@ -154,6 +206,27 @@ export type SealedReportVersionFreshness =
       readonly currentVersion: string;
       readonly reportVersion: string;
     };
+
+type SealedReportRevisionFreshnessOptions = {
+  readonly currentGitSha: string;
+  readonly reportGitSha: string;
+};
+
+export type SealedReportRevisionFreshness =
+  | { readonly status: "current" }
+  | {
+      readonly status: "stale";
+      readonly currentGitSha: string;
+      readonly reportGitSha: string;
+    };
+
+export const assessSealedReportRevisionFreshness = ({
+  currentGitSha,
+  reportGitSha,
+}: SealedReportRevisionFreshnessOptions): SealedReportRevisionFreshness =>
+  currentGitSha === reportGitSha
+    ? { status: "current" }
+    : { status: "stale", currentGitSha, reportGitSha };
 
 const RELEASE_VERSION =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(alpha|beta|rc)\.(0|[1-9]\d*))?$/u;
@@ -329,7 +402,10 @@ const validateTiming = (value: unknown, context: string): void => {
   requireCount(value["totalChars"], `${context} totalChars`);
 };
 
-const validateMetrics = (value: unknown): void => {
+const validateMetrics = (
+  value: unknown,
+  schemaVersion: SupportedSealedAggregateReport["schemaVersion"],
+): void => {
   if (!isRecord(value)) {
     throw new Error("sealed metrics must be an object");
   }
@@ -383,6 +459,9 @@ const validateMetrics = (value: unknown): void => {
     return;
   }
   if (type === "multigrassco-direct-indirect-redaction") {
+    if (schemaVersion === LEGACY_SEALED_AGGREGATE_REPORT_SCHEMA_VERSION) {
+      throw new Error("legacy sealed metrics use an unknown task type");
+    }
     const counts = [
       "documents",
       "directSpans",
@@ -421,7 +500,7 @@ const validateMetrics = (value: unknown): void => {
 };
 
 const metricTypeForCorpus = (
-  corpusId: SealedAggregateReport["corpus"]["id"],
+  corpusId: unknown,
 ): SealedAggregateMetrics["type"] => {
   if (corpusId === "tab-echr") {
     return "tab-independent-annotator-span-redaction";
@@ -438,9 +517,9 @@ const metricTypeForCorpus = (
   return "label-agnostic-span-redaction";
 };
 
-export const assertSealedAggregateReport: (
+export const assertSupportedSealedAggregateReport: (
   value: unknown,
-) => asserts value is SealedAggregateReport = (value) => {
+) => asserts value is SupportedSealedAggregateReport = (value) => {
   if (!isRecord(value)) throw new Error("sealed report must be an object");
   exactKeys(
     value,
@@ -455,8 +534,10 @@ export const assertSealedAggregateReport: (
     ],
     "sealed report",
   );
+  const schemaVersion = value["schemaVersion"];
   if (
-    value["schemaVersion"] !== SEALED_AGGREGATE_REPORT_SCHEMA_VERSION ||
+    (schemaVersion !== LEGACY_SEALED_AGGREGATE_REPORT_SCHEMA_VERSION &&
+      schemaVersion !== SEALED_AGGREGATE_REPORT_SCHEMA_VERSION) ||
     value["policy"] !== "evaluation-only"
   ) {
     throw new Error("sealed report contract or policy is invalid");
@@ -489,14 +570,18 @@ export const assertSealedAggregateReport: (
     "sealed report corpus",
   );
   const corpusId = corpus["id"];
-  if (
-    (corpusId !== "tab-echr" &&
-      corpusId !== "redactionbench" &&
-      corpusId !== "meddocan" &&
-      corpusId !== "multigrassco" &&
-      corpusId !== "german-ler") ||
-    (corpus["split"] !== "test" && corpus["split"] !== "evaluation")
-  ) {
+  const legacyCorpus =
+    corpusId === "tab-echr" ||
+    corpusId === "redactionbench" ||
+    corpusId === "meddocan" ||
+    corpusId === "german-ler";
+  const currentCorpus = legacyCorpus || corpusId === "multigrassco";
+  const validCorpusAndSplit =
+    schemaVersion === LEGACY_SEALED_AGGREGATE_REPORT_SCHEMA_VERSION
+      ? legacyCorpus && corpus["split"] === "test"
+      : currentCorpus &&
+        (corpus["split"] === "test" || corpus["split"] === "evaluation");
+  if (!validCorpusAndSplit) {
     throw new Error("sealed report corpus id or split is invalid");
   }
   for (const key of ["source", "version", "file", "sha256", "license"] as const)
@@ -540,19 +625,30 @@ export const assertSealedAggregateReport: (
   } else {
     throw new Error("sealed report selection is invalid");
   }
-  if (
-    corpusId !== "tab-echr" &&
-    corpusId !== "multigrassco" &&
-    selection["type"] !== "full-test-split"
-  ) {
-    throw new Error("only TAB supports a fixed sealed sample");
-  }
-  if (
-    (corpusId === "multigrassco") !==
-      (selection["type"] === "validated-offset-subset") ||
-    (corpusId === "multigrassco") !== (corpus["split"] === "evaluation")
-  ) {
-    throw new Error("MultiGraSCCo requires its validated evaluation selection");
+  if (schemaVersion === LEGACY_SEALED_AGGREGATE_REPORT_SCHEMA_VERSION) {
+    if (
+      selection["type"] === "validated-offset-subset" ||
+      (corpusId !== "tab-echr" && selection["type"] !== "full-test-split")
+    ) {
+      throw new Error("legacy sealed report selection is invalid");
+    }
+  } else {
+    if (
+      corpusId !== "tab-echr" &&
+      corpusId !== "multigrassco" &&
+      selection["type"] !== "full-test-split"
+    ) {
+      throw new Error("only TAB supports a fixed sealed sample");
+    }
+    if (
+      (corpusId === "multigrassco") !==
+        (selection["type"] === "validated-offset-subset") ||
+      (corpusId === "multigrassco") !== (corpus["split"] === "evaluation")
+    ) {
+      throw new Error(
+        "MultiGraSCCo requires its validated evaluation selection",
+      );
+    }
   }
 
   const libraries = value["libraries"];
@@ -618,7 +714,7 @@ export const assertSealedAggregateReport: (
       library["adapterWallSeconds"],
       `sealed library ${index} adapterWallSeconds`,
     );
-    validateMetrics(library["metrics"]);
+    validateMetrics(library["metrics"], schemaVersion);
     const metrics = library["metrics"];
     if (!isRecord(metrics)) {
       throw new Error(`sealed library ${index} metrics are invalid`);
@@ -637,6 +733,15 @@ export const assertSealedAggregateReport: (
         `sealed library ${index} document count does not match the corpus`,
       );
     }
+  }
+};
+
+export const assertSealedAggregateReport: (
+  value: unknown,
+) => asserts value is SealedAggregateReport = (value) => {
+  assertSupportedSealedAggregateReport(value);
+  if (value.schemaVersion !== SEALED_AGGREGATE_REPORT_SCHEMA_VERSION) {
+    throw new Error("sealed report does not use the current schema");
   }
 };
 
@@ -734,11 +839,20 @@ const tableDefinition = (
   };
 };
 
+const firstAvailableLibrary = (
+  report: SupportedSealedAggregateReport,
+): AvailableSupportedSealedLibraryResult | undefined => {
+  for (const library of report.libraries) {
+    if (library.status === "ok") return library;
+  }
+  return undefined;
+};
+
 export const renderSealedAggregateMarkdown = (
-  report: SealedAggregateReport,
+  report: SupportedSealedAggregateReport,
 ): string => {
-  assertSealedAggregateReport(report);
-  const available = report.libraries.find((library) => library.status === "ok");
+  assertSupportedSealedAggregateReport(report);
+  const available = firstAvailableLibrary(report);
   const definition =
     available === undefined
       ? { headers: ["Aggregate metrics"], values: ["unavailable"] }
@@ -746,7 +860,9 @@ export const renderSealedAggregateMarkdown = (
   const lines = [
     "# Held-out aggregate benchmark evaluation",
     "",
-    "Evaluation-only results on a checksum-pinned public corpus.",
+    report.schemaVersion === LEGACY_SEALED_AGGREGATE_REPORT_SCHEMA_VERSION
+      ? "Evaluation-only results on a checksum-pinned public test split."
+      : "Evaluation-only results on a checksum-pinned public corpus.",
     "This report is generated exclusively from the aggregate report contract.",
     "It contains no source text, examples, categories, predictions, or per-document results.",
     "",

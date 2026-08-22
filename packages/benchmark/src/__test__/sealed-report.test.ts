@@ -6,12 +6,16 @@ import { describe, expect, test } from "bun:test";
 
 import {
   assertSealedAggregateReport,
+  assertSupportedSealedAggregateReport,
+  assessSealedReportRevisionFreshness,
   assessSealedReportVersionFreshness,
+  LEGACY_SEALED_AGGREGATE_REPORT_SCHEMA_VERSION,
   normalizeSealedProviderVersion,
   renderSealedAggregateMarkdown,
   SEALED_AGGREGATE_REPORT_SCHEMA_VERSION,
   type SealedAggregateReport,
   serializeSealedAggregateReport,
+  type SupportedSealedAggregateReport,
 } from "../sealed-report";
 import { parseVerifiedArtifact } from "../verified-artifact";
 import { runSealedBoundary } from "../sealed-boundary";
@@ -64,6 +68,26 @@ const report = (): SealedAggregateReport => ({
 });
 
 describe("sealed aggregate report contract", () => {
+  test("models source revision freshness without blocking stale reports", () => {
+    const currentGitSha = "a".repeat(40);
+    expect(
+      assessSealedReportRevisionFreshness({
+        currentGitSha,
+        reportGitSha: currentGitSha,
+      }),
+    ).toEqual({ status: "current" });
+    expect(
+      assessSealedReportRevisionFreshness({
+        currentGitSha,
+        reportGitSha: "b".repeat(40),
+      }),
+    ).toEqual({
+      status: "stale",
+      currentGitSha,
+      reportGitSha: "b".repeat(40),
+    });
+  });
+
   test("models report freshness and fails closed on unusable versions", () => {
     expect(
       assessSealedReportVersionFreshness({
@@ -163,6 +187,77 @@ describe("sealed aggregate report contract", () => {
     expect(markdown).toContain("Adapter wall time is diagnostic only");
     expect(markdown.endsWith("\n")).toBe(true);
     expect(markdown.endsWith("\n\n")).toBe(false);
+  });
+
+  test("accepts the closed legacy v4 contract", () => {
+    const legacy = {
+      ...report(),
+      schemaVersion: LEGACY_SEALED_AGGREGATE_REPORT_SCHEMA_VERSION,
+    };
+    expect(() => assertSupportedSealedAggregateReport(legacy)).not.toThrow();
+    expect(() => assertSealedAggregateReport(legacy)).toThrow(
+      "does not use the current schema",
+    );
+  });
+
+  test("keeps current-only corpus features out of legacy v4", () => {
+    const base = {
+      ...report(),
+      schemaVersion: LEGACY_SEALED_AGGREGATE_REPORT_SCHEMA_VERSION,
+    };
+    expect(() =>
+      assertSupportedSealedAggregateReport({
+        ...base,
+        corpus: { ...base.corpus, id: "multigrassco" },
+      }),
+    ).toThrow("corpus id or split is invalid");
+    expect(() =>
+      assertSupportedSealedAggregateReport({
+        ...base,
+        corpus: { ...base.corpus, split: "evaluation" },
+      }),
+    ).toThrow("corpus id or split is invalid");
+    expect(() =>
+      assertSupportedSealedAggregateReport({
+        ...base,
+        corpus: {
+          ...base.corpus,
+          documentCount: 100,
+          selection: {
+            type: "validated-offset-subset",
+            sourceDocuments: 127,
+            excludedDocuments: 27,
+            reasonCode: "invalid-source-spans",
+          },
+        },
+      }),
+    ).toThrow("legacy sealed report selection is invalid");
+    const first = base.libraries.at(0);
+    if (first?.status !== "ok") {
+      throw new Error("test report must be available");
+    }
+    expect(() =>
+      assertSupportedSealedAggregateReport({
+        ...base,
+        libraries: [
+          {
+            ...first,
+            metrics: {
+              type: "multigrassco-direct-indirect-redaction",
+              documents: 127,
+              directSpans: 10,
+              indirectSpans: 20,
+              predictedSpans: 15,
+              directSpanRecall: 0.8,
+              indirectSpanRecall: 0.4,
+              directCharacterRecall: 0.9,
+              indirectCharacterRecall: 0.5,
+              acceptedCharacterPrecision: 0.7,
+            },
+          },
+        ],
+      }),
+    ).toThrow("legacy sealed metrics use an unknown task type");
   });
 
   test("renders one value for every TAB table column", () => {
@@ -291,7 +386,7 @@ describe("sealed aggregate report contract", () => {
     ).toThrow("totalChars does not match other providers");
   });
 
-  test("keeps every current-schema sealed Markdown report canonical", () => {
+  test("keeps every supported sealed Markdown report canonical", () => {
     const rootResult = Bun.spawnSync(["git", "rev-parse", "--show-toplevel"]);
     if (!rootResult.success || rootResult.exitCode !== 0) {
       throw new Error("benchmark tests must run inside a Git repository");
@@ -326,10 +421,14 @@ describe("sealed aggregate report contract", () => {
         continue;
       }
       aggregateReportCount += 1;
-      if (parsed.schemaVersion !== SEALED_AGGREGATE_REPORT_SCHEMA_VERSION) {
+      if (
+        parsed.schemaVersion !==
+          LEGACY_SEALED_AGGREGATE_REPORT_SCHEMA_VERSION &&
+        parsed.schemaVersion !== SEALED_AGGREGATE_REPORT_SCHEMA_VERSION
+      ) {
         continue;
       }
-      assertSealedAggregateReport(parsed);
+      assertSupportedSealedAggregateReport(parsed);
       const markdownPath = jsonPath.replace(/\.json$/u, ".md");
       expect(trackedPathSet.has(markdownPath)).toBe(true);
       expect(readFileSync(join(root, markdownPath), "utf8")).toBe(
@@ -361,6 +460,17 @@ describe("sealed aggregate report contract", () => {
     const currentReleaseVersion = normalizeSealedProviderVersion(
       packageJson.version,
     );
+    const headResult = Bun.spawnSync(["git", "rev-parse", "HEAD"], {
+      cwd: root,
+    });
+    const currentGitSha = headResult.stdout.toString().trim();
+    if (
+      !headResult.success ||
+      headResult.exitCode !== 0 ||
+      !/^[a-f0-9]{40}$/u.test(currentGitSha)
+    ) {
+      throw new Error("could not resolve the current full Git SHA");
+    }
 
     const reportsResult = Bun.spawnSync(
       [
@@ -380,7 +490,7 @@ describe("sealed aggregate report contract", () => {
       throw new Error("could not enumerate held-out benchmark reports");
     }
 
-    const latestByCorpus = new Map<string, SealedAggregateReport>();
+    const latestByCorpus = new Map<string, SupportedSealedAggregateReport>();
     for (const jsonPath of reportsResult.stdout
       .toString()
       .split("\0")
@@ -393,11 +503,13 @@ describe("sealed aggregate report contract", () => {
         typeof parsed !== "object" ||
         Array.isArray(parsed) ||
         !("schemaVersion" in parsed) ||
-        parsed.schemaVersion !== SEALED_AGGREGATE_REPORT_SCHEMA_VERSION
+        (parsed.schemaVersion !==
+          LEGACY_SEALED_AGGREGATE_REPORT_SCHEMA_VERSION &&
+          parsed.schemaVersion !== SEALED_AGGREGATE_REPORT_SCHEMA_VERSION)
       ) {
         continue;
       }
-      assertSealedAggregateReport(parsed);
+      assertSupportedSealedAggregateReport(parsed);
       if (parsed.corpus.selection.type === "fixed-hash-sample") {
         continue;
       }
@@ -441,6 +553,16 @@ describe("sealed aggregate report contract", () => {
       expect(current?.corpus.split, `${corpusId} uses a stale split`).toBe(
         expected.artifact.split,
       );
+      if (current === undefined) continue;
+      const revisionFreshness = assessSealedReportRevisionFreshness({
+        currentGitSha,
+        reportGitSha: current.sourceGitSha,
+      });
+      if (revisionFreshness.status === "stale") {
+        process.stdout.write(
+          `::warning title=Stale sealed benchmark source::${corpusId} report uses ${revisionFreshness.reportGitSha}; current HEAD is ${revisionFreshness.currentGitSha}\n`,
+        );
+      }
       const stella = current?.libraries.find(({ name }) => name === "stella");
       expect(stella?.status, `${corpusId} must include stella`).toBe("ok");
       if (stella?.status !== "ok") continue;

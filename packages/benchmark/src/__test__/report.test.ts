@@ -1,3 +1,6 @@
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { expect, test } from "bun:test";
 
 import { type BenchResult, renderMarkdown } from "../report";
@@ -19,4 +22,19 @@ test("development Markdown ends with exactly one newline", () => {
   } as const satisfies BenchResult;
 
   expect(renderMarkdown(result)).toMatch(/[^\n]\n$/);
+});
+
+test("tracked development evidence comes from a clean worktree", () => {
+  const resultsDirectory = join(import.meta.dir, "..", "..", "results");
+  const developmentReports = readdirSync(resultsDirectory).filter((path) =>
+    /^(?:development-latest|\d{4}-\d{2}-\d{2})\.(?:json|md)$/u.test(path),
+  );
+
+  expect(developmentReports.length).toBeGreaterThan(0);
+  for (const path of developmentReports) {
+    expect(
+      readFileSync(join(resultsDirectory, path), "utf8"),
+      path,
+    ).not.toMatch(/(?:"gitSha": "[^"]*|- Commit: .*?)-dirty/u);
+  }
 });
