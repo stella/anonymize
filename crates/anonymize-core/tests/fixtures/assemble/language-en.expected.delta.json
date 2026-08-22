@@ -1291,6 +1291,27 @@
       ]
     },
     {
+      "type": "set",
+      "path": ["legal_form_data", "clause_noun_heads"],
+      "value": [
+        "agreement",
+        "contract",
+        "agreements",
+        "contracts",
+        "license",
+        "licence",
+        "lease",
+        "memorandum",
+        "notice",
+        "exhibit",
+        "schedule",
+        "addendum",
+        "amendment",
+        "appendix",
+        "attachment"
+      ]
+    },
+    {
       "type": "array",
       "path": ["zone_data", "signing_clauses"],
       "segments": [

@@ -1971,6 +1971,19 @@
       ]
     },
     {
+      "type": "set",
+      "path": ["legal_form_data", "clause_noun_heads"],
+      "value": [
+        "vertrag",
+        "vertrages",
+        "vereinbarung",
+        "vereinbarungen",
+        "lizenz",
+        "anlage",
+        "anhang"
+      ]
+    },
+    {
       "type": "array",
       "path": ["zone_data", "signing_clauses"],
       "segments": [

@@ -1071,6 +1071,11 @@
       ]
     },
     {
+      "type": "set",
+      "path": ["legal_form_data", "clause_noun_heads"],
+      "value": []
+    },
+    {
       "type": "array",
       "path": ["zone_data", "signing_clauses"],
       "segments": []

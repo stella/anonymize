@@ -700,8 +700,8 @@ fn compare_regex_and_legal(
   }
   if actual.legal_form_data != expected.legal_form_data {
     return Err(format!(
-      "{name}: legal_form_data {:?} != {:?}",
-      actual.legal_form_data, expected.legal_form_data
+      "{name}: legal_form_data {}",
+      serialized_difference(&actual.legal_form_data, &expected.legal_form_data)
     ));
   }
   compare_regex_patterns(name, actual, expected)

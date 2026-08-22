@@ -4,7 +4,9 @@
     "language": "cs",
     "title": "Kontext smluvních stran a dokladů (synthetic)",
     "segments": [
-      "Smluvní strany Testovací osoba a ",
+      "Smluvní strany ",
+      { "t": "Testovací osoba", "label": "person" },
+      " a ",
       { "t": "Křišťálové dílny s.r.o.", "label": "organization" },
       " uzavřely dohodu. Rodné číslo je ",
       { "t": "900314/1258", "label": "id-number" },
@@ -26,7 +28,9 @@
     "language": "de",
     "title": "Vertragspartei und Ausweisfeld (synthetic)",
     "segments": [
-      "Die Vertragsparteien Testperson und ",
+      "Die Vertragsparteien ",
+      { "t": "Testperson", "label": "person" },
+      " und ",
       { "t": "Morgenhafen Werkstatt GmbH", "label": "organization" },
       " schließen den Vertrag. Die Personalausweisnummer lautet ",
       { "t": "T22000123", "label": "id-number" },
@@ -46,7 +50,9 @@
     "language": "en",
     "title": "Contracting party and passport field (synthetic)",
     "segments": [
-      "The parties Sample Person and ",
+      "The parties ",
+      { "t": "Sample Person", "label": "person" },
+      " and ",
       { "t": "Silver Orchard Labs LLC", "label": "organization" },
       " signed the agreement. The passport number is ",
       { "t": "Z12345678", "label": "id-number" },

@@ -527,11 +527,25 @@ pub(super) fn role_heads(
   Ok(out)
 }
 
-/// Mirrors `getClauseNounHeadsSync` (post-warm): the `clause-noun-heads.json`
-/// union seeded with `CLAUSE_NOUN_HEADS_SEED`, lowercased with insertion-order
-/// dedup. Reused by `false_positive_filters` for `trailingAddressWordExclusions`.
-pub(super) fn clause_noun_heads() -> Result<Vec<String>, AssembleError> {
-  load_lowercase_union("clause-noun-heads.json", CLAUSE_NOUN_HEADS_SEED)
+/// Loads `clause-noun-heads.json` for the configured content languages,
+/// preserving the English seed order. Reused by `false_positive_filters` for
+/// `trailingAddressWordExclusions`.
+pub(super) fn clause_noun_heads(
+  selected: Option<&[String]>,
+) -> Result<Vec<String>, AssembleError> {
+  let configured: OrderedMap<Value> =
+    parse_ordered_data_file("clause-noun-heads.json")?;
+  let mut seen = HashSet::new();
+  let mut result = Vec::new();
+  if language::language_config_matches("en", selected) {
+    for word in CLAUSE_NOUN_HEADS_SEED {
+      push_unique((*word).to_string(), &mut seen, &mut result);
+    }
+  }
+  for word in language::language_keyed_terms(&configured, selected) {
+    push_unique(word.to_lowercase(), &mut seen, &mut result);
+  }
+  Ok(result)
 }
 
 /// Mirrors `getConnectorProseHeadsSync` (post-warm): `generic-roles.json`
@@ -764,10 +778,7 @@ pub(super) fn build_legal_form_data(
       "sentence-verb-indicators.json",
       &[],
     )?,
-    clause_noun_heads: load_lowercase_union(
-      "clause-noun-heads.json",
-      CLAUSE_NOUN_HEADS_SEED,
-    )?,
+    clause_noun_heads: clause_noun_heads(ctx.content_languages.as_deref())?,
     connector_prose_heads: connector_prose_heads()?,
     structural_single_cap_prefixes: load_lowercase_union(
       "structural-single-cap-prefixes.json",
@@ -806,7 +817,7 @@ mod tests {
   #![allow(clippy::unwrap_used)]
 
   use super::{
-    InstitutionalOrganizationData, all_legal_suffixes,
+    InstitutionalOrganizationData, all_legal_suffixes, clause_noun_heads,
     institutional_language_words, non_ascii_name_short_suffixes,
     organization_detection_suffixes, role_heads, validate_institutional_terms,
   };
@@ -835,6 +846,17 @@ mod tests {
 
     assert!(czech.iter().any(|word| word == "poskytovatele"));
     assert!(!english.iter().any(|word| word == "poskytovatele"));
+  }
+
+  #[test]
+  fn clause_noun_heads_follow_content_language_scope() {
+    let czech = clause_noun_heads(Some(&[String::from("cs")])).unwrap();
+    let english = clause_noun_heads(Some(&[String::from("en")])).unwrap();
+
+    assert!(czech.iter().any(|word| word == "dohoda"));
+    assert!(!english.iter().any(|word| word == "dohoda"));
+    assert!(english.iter().any(|word| word == "agreement"));
+    assert!(!czech.iter().any(|word| word == "agreement"));
   }
 
   #[test]

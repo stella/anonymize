@@ -12,6 +12,7 @@ import {
 import {
   buildPerformanceInput,
   PERFORMANCE_SCENARIO_IDS,
+  performanceInputSourceDigest,
 } from "../performance/input";
 import { loadGroundTruthFile } from "../ground-truth";
 import {
@@ -71,6 +72,16 @@ describe("canonical performance statistics", () => {
 
     expect(input.text).toBe(expectedSeed);
     expect(input.text).not.toContain("Silver Orchard Labs LLC");
+  });
+
+  test("hashes only fixtures used by performance scenarios", () => {
+    const requestedFixtures: string[] = [];
+    performanceInputSourceDigest((file) => {
+      requestedFixtures.push(file);
+      return new TextEncoder().encode(`contents of ${file}`);
+    });
+
+    expect(requestedFixtures).toEqual(["en.json"]);
   });
 
   test("builds deterministic short inputs for every entity-density scenario", async () => {

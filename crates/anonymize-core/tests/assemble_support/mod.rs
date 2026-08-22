@@ -55,9 +55,26 @@ fn read_expected_delta(
   dir: &Path,
   name: &str,
 ) -> Result<ExpectedDelta, String> {
+  read_expected_delta_if_present(dir, name)?.ok_or_else(|| {
+    format!(
+      "read {}: file does not exist",
+      expected_path(dir, name).display()
+    )
+  })
+}
+
+fn read_expected_delta_if_present(
+  dir: &Path,
+  name: &str,
+) -> Result<Option<ExpectedDelta>, String> {
   let path = expected_path(dir, name);
-  let text = fs::read_to_string(&path)
-    .map_err(|error| format!("read {}: {error}", path.display()))?;
+  let text = match fs::read_to_string(&path) {
+    Ok(text) => text,
+    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+      return Ok(None);
+    }
+    Err(error) => return Err(format!("read {}: {error}", path.display())),
+  };
   let delta: ExpectedDelta = serde_json::from_str(&text)
     .map_err(|error| format!("parse {}: {error}", path.display()))?;
   if delta.base != BASELINE_FIXTURE {
@@ -67,7 +84,7 @@ fn read_expected_delta(
       delta.base
     ));
   }
-  Ok(delta)
+  Ok(Some(delta))
 }
 
 fn object_at_path_mut<'a>(
@@ -325,33 +342,24 @@ fn is_omittable_serialized_default(value: &Value) -> bool {
     || value.as_object().is_some_and(Map::is_empty)
 }
 
-fn preserve_omitted_member(actual: &mut Value, path: &[String]) {
-  let Some((key, parent_path)) = path.split_last() else {
-    return;
-  };
-  let mut parent = actual;
-  for segment in parent_path {
-    let Some(next) = parent
-      .as_object_mut()
-      .and_then(|object| object.get_mut(segment))
-    else {
-      return;
-    };
-    parent = next;
-  }
-  let Some(object) = parent.as_object_mut() else {
-    return;
-  };
-  if object.get(key).is_some_and(is_omittable_serialized_default) {
-    object.remove(key);
-  }
-}
-
-fn preserve_omitted_members(actual: &mut Value, changes: &[ExpectedChange]) {
-  for change in changes {
-    if let ExpectedChange::Remove { path } = change {
-      preserve_omitted_member(actual, path);
+fn preserve_omissions_from_oracle(actual: &mut Value, oracle: &Value) {
+  match (actual, oracle) {
+    (Value::Object(actual), Value::Object(oracle)) => {
+      actual.retain(|key, value| {
+        oracle.contains_key(key) || !is_omittable_serialized_default(value)
+      });
+      for (key, value) in actual {
+        if let Some(oracle_value) = oracle.get(key) {
+          preserve_omissions_from_oracle(value, oracle_value);
+        }
+      }
     }
+    (Value::Array(actual), Value::Array(oracle)) => {
+      for (value, oracle_value) in actual.iter_mut().zip(oracle) {
+        preserve_omissions_from_oracle(value, oracle_value);
+      }
+    }
+    _ => {}
   }
 }
 
@@ -367,8 +375,17 @@ pub fn preserve_omission_oracle(
   if name == BASELINE_FIXTURE {
     return Ok(());
   }
-  let delta = read_expected_delta(dir, name)?;
-  preserve_omitted_members(actual, &delta.changes);
+  let Some(delta) = read_expected_delta_if_present(dir, name)? else {
+    return Ok(());
+  };
+  let mut oracle = read_value(&expected_path(dir, BASELINE_FIXTURE))?;
+  for change in delta.changes {
+    // A historical delta may no longer apply cleanly to the new baseline.
+    // Best-effort reconstruction still preserves every omission whose path
+    // remains meaningful, without copying stale values into `actual`.
+    drop(apply_change(&mut oracle, change));
+  }
+  preserve_omissions_from_oracle(actual, &oracle);
   Ok(())
 }
 
@@ -512,18 +529,12 @@ mod tests {
         "explicit_object": {}
       }
     });
-    let changes = vec![
-      ExpectedChange::Remove {
-        path: vec![String::from("omitted_null")],
-      },
-      ExpectedChange::Remove {
-        path: vec![String::from("omitted_array")],
-      },
-      ExpectedChange::Remove {
-        path: vec![String::from("nested"), String::from("omitted_object")],
-      },
-    ];
-    preserve_omitted_members(&mut actual, &changes);
+    let oracle = serde_json::json!({
+      "explicit_null": null,
+      "explicit_array": [],
+      "nested": {"explicit_object": {}}
+    });
+    preserve_omissions_from_oracle(&mut actual, &oracle);
     assert_eq!(
       actual,
       serde_json::json!({
@@ -532,6 +543,26 @@ mod tests {
         "nested": {"explicit_object": {}}
       })
     );
+  }
+
+  #[test]
+  fn missing_omission_oracle_leaves_new_fixture_unchanged() -> Result<(), String>
+  {
+    let dir = std::env::temp_dir().join(format!(
+      "stella-missing-assemble-delta-{}",
+      std::process::id()
+    ));
+    let mut actual = serde_json::json!({
+      "null_member": null,
+      "array_member": [],
+      "object_member": {}
+    });
+    let expected = actual.clone();
+
+    preserve_omission_oracle(&dir, "new-fixture", &mut actual)?;
+
+    assert_eq!(actual, expected);
+    Ok(())
   }
 
   proptest! {

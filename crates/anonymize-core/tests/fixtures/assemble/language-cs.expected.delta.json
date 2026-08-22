@@ -1443,6 +1443,32 @@
       ]
     },
     {
+      "type": "set",
+      "path": ["legal_form_data", "clause_noun_heads"],
+      "value": [
+        "smlouva",
+        "smlouvy",
+        "smlouvu",
+        "smlouvou",
+        "dohoda",
+        "dohody",
+        "dohodu",
+        "dohodou",
+        "licence",
+        "licenci",
+        "příloha",
+        "přílohy",
+        "přílohu",
+        "dodatek",
+        "dodatku",
+        "článek",
+        "oznámení",
+        "podmínky",
+        "předmět",
+        "ustanovení"
+      ]
+    },
+    {
       "type": "array",
       "path": ["zone_data", "signing_clauses"],
       "segments": [

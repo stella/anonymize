@@ -4681,6 +4681,22 @@ mod tests {
   }
 
   #[test]
+  fn connector_clause_nouns_are_language_isolated() {
+    let text = "Alpha Beta Dohoda and Holdings LLC";
+    let suffix_start = text.find("LLC").unwrap();
+    let organization_start = text.find("Holdings").unwrap();
+    let english = connector_test_data();
+    let mut czech = connector_test_data();
+    czech.clause_noun_heads.insert(String::from("dohoda"));
+
+    assert_eq!(super::walk_backward(text, suffix_start, &english), Some(0));
+    assert_eq!(
+      super::walk_backward(text, suffix_start, &czech),
+      Some(organization_start)
+    );
+  }
+
+  #[test]
   fn connector_boundary_extends_across_institutional_head_for_company_word() {
     let mut data = connector_test_data();
     data.company_suffix_words.insert(String::from("associates"));
