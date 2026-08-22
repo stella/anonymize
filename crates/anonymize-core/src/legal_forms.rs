@@ -575,7 +575,7 @@ fn walk_backward(
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum ConnectorBoundaryEvidence {
   ListSeparator,
-  PartyRoleWithPersonShapedLeftParty,
+  PartyListRoleWithPersonShapedLeftParty,
 }
 
 fn connector_boundary_evidence(
@@ -596,15 +596,15 @@ fn connector_boundary_evidence(
   let clause = before
     .rsplit_once(['.', ';', '\n', '\r'])
     .map_or(before, |(_, clause)| clause);
-  role_precedes_person_shaped_left_party(clause, data)
-    .then_some(ConnectorBoundaryEvidence::PartyRoleWithPersonShapedLeftParty)
+  party_list_role_precedes_person_shaped_left_party(clause, data).then_some(
+    ConnectorBoundaryEvidence::PartyListRoleWithPersonShapedLeftParty,
+  )
 }
 
-/// A role word alone can label an organization whose name contains a
-/// connector (`Nájemce: Základní škola a Mateřská škola`). Require the
-/// text immediately left of the connector to look like a person's two-word
-/// name before treating the role as evidence for a party-list boundary.
-fn role_precedes_person_shaped_left_party(
+/// A singular role can label an organization whose name contains a connector
+/// (`Nájemce: Alfa Beta a Partneři`). Require an explicit multi-token
+/// party-list role before the person-shaped left party.
+fn party_list_role_precedes_person_shaped_left_party(
   clause: &str,
   data: &PreparedLegalFormData,
 ) -> bool {
@@ -615,20 +615,23 @@ fn role_precedes_person_shaped_left_party(
   let Some(mut current) = tokens.next() else {
     return false;
   };
-  let mut role_before_pair = false;
+  let mut consecutive_role_heads_before_pair = 0usize;
 
   for next in tokens {
     if data
       .role_heads
       .contains(lowercase_lookup(previous.text).as_ref())
     {
-      role_before_pair = true;
+      consecutive_role_heads_before_pair =
+        consecutive_role_heads_before_pair.saturating_add(1);
+    } else {
+      consecutive_role_heads_before_pair = 0;
     }
     previous = current;
     current = next;
   }
 
-  role_before_pair
+  consecutive_role_heads_before_pair >= 2
     && starts_person_name_word(previous.text)
     && starts_person_name_word(current.text)
 }
@@ -4623,18 +4626,20 @@ mod tests {
 
   proptest! {
     #[test]
-    fn role_labeled_lowercase_bridge_is_not_party_evidence(
+    fn singular_role_labeled_company_is_not_party_evidence(
       label_space in prop_oneof![Just(" "), Just("\t"), Just("\u{00a0}"), Just("\u{202f}")],
       connector_space in prop_oneof![Just(" "), Just("\t"), Just("\u{00a0}"), Just("\u{202f}")],
     ) {
-      let organization = format!(
-        "Základní škola{connector_space}a{connector_space}Mateřská škola Brno, s.r.o."
-      );
-      let text = format!("Nájemce:{label_space}{organization}");
-      prop_assert_eq!(
-        czech_party_connector_entities(&text),
-        vec![organization]
-      );
+      for organization in [
+        format!("Základní škola{connector_space}a{connector_space}Mateřská škola Brno, s.r.o."),
+        format!("Alfa Beta{connector_space}a{connector_space}Partneři s.r.o."),
+      ] {
+        let text = format!("Nájemce:{label_space}{organization}");
+        prop_assert_eq!(
+          czech_party_connector_entities(&text),
+          vec![organization]
+        );
+      }
     }
   }
 
