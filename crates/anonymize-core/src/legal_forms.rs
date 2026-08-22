@@ -527,7 +527,7 @@ fn walk_backward(
       let is_party_list_connector = data
         .and_connector_words
         .contains(lowercase_lookup(token.text).as_ref());
-      if is_party_list_connector && list_separator_precedes(text, token.start) {
+      if connector_has_boundary_evidence(text, &token, data) {
         break;
       }
       let previous = token_before(text, token.start, false, data);
@@ -1004,6 +1004,49 @@ fn list_separator_precedes(text: &str, pos: usize) -> bool {
     return matches!(ch, ',' | ';');
   }
   false
+}
+
+fn connector_has_boundary_evidence(
+  text: &str,
+  connector: &Token<'_>,
+  data: &PreparedLegalFormData,
+) -> bool {
+  let lower = lowercase_lookup(connector.text);
+  let is_party_list_connector =
+    data.and_connector_words.contains(lower.as_ref());
+  if is_party_list_connector
+    && (list_separator_precedes(text, connector.start)
+      || has_middle_initial_before(text, connector.start))
+  {
+    return true;
+  }
+
+  let next = word_tokens(text, connector.end, text.len()).next();
+  if list_separator_precedes(text, connector.start)
+    && next.is_some_and(|word| {
+      data
+        .role_heads
+        .contains(lowercase_lookup(word.text).as_ref())
+    })
+  {
+    return true;
+  }
+
+  let Some(previous) = simple_word_before(text, connector.start) else {
+    return false;
+  };
+  let Some(next) = next else {
+    return false;
+  };
+  let previous_lower = lowercase_lookup(previous.text);
+  let next_lower = lowercase_lookup(next.text);
+  data.leading_clause_phrases.iter().any(|phrase| {
+    let mut words = phrase.split_whitespace();
+    words.next() == Some(previous_lower.as_ref())
+      && words.next() == Some(lower.as_ref())
+      && words.next() == Some(next_lower.as_ref())
+      && words.next().is_none()
+  })
 }
 
 fn starts_upper(text: &str) -> bool {
@@ -1620,7 +1663,7 @@ fn emit_candidate_segments(
     let prefix = prefix_info(emit_text);
     let all_caps_match =
       prefix.part.len() > 2 && prefix.part == prefix.part.to_uppercase();
-    if all_caps_match {
+    if all_caps_match && leading.offset == 0 {
       let word_count = if prefix.end > 0 {
         emit_text
           .get(..prefix.end)
@@ -2110,9 +2153,7 @@ fn extend_backward(
     if is_connector {
       let is_party_list_connector =
         data.and_connector_words.contains(lower.as_ref());
-      if is_party_list_connector
-        && list_separator_precedes(full_text, found.start)
-      {
+      if connector_has_boundary_evidence(full_text, &found, data) {
         break;
       }
       let Some(previous) = simple_word_before(full_text, found.start) else {
@@ -3527,6 +3568,8 @@ mod tests {
         String::from("amongst"),
         String::from("between"),
       ],
+      connector_words: vec![String::from("and")],
+      and_connector_words: vec![String::from("and")],
       ..LegalFormData::default()
     })
   }
@@ -3641,6 +3684,19 @@ mod tests {
       .collect()
   }
 
+  fn english_object_vocabulary(source: &str, key: &str) -> Vec<String> {
+    let value: serde_json::Value =
+      serde_json::from_str(source).expect("language-keyed vocabulary JSON");
+    value
+      .get("en")
+      .and_then(|english| english.get(key))
+      .and_then(serde_json::Value::as_array)
+      .expect("English vocabulary array")
+      .iter()
+      .map(|word| word.as_str().expect("vocabulary string").to_string())
+      .collect()
+  }
+
   fn legal_form_entities(
     text: &str,
     suffixes: &[&str],
@@ -3674,6 +3730,9 @@ mod tests {
     ));
     let legal_form_rule_words =
       include_str!("../../../packages/data/config/legal-form-rule-words.json");
+    let leading_clauses = include_str!(
+      "../../../packages/data/config/legal-form-leading-clauses.json"
+    );
     let data = PreparedLegalFormData::new(LegalFormData {
       suffixes: suffixes.iter().map(ToString::to_string).collect(),
       non_ascii_name_short_suffixes: non_ascii_name_short_suffixes
@@ -3691,6 +3750,18 @@ mod tests {
       company_suffix_words: object_vocabulary(
         legal_form_rule_words,
         "companySuffixWords",
+      ),
+      leading_clause_phrases: english_object_vocabulary(
+        leading_clauses,
+        "phrases",
+      ),
+      leading_clause_direct_prefixes: english_object_vocabulary(
+        leading_clauses,
+        "directPrefixes",
+      ),
+      comma_gated_direct_prefixes: object_vocabulary(
+        legal_form_rule_words,
+        "commaGatedDirectPrefixes",
       ),
       institutional_heads: institutional_heads
         .iter()
@@ -4505,11 +4576,11 @@ mod tests {
     let data = PreparedLegalFormData::new(LegalFormData {
       suffixes: vec![String::from(suffix)],
       connector_words: vec![String::from("a")],
-      and_connector_words: vec![String::from("a")],
       role_heads: vec![
         String::from("smluvní"),
         String::from("strany"),
         String::from("nájemce"),
+        String::from("kupujícím"),
       ],
       ..LegalFormData::default()
     });
@@ -4586,7 +4657,7 @@ mod tests {
       whitespace in prop_oneof![Just(" "), Just("\t"), Just("\u{00a0}"), Just("\u{202f}")],
     ) {
       let text = format!(
-        "Jan Novák{separator}{whitespace}a Modrá věž s.r.o."
+        "Jan Novák{separator}{whitespace}a{whitespace}kupujícím společností Modrá věž s.r.o."
       );
       prop_assert_eq!(
         czech_party_connector_entities(&text),
@@ -4632,11 +4703,43 @@ mod tests {
     // Widgets and Bar, Inc." above — this initialed variant is the
     // preserved case the guard can still tell apart.)
     let data = connector_test_data();
-    let text = "Paul J. Newman and Apple, Inc.";
-    let match_start = text.find("Apple").unwrap();
+    for (text, organization) in [
+      ("Paul J. Newman and Apple, Inc.", "Apple, Inc."),
+      ("Elon R. Musk and X Corp.", "X Corp."),
+      ("Elon R. Musk and X Holdings I, Inc.", "X Holdings I, Inc."),
+    ] {
+      let match_start = text.find(organization).unwrap();
+      assert_eq!(
+        extend_backward(text, match_start, &data, false),
+        match_start
+      );
+      let suffix = organization.split_whitespace().next_back().unwrap();
+      assert_eq!(legal_form_entities(text, &[suffix], &[]), [organization]);
+    }
+  }
+
+  #[test]
+  fn configured_party_clause_does_not_absorb_a_preceding_date() {
+    let text =
+      "March 11, 2022 by and between HEALTHCARE TRUST OF AMERICA, INC.";
+    let data = leading_clause_data();
+    let company_start = text.find("HEALTHCARE").expect("company name");
+    let suffix_start = text.find("INC").expect("legal form");
     assert_eq!(
-      extend_backward(text, match_start, &data, false),
-      match_start
+      super::walk_backward(text, suffix_start, &data),
+      Some(company_start)
+    );
+    assert_eq!(
+      extend_backward(text, company_start, &data, false),
+      company_start
+    );
+    assert_eq!(
+      text.get(trim_leading_clause(text, &data).offset..),
+      Some("HEALTHCARE TRUST OF AMERICA, INC.")
+    );
+    assert_eq!(
+      legal_form_entities(text, &["INC", "INC."], &[]),
+      ["HEALTHCARE TRUST OF AMERICA, INC."]
     );
   }
 
