@@ -1,6 +1,6 @@
 {
-  "createdAt": "2026-08-22T11:23:47.475Z",
-  "gitSha": "7e12492e-dirty",
+  "createdAt": "2026-08-22T13:38:00.723Z",
+  "gitSha": "baf89465",
   "hardware": "darwin/arm64, 8x Apple M3, 24 GiB RAM",
   "runtime": "Bun 1.4.0",
   "corpus": {
@@ -43,35 +43,35 @@
         "phone"
       ],
       "throughput": {
-        "initSeconds": 0.25927041700000003,
+        "initSeconds": 0.519930083,
         "totalChars": 8854,
-        "coldCharsPerSec": 18482.98864573975,
-        "warmCharsPerSec": 252228.55781641684
+        "coldCharsPerSec": 13158.644339034168,
+        "warmCharsPerSec": 175657.3232339562
       },
       "overall": {
         "overlapAll": {
-          "precision": 0.9518716577540107,
-          "recall": 0.8768472906403941,
-          "f1": 0.9128205128205128,
-          "tp": 178,
-          "fp": 9,
-          "fn": 25
+          "precision": 0.9411764705882353,
+          "recall": 0.8669950738916257,
+          "f1": 0.9025641025641026,
+          "tp": 176,
+          "fp": 11,
+          "fn": 27
         },
         "overlapSupported": {
-          "precision": 0.9518716577540107,
-          "recall": 0.8768472906403941,
-          "f1": 0.9128205128205128,
-          "tp": 178,
-          "fp": 9,
-          "fn": 25
+          "precision": 0.9411764705882353,
+          "recall": 0.8669950738916257,
+          "f1": 0.9025641025641026,
+          "tp": 176,
+          "fp": 11,
+          "fn": 27
         },
         "exactAll": {
-          "precision": 0.8609625668449198,
-          "recall": 0.7931034482758621,
-          "f1": 0.8256410256410257,
-          "tp": 161,
-          "fp": 26,
-          "fn": 42
+          "precision": 0.8502673796791443,
+          "recall": 0.7832512315270936,
+          "f1": 0.8153846153846154,
+          "tp": 159,
+          "fp": 28,
+          "fn": 44
         }
       },
       "perLabel": {
@@ -84,12 +84,12 @@
           "fn": 3
         },
         "organization": {
-          "precision": 0.8148148148148148,
-          "recall": 0.6470588235294118,
-          "f1": 0.7213114754098361,
-          "tp": 22,
-          "fp": 5,
-          "fn": 12
+          "precision": 0.7407407407407407,
+          "recall": 0.5882352941176471,
+          "f1": 0.6557377049180328,
+          "tp": 20,
+          "fp": 7,
+          "fn": 14
         },
         "address": {
           "precision": 0.8888888888888888,
@@ -142,20 +142,20 @@
       },
       "perLanguage": {
         "cs": {
-          "precision": 0.9354838709677419,
-          "recall": 0.7945205479452054,
-          "f1": 0.8592592592592593,
-          "tp": 58,
-          "fp": 4,
-          "fn": 15
+          "precision": 0.9193548387096774,
+          "recall": 0.7808219178082192,
+          "f1": 0.8444444444444444,
+          "tp": 57,
+          "fp": 5,
+          "fn": 16
         },
         "de": {
-          "precision": 0.9411764705882353,
-          "recall": 0.8727272727272727,
-          "f1": 0.9056603773584905,
-          "tp": 48,
-          "fp": 3,
-          "fn": 7
+          "precision": 0.9215686274509803,
+          "recall": 0.8545454545454545,
+          "f1": 0.8867924528301887,
+          "tp": 47,
+          "fp": 4,
+          "fn": 8
         },
         "en": {
           "precision": 0.972972972972973,
@@ -181,10 +181,10 @@
         "phone"
       ],
       "throughput": {
-        "initSeconds": 0.07612016699999992,
+        "initSeconds": 0.034040083000000096,
         "totalChars": 8854,
-        "coldCharsPerSec": 86581.91365821585,
-        "warmCharsPerSec": 165477.80192101517
+        "coldCharsPerSec": 31601.503710476598,
+        "warmCharsPerSec": 125227.6239069636
       },
       "overall": {
         "overlapAll": {
@@ -335,10 +335,10 @@
         "phone"
       ],
       "throughput": {
-        "initSeconds": 0.009119249999999966,
+        "initSeconds": 0.024572999999999866,
         "totalChars": 8854,
-        "coldCharsPerSec": 17482.67313373664,
-        "warmCharsPerSec": 22725.581037204345
+        "coldCharsPerSec": 4816.157137349653,
+        "warmCharsPerSec": 8943.103864129527
       },
       "overall": {
         "overlapAll": {
