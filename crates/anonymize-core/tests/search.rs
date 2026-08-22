@@ -78,8 +78,14 @@ fn assembled_obfuscated_email_pattern(
     pattern.prefilter_regex, None,
     "the written-email pattern must not retain a secondary regex"
   );
-  assert_eq!(pattern.prefilter_window_bytes, None);
-  assert_eq!(pattern.prepared_artifact_policy, None);
+  assert_eq!(
+    pattern.prefilter_window_bytes, None,
+    "the written-email pattern must not impose a prefilter window"
+  );
+  assert_eq!(
+    pattern.prepared_artifact_policy, None,
+    "the written-email pattern must not override artifact policy"
+  );
   pattern
 }
 
