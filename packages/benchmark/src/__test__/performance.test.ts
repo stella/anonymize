@@ -13,6 +13,7 @@ import {
   buildPerformanceInput,
   PERFORMANCE_SCENARIO_IDS,
 } from "../performance/input";
+import { loadGroundTruthFile } from "../ground-truth";
 import {
   assertCleanCpuNoise,
   cpuNoiseDelta,
@@ -58,6 +59,18 @@ describe("canonical performance statistics", () => {
     const second = await buildPerformanceInput(48 * 1024);
     expect(new TextEncoder().encode(first.text)).toHaveLength(48 * 1024);
     expect(first.sha256).toBe(second.sha256);
+  });
+
+  test("pins fixture-mixed to the original English fixture file", async () => {
+    const documents = await loadGroundTruthFile("en.json");
+    const expectedSeed =
+      documents.map(({ text }) => text).join("\n\n") + "\n\n";
+    const input = await buildPerformanceInput(
+      new TextEncoder().encode(expectedSeed).length,
+    );
+
+    expect(input.text).toBe(expectedSeed);
+    expect(input.text).not.toContain("Silver Orchard Labs LLC");
   });
 
   test("builds deterministic short inputs for every entity-density scenario", async () => {

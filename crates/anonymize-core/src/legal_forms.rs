@@ -10,7 +10,6 @@ const LEGAL_FORM_SCORE: f64 = 0.95;
 const HEAD_TOKEN_CAP: usize = 20;
 const MAX_LOWER_BRIDGE: usize = 4;
 const MAX_NAME_LOOKBACK: usize = 32;
-const MAX_CONNECTOR_EVIDENCE_LOOKBACK: usize = 160;
 
 #[derive(
   Clone, Debug, Default, Eq, PartialEq, serde::Deserialize, serde::Serialize,
@@ -411,7 +410,6 @@ fn extend_institutional_complement(
   {
     return suffix_end;
   }
-
   let mut last_capital_end = None;
   for token in tokens.take(MAX_INSTITUTIONAL_COMPLEMENT_TOKENS) {
     if starts_upper(token.text) {
@@ -526,24 +524,27 @@ fn walk_backward(
     }
 
     if contains_lowercase(&data.connector_words, token.text) {
-      if connector_boundary_evidence(text, token.start, data).is_some() {
+      let is_party_list_connector = data
+        .and_connector_words
+        .contains(lowercase_lookup(token.text).as_ref());
+      if is_party_list_connector && list_separator_precedes(text, token.start) {
         break;
       }
       let previous = token_before(text, token.start, false, data);
+      if is_party_list_connector
+        && previous.as_ref().is_some_and(|found| {
+          let lower = lowercase_lookup(found.text);
+          data.clause_noun_heads.contains(lower.as_ref())
+            || data.connector_prose_heads.contains(lower.as_ref())
+        })
+      {
+        break;
+      }
       if previous
         .as_ref()
         .is_some_and(|found| is_legal_form_suffix_word(found.text, data))
       {
         break;
-      }
-      if data
-        .and_connector_words
-        .contains(lowercase_lookup(token.text).as_ref())
-      {
-        let upper_before = count_upper_before(text, token.start, data);
-        if upper_before <= 2 || has_middle_initial_before(text, token.start) {
-          break;
-        }
       }
     }
 
@@ -566,78 +567,6 @@ fn walk_backward(
   }
 
   leftmost_cap
-}
-
-/// Evidence that a connector separates parties rather than words inside one
-/// organization name. Keeping this closed prevents a bare conjunction from
-/// becoming an implicit boundary rule: the surrounding syntax must prove the
-/// party-list interpretation.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum ConnectorBoundaryEvidence {
-  ListSeparator,
-  PartyListRoleWithPersonShapedLeftParty,
-}
-
-fn connector_boundary_evidence(
-  text: &str,
-  connector_start: usize,
-  data: &PreparedLegalFormData,
-) -> Option<ConnectorBoundaryEvidence> {
-  if list_separator_precedes(text, connector_start) {
-    return Some(ConnectorBoundaryEvidence::ListSeparator);
-  }
-
-  let mut window_start =
-    connector_start.saturating_sub(MAX_CONNECTOR_EVIDENCE_LOOKBACK);
-  while !text.is_char_boundary(window_start) {
-    window_start = window_start.saturating_add(1);
-  }
-  let before = text.get(window_start..connector_start)?;
-  let clause = before
-    .rsplit_once(['.', ';', '\n', '\r'])
-    .map_or(before, |(_, clause)| clause);
-  party_list_role_precedes_person_shaped_left_party(clause, data).then_some(
-    ConnectorBoundaryEvidence::PartyListRoleWithPersonShapedLeftParty,
-  )
-}
-
-/// A singular role can label an organization whose name contains a connector
-/// (`Nájemce: Alfa Beta a Partneři`). Require an explicit multi-token
-/// party-list role before the person-shaped left party.
-fn party_list_role_precedes_person_shaped_left_party(
-  clause: &str,
-  data: &PreparedLegalFormData,
-) -> bool {
-  let mut tokens = word_tokens(clause, 0, clause.len());
-  let Some(mut previous) = tokens.next() else {
-    return false;
-  };
-  let Some(mut current) = tokens.next() else {
-    return false;
-  };
-  let mut consecutive_role_heads_before_pair = 0usize;
-
-  for next in tokens {
-    if data
-      .role_heads
-      .contains(lowercase_lookup(previous.text).as_ref())
-    {
-      consecutive_role_heads_before_pair =
-        consecutive_role_heads_before_pair.saturating_add(1);
-    } else {
-      consecutive_role_heads_before_pair = 0;
-    }
-    previous = current;
-    current = next;
-  }
-
-  consecutive_role_heads_before_pair >= 2
-    && starts_person_name_word(previous.text)
-    && starts_person_name_word(current.text)
-}
-
-fn starts_person_name_word(text: &str) -> bool {
-  starts_upper(text) && text.chars().skip(1).any(char::is_lowercase)
 }
 
 fn preceding_line_is_role_list(
@@ -1140,23 +1069,6 @@ fn is_in_name_legal_form_word(
   let normalized = normalize_suffix_token(word);
   !normalized.is_empty()
     && data.normalized_in_name_words.contains(normalized.as_ref())
-}
-
-fn count_upper_before(
-  text: &str,
-  pos: usize,
-  data: &PreparedLegalFormData,
-) -> usize {
-  let mut scan = pos;
-  let mut count = 0_usize;
-  while let Some(token) = token_before(text, scan, false, data) {
-    if !starts_upper(token.text) {
-      break;
-    }
-    count = count.saturating_add(1);
-    scan = token.start;
-  }
-  count
 }
 
 fn has_middle_initial_before(text: &str, pos: usize) -> bool {
@@ -2196,7 +2108,11 @@ fn extend_backward(
     }
 
     if is_connector {
-      if connector_boundary_evidence(full_text, found.start, data).is_some() {
+      let is_party_list_connector =
+        data.and_connector_words.contains(lower.as_ref());
+      if is_party_list_connector
+        && list_separator_precedes(full_text, found.start)
+      {
         break;
       }
       let Some(previous) = simple_word_before(full_text, found.start) else {
@@ -2219,7 +2135,7 @@ fn extend_backward(
       {
         break;
       }
-      if data.and_connector_words.contains(lower.as_ref()) {
+      if is_party_list_connector {
         let upper_before =
           count_upper_words_before(full_text, found.start, suffix_mode, data);
         let middle_initial = has_middle_initial_before(full_text, found.start);
@@ -3966,13 +3882,15 @@ mod tests {
       legal_form_entities("Acme LLC, LLC", &["LLC"], &[]),
       ["Acme LLC, LLC"]
     );
+    // A bare conjunction is also valid inside one title-cased organization
+    // name. Without punctuation, retain one fail-closed redaction span.
     assert_eq!(
       institutional_head_entities("Court and Beta Court", "Court"),
-      ["Beta Court"]
+      ["Court and Beta Court"]
     );
     assert_eq!(
       institutional_head_entities("Acme Court and Beta Court", "Court"),
-      ["Acme Court", "Beta Court"]
+      ["Acme Court and Beta Court"]
     );
     assert_eq!(
       legal_form_entities(
@@ -3980,7 +3898,7 @@ mod tests {
         &["Committee", "Court"],
         &["Committee", "Court"],
       ),
-      ["Beta Court"]
+      ["Finance Committee and Beta Court"]
     );
     assert_eq!(
       legal_form_entities(
@@ -3988,7 +3906,7 @@ mod tests {
         &["Court", "Inc", "Inc."],
         &["Court"],
       ),
-      ["Acme Court", "Beta Inc."]
+      ["Acme Court and Beta Inc."]
     );
     assert_eq!(
       legal_form_entities(
@@ -4587,6 +4505,7 @@ mod tests {
     let data = PreparedLegalFormData::new(LegalFormData {
       suffixes: vec![String::from(suffix)],
       connector_words: vec![String::from("a")],
+      and_connector_words: vec![String::from("a")],
       role_heads: vec![
         String::from("smluvní"),
         String::from("strany"),
@@ -4607,11 +4526,11 @@ mod tests {
   }
 
   #[test]
-  fn language_connector_with_party_role_evidence_closes_name() {
+  fn unpunctuated_party_list_connector_fails_closed() {
     let text = "Smluvní strany Filip Sedláček a Orlické strojírny s.r.o.";
     assert_eq!(
       czech_party_connector_entities(text),
-      vec![String::from("Orlické strojírny s.r.o.")]
+      vec![String::from(text)]
     );
   }
 
@@ -4630,17 +4549,25 @@ mod tests {
       label_space in prop_oneof![Just(" "), Just("\t"), Just("\u{00a0}"), Just("\u{202f}")],
       connector_space in prop_oneof![Just(" "), Just("\t"), Just("\u{00a0}"), Just("\u{202f}")],
     ) {
-      for organization in [
-        format!("Základní škola{connector_space}a{connector_space}Mateřská škola Brno, s.r.o."),
-        format!("Alfa Beta{connector_space}a{connector_space}Partneři s.r.o."),
-      ] {
-        let text = format!("Nájemce:{label_space}{organization}");
-        prop_assert_eq!(
-          czech_party_connector_entities(&text),
-          vec![organization]
-        );
+      for role in ["Nájemce:", "Smluvní strany:"] {
+        for organization in [
+          format!("Základní škola{connector_space}a{connector_space}Mateřská škola Brno, s.r.o."),
+          format!("Alfa Beta{connector_space}a{connector_space}Partneři s.r.o."),
+        ] {
+          let text = format!("{role}{label_space}{organization}");
+          prop_assert_eq!(
+            czech_party_connector_entities(&text),
+            vec![organization]
+          );
+        }
       }
     }
+  }
+
+  #[test]
+  fn comma_before_ampersand_stays_inside_company_name() {
+    let text = "Smith, Jones, & Brown LLP";
+    assert_eq!(org_texts_for(text, "LLP"), vec![String::from(text)]);
   }
 
   #[test]

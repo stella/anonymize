@@ -15,6 +15,7 @@ pub mod assemble_support;
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -24,7 +25,8 @@ use stella_anonymize_adapter_contract::{
 use stella_anonymize_core::assemble::{GazetteerEntry, PipelineConfig};
 
 use assemble_support::{
-  BASELINE_FIXTURE, read_expected_value, write_expected_delta,
+  BASELINE_FIXTURE, preserve_omission_oracle, read_expected_value,
+  write_expected_delta,
 };
 
 /// Set to `1` to rewrite derived delta snapshots after the independent
@@ -772,18 +774,70 @@ fn refresh_delta_snapshots(
       continue;
     }
     let actual = assemble_fixture(input_path)?;
-    let current_expected: BindingPreparedSearchConfig = serde_json::from_value(
-      read_expected_value(dir, name)?,
-    )
-    .map_err(|error| format!("{name}: parse reconstructed config: {error}"))?;
-    if actual == current_expected {
-      continue;
-    }
-    let actual_value = serde_json::to_value(actual)
+    let mut actual_value = serde_json::to_value(actual)
       .map_err(|error| format!("{name}: serialize config: {error}"))?;
+    preserve_omission_oracle(dir, name, &mut actual_value)?;
     write_expected_delta(dir, name, &baseline_value, &actual_value)?;
   }
   Ok(())
+}
+
+#[test]
+fn refresh_replaces_a_delta_that_no_longer_applies_to_the_baseline()
+-> Result<(), String> {
+  let source_dir = fixtures_dir();
+  let fixture = "custom-regex-disabled";
+  let nonce = SystemTime::now()
+    .duration_since(UNIX_EPOCH)
+    .map_err(|error| format!("read system time: {error}"))?
+    .as_nanos();
+  let dir = std::env::temp_dir().join(format!(
+    "stella-assemble-parity-refresh-{}-{nonce}",
+    std::process::id()
+  ));
+  fs::create_dir(&dir)
+    .map_err(|error| format!("create {}: {error}", dir.display()))?;
+
+  let result = (|| {
+    fs::copy(
+      source_dir.join(format!("{BASELINE_FIXTURE}.expected.json")),
+      dir.join(format!("{BASELINE_FIXTURE}.expected.json")),
+    )
+    .map_err(|error| format!("copy baseline fixture: {error}"))?;
+    fs::write(
+      dir.join(format!("{fixture}.expected.delta.json")),
+      r#"{
+  "base": "baseline-all-on",
+  "changes": [
+    {"type": "remove", "path": ["date_data"]},
+    {"type": "remove", "path": ["obsolete_baseline_member"]}
+  ]
+}
+"#,
+    )
+    .map_err(|error| format!("write stale delta: {error}"))?;
+
+    let inputs = vec![
+      source_dir.join(format!("{BASELINE_FIXTURE}.input.json")),
+      source_dir.join(format!("{fixture}.input.json")),
+    ];
+    refresh_delta_snapshots(&dir, &inputs)?;
+
+    let refreshed = read_expected_value(&dir, fixture)?;
+    assert!(
+      refreshed.get("date_data").is_none(),
+      "the stale delta's independent omission oracle must survive refresh"
+    );
+    let actual = assemble_fixture(&inputs[1])?;
+    let expected: BindingPreparedSearchConfig =
+      serde_json::from_value(refreshed)
+        .map_err(|error| format!("parse refreshed fixture: {error}"))?;
+    assert_eq!(actual, expected);
+    Ok(())
+  })();
+  fs::remove_dir_all(&dir)
+    .map_err(|error| format!("remove {}: {error}", dir.display()))?;
+  result
 }
 
 #[test]

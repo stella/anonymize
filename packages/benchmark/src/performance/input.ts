@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { FIXTURES_DIR, loadGroundTruth } from "../ground-truth";
+import { FIXTURES_DIR, loadGroundTruthFile } from "../ground-truth";
 
 export const PERFORMANCE_INPUT_SOURCE =
   "versioned performance scenarios and packages/benchmark/fixtures/*.json";
@@ -35,6 +35,7 @@ const SPARSE_BLOCK_BYTES = 16 * 1024;
 const DENSE_ENTITY_SEED =
   "Email dense.person@example.test or call +1 202 555 0147. " +
   "Reference account GB82 WEST 1234 5698 7654 32.\n";
+const FIXTURE_MIXED_FILE = "en.json";
 
 const encoder = new TextEncoder();
 
@@ -117,9 +118,7 @@ const scenarioSeed = async (id: PerformanceScenarioId): Promise<string> => {
     case "dense-entities":
       return DENSE_ENTITY_SEED;
     case "fixture-mixed": {
-      const documents = (await loadGroundTruth()).filter(
-        ({ language }) => language === "en",
-      );
+      const documents = await loadGroundTruthFile(FIXTURE_MIXED_FILE);
       if (documents.length === 0) {
         throw new Error(
           "English synthetic performance fixtures are unavailable",

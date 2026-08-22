@@ -29,7 +29,12 @@ itself. Do not restore a parallel TypeScript assembly implementation.
    and mirror the change by hand into `baseline-all-on.expected.json`; the JSON
    data change is the independent source that justifies the new oracle.
 2. Refresh the derived delta snapshots. The updater first requires exact
-   parity with the hand-reviewed baseline and refuses to rewrite that baseline:
+   parity with the hand-reviewed baseline and refuses to rewrite that baseline.
+   It rebuilds every derived delta directly from that baseline and the newly
+   assembled config, so an obsolete delta cannot block a baseline shape change.
+   Existing `remove` operations remain the independent oracle for intentional
+   omissions, because Rust DTO serialization otherwise writes their defaults
+   as `null`, `[]`, or `{}`:
 
    ```bash
    ANONYMIZE_UPDATE_ASSEMBLE_SNAPSHOTS=1 cargo nextest run -p stella-anonymize-core --test assemble_parity

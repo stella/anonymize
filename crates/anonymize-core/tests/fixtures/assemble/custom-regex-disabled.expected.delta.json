@@ -2,9 +2,8 @@
   "base": "baseline-all-on",
   "changes": [
     {
-      "type": "set",
-      "path": ["date_data"],
-      "value": null
+      "type": "remove",
+      "path": ["date_data"]
     },
     {
       "type": "array",

@@ -51,6 +51,25 @@ fn read_value(path: &Path) -> Result<Value, String> {
     .map_err(|error| format!("parse {}: {error}", path.display()))
 }
 
+fn read_expected_delta(
+  dir: &Path,
+  name: &str,
+) -> Result<ExpectedDelta, String> {
+  let path = expected_path(dir, name);
+  let text = fs::read_to_string(&path)
+    .map_err(|error| format!("read {}: {error}", path.display()))?;
+  let delta: ExpectedDelta = serde_json::from_str(&text)
+    .map_err(|error| format!("parse {}: {error}", path.display()))?;
+  if delta.base != BASELINE_FIXTURE {
+    return Err(format!(
+      "{}: unsupported delta base {:?}, expected {BASELINE_FIXTURE:?}",
+      path.display(),
+      delta.base
+    ));
+  }
+  Ok(delta)
+}
+
 fn object_at_path_mut<'a>(
   mut value: &'a mut Value,
   path: &[String],
@@ -123,40 +142,8 @@ fn apply_change(
   Ok(())
 }
 
-fn is_omittable_snapshot_default(value: &Value) -> bool {
-  value.is_null()
-    || value.as_array().is_some_and(Vec::is_empty)
-    || value.as_object().is_some_and(Map::is_empty)
-}
-
-fn normalized_snapshot_value(snapshot: &Value) -> Value {
-  match snapshot {
-    Value::Object(object) => Value::Object(
-      object
-        .iter()
-        .filter(|(_, member)| !is_omittable_snapshot_default(member))
-        .map(|(key, member)| (key.clone(), normalized_snapshot_value(member)))
-        .collect(),
-    ),
-    Value::Array(values) => {
-      Value::Array(values.iter().map(normalized_snapshot_value).collect())
-    }
-    Value::Number(number) if number.is_f64() => number
-      .as_f64()
-      .filter(|number_value| number_value.fract() == 0.0)
-      .map(|number_value| format!("{number_value:.0}"))
-      .and_then(|formatted| formatted.parse::<i64>().ok())
-      .map_or_else(|| snapshot.clone(), Value::from),
-    unmatched => unmatched.clone(),
-  }
-}
-
-fn snapshot_values_equal(left: &Value, right: &Value) -> bool {
-  normalized_snapshot_value(left) == normalized_snapshot_value(right)
-}
-
 fn value_key(value: &Value) -> Result<String, String> {
-  serde_json::to_string(&normalized_snapshot_value(value))
+  serde_json::to_string(value)
     .map_err(|error| format!("serialize array item: {error}"))
 }
 
@@ -237,7 +224,7 @@ fn array_segments(
         .ok_or_else(|| String::from("actual array key copy exceeds length"))?;
       continue;
     }
-    push_value_segment(&mut segments, normalized_snapshot_value(actual_value));
+    push_value_segment(&mut segments, actual_value.clone());
     remaining_actual = remaining_actual
       .get(1..)
       .ok_or_else(|| String::from("actual array advance exceeds length"))?;
@@ -254,18 +241,13 @@ fn build_changes(
   path: &mut Vec<String>,
   changes: &mut Vec<ExpectedChange>,
 ) -> Result<(), String> {
-  if snapshot_values_equal(baseline, actual) {
+  if baseline == actual {
     return Ok(());
   }
 
   match (baseline, actual) {
     (Value::Object(baseline), Value::Object(actual)) => {
       for (key, baseline_value) in baseline {
-        if is_omittable_snapshot_default(baseline_value)
-          && !actual.contains_key(key)
-        {
-          continue;
-        }
         path.push(key.clone());
         match actual.get(key) {
           Some(actual_value) => {
@@ -276,15 +258,13 @@ fn build_changes(
         path.pop();
       }
       for (key, actual_value) in actual {
-        if baseline.contains_key(key)
-          || is_omittable_snapshot_default(actual_value)
-        {
+        if baseline.contains_key(key) {
           continue;
         }
         path.push(key.clone());
         changes.push(ExpectedChange::Set {
           path: path.clone(),
-          value: normalized_snapshot_value(actual_value),
+          value: actual_value.clone(),
         });
         path.pop();
       }
@@ -297,7 +277,7 @@ fn build_changes(
     }
     (_, actual) => changes.push(ExpectedChange::Set {
       path: path.clone(),
-      value: normalized_snapshot_value(actual),
+      value: actual.clone(),
     }),
   }
   Ok(())
@@ -325,7 +305,7 @@ pub fn write_expected_delta(
   for change in delta.changes.clone() {
     apply_change(&mut reconstructed, change)?;
   }
-  if !snapshot_values_equal(&reconstructed, actual) {
+  if reconstructed != *actual {
     return Err(format!(
       "{name}: generated delta does not reconstruct the actual config"
     ));
@@ -339,25 +319,64 @@ pub fn write_expected_delta(
     .map_err(|error| format!("write {}: {error}", path.display()))
 }
 
+fn is_omittable_serialized_default(value: &Value) -> bool {
+  value.is_null()
+    || value.as_array().is_some_and(Vec::is_empty)
+    || value.as_object().is_some_and(Map::is_empty)
+}
+
+fn preserve_omitted_member(actual: &mut Value, path: &[String]) {
+  let Some((key, parent_path)) = path.split_last() else {
+    return;
+  };
+  let mut parent = actual;
+  for segment in parent_path {
+    let Some(next) = parent
+      .as_object_mut()
+      .and_then(|object| object.get_mut(segment))
+    else {
+      return;
+    };
+    parent = next;
+  }
+  let Some(object) = parent.as_object_mut() else {
+    return;
+  };
+  if object.get(key).is_some_and(is_omittable_serialized_default) {
+    object.remove(key);
+  }
+}
+
+fn preserve_omitted_members(actual: &mut Value, changes: &[ExpectedChange]) {
+  for change in changes {
+    if let ExpectedChange::Remove { path } = change {
+      preserve_omitted_member(actual, path);
+    }
+  }
+}
+
+/// Applies omission-only information from a prior frozen delta to an assembled
+/// Rust DTO. This retains intentional JSON omissions that serde represents as
+/// `null`, `[]`, or `{}` without applying the stale delta to the new baseline.
+pub fn preserve_omission_oracle(
+  dir: &Path,
+  name: &str,
+  actual: &mut Value,
+) -> Result<(), String> {
+  if name == BASELINE_FIXTURE {
+    return Ok(());
+  }
+  let delta = read_expected_delta(dir, name)?;
+  preserve_omitted_members(actual, &delta.changes);
+  Ok(())
+}
+
 pub fn read_expected_value(dir: &Path, name: &str) -> Result<Value, String> {
   if name == BASELINE_FIXTURE {
     return read_value(&expected_path(dir, name));
   }
 
-  let delta_path = expected_path(dir, name);
-  let delta: ExpectedDelta = {
-    let text = fs::read_to_string(&delta_path)
-      .map_err(|error| format!("read {}: {error}", delta_path.display()))?;
-    serde_json::from_str(&text)
-      .map_err(|error| format!("parse {}: {error}", delta_path.display()))?
-  };
-  if delta.base != BASELINE_FIXTURE {
-    return Err(format!(
-      "{}: unsupported delta base {:?}, expected {BASELINE_FIXTURE:?}",
-      delta_path.display(),
-      delta.base
-    ));
-  }
+  let delta = read_expected_delta(dir, name)?;
 
   let mut expected = read_value(&expected_path(dir, BASELINE_FIXTURE))?;
   for change in delta.changes {
@@ -368,7 +387,17 @@ pub fn read_expected_value(dir: &Path, name: &str) -> Result<Value, String> {
 
 #[cfg(test)]
 mod tests {
+  use proptest::prelude::*;
+
   use super::*;
+
+  fn structural_snapshot(member: Option<Value>) -> Value {
+    let mut object = Map::new();
+    if let Some(member) = member {
+      object.insert(String::from("member"), member);
+    }
+    Value::Object(object)
+  }
 
   #[test]
   fn delta_preserves_nulls_and_removes_fields() -> Result<(), String> {
@@ -434,6 +463,106 @@ mod tests {
     }
     assert_eq!(reconstructed, actual);
     Ok(())
+  }
+
+  #[test]
+  fn generated_delta_preserves_absent_null_and_empty_members()
+  -> Result<(), String> {
+    let baseline = serde_json::json!({
+      "removed_null": null,
+      "removed_array": [],
+      "removed_object": {},
+      "nested": {
+        "removed_null": null,
+        "removed_array": [],
+        "removed_object": {}
+      }
+    });
+    let actual = serde_json::json!({
+      "added_null": null,
+      "added_array": [],
+      "added_object": {},
+      "nested": {
+        "added_null": null,
+        "added_array": [],
+        "added_object": {}
+      }
+    });
+    let mut changes = Vec::new();
+    build_changes(&baseline, &actual, &mut Vec::new(), &mut changes)?;
+
+    let mut reconstructed = baseline;
+    for change in changes {
+      apply_change(&mut reconstructed, change)?;
+    }
+    assert_eq!(reconstructed, actual);
+    Ok(())
+  }
+
+  #[test]
+  fn omission_oracle_preserves_omitted_null_and_empty_members()
+  -> Result<(), String> {
+    let mut actual = serde_json::json!({
+      "omitted_null": null,
+      "explicit_null": null,
+      "omitted_array": [],
+      "explicit_array": [],
+      "nested": {
+        "omitted_object": {},
+        "explicit_object": {}
+      }
+    });
+    let changes = vec![
+      ExpectedChange::Remove {
+        path: vec![String::from("omitted_null")],
+      },
+      ExpectedChange::Remove {
+        path: vec![String::from("omitted_array")],
+      },
+      ExpectedChange::Remove {
+        path: vec![String::from("nested"), String::from("omitted_object")],
+      },
+    ];
+    preserve_omitted_members(&mut actual, &changes);
+    assert_eq!(
+      actual,
+      serde_json::json!({
+        "explicit_null": null,
+        "explicit_array": [],
+        "nested": {"explicit_object": {}}
+      })
+    );
+    Ok(())
+  }
+
+  proptest! {
+    #[test]
+    fn generated_delta_round_trips_each_structural_member_state(
+      baseline_member in prop_oneof![
+        Just(None),
+        Just(Some(Value::Null)),
+        Just(Some(Value::Array(Vec::new()))),
+        Just(Some(Value::Object(Map::new()))),
+      ],
+      actual_member in prop_oneof![
+        Just(None),
+        Just(Some(Value::Null)),
+        Just(Some(Value::Array(Vec::new()))),
+        Just(Some(Value::Object(Map::new()))),
+      ],
+    ) {
+      let baseline = structural_snapshot(baseline_member);
+      let actual = structural_snapshot(actual_member);
+      let mut changes = Vec::new();
+      prop_assert!(
+        build_changes(&baseline, &actual, &mut Vec::new(), &mut changes).is_ok()
+      );
+      let mut reconstructed = baseline;
+      for change in changes {
+        prop_assert!(apply_change(&mut reconstructed, change).is_ok());
+      }
+      prop_assert_eq!(reconstructed, actual);
+    }
   }
 
   #[test]
