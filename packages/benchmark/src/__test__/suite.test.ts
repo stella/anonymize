@@ -60,8 +60,12 @@ describe("benchmark suite registry", () => {
       ({ policy }) => policy === "evaluation-only",
     )) {
       expect(corpus.access).toBe("verified-download");
-      expect(["test", "evaluation"]).toContain(corpus.artifact?.split);
-      expect(corpus.artifact?.sha256).toMatch(/^[a-f0-9]{64}$/u);
+      const artifact = corpus.artifact;
+      if (artifact === undefined) {
+        throw new Error(`${corpus.id} must pin an evaluation artifact`);
+      }
+      expect(["test", "evaluation"]).toContain(artifact.split);
+      expect(artifact.sha256).toMatch(/^[a-f0-9]{64}$/u);
     }
   });
 });
