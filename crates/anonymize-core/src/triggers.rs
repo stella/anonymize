@@ -118,6 +118,12 @@ struct PreparedTriggerRule {
   include_trigger: bool,
 }
 
+struct SuccessfulTriggerCandidate<'a> {
+  found: SearchMatch,
+  rule: &'a PreparedTriggerRule,
+  entity: PipelineEntity,
+}
+
 enum PreparedTriggerStrategy {
   ToNextComma {
     stop_words: Vec<String>,
@@ -322,34 +328,7 @@ pub(crate) fn process_trigger_matches(
   mut diagnostics: Option<&mut StaticRedactionDiagnostics>,
 ) -> Result<Vec<PipelineEntity>> {
   let offsets = ByteOffsets::new(full_text);
-  let mut results = Vec::new();
-  // Several configured field grammars intentionally share a start
-  // (`passport number` and `passport number is`). The shorter trigger must
-  // not extract the linking word as part of the value and then win conflict
-  // resolution through its broader span. Compute maximum munch once; equal
-  // length alternatives remain available for label/validation differences.
-  let mut maximum_end_by_start = HashMap::<u32, u32>::new();
-  for found in matches {
-    let Some(local_index) = slice.local_index(found.pattern()) else {
-      continue;
-    };
-    let Some(rule) = data.rules.get(local_index) else {
-      continue;
-    };
-    // An overlapping longer literal may only shadow the shorter fallback
-    // when it is itself a valid trigger occurrence. For example, `VAT number`
-    // inside `VAT numbers` fails its right boundary and must not suppress the
-    // valid `VAT` trigger at the same start.
-    if !has_left_boundary(full_text, &offsets, found.start())?
-      || !has_right_boundary(full_text, &offsets, found.end(), &rule.trigger)?
-    {
-      continue;
-    }
-    maximum_end_by_start
-      .entry(found.start())
-      .and_modify(|end| *end = (*end).max(found.end()))
-      .or_insert_with(|| found.end());
-  }
+  let mut candidates = Vec::new();
   let extraction_data = TriggerExtractionData {
     address_stop_keywords: &data.address_stop_keywords,
     party_position_terms: &data.party_position_terms,
@@ -367,18 +346,6 @@ pub(crate) fn process_trigger_matches(
     let Some(rule) = data.rules.get(local_index) else {
       continue;
     };
-    if maximum_end_by_start
-      .get(&found.start())
-      .is_some_and(|maximum_end| found.end() < *maximum_end)
-    {
-      record_trigger_rejection(
-        &mut diagnostics,
-        found,
-        rule,
-        "shorter-same-start-trigger",
-      );
-      continue;
-    }
     if !has_left_boundary(full_text, &offsets, found.start())? {
       record_trigger_rejection(&mut diagnostics, found, rule, "left-boundary");
       continue;
@@ -496,14 +463,48 @@ pub(crate) fn process_trigger_matches(
     if label.is_empty() {
       label.clone_from(&rule.label);
     }
-    results.push(PipelineEntity::detected(
-      entity_start,
-      entity_end,
-      label,
-      entity_text,
-      TRIGGER_SCORE,
-      DetectionSource::Trigger,
-    ));
+    candidates.push(SuccessfulTriggerCandidate {
+      found: *found,
+      rule,
+      entity: PipelineEntity::detected(
+        entity_start,
+        entity_end,
+        label,
+        entity_text,
+        TRIGGER_SCORE,
+        DetectionSource::Trigger,
+      ),
+    });
+  }
+
+  // Several configured field grammars intentionally share a start
+  // (`passport number` and `passport number is`). A successful longer rule
+  // owns that field grammar, but a boundary-valid rule that cannot extract or
+  // validate a value must leave the shorter fallback available. Equal-length
+  // alternatives remain available for label and validation differences.
+  let mut maximum_successful_end_by_start = HashMap::<u32, u32>::new();
+  for candidate in &candidates {
+    maximum_successful_end_by_start
+      .entry(candidate.found.start())
+      .and_modify(|end| *end = (*end).max(candidate.found.end()))
+      .or_insert_with(|| candidate.found.end());
+  }
+
+  let mut results = Vec::with_capacity(candidates.len());
+  for candidate in candidates {
+    if maximum_successful_end_by_start
+      .get(&candidate.found.start())
+      .is_some_and(|maximum_end| candidate.found.end() < *maximum_end)
+    {
+      record_trigger_rejection(
+        &mut diagnostics,
+        &candidate.found,
+        candidate.rule,
+        "shorter-same-start-trigger",
+      );
+      continue;
+    }
+    results.push(candidate.entity);
   }
 
   Ok(results)
@@ -2983,6 +2984,57 @@ mod tests {
 
     assert_eq!(entities.len(), 1);
     assert_eq!(entities[0].text, "numbers 12345");
+  }
+
+  proptest::proptest! {
+    #[test]
+    fn validation_failed_longer_trigger_does_not_shadow_valid_fallback(
+      identifier in "[0-9]{1,12}",
+    ) {
+      let text = format!("record number code {identifier}");
+      let data = trigger_test_data(vec![
+        TriggerRule {
+          trigger: String::from("record number"),
+          label: String::from("registration number"),
+          strategy: TriggerStrategy::NWords { count: 2 },
+          validations: vec![TriggerValidation::HasDigits],
+          include_trigger: false,
+        },
+        TriggerRule {
+          trigger: String::from("record number code"),
+          label: String::from("registration number"),
+          strategy: TriggerStrategy::NWords { count: 1 },
+          validations: vec![TriggerValidation::NoDigits],
+          include_trigger: false,
+        },
+      ]);
+      let entities = process_trigger_matches(
+        &[
+          SearchMatch::Literal {
+            pattern: 0,
+            start: 0,
+            end: u32::try_from("record number".len()).unwrap(),
+          },
+          SearchMatch::Literal {
+            pattern: 1,
+            start: 0,
+            end: u32::try_from("record number code".len()).unwrap(),
+          },
+        ],
+        PatternSlice { start: 0, end: 2 },
+        &text,
+        &data,
+        &BTreeSet::new(),
+        None,
+      )
+      .unwrap();
+
+      proptest::prop_assert_eq!(entities.len(), 1);
+      proptest::prop_assert_eq!(
+        &entities[0].text,
+        &format!("code {identifier}"),
+      );
+    }
   }
 
   #[test]
