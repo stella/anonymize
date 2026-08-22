@@ -355,9 +355,10 @@ fn preserve_omitted_members(actual: &mut Value, changes: &[ExpectedChange]) {
   }
 }
 
-/// Applies omission-only information from a prior frozen delta to an assembled
-/// Rust DTO. This retains intentional JSON omissions that serde represents as
-/// `null`, `[]`, or `{}` without applying the stale delta to the new baseline.
+/// Applies omission-only information from a prior frozen delta.
+///
+/// This retains intentional JSON omissions that serde represents as `null`,
+/// `[]`, or `{}` without applying the stale delta to the new baseline.
 pub fn preserve_omission_oracle(
   dir: &Path,
   name: &str,
@@ -500,8 +501,7 @@ mod tests {
   }
 
   #[test]
-  fn omission_oracle_preserves_omitted_null_and_empty_members()
-  -> Result<(), String> {
+  fn omission_oracle_preserves_omitted_null_and_empty_members() {
     let mut actual = serde_json::json!({
       "omitted_null": null,
       "explicit_null": null,
@@ -532,7 +532,6 @@ mod tests {
         "nested": {"explicit_object": {}}
       })
     );
-    Ok(())
   }
 
   proptest! {

@@ -15,7 +15,6 @@ pub mod assemble_support;
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -787,15 +786,11 @@ fn refresh_replaces_a_delta_that_no_longer_applies_to_the_baseline()
 -> Result<(), String> {
   let source_dir = fixtures_dir();
   let fixture = "custom-regex-disabled";
-  let nonce = SystemTime::now()
-    .duration_since(UNIX_EPOCH)
-    .map_err(|error| format!("read system time: {error}"))?
-    .as_nanos();
   let dir = std::env::temp_dir().join(format!(
-    "stella-assemble-parity-refresh-{}-{nonce}",
+    "stella-assemble-parity-refresh-{}",
     std::process::id()
   ));
-  fs::create_dir(&dir)
+  fs::create_dir_all(&dir)
     .map_err(|error| format!("create {}: {error}", dir.display()))?;
 
   let result = (|| {
@@ -828,7 +823,10 @@ fn refresh_replaces_a_delta_that_no_longer_applies_to_the_baseline()
       refreshed.get("date_data").is_none(),
       "the stale delta's independent omission oracle must survive refresh"
     );
-    let actual = assemble_fixture(&inputs[1])?;
+    let fixture_input = inputs
+      .get(1)
+      .ok_or_else(|| String::from("derived fixture input is missing"))?;
+    let actual = assemble_fixture(fixture_input)?;
     let expected: BindingPreparedSearchConfig =
       serde_json::from_value(refreshed)
         .map_err(|error| format!("parse refreshed fixture: {error}"))?;
