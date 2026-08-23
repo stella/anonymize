@@ -1027,22 +1027,10 @@ fn connector_has_boundary_evidence(
     return true;
   }
 
-  let next = word_tokens(text, connector.end, text.len()).next();
-  if connector.text.chars().all(char::is_alphabetic)
-    && list_separator_precedes(text, connector.start)
-    && next.is_some_and(|word| {
-      data
-        .role_heads
-        .contains(lowercase_lookup(word.text).as_ref())
-    })
-  {
-    return true;
-  }
-
   let Some(previous) = simple_word_before(text, connector.start) else {
     return false;
   };
-  let Some(next) = next else {
+  let Some(next) = word_tokens(text, connector.end, text.len()).next() else {
     return false;
   };
   let previous_lower = lowercase_lookup(previous.text);
@@ -3039,6 +3027,8 @@ fn contains_lowercase(set: &HashSet<String>, text: &str) -> bool {
 mod tests {
   #![allow(clippy::expect_used, clippy::unwrap_used)]
 
+  use std::collections::HashSet;
+
   use super::{
     Candidate, CandidateContainmentIndex, LegalFormData, PreparedLegalFormData,
     crosses_sentence_end, drop_overlapping, ends_with_list_suffix,
@@ -3697,6 +3687,39 @@ mod tests {
       .collect()
   }
 
+  fn language_keyed_object_vocabulary(
+    source: &str,
+    key: &str,
+    language: &str,
+  ) -> Vec<String> {
+    let value: serde_json::Value =
+      serde_json::from_str(source).expect("language-keyed vocabulary JSON");
+    value
+      .get(key)
+      .and_then(|languages| languages.get(language))
+      .and_then(serde_json::Value::as_array)
+      .expect("language vocabulary array")
+      .iter()
+      .map(|word| word.as_str().expect("vocabulary string").to_string())
+      .collect()
+  }
+
+  fn scoped_object_vocabulary(
+    source: &str,
+    order_key: &str,
+    ownership_key: &str,
+    language: &str,
+  ) -> Vec<String> {
+    let owned: HashSet<String> =
+      language_keyed_object_vocabulary(source, ownership_key, language)
+        .into_iter()
+        .collect();
+    object_vocabulary(source, order_key)
+      .into_iter()
+      .filter(|word| owned.contains(word))
+      .collect()
+  }
+
   fn legal_form_entities(
     text: &str,
     suffixes: &[&str],
@@ -3733,19 +3756,23 @@ mod tests {
     let leading_clauses = include_str!(
       "../../../packages/data/config/legal-form-leading-clauses.json"
     );
+    let connector_words = scoped_object_vocabulary(
+      legal_form_rule_words,
+      "connectorWords",
+      "connectorWordLanguages",
+      "en",
+    );
     let data = PreparedLegalFormData::new(LegalFormData {
       suffixes: suffixes.iter().map(ToString::to_string).collect(),
       non_ascii_name_short_suffixes: non_ascii_name_short_suffixes
         .iter()
         .map(ToString::to_string)
         .collect(),
-      connector_words: object_vocabulary(
+      connector_words,
+      and_connector_words: language_keyed_object_vocabulary(
         legal_form_rule_words,
-        "connectorWords",
-      ),
-      and_connector_words: object_vocabulary(
-        legal_form_rule_words,
-        "andConnectorWords",
+        "partyConnectorWords",
+        "en",
       ),
       company_suffix_words: object_vocabulary(
         legal_form_rule_words,
@@ -4576,6 +4603,7 @@ mod tests {
     let data = PreparedLegalFormData::new(LegalFormData {
       suffixes: vec![String::from(suffix)],
       connector_words: vec![String::from("a")],
+      and_connector_words: vec![String::from("a")],
       role_heads: vec![
         String::from("smluvní"),
         String::from("strany"),
@@ -4710,6 +4738,37 @@ mod tests {
 
       prop_assert_eq!(super::walk_backward(&text, suffix_start, &data), Some(0));
     }
+
+    #[test]
+    fn foreign_alphabetic_connector_cannot_create_an_english_party_boundary(
+      whitespace in prop_oneof![Just(" "), Just("\t"), Just("\u{00a0}"), Just("\u{202f}")],
+    ) {
+      let data = PreparedLegalFormData::new(LegalFormData {
+        connector_words: vec![String::from("e")],
+        and_connector_words: vec![String::from("and")],
+        role_heads: vec![String::from("customer")],
+        company_suffix_words: vec![String::from("solutions")],
+        ..LegalFormData::default()
+      });
+      let text = format!("Smith, Jones,{whitespace}e{whitespace}Customer Solutions LLC");
+      let suffix_start = text.find("LLC").unwrap();
+
+      prop_assert_eq!(super::walk_backward(&text, suffix_start, &data), Some(0));
+    }
+  }
+
+  #[test]
+  fn language_owned_connector_prose_still_marks_a_party_boundary() {
+    let mut data = connector_test_data();
+    data.connector_prose_heads.insert(String::from("supplier"));
+    let text = "Supplier and Acme LLC";
+    let organization_start = text.find("Acme").unwrap();
+    let suffix_start = text.find("LLC").unwrap();
+
+    assert_eq!(
+      super::walk_backward(text, suffix_start, &data),
+      Some(organization_start)
+    );
   }
 
   #[test]

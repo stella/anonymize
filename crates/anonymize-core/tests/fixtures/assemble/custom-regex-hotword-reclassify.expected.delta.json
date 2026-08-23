@@ -2,14 +2,12 @@
   "base": "baseline-all-on",
   "changes": [
     {
-      "type": "set",
-      "path": ["address_context_data"],
-      "value": null
+      "type": "remove",
+      "path": ["address_context_data"]
     },
     {
-      "type": "set",
-      "path": ["address_seed_data"],
-      "value": null
+      "type": "remove",
+      "path": ["address_seed_data"]
     },
     {
       "type": "array",
@@ -22,9 +20,8 @@
       ]
     },
     {
-      "type": "set",
-      "path": ["country_data"],
-      "value": null
+      "type": "remove",
+      "path": ["country_data"]
     },
     {
       "type": "array",
@@ -67,9 +64,17 @@
       "path": ["regex_meta"],
       "segments": [
         {
-          "type": "copy",
-          "start": 13,
-          "end": 15
+          "type": "values",
+          "values": [
+            {
+              "label": "date",
+              "score": 1.0
+            },
+            {
+              "label": "date",
+              "score": 1.0
+            }
+          ]
         },
         {
           "type": "copy",

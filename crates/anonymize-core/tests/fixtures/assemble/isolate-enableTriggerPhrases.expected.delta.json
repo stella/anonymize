@@ -7,29 +7,24 @@
       "value": false
     },
     {
-      "type": "set",
-      "path": ["coreference_data"],
-      "value": null
+      "type": "remove",
+      "path": ["coreference_data"]
     },
     {
-      "type": "set",
-      "path": ["country_data"],
-      "value": null
+      "type": "remove",
+      "path": ["country_data"]
     },
     {
-      "type": "set",
-      "path": ["date_data"],
-      "value": null
+      "type": "remove",
+      "path": ["date_data"]
     },
     {
-      "type": "set",
-      "path": ["deny_list_data"],
-      "value": null
+      "type": "remove",
+      "path": ["deny_list_data"]
     },
     {
-      "type": "set",
-      "path": ["hotword_data"],
-      "value": null
+      "type": "remove",
+      "path": ["hotword_data"]
     },
     {
       "type": "array",
@@ -48,9 +43,8 @@
       "value": false
     },
     {
-      "type": "set",
-      "path": ["name_corpus_data"],
-      "value": null
+      "type": "remove",
+      "path": ["name_corpus_data"]
     },
     {
       "type": "array",
@@ -139,9 +133,8 @@
       "value": 0
     },
     {
-      "type": "set",
-      "path": ["zone_data"],
-      "value": null
+      "type": "remove",
+      "path": ["zone_data"]
     }
   ]
 }

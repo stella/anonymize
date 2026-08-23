@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -361,56 +362,193 @@ fn omission_identity_value(value: &Value) -> Value {
   }
 }
 
-fn unique_array_identities(
+fn array_identity_groups(
   values: &[Value],
-) -> Result<HashMap<String, Option<usize>>, String> {
-  let mut identities = HashMap::new();
+) -> Result<HashMap<String, Vec<usize>>, String> {
+  let mut identities = HashMap::<String, Vec<usize>>::new();
   for (index, value) in values.iter().enumerate() {
     let identity = value_key(&omission_identity_value(value))?;
-    identities
-      .entry(identity)
-      .and_modify(|prior| *prior = None)
-      .or_insert(Some(index));
+    identities.entry(identity).or_default().push(index);
   }
   Ok(identities)
 }
 
+fn uniform_group_value<'a>(
+  values: &'a [Value],
+  indices: &[usize],
+  identity: &str,
+) -> Result<&'a Value, String> {
+  let first_index = indices
+    .first()
+    .ok_or_else(|| format!("omission identity {identity} has no indices"))?;
+  let first = values.get(*first_index).ok_or_else(|| {
+    format!("omission identity index {first_index} disappeared")
+  })?;
+  for index in indices.iter().skip(1) {
+    let value = values
+      .get(*index)
+      .ok_or_else(|| format!("omission identity index {index} disappeared"))?;
+    if value != first {
+      return Err(format!(
+        "cannot classify omissions for ambiguous array identity {identity}"
+      ));
+    }
+  }
+  Ok(first)
+}
+
 fn preserve_omissions_from_oracle(
   actual: &mut Value,
-  oracle: &Value,
+  historical_expected: &Value,
+  historical_baseline: Option<&Value>,
 ) -> Result<(), String> {
-  match (actual, oracle) {
-    (Value::Object(actual), Value::Object(oracle)) => {
+  match (actual, historical_expected) {
+    (Value::Object(actual), Value::Object(expected)) => {
+      let baseline = historical_baseline.and_then(Value::as_object);
       actual.retain(|key, value| {
-        oracle.contains_key(key) || !is_omittable_serialized_default(value)
+        expected.contains_key(key)
+          || !baseline.is_some_and(|baseline| baseline.contains_key(key))
+          || !is_omittable_serialized_default(value)
       });
       for (key, value) in actual {
-        if let Some(oracle_value) = oracle.get(key) {
-          preserve_omissions_from_oracle(value, oracle_value)?;
+        if let Some(expected_value) = expected.get(key) {
+          preserve_omissions_from_oracle(
+            value,
+            expected_value,
+            baseline.and_then(|baseline| baseline.get(key)),
+          )?;
         }
       }
     }
-    (Value::Array(actual), Value::Array(oracle)) => {
-      let actual_identities = unique_array_identities(actual)?;
-      let oracle_identities = unique_array_identities(oracle)?;
-      for (identity, actual_index) in actual_identities {
-        let (Some(actual_index), Some(Some(oracle_index))) =
-          (actual_index, oracle_identities.get(&identity))
-        else {
+    (Value::Array(actual), Value::Array(expected)) => {
+      let actual_groups = array_identity_groups(actual)?;
+      let expected_groups = array_identity_groups(expected)?;
+      let baseline_array = historical_baseline.and_then(Value::as_array);
+      let baseline_groups = baseline_array
+        .map(|baseline| array_identity_groups(baseline))
+        .transpose()?;
+      for (identity, actual_indices) in actual_groups {
+        let Some(expected_indices) = expected_groups.get(&identity) else {
           continue;
         };
-        let actual_value = actual.get_mut(actual_index).ok_or_else(|| {
-          format!("actual omission identity index {actual_index} disappeared")
-        })?;
-        let oracle_value = oracle.get(*oracle_index).ok_or_else(|| {
-          format!("oracle omission identity index {oracle_index} disappeared")
-        })?;
-        preserve_omissions_from_oracle(actual_value, oracle_value)?;
+        let expected_value =
+          uniform_group_value(expected, expected_indices, &identity)?;
+        let baseline_value = baseline_array
+          .zip(baseline_groups.as_ref())
+          .and_then(|(baseline, groups)| {
+            groups
+              .get(&identity)
+              .map(|indices| uniform_group_value(baseline, indices, &identity))
+          })
+          .transpose()?;
+        for actual_index in actual_indices {
+          let actual_value = actual.get_mut(actual_index).ok_or_else(|| {
+            format!("actual omission identity index {actual_index} disappeared")
+          })?;
+          preserve_omissions_from_oracle(
+            actual_value,
+            expected_value,
+            baseline_value,
+          )?;
+        }
       }
     }
     _ => {}
   }
   Ok(())
+}
+
+fn repository_root() -> Result<PathBuf, String> {
+  let output = Command::new("git")
+    .args(["rev-parse", "--show-toplevel"])
+    .current_dir(env!("CARGO_MANIFEST_DIR"))
+    .output()
+    .map_err(|error| format!("run git rev-parse: {error}"))?;
+  if !output.status.success() {
+    let stderr = std::str::from_utf8(&output.stderr)
+      .map_err(|error| format!("git rev-parse stderr is not UTF-8: {error}"))?;
+    return Err(format!("git rev-parse failed: {}", stderr.trim()));
+  }
+  let root = String::from_utf8(output.stdout)
+    .map_err(|error| format!("git root is not UTF-8: {error}"))?;
+  Ok(PathBuf::from(root.trim()))
+}
+
+fn read_committed_file(path: &Path) -> Result<Option<Vec<u8>>, String> {
+  let root = repository_root()?;
+  let relative = path.strip_prefix(&root).map_err(|_| {
+    format!(
+      "{} is outside repository {}",
+      path.display(),
+      root.display()
+    )
+  })?;
+  let relative = relative.to_str().ok_or_else(|| {
+    format!("repository path is not UTF-8: {}", relative.display())
+  })?;
+  let listed = Command::new("git")
+    .args(["ls-tree", "--name-only", "HEAD", "--", relative])
+    .current_dir(&root)
+    .output()
+    .map_err(|error| format!("list committed {relative}: {error}"))?;
+  if !listed.status.success() {
+    let stderr = std::str::from_utf8(&listed.stderr)
+      .map_err(|error| format!("git ls-tree stderr is not UTF-8: {error}"))?;
+    return Err(format!("list committed {relative}: {}", stderr.trim()));
+  }
+  if listed.stdout.is_empty() {
+    return Ok(None);
+  }
+  let object = format!("HEAD:{relative}");
+  let shown = Command::new("git")
+    .args(["show", &object])
+    .current_dir(&root)
+    .output()
+    .map_err(|error| format!("read committed {relative}: {error}"))?;
+  if !shown.status.success() {
+    let stderr = std::str::from_utf8(&shown.stderr)
+      .map_err(|error| format!("git show stderr is not UTF-8: {error}"))?;
+    return Err(format!("read committed {relative}: {}", stderr.trim()));
+  }
+  Ok(Some(shown.stdout))
+}
+
+fn read_committed_value(path: &Path) -> Result<Value, String> {
+  let bytes = read_committed_file(path)?
+    .ok_or_else(|| format!("{} is not committed", path.display()))?;
+  serde_json::from_slice(&bytes)
+    .map_err(|error| format!("parse committed {}: {error}", path.display()))
+}
+
+fn read_committed_delta(
+  dir: &Path,
+  name: &str,
+) -> Result<Option<ExpectedDelta>, String> {
+  let path = expected_path(dir, name);
+  let Some(bytes) = read_committed_file(&path)? else {
+    return Ok(None);
+  };
+  let delta: ExpectedDelta = serde_json::from_slice(&bytes)
+    .map_err(|error| format!("parse committed {}: {error}", path.display()))?;
+  if delta.base != BASELINE_FIXTURE {
+    return Err(format!(
+      "{}: unsupported committed delta base {:?}",
+      path.display(),
+      delta.base
+    ));
+  }
+  Ok(Some(delta))
+}
+
+fn reconstruct_expected(
+  historical_baseline: &Value,
+  delta: &ExpectedDelta,
+) -> Result<Value, String> {
+  let mut historical_expected = historical_baseline.clone();
+  for change in delta.changes.clone() {
+    apply_change(&mut historical_expected, change)?;
+  }
+  Ok(historical_expected)
 }
 
 /// Applies omission-only information from a prior frozen delta.
@@ -425,17 +563,20 @@ pub fn preserve_omission_oracle(
   if name == BASELINE_FIXTURE {
     return Ok(());
   }
-  let Some(delta) = read_expected_delta_if_present(dir, name)? else {
+  let Some(delta) = read_committed_delta(dir, name)? else {
     return Ok(());
   };
-  let mut oracle = read_value(&expected_path(dir, BASELINE_FIXTURE))?;
-  for change in delta.changes {
-    // A historical delta may no longer apply cleanly to the new baseline.
-    // Best-effort reconstruction still preserves every omission whose path
-    // remains meaningful, without copying stale values into `actual`.
-    drop(apply_change(&mut oracle, change));
-  }
-  preserve_omissions_from_oracle(actual, &oracle)
+  let historical_baseline =
+    read_committed_value(&expected_path(dir, BASELINE_FIXTURE))?;
+  let historical_expected = reconstruct_expected(&historical_baseline, &delta)
+    .map_err(|error| {
+      format!("{name}: committed omission oracle is invalid: {error}")
+    })?;
+  preserve_omissions_from_oracle(
+    actual,
+    &historical_expected,
+    Some(&historical_baseline),
+  )
 }
 
 pub fn read_expected_value(dir: &Path, name: &str) -> Result<Value, String> {
@@ -584,7 +725,17 @@ mod tests {
       "explicit_array": [],
       "nested": {"explicit_object": {}}
     });
-    preserve_omissions_from_oracle(&mut actual, &oracle)?;
+    let baseline = serde_json::json!({
+      "omitted_null": null,
+      "explicit_null": null,
+      "omitted_array": [],
+      "explicit_array": [],
+      "nested": {
+        "omitted_object": {},
+        "explicit_object": {}
+      }
+    });
+    preserve_omissions_from_oracle(&mut actual, &oracle, Some(&baseline))?;
     assert_eq!(
       actual,
       serde_json::json!({
@@ -608,8 +759,12 @@ mod tests {
       {"id": "first"},
       {"id": "second", "optional": null}
     ]);
+    let baseline = serde_json::json!([
+      {"id": "first", "optional": null},
+      {"id": "second", "optional": null}
+    ]);
 
-    preserve_omissions_from_oracle(&mut actual, &oracle)?;
+    preserve_omissions_from_oracle(&mut actual, &oracle, Some(&baseline))?;
 
     assert_eq!(
       actual,
@@ -623,31 +778,144 @@ mod tests {
   }
 
   #[test]
-  fn omission_oracle_does_not_guess_between_duplicate_identities()
+  fn omission_oracle_fails_closed_for_duplicate_identity_shapes()
   -> Result<(), String> {
     let mut actual = serde_json::json!([
       {"id": "duplicate", "optional": null},
       {"id": "duplicate", "optional": null}
     ]);
-    let expected = actual.clone();
     let oracle = serde_json::json!([
       {"id": "duplicate"},
       {"id": "duplicate", "optional": null}
     ]);
+    let baseline = serde_json::json!([
+      {"id": "duplicate", "optional": null},
+      {"id": "duplicate", "optional": null}
+    ]);
 
-    preserve_omissions_from_oracle(&mut actual, &oracle)?;
+    let error = match preserve_omissions_from_oracle(
+      &mut actual,
+      &oracle,
+      Some(&baseline),
+    ) {
+      Ok(()) => {
+        return Err(String::from(
+          "ambiguous historical shapes did not fail closed",
+        ));
+      }
+      Err(error) => error,
+    };
 
-    assert_eq!(actual, expected);
+    assert!(error.contains("ambiguous array identity"));
     Ok(())
+  }
+
+  #[test]
+  fn omission_oracle_keeps_new_explicit_defaults() -> Result<(), String> {
+    let mut actual = serde_json::json!({
+      "historically_omitted": null,
+      "new_null": null,
+      "new_array": [],
+      "new_object": {}
+    });
+    let historical_expected = serde_json::json!({});
+    let historical_baseline = serde_json::json!({
+      "historically_omitted": null
+    });
+
+    preserve_omissions_from_oracle(
+      &mut actual,
+      &historical_expected,
+      Some(&historical_baseline),
+    )?;
+
+    assert_eq!(
+      actual,
+      serde_json::json!({
+        "new_null": null,
+        "new_array": [],
+        "new_object": {}
+      })
+    );
+    Ok(())
+  }
+
+  #[test]
+  fn committed_array_copies_use_historical_baseline_identities()
+  -> Result<(), String> {
+    let historical_baseline = serde_json::json!({
+      "items": [
+        {"id": "first", "optional": null},
+        {"id": "second", "optional": null}
+      ]
+    });
+    let delta = ExpectedDelta {
+      base: String::from(BASELINE_FIXTURE),
+      changes: vec![ExpectedChange::Array {
+        path: vec![String::from("items")],
+        segments: vec![
+          ExpectedArraySegment::Copy { start: 1, end: 2 },
+          ExpectedArraySegment::Values {
+            values: vec![serde_json::json!({"id": "first"})],
+          },
+        ],
+      }],
+    };
+    let historical_expected =
+      reconstruct_expected(&historical_baseline, &delta)?;
+    assert_eq!(
+      historical_expected,
+      serde_json::json!({
+        "items": [
+          {"id": "second", "optional": null},
+          {"id": "first"}
+        ]
+      })
+    );
+
+    let mut actual = serde_json::json!({
+      "items": [
+        {"id": "second", "optional": null},
+        {"id": "inserted", "optional": []},
+        {"id": "first", "optional": null}
+      ]
+    });
+    preserve_omissions_from_oracle(
+      &mut actual,
+      &historical_expected,
+      Some(&historical_baseline),
+    )?;
+    assert_eq!(
+      actual,
+      serde_json::json!({
+        "items": [
+          {"id": "second", "optional": null},
+          {"id": "inserted", "optional": []},
+          {"id": "first"}
+        ]
+      })
+    );
+    Ok(())
+  }
+
+  #[test]
+  fn invalid_committed_delta_fails_closed() {
+    let baseline = serde_json::json!({"kept": true});
+    let delta = ExpectedDelta {
+      base: String::from(BASELINE_FIXTURE),
+      changes: vec![ExpectedChange::Remove {
+        path: vec![String::from("missing")],
+      }],
+    };
+
+    assert!(reconstruct_expected(&baseline, &delta).is_err());
   }
 
   #[test]
   fn missing_omission_oracle_leaves_new_fixture_unchanged() -> Result<(), String>
   {
-    let dir = std::env::temp_dir().join(format!(
-      "stella-missing-assemble-delta-{}",
-      std::process::id()
-    ));
+    let dir =
+      Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/assemble");
     let mut actual = serde_json::json!({
       "null_member": null,
       "array_member": [],
@@ -710,11 +978,26 @@ mod tests {
         entries
           .keys()
           .rev()
-          .map(|id| serde_json::json!({"id": id, "optional": null}))
+          .map(|id| {
+            serde_json::json!({
+              "id": id,
+              "optional": null,
+              "new_optional": []
+            })
+          })
           .collect(),
       );
 
-      prop_assert!(preserve_omissions_from_oracle(&mut actual, &oracle).is_ok());
+      let baseline = Value::Array(
+        entries
+          .keys()
+          .map(|id| serde_json::json!({"id": id, "optional": null}))
+          .collect(),
+      );
+      prop_assert!(
+        preserve_omissions_from_oracle(&mut actual, &oracle, Some(&baseline))
+          .is_ok()
+      );
       let Value::Array(actual_entries) = actual else {
         return Err(TestCaseError::fail("actual array changed type"));
       };
@@ -729,6 +1012,7 @@ mod tests {
           .get(&id)
           .ok_or_else(|| TestCaseError::fail("unexpected array identity"))?;
         prop_assert_eq!(entry.get("optional").is_some(), *explicit);
+        prop_assert_eq!(entry.get("new_optional"), Some(&Value::Array(vec![])));
       }
     }
   }

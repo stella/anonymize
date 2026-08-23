@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { createHash } from "node:crypto";
 import { resolve } from "node:path";
 
 import {
@@ -76,12 +77,38 @@ describe("canonical performance statistics", () => {
 
   test("hashes only fixtures used by performance scenarios", () => {
     const requestedFixtures: string[] = [];
-    performanceInputSourceDigest((file) => {
-      requestedFixtures.push(file);
-      return new TextEncoder().encode(`contents of ${file}`);
+    performanceInputSourceDigest({
+      scenarioIds: PERFORMANCE_SCENARIO_IDS,
+      readFixture: (file) => {
+        requestedFixtures.push(file);
+        return new TextEncoder().encode(`contents of ${file}`);
+      },
     });
 
     expect(requestedFixtures).toEqual(["en.json"]);
+  });
+
+  test("excludes unconfigured local scenarios from the canonical source digest", () => {
+    const fixture = new TextEncoder().encode("canonical fixture");
+    const digest = performanceInputSourceDigest({
+      scenarioIds: ["fixture-mixed"],
+      readFixture: () => fixture,
+    });
+    const expected = createHash("sha256")
+      .update("1\0")
+      .update("fixture-mixed\0")
+      .update("fixture\0")
+      .update("en.json\0")
+      .update(fixture)
+      .digest("hex");
+
+    expect(digest).toBe(expected);
+    expect(
+      performanceInputSourceDigest({
+        scenarioIds: PERFORMANCE_SCENARIO_IDS,
+        readFixture: () => fixture,
+      }),
+    ).not.toBe(digest);
   });
 
   test("builds deterministic short inputs for every entity-density scenario", async () => {

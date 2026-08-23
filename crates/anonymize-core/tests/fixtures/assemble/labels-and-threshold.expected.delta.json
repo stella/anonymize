@@ -12,14 +12,12 @@
       ]
     },
     {
-      "type": "set",
-      "path": ["country_data"],
-      "value": null
+      "type": "remove",
+      "path": ["country_data"]
     },
     {
-      "type": "set",
-      "path": ["date_data"],
-      "value": null
+      "type": "remove",
+      "path": ["date_data"]
     },
     {
       "type": "array",

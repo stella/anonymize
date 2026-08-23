@@ -387,7 +387,9 @@ export const runPerformance = async (
     fixture: {
       kind: "public-safe-synthetic",
       source: PERFORMANCE_INPUT_SOURCE,
-      sha256: performanceInputSourceDigest(),
+      sha256: performanceInputSourceDigest({
+        scenarioIds: options.scenarios,
+      }),
     },
     machine: await machineMetadata(
       execution.type === "canonical" ? execution.benchmarkCpu : null,

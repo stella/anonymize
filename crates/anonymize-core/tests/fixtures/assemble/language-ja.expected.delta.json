@@ -704,6 +704,11 @@
     },
     {
       "type": "array",
+      "path": ["legal_form_data", "and_connector_words"],
+      "segments": []
+    },
+    {
+      "type": "array",
       "path": ["legal_form_data", "clause_noun_heads"],
       "segments": []
     },
@@ -711,6 +716,17 @@
       "type": "array",
       "path": ["legal_form_data", "connector_prose_heads"],
       "segments": []
+    },
+    {
+      "type": "array",
+      "path": ["legal_form_data", "connector_words"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 7,
+          "end": 8
+        }
+      ]
     },
     {
       "type": "array",

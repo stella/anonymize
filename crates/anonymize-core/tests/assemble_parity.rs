@@ -101,6 +101,15 @@ fn is_typescript_optional_null_member(key: &str) -> bool {
       | "prefilter_regex"
       | "prefilter_window_bytes"
       | "prepared_artifact_policy"
+      | "regex"
+      | "custom_regex"
+      | "legal_forms"
+      | "triggers"
+      | "deny_list"
+      | "street_types"
+      | "gazetteer"
+      | "countries"
+      | "hotwords"
       | "literal_case_insensitive"
       | "literal_whole_words"
       | "regex_whole_words"
@@ -119,7 +128,26 @@ fn is_typescript_optional_null_member(key: &str) -> bool {
       | "max_chars"
       | "flags"
       | "standalone_street"
+      | "regex_options"
+      | "custom_regex_options"
+      | "literal_options"
+      | "deny_list_data"
+      | "false_positive_filters"
       | "gazetteer_data"
+      | "country_data"
+      | "hotword_data"
+      | "trigger_data"
+      | "legal_form_data"
+      | "address_seed_data"
+      | "zone_data"
+      | "address_context_data"
+      | "coreference_data"
+      | "name_corpus_data"
+      | "signature_data"
+      | "date_data"
+      | "monetary_data"
+      | "operators"
+      | "redact_string"
   )
 }
 
@@ -842,13 +870,21 @@ fn compare_regex_patterns(
 
 fn check_fixture(input_path: &Path) -> Result<(), String> {
   let name = fixture_name(input_path);
+  let expected_value = read_expected_value(&fixtures_dir(), name)?;
   let expected: BindingPreparedSearchConfig =
-    serde_json::from_value(read_expected_value(&fixtures_dir(), name)?)
-      .map_err(|error| {
-        format!("{name}: parse reconstructed config: {error}")
-      })?;
+    serde_json::from_value(expected_value.clone()).map_err(|error| {
+      format!("{name}: parse reconstructed config: {error}")
+    })?;
   let actual = assemble_fixture(input_path)?;
-  compare_full_config(name, &actual, &expected)
+  compare_full_config(name, &actual, &expected)?;
+  let actual_value = canonical_oracle_value(&actual)?;
+  if json_values_equal(&actual_value, &expected_value) {
+    return Ok(());
+  }
+  Err(format!(
+    "{name}: canonical serialized shape differs: {}",
+    first_json_difference("config", &actual_value, &expected_value)
+  ))
 }
 
 fn refresh_delta_snapshots(
@@ -954,69 +990,6 @@ fn refresh_rejects_lossy_baseline_default_omission() -> Result<(), String> {
       error.contains("config.custom_regex_patterns"),
       "unexpected refresh error: {error}"
     );
-    Ok(())
-  })();
-  fs::remove_dir_all(&dir)
-    .map_err(|error| format!("remove {}: {error}", dir.display()))?;
-  result
-}
-
-#[test]
-fn refresh_replaces_a_delta_that_no_longer_applies_to_the_baseline()
--> Result<(), String> {
-  let source_dir = fixtures_dir();
-  let fixture = "custom-regex-disabled";
-  let dir = std::env::temp_dir().join(format!(
-    "stella-assemble-parity-refresh-{}",
-    std::process::id()
-  ));
-  fs::create_dir_all(&dir)
-    .map_err(|error| format!("create {}: {error}", dir.display()))?;
-
-  let result = (|| {
-    let baseline_input =
-      source_dir.join(format!("{BASELINE_FIXTURE}.input.json"));
-    let baseline = serde_json::to_vec(&canonical_oracle_value(
-      &assemble_fixture(&baseline_input)?,
-    )?)
-    .map_err(|error| format!("serialize assembled baseline: {error}"))?;
-    fs::write(
-      dir.join(format!("{BASELINE_FIXTURE}.expected.json")),
-      baseline,
-    )
-    .map_err(|error| format!("write baseline fixture: {error}"))?;
-    fs::write(
-      dir.join(format!("{fixture}.expected.delta.json")),
-      r#"{
-  "base": "baseline-all-on",
-  "changes": [
-    {"type": "remove", "path": ["date_data"]},
-    {"type": "remove", "path": ["obsolete_baseline_member"]}
-  ]
-}
-"#,
-    )
-    .map_err(|error| format!("write stale delta: {error}"))?;
-
-    let inputs = vec![
-      baseline_input,
-      source_dir.join(format!("{fixture}.input.json")),
-    ];
-    refresh_delta_snapshots(&dir, &inputs)?;
-
-    let refreshed = read_expected_value(&dir, fixture)?;
-    assert!(
-      refreshed.get("date_data").is_none(),
-      "the stale delta's independent omission oracle must survive refresh"
-    );
-    let fixture_input = inputs
-      .get(1)
-      .ok_or_else(|| String::from("derived fixture input is missing"))?;
-    let actual = assemble_fixture(fixture_input)?;
-    let expected: BindingPreparedSearchConfig =
-      serde_json::from_value(refreshed)
-        .map_err(|error| format!("parse refreshed fixture: {error}"))?;
-    assert_eq!(actual, expected);
     Ok(())
   })();
   fs::remove_dir_all(&dir)

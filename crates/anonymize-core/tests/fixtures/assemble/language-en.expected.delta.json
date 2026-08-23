@@ -886,6 +886,17 @@
     },
     {
       "type": "array",
+      "path": ["legal_form_data", "and_connector_words"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 1
+        }
+      ]
+    },
+    {
+      "type": "array",
       "path": ["legal_form_data", "clause_noun_heads"],
       "segments": [
         {
@@ -901,7 +912,7 @@
       "segments": [
         {
           "type": "copy",
-          "start": 13,
+          "start": 12,
           "end": 15
         },
         {
@@ -911,7 +922,7 @@
         },
         {
           "type": "copy",
-          "start": 27,
+          "start": 24,
           "end": 28
         },
         {
@@ -922,7 +933,7 @@
         {
           "type": "copy",
           "start": 50,
-          "end": 52
+          "end": 53
         },
         {
           "type": "copy",
@@ -951,13 +962,29 @@
         },
         {
           "type": "copy",
-          "start": 101,
+          "start": 100,
           "end": 102
         },
         {
           "type": "copy",
           "start": 104,
           "end": 105
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["legal_form_data", "connector_words"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 1,
+          "end": 2
+        },
+        {
+          "type": "copy",
+          "start": 7,
+          "end": 8
         }
       ]
     },

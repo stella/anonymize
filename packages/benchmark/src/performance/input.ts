@@ -80,12 +80,18 @@ type ReadPerformanceFixture = (file: string) => Uint8Array;
 const readPerformanceFixture: ReadPerformanceFixture = (file) =>
   readFileSync(join(FIXTURES_DIR, file));
 
-export const performanceInputSourceDigest = (
-  readFixture: ReadPerformanceFixture = readPerformanceFixture,
-): string => {
+type PerformanceInputSourceDigestOptions = {
+  readonly scenarioIds: readonly PerformanceScenarioId[];
+  readonly readFixture?: ReadPerformanceFixture | undefined;
+};
+
+export const performanceInputSourceDigest = ({
+  scenarioIds,
+  readFixture = readPerformanceFixture,
+}: PerformanceInputSourceDigestOptions): string => {
   const hash = createHash("sha256");
   hash.update(`${PERFORMANCE_SCENARIO_SCHEMA_VERSION}\0`);
-  for (const scenario of PERFORMANCE_SCENARIO_IDS) {
+  for (const scenario of scenarioIds) {
     hash.update(`${scenario}\0`);
     const source = PERFORMANCE_SCENARIO_SOURCES[scenario];
     hash.update(`${source.type}\0`);
