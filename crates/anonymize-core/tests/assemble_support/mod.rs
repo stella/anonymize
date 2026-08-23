@@ -342,7 +342,43 @@ fn is_omittable_serialized_default(value: &Value) -> bool {
     || value.as_object().is_some_and(Map::is_empty)
 }
 
-fn preserve_omissions_from_oracle(actual: &mut Value, oracle: &Value) {
+fn omission_identity_value(value: &Value) -> Value {
+  match value {
+    Value::Object(object) => Value::Object(
+      object
+        .iter()
+        .filter_map(|(key, member)| {
+          let normalized = omission_identity_value(member);
+          (!is_omittable_serialized_default(&normalized))
+            .then(|| (key.clone(), normalized))
+        })
+        .collect(),
+    ),
+    Value::Array(array) => {
+      Value::Array(array.iter().map(omission_identity_value).collect())
+    }
+    _ => value.clone(),
+  }
+}
+
+fn unique_array_identities(
+  values: &[Value],
+) -> Result<HashMap<String, Option<usize>>, String> {
+  let mut identities = HashMap::new();
+  for (index, value) in values.iter().enumerate() {
+    let identity = value_key(&omission_identity_value(value))?;
+    identities
+      .entry(identity)
+      .and_modify(|prior| *prior = None)
+      .or_insert(Some(index));
+  }
+  Ok(identities)
+}
+
+fn preserve_omissions_from_oracle(
+  actual: &mut Value,
+  oracle: &Value,
+) -> Result<(), String> {
   match (actual, oracle) {
     (Value::Object(actual), Value::Object(oracle)) => {
       actual.retain(|key, value| {
@@ -350,17 +386,31 @@ fn preserve_omissions_from_oracle(actual: &mut Value, oracle: &Value) {
       });
       for (key, value) in actual {
         if let Some(oracle_value) = oracle.get(key) {
-          preserve_omissions_from_oracle(value, oracle_value);
+          preserve_omissions_from_oracle(value, oracle_value)?;
         }
       }
     }
     (Value::Array(actual), Value::Array(oracle)) => {
-      for (value, oracle_value) in actual.iter_mut().zip(oracle) {
-        preserve_omissions_from_oracle(value, oracle_value);
+      let actual_identities = unique_array_identities(actual)?;
+      let oracle_identities = unique_array_identities(oracle)?;
+      for (identity, actual_index) in actual_identities {
+        let (Some(actual_index), Some(Some(oracle_index))) =
+          (actual_index, oracle_identities.get(&identity))
+        else {
+          continue;
+        };
+        let actual_value = actual.get_mut(actual_index).ok_or_else(|| {
+          format!("actual omission identity index {actual_index} disappeared")
+        })?;
+        let oracle_value = oracle.get(*oracle_index).ok_or_else(|| {
+          format!("oracle omission identity index {oracle_index} disappeared")
+        })?;
+        preserve_omissions_from_oracle(actual_value, oracle_value)?;
       }
     }
     _ => {}
   }
+  Ok(())
 }
 
 /// Applies omission-only information from a prior frozen delta.
@@ -385,8 +435,7 @@ pub fn preserve_omission_oracle(
     // remains meaningful, without copying stale values into `actual`.
     drop(apply_change(&mut oracle, change));
   }
-  preserve_omissions_from_oracle(actual, &oracle);
-  Ok(())
+  preserve_omissions_from_oracle(actual, &oracle)
 }
 
 pub fn read_expected_value(dir: &Path, name: &str) -> Result<Value, String> {
@@ -518,7 +567,8 @@ mod tests {
   }
 
   #[test]
-  fn omission_oracle_preserves_omitted_null_and_empty_members() {
+  fn omission_oracle_preserves_omitted_null_and_empty_members()
+  -> Result<(), String> {
     let mut actual = serde_json::json!({
       "omitted_null": null,
       "explicit_null": null,
@@ -534,7 +584,7 @@ mod tests {
       "explicit_array": [],
       "nested": {"explicit_object": {}}
     });
-    preserve_omissions_from_oracle(&mut actual, &oracle);
+    preserve_omissions_from_oracle(&mut actual, &oracle)?;
     assert_eq!(
       actual,
       serde_json::json!({
@@ -543,6 +593,52 @@ mod tests {
         "nested": {"explicit_object": {}}
       })
     );
+    Ok(())
+  }
+
+  #[test]
+  fn omission_oracle_aligns_reordered_arrays_by_identity() -> Result<(), String>
+  {
+    let mut actual = serde_json::json!([
+      {"id": "second", "optional": null},
+      {"id": "inserted", "optional": null},
+      {"id": "first", "optional": null}
+    ]);
+    let oracle = serde_json::json!([
+      {"id": "first"},
+      {"id": "second", "optional": null}
+    ]);
+
+    preserve_omissions_from_oracle(&mut actual, &oracle)?;
+
+    assert_eq!(
+      actual,
+      serde_json::json!([
+        {"id": "second", "optional": null},
+        {"id": "inserted", "optional": null},
+        {"id": "first"}
+      ])
+    );
+    Ok(())
+  }
+
+  #[test]
+  fn omission_oracle_does_not_guess_between_duplicate_identities()
+  -> Result<(), String> {
+    let mut actual = serde_json::json!([
+      {"id": "duplicate", "optional": null},
+      {"id": "duplicate", "optional": null}
+    ]);
+    let expected = actual.clone();
+    let oracle = serde_json::json!([
+      {"id": "duplicate"},
+      {"id": "duplicate", "optional": null}
+    ]);
+
+    preserve_omissions_from_oracle(&mut actual, &oracle)?;
+
+    assert_eq!(actual, expected);
+    Ok(())
   }
 
   #[test]
@@ -592,6 +688,48 @@ mod tests {
         prop_assert!(apply_change(&mut reconstructed, change).is_ok());
       }
       prop_assert_eq!(reconstructed, actual);
+    }
+
+    #[test]
+    fn omission_oracle_shape_follows_identity_across_reordering(
+      entries in proptest::collection::btree_map(0_u16..1_000, any::<bool>(), 1..20),
+    ) {
+      let oracle = Value::Array(
+        entries
+          .iter()
+          .map(|(id, explicit)| {
+            if *explicit {
+              serde_json::json!({"id": id, "optional": null})
+            } else {
+              serde_json::json!({"id": id})
+            }
+          })
+          .collect(),
+      );
+      let mut actual = Value::Array(
+        entries
+          .keys()
+          .rev()
+          .map(|id| serde_json::json!({"id": id, "optional": null}))
+          .collect(),
+      );
+
+      prop_assert!(preserve_omissions_from_oracle(&mut actual, &oracle).is_ok());
+      let Value::Array(actual_entries) = actual else {
+        return Err(TestCaseError::fail("actual array changed type"));
+      };
+      for entry in actual_entries {
+        let id = entry
+          .get("id")
+          .and_then(Value::as_u64)
+          .ok_or_else(|| TestCaseError::fail("array identity disappeared"))?;
+        let id = u16::try_from(id)
+          .map_err(|_| TestCaseError::fail("array identity exceeded u16"))?;
+        let explicit = entries
+          .get(&id)
+          .ok_or_else(|| TestCaseError::fail("unexpected array identity"))?;
+        prop_assert_eq!(entry.get("optional").is_some(), *explicit);
+      }
     }
   }
 

@@ -4978,6 +4978,118 @@
     },
     {
       "type": "array",
+      "path": ["legal_form_data", "clause_noun_heads"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 15,
+          "end": 23
+        },
+        {
+          "type": "copy",
+          "start": 5,
+          "end": 6
+        },
+        {
+          "type": "copy",
+          "start": 23,
+          "end": 34
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["legal_form_data", "connector_prose_heads"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 36,
+          "end": 37
+        },
+        {
+          "type": "copy",
+          "start": 38,
+          "end": 39
+        },
+        {
+          "type": "copy",
+          "start": 57,
+          "end": 58
+        },
+        {
+          "type": "copy",
+          "start": 67,
+          "end": 68
+        },
+        {
+          "type": "copy",
+          "start": 69,
+          "end": 70
+        },
+        {
+          "type": "copy",
+          "start": 71,
+          "end": 72
+        },
+        {
+          "type": "copy",
+          "start": 80,
+          "end": 81
+        },
+        {
+          "type": "copy",
+          "start": 87,
+          "end": 88
+        },
+        {
+          "type": "copy",
+          "start": 89,
+          "end": 90
+        },
+        {
+          "type": "copy",
+          "start": 93,
+          "end": 94
+        },
+        {
+          "type": "copy",
+          "start": 98,
+          "end": 100
+        },
+        {
+          "type": "copy",
+          "start": 107,
+          "end": 108
+        },
+        {
+          "type": "copy",
+          "start": 109,
+          "end": 110
+        },
+        {
+          "type": "copy",
+          "start": 112,
+          "end": 113
+        },
+        {
+          "type": "copy",
+          "start": 116,
+          "end": 117
+        },
+        {
+          "type": "copy",
+          "start": 118,
+          "end": 119
+        },
+        {
+          "type": "copy",
+          "start": 120,
+          "end": 121
+        }
+      ]
+    },
+    {
+      "type": "array",
       "path": ["legal_form_data", "detection_only_suffixes"],
       "segments": []
     },
@@ -5288,11 +5400,95 @@
         {
           "type": "copy",
           "start": 0,
-          "end": 5
+          "end": 3
+        },
+        {
+          "type": "values",
+          "values": [
+            {
+              "label": "iban",
+              "score": 1.0
+            },
+            {
+              "label": "email address",
+              "score": 1.0
+            },
+            {
+              "label": "phone number",
+              "min_byte_length": 7,
+              "requires_validation": true,
+              "score": 1.0,
+              "validator_id": "phone.international"
+            }
+          ]
         },
         {
           "type": "copy",
-          "start": 6,
+          "start": 7,
+          "end": 10
+        },
+        {
+          "type": "values",
+          "values": [
+            {
+              "label": "credit card number",
+              "score": 1.0
+            },
+            {
+              "label": "birth number",
+              "requires_validation": true,
+              "score": 1.0,
+              "validator_id": "cz.rc"
+            }
+          ]
+        },
+        {
+          "type": "copy",
+          "start": 12,
+          "end": 13
+        },
+        {
+          "type": "values",
+          "values": [
+            {
+              "label": "date",
+              "score": 1.0
+            },
+            {
+              "label": "date",
+              "score": 1.0
+            },
+            {
+              "label": "ip address",
+              "score": 1.0
+            }
+          ]
+        },
+        {
+          "type": "copy",
+          "start": 16,
+          "end": 40
+        },
+        {
+          "type": "values",
+          "values": [
+            {
+              "label": "url",
+              "score": 1.0
+            },
+            {
+              "label": "ip address",
+              "score": 1.0
+            },
+            {
+              "label": "mac address",
+              "score": 1.0
+            }
+          ]
+        },
+        {
+          "type": "copy",
+          "start": 43,
           "end": 111
         }
       ]
@@ -5524,32 +5720,6 @@
           "start": 1707,
           "end": 1753
         }
-      ]
-    },
-    {
-      "type": "set",
-      "path": ["legal_form_data", "clause_noun_heads"],
-      "value": [
-        "smlouva",
-        "smlouvy",
-        "smlouvu",
-        "smlouvou",
-        "dohoda",
-        "dohody",
-        "dohodu",
-        "dohodou",
-        "licence",
-        "licenci",
-        "příloha",
-        "přílohy",
-        "přílohu",
-        "dodatek",
-        "dodatku",
-        "článek",
-        "oznámení",
-        "podmínky",
-        "předmět",
-        "ustanovení"
       ]
     },
     {

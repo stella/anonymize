@@ -55,7 +55,7 @@ for (const adapter of createBenchmarkAdapters()) {
       name: adapter.name,
       version: adapter.version,
       status: "unavailable",
-      reasonCode: "adapter-unavailable",
+      reasonCode: outcome.reasonCode,
     });
     continue;
   }

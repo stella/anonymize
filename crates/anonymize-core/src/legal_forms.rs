@@ -527,7 +527,16 @@ fn walk_backward(
       let is_party_list_connector = data
         .and_connector_words
         .contains(lowercase_lookup(token.text).as_ref());
-      if connector_has_boundary_evidence(text, &token, data) {
+      let suffix_mode = leading_entity_word(text, pos).is_some_and(|word| {
+        data
+          .company_suffix_words
+          .contains(lowercase_lookup(&word).as_ref())
+      });
+      if connector_has_boundary_evidence(text, &token, data)
+        || (is_party_list_connector
+          && !suffix_mode
+          && has_middle_initial_before(text, token.start))
+      {
         break;
       }
       let previous = token_before(text, token.start, false, data);
@@ -1014,24 +1023,11 @@ fn connector_has_boundary_evidence(
   let lower = lowercase_lookup(connector.text);
   let is_party_list_connector =
     data.and_connector_words.contains(lower.as_ref());
-  if is_party_list_connector
-    && (list_separator_precedes(text, connector.start)
-      || has_middle_initial_before(text, connector.start))
-  {
+  if is_party_list_connector && list_separator_precedes(text, connector.start) {
     return true;
   }
 
   let next = word_tokens(text, connector.end, text.len()).next();
-  if list_separator_precedes(text, connector.start)
-    && next.is_some_and(|word| {
-      data
-        .role_heads
-        .contains(lowercase_lookup(word.text).as_ref())
-    })
-  {
-    return true;
-  }
-
   let Some(previous) = simple_word_before(text, connector.start) else {
     return false;
   };
@@ -2311,39 +2307,32 @@ fn has_single_cap_prefix_before(full_text: &str, match_start: usize) -> bool {
 }
 
 fn skip_initials_backward(full_text: &str, pos: usize) -> usize {
-  let mut scan = pos;
-  while let Some((prev_start, ch)) = previous_char(full_text, scan) {
-    if ch == '\n' || !ch.is_whitespace() {
-      break;
+  let mut cursor = pos;
+  let mut start = pos;
+  let mut initial_count = 0_usize;
+  loop {
+    while let Some((previous_start, ch)) = previous_char(full_text, cursor) {
+      if !is_inter_token_space(ch) {
+        break;
+      }
+      cursor = previous_start;
     }
-    scan = prev_start;
-  }
-  let Some((dot_start, '.')) = previous_char(full_text, scan) else {
-    return pos;
-  };
-
-  let mut cursor = dot_start;
-  let mut start = dot_start;
-  let mut saw_two = false;
-  while let Some((letter_start, letter)) = previous_char(full_text, cursor) {
+    let Some((dot_start, '.')) = previous_char(full_text, cursor) else {
+      break;
+    };
+    let Some((letter_start, letter)) = previous_char(full_text, dot_start)
+    else {
+      break;
+    };
     if !letter.is_uppercase() {
       break;
     }
     start = letter_start;
-    let before_letter = previous_char(full_text, letter_start);
-    match before_letter {
-      Some((space_start, ch)) if is_inter_token_space(ch) => {
-        cursor = space_start;
-      }
-      Some((prev_dot_start, '.')) => {
-        saw_two = true;
-        cursor = prev_dot_start;
-      }
-      _ => break,
-    }
+    initial_count = initial_count.saturating_add(1);
+    cursor = letter_start;
   }
 
-  if saw_two
+  if initial_count >= 2
     && previous_char(full_text, start)
       .is_none_or(|(_, ch)| !ch.is_alphanumeric())
   {
@@ -4576,6 +4565,7 @@ mod tests {
     let data = PreparedLegalFormData::new(LegalFormData {
       suffixes: vec![String::from(suffix)],
       connector_words: vec![String::from("a")],
+      and_connector_words: vec![String::from("a")],
       role_heads: vec![
         String::from("smluvní"),
         String::from("strany"),
@@ -4678,6 +4668,38 @@ mod tests {
     let text = "Acme Widgets and Bar, Inc.";
     let match_start = text.find("Bar").unwrap();
     assert_eq!(extend_backward(text, match_start, &data, false), 0);
+  }
+
+  proptest! {
+    #[test]
+    fn suffix_mode_recovers_companies_with_spaced_or_compact_initials(
+      initial_space in prop_oneof![Just(""), Just(" "), Just("\t"), Just("\u{00a0}")],
+    ) {
+      let mut data = connector_test_data();
+      data.company_suffix_words.insert(String::from("company"));
+      let text = format!("J.{initial_space}P. Morgan and Company LLC");
+      let company_start = text.find("Company").unwrap();
+
+      prop_assert_eq!(extend_backward(&text, company_start, &data, false), 0);
+      prop_assert_eq!(legal_form_entities(&text, &["LLC"], &[]), [text]);
+    }
+
+    #[test]
+    fn ampersand_before_a_role_named_company_stays_inside_the_name(
+      whitespace in prop_oneof![Just(" "), Just("\t"), Just("\u{00a0}"), Just("\u{202f}")],
+    ) {
+      let data = PreparedLegalFormData::new(LegalFormData {
+        connector_words: vec![String::from("&")],
+        and_connector_words: vec![String::from("and")],
+        role_heads: vec![String::from("customer")],
+        company_suffix_words: vec![String::from("solutions")],
+        ..LegalFormData::default()
+      });
+      let text = format!("Smith, Jones,{whitespace}&{whitespace}Customer Solutions LLC");
+      let suffix_start = text.find("LLC").unwrap();
+
+      prop_assert_eq!(super::walk_backward(&text, suffix_start, &data), Some(0));
+    }
   }
 
   #[test]

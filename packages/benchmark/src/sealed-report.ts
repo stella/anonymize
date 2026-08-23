@@ -103,7 +103,7 @@ export type SealedLibraryResult =
       readonly name: string;
       readonly version: string;
       readonly status: "unavailable";
-      readonly reasonCode: "adapter-unavailable";
+      readonly reasonCode: "adapter-unavailable" | "language-unsupported";
     };
 
 export type LegacySealedLibraryResult =
@@ -683,7 +683,12 @@ export const assertSupportedSealedAggregateReport: (
         ["name", "version", "status", "reasonCode"],
         `sealed library ${index}`,
       );
-      if (library["reasonCode"] !== "adapter-unavailable")
+      const reasonCode = library["reasonCode"];
+      if (
+        reasonCode !== "adapter-unavailable" &&
+        (schemaVersion === LEGACY_SEALED_AGGREGATE_REPORT_SCHEMA_VERSION ||
+          reasonCode !== "language-unsupported")
+      )
         throw new Error(`sealed library ${index} reason code is invalid`);
       continue;
     }
@@ -888,8 +893,12 @@ export const renderSealedAggregateMarkdown = (
   ];
   for (const library of report.libraries) {
     if (library.status === "unavailable") {
+      const availability =
+        library.reasonCode === "language-unsupported"
+          ? "unsupported"
+          : "unavailable";
       const unavailableValues = [
-        "unavailable",
+        availability,
         ...definition.headers.slice(1).map(() => "—"),
       ].join(" | ");
       lines.push(

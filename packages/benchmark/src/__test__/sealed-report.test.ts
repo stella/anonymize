@@ -200,6 +200,31 @@ describe("sealed aggregate report contract", () => {
     );
   });
 
+  test("reports unsupported corpus languages without invoking or scoring an adapter", () => {
+    const unsupported: SealedAggregateReport = {
+      ...report(),
+      libraries: [
+        {
+          name: "presidio",
+          version: "unknown",
+          status: "unavailable",
+          reasonCode: "language-unsupported",
+        },
+      ],
+    };
+
+    expect(() => assertSealedAggregateReport(unsupported)).not.toThrow();
+    expect(renderSealedAggregateMarkdown(unsupported)).toContain(
+      "| presidio | unknown | unsupported |",
+    );
+    expect(() =>
+      assertSupportedSealedAggregateReport({
+        ...unsupported,
+        schemaVersion: LEGACY_SEALED_AGGREGATE_REPORT_SCHEMA_VERSION,
+      }),
+    ).toThrow("reason code is invalid");
+  });
+
   test("keeps current-only corpus features out of legacy v4", () => {
     const base = {
       ...report(),

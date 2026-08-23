@@ -97,7 +97,11 @@ fn first_json_difference(
   match (actual, expected) {
     (Value::Object(actual), Value::Object(expected)) => {
       for key in actual.keys().chain(expected.keys()) {
-        if actual.get(key) == expected.get(key) {
+        if actual
+          .get(key)
+          .zip(expected.get(key))
+          .is_some_and(|(actual, expected)| json_values_equal(actual, expected))
+        {
           continue;
         }
         let child_path = format!("{path}.{key}");
@@ -116,7 +120,7 @@ fn first_json_difference(
       for (index, (actual_item, expected_item)) in
         actual.iter().zip(expected.iter()).enumerate()
       {
-        if actual_item != expected_item {
+        if !json_values_equal(actual_item, expected_item) {
           return first_json_difference(
             &format!("{path}[{index}]"),
             actual_item,
@@ -127,6 +131,31 @@ fn first_json_difference(
       format!("{path}.length: {} != {}", actual.len(), expected.len())
     }
     _ => format!("{path}: {actual:?} != {expected:?}"),
+  }
+}
+
+fn json_values_equal(actual: &Value, expected: &Value) -> bool {
+  match (actual, expected) {
+    (Value::Object(actual), Value::Object(expected)) => {
+      actual.len() == expected.len()
+        && actual.iter().all(|(key, actual)| {
+          expected
+            .get(key)
+            .is_some_and(|expected| json_values_equal(actual, expected))
+        })
+    }
+    (Value::Array(actual), Value::Array(expected)) => {
+      actual.len() == expected.len()
+        && actual
+          .iter()
+          .zip(expected)
+          .all(|(actual, expected)| json_values_equal(actual, expected))
+    }
+    (Value::Number(actual), Value::Number(expected)) => actual
+      .as_f64()
+      .zip(expected.as_f64())
+      .is_some_and(|(actual, expected)| actual.to_bits() == expected.to_bits()),
+    _ => actual == expected,
   }
 }
 
@@ -755,17 +784,22 @@ fn refresh_delta_snapshots(
     .find(|path| fixture_name(path) == BASELINE_FIXTURE)
     .ok_or_else(|| String::from("baseline input fixture is missing"))?;
   let baseline_value = read_expected_value(dir, BASELINE_FIXTURE)?;
-  let baseline_expected: BindingPreparedSearchConfig =
-    serde_json::from_value(baseline_value.clone())
-      .map_err(|error| format!("parse baseline oracle: {error}"))?;
   let baseline_actual = assemble_fixture(baseline_path)?;
-  compare_full_config(BASELINE_FIXTURE, &baseline_actual, &baseline_expected)
-    .map_err(|error| {
-    format!(
-      "refusing to update derived snapshots because the independent baseline \
-       oracle differs:\n{error}"
-    )
-  })?;
+  let baseline_actual_value = serde_json::to_value(&baseline_actual)
+    .map_err(|error| format!("serialize assembled baseline: {error}"))?;
+  if !json_values_equal(&baseline_actual_value, &baseline_value) {
+    return Err({
+      let difference = first_json_difference(
+        "config",
+        &baseline_actual_value,
+        &baseline_value,
+      );
+      format!(
+        "refusing to update derived snapshots because the independent baseline \
+       oracle differs:\n{BASELINE_FIXTURE}: {difference}"
+      )
+    });
+  }
 
   for input_path in inputs {
     let name = fixture_name(input_path);
@@ -782,6 +816,80 @@ fn refresh_delta_snapshots(
 }
 
 #[test]
+fn baseline_oracle_has_exact_serialized_shape() -> Result<(), String> {
+  let dir = fixtures_dir();
+  let baseline_input = dir.join(format!("{BASELINE_FIXTURE}.input.json"));
+  let actual = serde_json::to_value(assemble_fixture(&baseline_input)?)
+    .map_err(|error| format!("serialize assembled baseline: {error}"))?;
+  let expected = read_expected_value(&dir, BASELINE_FIXTURE)?;
+  if json_values_equal(&actual, &expected) {
+    return Ok(());
+  }
+  Err(format!(
+    "baseline oracle shape differs: {}",
+    first_json_difference("config", &actual, &expected)
+  ))
+}
+
+#[test]
+fn refresh_rejects_lossy_baseline_default_omission() -> Result<(), String> {
+  let source_dir = fixtures_dir();
+  let dir = std::env::temp_dir().join(format!(
+    "stella-assemble-baseline-shape-{}",
+    std::process::id()
+  ));
+  fs::create_dir_all(&dir)
+    .map_err(|error| format!("create {}: {error}", dir.display()))?;
+
+  let result = (|| {
+    let baseline_input =
+      source_dir.join(format!("{BASELINE_FIXTURE}.input.json"));
+    let assembled = assemble_fixture(&baseline_input)?;
+    let mut baseline = serde_json::to_value(&assembled)
+      .map_err(|error| format!("serialize assembled baseline: {error}"))?;
+    baseline
+      .as_object_mut()
+      .ok_or_else(|| String::from("baseline oracle is not an object"))?
+      .remove("custom_regex_patterns")
+      .ok_or_else(|| {
+        String::from("baseline oracle lacks custom_regex_patterns")
+      })?;
+    let baseline_path = dir.join(format!("{BASELINE_FIXTURE}.expected.json"));
+    fs::write(
+      &baseline_path,
+      serde_json::to_vec(&baseline)
+        .map_err(|error| format!("serialize baseline oracle: {error}"))?,
+    )
+    .map_err(|error| format!("write {}: {error}", baseline_path.display()))?;
+
+    let lossy_expected: BindingPreparedSearchConfig =
+      serde_json::from_value(baseline.clone())
+        .map_err(|error| format!("parse lossy baseline oracle: {error}"))?;
+    assert_eq!(
+      assembled, lossy_expected,
+      "the typed comparison must demonstrate the omitted default is lossy"
+    );
+
+    let error = match refresh_delta_snapshots(&dir, &[baseline_input]) {
+      Ok(()) => {
+        return Err(String::from(
+          "exact-shape gate accepted an omitted baseline member",
+        ));
+      }
+      Err(error) => error,
+    };
+    assert!(
+      error.contains("config.custom_regex_patterns"),
+      "unexpected refresh error: {error}"
+    );
+    Ok(())
+  })();
+  fs::remove_dir_all(&dir)
+    .map_err(|error| format!("remove {}: {error}", dir.display()))?;
+  result
+}
+
+#[test]
 fn refresh_replaces_a_delta_that_no_longer_applies_to_the_baseline()
 -> Result<(), String> {
   let source_dir = fixtures_dir();
@@ -794,11 +902,15 @@ fn refresh_replaces_a_delta_that_no_longer_applies_to_the_baseline()
     .map_err(|error| format!("create {}: {error}", dir.display()))?;
 
   let result = (|| {
-    fs::copy(
-      source_dir.join(format!("{BASELINE_FIXTURE}.expected.json")),
+    let baseline_input =
+      source_dir.join(format!("{BASELINE_FIXTURE}.input.json"));
+    let baseline = serde_json::to_vec(&assemble_fixture(&baseline_input)?)
+      .map_err(|error| format!("serialize assembled baseline: {error}"))?;
+    fs::write(
       dir.join(format!("{BASELINE_FIXTURE}.expected.json")),
+      baseline,
     )
-    .map_err(|error| format!("copy baseline fixture: {error}"))?;
+    .map_err(|error| format!("write baseline fixture: {error}"))?;
     fs::write(
       dir.join(format!("{fixture}.expected.delta.json")),
       r#"{
@@ -813,7 +925,7 @@ fn refresh_replaces_a_delta_that_no_longer_applies_to_the_baseline()
     .map_err(|error| format!("write stale delta: {error}"))?;
 
     let inputs = vec![
-      source_dir.join(format!("{BASELINE_FIXTURE}.input.json")),
+      baseline_input,
       source_dir.join(format!("{fixture}.input.json")),
     ];
     refresh_delta_snapshots(&dir, &inputs)?;

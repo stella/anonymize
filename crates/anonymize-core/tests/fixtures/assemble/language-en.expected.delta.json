@@ -885,6 +885,83 @@
       ]
     },
     {
+      "type": "array",
+      "path": ["legal_form_data", "clause_noun_heads"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 15
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["legal_form_data", "connector_prose_heads"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 13,
+          "end": 15
+        },
+        {
+          "type": "copy",
+          "start": 20,
+          "end": 21
+        },
+        {
+          "type": "copy",
+          "start": 27,
+          "end": 28
+        },
+        {
+          "type": "copy",
+          "start": 31,
+          "end": 32
+        },
+        {
+          "type": "copy",
+          "start": 50,
+          "end": 52
+        },
+        {
+          "type": "copy",
+          "start": 56,
+          "end": 57
+        },
+        {
+          "type": "copy",
+          "start": 60,
+          "end": 61
+        },
+        {
+          "type": "copy",
+          "start": 63,
+          "end": 66
+        },
+        {
+          "type": "copy",
+          "start": 78,
+          "end": 80
+        },
+        {
+          "type": "copy",
+          "start": 94,
+          "end": 95
+        },
+        {
+          "type": "copy",
+          "start": 101,
+          "end": 102
+        },
+        {
+          "type": "copy",
+          "start": 104,
+          "end": 105
+        }
+      ]
+    },
+    {
       "type": "set",
       "path": ["legal_form_data", "lowercase_bridge", "policy"],
       "value": "closed"
@@ -1077,6 +1154,105 @@
         {
           "type": "copy",
           "start": 0,
+          "end": 3
+        },
+        {
+          "type": "values",
+          "values": [
+            {
+              "label": "iban",
+              "score": 1.0
+            },
+            {
+              "label": "email address",
+              "score": 1.0
+            }
+          ]
+        },
+        {
+          "type": "copy",
+          "start": 5,
+          "end": 6
+        },
+        {
+          "type": "values",
+          "values": [
+            {
+              "label": "phone number",
+              "min_byte_length": 7,
+              "requires_validation": true,
+              "score": 1.0,
+              "validator_id": "phone.international"
+            }
+          ]
+        },
+        {
+          "type": "copy",
+          "start": 7,
+          "end": 10
+        },
+        {
+          "type": "values",
+          "values": [
+            {
+              "label": "credit card number",
+              "score": 1.0
+            },
+            {
+              "label": "birth number",
+              "requires_validation": true,
+              "score": 1.0,
+              "validator_id": "cz.rc"
+            }
+          ]
+        },
+        {
+          "type": "copy",
+          "start": 12,
+          "end": 13
+        },
+        {
+          "type": "values",
+          "values": [
+            {
+              "label": "date",
+              "score": 1.0
+            },
+            {
+              "label": "date",
+              "score": 1.0
+            },
+            {
+              "label": "ip address",
+              "score": 1.0
+            }
+          ]
+        },
+        {
+          "type": "copy",
+          "start": 16,
+          "end": 40
+        },
+        {
+          "type": "values",
+          "values": [
+            {
+              "label": "url",
+              "score": 1.0
+            },
+            {
+              "label": "ip address",
+              "score": 1.0
+            },
+            {
+              "label": "mac address",
+              "score": 1.0
+            }
+          ]
+        },
+        {
+          "type": "copy",
+          "start": 43,
           "end": 111
         }
       ]
@@ -1288,27 +1464,6 @@
           "start": 1759,
           "end": 1760
         }
-      ]
-    },
-    {
-      "type": "set",
-      "path": ["legal_form_data", "clause_noun_heads"],
-      "value": [
-        "agreement",
-        "contract",
-        "agreements",
-        "contracts",
-        "license",
-        "licence",
-        "lease",
-        "memorandum",
-        "notice",
-        "exhibit",
-        "schedule",
-        "addendum",
-        "amendment",
-        "appendix",
-        "attachment"
       ]
     },
     {

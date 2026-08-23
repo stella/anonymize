@@ -553,21 +553,37 @@ fn scoped_clause_noun_heads(
 }
 
 /// Mirrors `getConnectorProseHeadsSync` (post-warm): `generic-roles.json`
-/// `roles`, lowercased, insertion-order dedup.
-fn connector_prose_heads() -> Result<Vec<String>, AssembleError> {
+/// `roles`, lowercased, insertion-order dedup. Explicit language selections
+/// retain only roles declared by the selected language files.
+fn connector_prose_heads(
+  selected: Option<&[String]>,
+) -> Result<Vec<String>, AssembleError> {
   #[derive(Deserialize)]
   struct GenericRoles {
     #[serde(default)]
     roles: Vec<String>,
   }
   let parsed: GenericRoles = parse_data_file("generic-roles.json")?;
+  let selected_roles = selected
+    .map(|selected| {
+      role_heads(Some(selected))
+        .map(|roles| roles.into_iter().collect::<HashSet<_>>())
+    })
+    .transpose()?;
   let mut seen = HashSet::new();
   let mut out = Vec::new();
   for role in parsed.roles {
     if role.is_empty() {
       continue;
     }
-    push_unique(role.to_lowercase(), &mut seen, &mut out);
+    let role = role.to_lowercase();
+    if selected_roles
+      .as_ref()
+      .is_some_and(|roles| !roles.contains(&role))
+    {
+      continue;
+    }
+    push_unique(role, &mut seen, &mut out);
   }
   Ok(out)
 }
@@ -785,7 +801,9 @@ pub(super) fn build_legal_form_data(
     clause_noun_heads: scoped_clause_noun_heads(
       ctx.content_languages.as_deref(),
     )?,
-    connector_prose_heads: connector_prose_heads()?,
+    connector_prose_heads: connector_prose_heads(
+      ctx.content_languages.as_deref(),
+    )?,
     structural_single_cap_prefixes: load_lowercase_union(
       "structural-single-cap-prefixes.json",
       &[],
@@ -823,7 +841,7 @@ mod tests {
   #![allow(clippy::unwrap_used)]
 
   use super::{
-    InstitutionalOrganizationData, all_legal_suffixes,
+    InstitutionalOrganizationData, all_legal_suffixes, connector_prose_heads,
     institutional_language_words, non_ascii_name_short_suffixes,
     organization_detection_suffixes, role_heads, scoped_clause_noun_heads,
     validate_institutional_terms,
@@ -865,6 +883,17 @@ mod tests {
     assert!(!english.iter().any(|word| word == "dohoda"));
     assert!(english.iter().any(|word| word == "agreement"));
     assert!(!czech.iter().any(|word| word == "agreement"));
+  }
+
+  #[test]
+  fn connector_prose_heads_follow_content_language_scope() {
+    let czech = connector_prose_heads(Some(&[String::from("cs")])).unwrap();
+    let english = connector_prose_heads(Some(&[String::from("en")])).unwrap();
+
+    assert!(czech.contains(&String::from("nájemce")));
+    assert!(!czech.contains(&String::from("customer")));
+    assert!(english.contains(&String::from("customer")));
+    assert!(!english.contains(&String::from("nájemce")));
   }
 
   #[test]
