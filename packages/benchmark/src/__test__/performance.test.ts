@@ -28,6 +28,7 @@ import {
 import {
   buildPerformanceWorkerInvocation,
   parsePerformanceArgs,
+  parsePerformanceWorkerMessage,
 } from "../performance/run";
 import { summarize } from "../performance/statistics";
 import {
@@ -46,6 +47,16 @@ import {
 } from "../performance/providers/input-identity";
 
 describe("canonical performance statistics", () => {
+  test("validates worker messages at the process boundary", () => {
+    expect(parsePerformanceWorkerMessage('{"type":"ready"}')).toEqual({
+      type: "ready",
+    });
+    expect(() =>
+      parsePerformanceWorkerMessage('{"type":"result","sample":{}}'),
+    ).toThrow("performance scenario must be an object");
+    expect(() => parsePerformanceWorkerMessage("not JSON")).toThrow();
+  });
+
   test("reports median, MAD, and nearest-rank p95 without sorting samples", () => {
     const values = [9, 1, 4, 2, 3];
     expect(summarize(values)).toEqual({

@@ -104,11 +104,7 @@ type CanonicalSessionDeletionSummary = {
 };
 
 type CanonicalSessionRedactionPlanResult = {
-  replacements: Array<{
-    start: number;
-    end: number;
-    replacement: string;
-  }>;
+  replacements: Array<{ start: number; end: number; replacement: string }>;
   entity_count: number;
   caller_entity_count: number;
 };
@@ -453,6 +449,11 @@ export type NativeOperatorConfig = {
 };
 
 export const CALLER_DETECTION_CONTRACT_VERSION = 2;
+export const CALLER_DETECTION_MAX_COUNT = 100_000;
+export const CALLER_DETECTION_TEXT_MAX_BYTES = 64 * 1024 * 1024;
+export const CALLER_DETECTION_REQUEST_JSON_MAX_BYTES = 16 * 1024 * 1024;
+export const SESSION_CALLER_MAX_INPUTS = 100_000;
+export const SESSION_CALLER_INPUTS_JSON_MAX_BYTES = 64 * 1024 * 1024;
 
 export const EXTERNAL_DETECTION_BATCH_VERSION = 1 as const;
 export const EXTERNAL_DETECTION_BATCH_MAX_BYTES = 16 * 1024 * 1024;
@@ -543,20 +544,116 @@ export type NativeSessionBlockRedactionPlan = {
   callerEntityCount: number;
 };
 
-const callerDetectionRequestJson = (
+const utf8ByteLengthAtMost = (text: string, maximum: number): number => {
+  let bytes = 0;
+  for (let index = 0; index < text.length; index += 1) {
+    const unit = text.charCodeAt(index);
+    if (unit <= 0x7f) {
+      bytes += 1;
+    } else if (unit <= 0x7ff) {
+      bytes += 2;
+    } else if (
+      unit >= 0xd800 &&
+      unit <= 0xdbff &&
+      index + 1 < text.length &&
+      text.charCodeAt(index + 1) >= 0xdc00 &&
+      text.charCodeAt(index + 1) <= 0xdfff
+    ) {
+      bytes += 4;
+      index += 1;
+    } else {
+      bytes += 3;
+    }
+    if (bytes > maximum) {
+      return bytes;
+    }
+  }
+  return bytes;
+};
+
+const validateCallerDetectionInput = (
+  fullText: string,
   detections: readonly NativeCallerDetection[],
-): string =>
-  JSON.stringify({
+): number => {
+  if (!Array.isArray(detections)) {
+    throw new TypeError("Caller detections must be an array");
+  }
+  if (detections.length > CALLER_DETECTION_MAX_COUNT) {
+    throw new RangeError(
+      `Caller detections contains ${detections.length} items; the maximum is ${CALLER_DETECTION_MAX_COUNT}`,
+    );
+  }
+  const textBytes = utf8ByteLengthAtMost(
+    fullText,
+    CALLER_DETECTION_TEXT_MAX_BYTES,
+  );
+  if (textBytes > CALLER_DETECTION_TEXT_MAX_BYTES) {
+    throw new RangeError(
+      `Caller detection text contains ${textBytes} bytes; the maximum is ${CALLER_DETECTION_TEXT_MAX_BYTES}`,
+    );
+  }
+  return textBytes;
+};
+
+const callerDetectionRequestJson = (
+  fullText: string,
+  detections: readonly NativeCallerDetection[],
+): string => {
+  validateCallerDetectionInput(fullText, detections);
+  const requestJson = JSON.stringify({
     version: CALLER_DETECTION_CONTRACT_VERSION,
-    detections: detections.map((detection) => ({
-      start: detection.start,
-      end: detection.end,
-      label: detection.label,
-      score: detection.score,
-      provider_id: detection.providerId,
-      detection_id: detection.detectionId,
-    })),
+    detections: detections.map(
+      ({ start, end, label, score, providerId, detectionId }) => ({
+        start,
+        end,
+        label,
+        score,
+        provider_id: providerId,
+        detection_id: detectionId,
+      }),
+    ),
   });
+  const requestBytes = utf8ByteLengthAtMost(
+    requestJson,
+    CALLER_DETECTION_REQUEST_JSON_MAX_BYTES,
+  );
+  if (requestBytes > CALLER_DETECTION_REQUEST_JSON_MAX_BYTES) {
+    throw new RangeError(
+      `Caller detection request JSON contains ${requestBytes} bytes; the maximum is ${CALLER_DETECTION_REQUEST_JSON_MAX_BYTES}`,
+    );
+  }
+  return requestJson;
+};
+
+const validateSessionCallerInputs = (
+  inputs: readonly NativeSessionCallerRedactionInput[],
+): void => {
+  if (!Array.isArray(inputs)) {
+    throw new TypeError("Session caller inputs must be an array");
+  }
+  if (inputs.length > SESSION_CALLER_MAX_INPUTS) {
+    throw new RangeError(
+      `Session caller inputs contains ${inputs.length} items; the maximum is ${SESSION_CALLER_MAX_INPUTS}`,
+    );
+  }
+  let detectionCount = 0;
+  let textBytes = 0;
+  for (const { detections, fullText } of inputs) {
+    const inputTextBytes = validateCallerDetectionInput(fullText, detections);
+    detectionCount += detections.length;
+    if (detectionCount > CALLER_DETECTION_MAX_COUNT) {
+      throw new RangeError(
+        `Session caller detections contains ${detectionCount} items; the maximum is ${CALLER_DETECTION_MAX_COUNT}`,
+      );
+    }
+    textBytes += inputTextBytes;
+    if (textBytes > CALLER_DETECTION_TEXT_MAX_BYTES) {
+      throw new RangeError(
+        `Session caller text contains ${textBytes} bytes; the maximum is ${CALLER_DETECTION_TEXT_MAX_BYTES}`,
+      );
+    }
+  }
+};
 
 export type NativePipelineEntity = {
   start: number;
@@ -827,11 +924,12 @@ export class PreparedNativeRedactionSession {
     operators,
     observedAtEpochSeconds,
   }: NativeSessionCallerRedactionPlanOptions): PreparedNativeSessionRedactionPlan {
+    validateSessionCallerInputs(inputs);
     const bindingOperators = toBindingOperatorConfig(operators);
     const bindingPlan = this.#session.planStaticEntitiesWithCallerDetections({
       inputs: inputs.map(({ detections, fullText }) => ({
         fullText,
-        requestJson: callerDetectionRequestJson(detections),
+        requestJson: callerDetectionRequestJson(fullText, detections),
       })),
       ...(bindingOperators === undefined
         ? {}
@@ -994,7 +1092,10 @@ export class PreparedNativeAnonymizer {
     fullText: string,
     options: NativeCallerRedactionOptions,
   ): NativeStaticRedactionResult {
-    const requestJson = callerDetectionRequestJson(options.detections);
+    const requestJson = callerDetectionRequestJson(
+      fullText,
+      options.detections,
+    );
     const operators = toBindingOperatorConfig(options.operators);
     const result: CanonicalStaticRedactionResult = JSON.parse(
       this.#prepared.redactStaticEntitiesWithCallerDetectionsJson(fullText, {
@@ -1016,7 +1117,10 @@ export class PreparedNativeAnonymizer {
     fullText: string,
     options: NativeCallerRedactionOptions,
   ): string {
-    const requestJson = callerDetectionRequestJson(options.detections);
+    const requestJson = callerDetectionRequestJson(
+      fullText,
+      options.detections,
+    );
     const operators = toBindingOperatorConfig(options.operators);
     return this.#prepared.redactStaticEntitiesWithCallerDetectionsDiagnosticsJson(
       fullText,

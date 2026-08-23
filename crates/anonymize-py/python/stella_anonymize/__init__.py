@@ -82,6 +82,11 @@ __all__ = [
     "MaskOperatorConfig",
     "CallerDetection",
     "CALLER_DETECTION_CONTRACT_VERSION",
+    "CALLER_DETECTION_MAX_COUNT",
+    "CALLER_DETECTION_REQUEST_JSON_MAX_BYTES",
+    "CALLER_DETECTION_TEXT_MAX_BYTES",
+    "SESSION_CALLER_INPUTS_JSON_MAX_BYTES",
+    "SESSION_CALLER_MAX_INPUTS",
     "ExternalDetectionBatch",
     "ExternalDetection",
     "ExternalDetectionDocument",
@@ -195,6 +200,11 @@ class MaskOperatorConfig(TypedDict):
 OperatorSelection = Literal["replace", "redact", "keep"] | MaskOperatorConfig
 OperatorConfig = Mapping[str, OperatorSelection] | str | None
 CALLER_DETECTION_CONTRACT_VERSION = 2
+CALLER_DETECTION_MAX_COUNT = 100_000
+CALLER_DETECTION_TEXT_MAX_BYTES = 64 * 1024 * 1024
+CALLER_DETECTION_REQUEST_JSON_MAX_BYTES = 16 * 1024 * 1024
+SESSION_CALLER_MAX_INPUTS = 100_000
+SESSION_CALLER_INPUTS_JSON_MAX_BYTES = 64 * 1024 * 1024
 EXTERNAL_DETECTION_BATCH_VERSION = 1
 _EXTERNAL_DETECTION_LIMITS = cast(
     dict[str, int], json.loads(_native_external_detection_limits_json())
@@ -333,17 +343,51 @@ class PreparedRedactionSession:
         operators: OperatorConfig,
         observed_at_epoch_seconds: int | None,
     ) -> object:
-        native_inputs = [
-            {
-                "full_text": str(item["full_text"]),
-                "request_json": _caller_detection_request_json(
-                    item.get("detections", ())  # type: ignore[arg-type]
-                ),
-            }
-            for item in inputs
-        ]
+        if len(inputs) > SESSION_CALLER_MAX_INPUTS:
+            raise ValueError(
+                "Session caller inputs contains "
+                f"{len(inputs)} items; the maximum is {SESSION_CALLER_MAX_INPUTS}"
+            )
+        detection_count = 0
+        text_bytes = 0
+        native_inputs: list[dict[str, str]] = []
+        for item in inputs:
+            full_text = str(item["full_text"])
+            detections = cast(
+                Sequence[CallerDetection], item.get("detections", ())
+            )
+            detection_count += len(detections)
+            if detection_count > CALLER_DETECTION_MAX_COUNT:
+                raise ValueError(
+                    "Session caller detections contains "
+                    f"{detection_count} items; the maximum is "
+                    f"{CALLER_DETECTION_MAX_COUNT}"
+                )
+            text_bytes += len(full_text.encode("utf-8"))
+            if text_bytes > CALLER_DETECTION_TEXT_MAX_BYTES:
+                raise ValueError(
+                    "Session caller text contains "
+                    f"{text_bytes} bytes; the maximum is "
+                    f"{CALLER_DETECTION_TEXT_MAX_BYTES}"
+                )
+            native_inputs.append(
+                {
+                    "full_text": full_text,
+                    "request_json": _caller_detection_request_json(
+                        detections, full_text
+                    ),
+                }
+            )
+        inputs_json = json.dumps(native_inputs, separators=(",", ":"))
+        inputs_json_bytes = len(inputs_json.encode("utf-8"))
+        if inputs_json_bytes > SESSION_CALLER_INPUTS_JSON_MAX_BYTES:
+            raise ValueError(
+                "Session caller inputs JSON contains "
+                f"{inputs_json_bytes} bytes; the maximum is "
+                f"{SESSION_CALLER_INPUTS_JSON_MAX_BYTES}"
+            )
         return self._session.plan_docx_text_batch(
-            json.dumps(native_inputs, separators=(",", ":")),
+            inputs_json,
             _operator_config_json(operators, redact_string=None),
             observed_at_epoch_seconds,
         )
@@ -609,7 +653,7 @@ class PreparedAnonymizer:
     ) -> StaticRedactionResult:
         return self._prepared.redact_static_entities_with_caller_detections(
             full_text,
-            _caller_detection_request_json(detections),
+            _caller_detection_request_json(detections, full_text),
             _operator_config_json(operators, redact_string=redact_string),
         )
 
@@ -623,7 +667,7 @@ class PreparedAnonymizer:
     ) -> str:
         return self._prepared.redact_static_entities_with_caller_detections_json(
             full_text,
-            _caller_detection_request_json(detections),
+            _caller_detection_request_json(detections, full_text),
             _operator_config_json(operators, redact_string=redact_string),
         )
 
@@ -637,7 +681,7 @@ class PreparedAnonymizer:
     ) -> str:
         return self._prepared.redact_static_entities_with_caller_detections_diagnostics_json(
             full_text,
-            _caller_detection_request_json(detections),
+            _caller_detection_request_json(detections, full_text),
             _operator_config_json(operators, redact_string=redact_string),
         )
 
@@ -1191,14 +1235,44 @@ def _native_search_config_json(config_json: NativeSearchPackageInput) -> str:
 
 def _caller_detection_request_json(
     detections: Sequence[CallerDetection],
+    full_text: str,
 ) -> str:
-    return json.dumps(
+    if len(detections) > CALLER_DETECTION_MAX_COUNT:
+        raise ValueError(
+            f"Caller detections contains {len(detections)} items; the maximum is "
+            f"{CALLER_DETECTION_MAX_COUNT}"
+        )
+    text_bytes = len(full_text.encode("utf-8"))
+    if text_bytes > CALLER_DETECTION_TEXT_MAX_BYTES:
+        raise ValueError(
+            f"Caller detection text contains {text_bytes} bytes; the maximum is "
+            f"{CALLER_DETECTION_TEXT_MAX_BYTES}"
+        )
+    request_json = json.dumps(
         {
             "version": CALLER_DETECTION_CONTRACT_VERSION,
-            "detections": list(detections),
+            "detections": [
+                {
+                    "start": detection["start"],
+                    "end": detection["end"],
+                    "label": detection["label"],
+                    "score": detection["score"],
+                    "provider_id": detection["provider_id"],
+                    "detection_id": detection["detection_id"],
+                }
+                for detection in detections
+            ],
         },
         separators=(",", ":"),
     )
+    request_json_bytes = len(request_json.encode("utf-8"))
+    if request_json_bytes > CALLER_DETECTION_REQUEST_JSON_MAX_BYTES:
+        raise ValueError(
+            "Caller detection request JSON contains "
+            f"{request_json_bytes} bytes; the maximum is "
+            f"{CALLER_DETECTION_REQUEST_JSON_MAX_BYTES}"
+        )
+    return request_json
 
 
 def _operator_config_json(
