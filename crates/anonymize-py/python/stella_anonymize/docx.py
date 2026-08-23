@@ -204,7 +204,9 @@ def rewrite_docx_text(
                 normalized["expectedText"] = normalized.pop("expected_text")
             normalized_rewrites.append(normalized)
         serializable_rewrites = _preflight_rewrite_plan(normalized_rewrites)
-        rewrites_json = json.dumps(serializable_rewrites, separators=(",", ":"))
+        rewrites_json = json.dumps(
+            serializable_rewrites, separators=(",", ":"), ensure_ascii=False
+        )
     except DocxRewriteError:
         raise
     except (TypeError, ValueError) as error:

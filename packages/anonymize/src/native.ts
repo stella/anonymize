@@ -598,34 +598,149 @@ const validateCallerDetectionInput = (
   return textBytes;
 };
 
+class BoundedJsonWriter {
+  readonly #chunks: string[] = [];
+  readonly #maximumBytes: number;
+  #bytes = 0;
+
+  constructor(maximumBytes: number) {
+    this.#maximumBytes = maximumBytes;
+  }
+
+  appendRaw(value: string): void {
+    this.#reserve(value.length);
+    this.#chunks.push(value);
+  }
+
+  appendNumber(value: number, field: string): void {
+    if (typeof value !== "number") {
+      throw new TypeError(`${field} must be a number`);
+    }
+    this.appendRaw(JSON.stringify(value));
+  }
+
+  appendString(value: string, field: string): void {
+    if (typeof value !== "string") {
+      throw new TypeError(`${field} must be a string`);
+    }
+    this.appendRaw('"');
+    let runStart = 0;
+    for (let index = 0; index < value.length; index += 1) {
+      const unit = value.charCodeAt(index);
+      const escape = jsonEscape(unit);
+      if (escape !== undefined) {
+        this.#appendReservedRun(value, runStart, index);
+        this.appendRaw(escape);
+        runStart = index + 1;
+        continue;
+      }
+      if (
+        unit >= 0xd800 &&
+        unit <= 0xdbff &&
+        index + 1 < value.length &&
+        value.charCodeAt(index + 1) >= 0xdc00 &&
+        value.charCodeAt(index + 1) <= 0xdfff
+      ) {
+        this.#reserve(4);
+        index += 1;
+        continue;
+      }
+      if (unit >= 0xd800 && unit <= 0xdfff) {
+        this.#appendReservedRun(value, runStart, index);
+        this.appendRaw(`\\u${unit.toString(16).padStart(4, "0")}`);
+        runStart = index + 1;
+        continue;
+      }
+      let unitBytes = 3;
+      if (unit <= 0x7f) {
+        unitBytes = 1;
+      } else if (unit <= 0x7ff) {
+        unitBytes = 2;
+      }
+      this.#reserve(unitBytes);
+    }
+    this.#appendReservedRun(value, runStart, value.length);
+    this.appendRaw('"');
+  }
+
+  finish(suffix: string): string {
+    return this.#chunks.join("") + suffix;
+  }
+
+  #appendReservedRun(value: string, start: number, end: number): void {
+    if (end > start) {
+      this.#chunks.push(value.slice(start, end));
+    }
+  }
+
+  #reserve(bytes: number): void {
+    if (bytes > this.#maximumBytes - this.#bytes) {
+      throw new RangeError(
+        `Caller detection request JSON exceeds the ${CALLER_DETECTION_REQUEST_JSON_MAX_BYTES}-byte maximum`,
+      );
+    }
+    this.#bytes += bytes;
+  }
+}
+
+const jsonEscape = (unit: number): string | undefined => {
+  switch (unit) {
+    case 0x08:
+      return "\\b";
+    case 0x09:
+      return "\\t";
+    case 0x0a:
+      return "\\n";
+    case 0x0c:
+      return "\\f";
+    case 0x0d:
+      return "\\r";
+    case 0x22:
+      return '\\"';
+    case 0x5c:
+      return "\\\\";
+    default:
+      return unit < 0x20
+        ? `\\u${unit.toString(16).padStart(4, "0")}`
+        : undefined;
+  }
+};
+
 const callerDetectionRequestJson = (
   fullText: string,
   detections: readonly NativeCallerDetection[],
 ): string => {
   validateCallerDetectionInput(fullText, detections);
-  const requestJson = JSON.stringify({
-    version: CALLER_DETECTION_CONTRACT_VERSION,
-    detections: detections.map(
-      ({ start, end, label, score, providerId, detectionId }) => ({
-        start,
-        end,
-        label,
-        score,
-        provider_id: providerId,
-        detection_id: detectionId,
-      }),
-    ),
-  });
-  const requestBytes = utf8ByteLengthWithin(
-    requestJson,
-    CALLER_DETECTION_REQUEST_JSON_MAX_BYTES,
+  const suffix = "]}";
+  const writer = new BoundedJsonWriter(
+    CALLER_DETECTION_REQUEST_JSON_MAX_BYTES - suffix.length,
   );
-  if (requestBytes === undefined) {
-    throw new RangeError(
-      `Caller detection request JSON exceeds the ${CALLER_DETECTION_REQUEST_JSON_MAX_BYTES}-byte maximum`,
-    );
+  writer.appendRaw(
+    `{"version":${CALLER_DETECTION_CONTRACT_VERSION},"detections":[`,
+  );
+  for (let index = 0; index < detections.length; index += 1) {
+    const detection = detections[index];
+    if (detection === undefined) {
+      throw new TypeError("Caller detections must not be sparse");
+    }
+    if (index > 0) {
+      writer.appendRaw(",");
+    }
+    writer.appendRaw('{"start":');
+    writer.appendNumber(detection.start, "Caller detection start");
+    writer.appendRaw(',"end":');
+    writer.appendNumber(detection.end, "Caller detection end");
+    writer.appendRaw(',"label":');
+    writer.appendString(detection.label, "Caller detection label");
+    writer.appendRaw(',"score":');
+    writer.appendNumber(detection.score, "Caller detection score");
+    writer.appendRaw(',"provider_id":');
+    writer.appendString(detection.providerId, "Caller detection providerId");
+    writer.appendRaw(',"detection_id":');
+    writer.appendString(detection.detectionId, "Caller detection detectionId");
+    writer.appendRaw("}");
   }
-  return requestJson;
+  return writer.finish(suffix);
 };
 
 const validateSessionCallerInputs = (

@@ -24,7 +24,6 @@ use stella_anonymize_adapter_contract::{
 };
 use stella_anonymize_binding_core::{
   PackageEncoding, PreparedBinding, PreparedSessionPlan, SessionCallerInputs,
-  caller_detection_request_from_json,
   operators_from_json as binding_operators_from_json,
   package_from_binding_config as binding_package_from_config,
   plan_session_redactions as binding_plan_session_redactions,
@@ -927,10 +926,8 @@ impl NativePreparedRedactionSession {
     let mut inputs = SessionCallerInputs::with_capacity(options.inputs.len())
       .map_err(to_napi_facade_error)?;
     for input in options.inputs {
-      let request = caller_detection_request_from_json(&input.request_json)
-        .map_err(to_napi_facade_error)?;
       inputs
-        .push_utf16_binding(request, input.full_text)
+        .push_utf16_binding_json(&input.request_json, input.full_text)
         .map_err(to_napi_facade_error)?;
     }
     let session = self.lock_session()?;

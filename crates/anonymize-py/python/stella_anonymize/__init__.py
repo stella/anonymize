@@ -273,7 +273,9 @@ def convert_external_detection_batch(
     batch: ExternalDetectionBatch | str,
 ) -> list[CallerDetection]:
     batch_json = (
-        batch if isinstance(batch, str) else json.dumps(batch, separators=(",", ":"))
+        batch
+        if isinstance(batch, str)
+        else json.dumps(batch, separators=(",", ":"), ensure_ascii=False)
     )
     converted = json.loads(
         _native_convert_external_detection_batch(bytes(document), batch_json)
@@ -373,7 +375,9 @@ class PreparedRedactionSession:
                     ),
                 }
             )
-        inputs_json = json.dumps(native_inputs, separators=(",", ":"))
+        inputs_json = json.dumps(
+            native_inputs, separators=(",", ":"), ensure_ascii=False
+        )
         inputs_json_bytes = len(inputs_json.encode("utf-8"))
         if inputs_json_bytes > SESSION_CALLER_INPUTS_JSON_MAX_BYTES:
             raise ValueError(
@@ -1225,7 +1229,7 @@ def _native_search_config_json(config_json: NativeSearchPackageInput) -> str:
         return config_json
     if isinstance(config_json, (bytes, bytearray, memoryview)):
         return bytes(config_json).decode("utf-8")
-    return json.dumps(config_json, separators=(",", ":"))
+    return json.dumps(config_json, separators=(",", ":"), ensure_ascii=False)
 
 
 def _caller_detection_request_json(
@@ -1259,6 +1263,7 @@ def _caller_detection_request_json(
             ],
         },
         separators=(",", ":"),
+        ensure_ascii=False,
     )
     request_json_bytes = len(request_json.encode("utf-8"))
     if request_json_bytes > CALLER_DETECTION_REQUEST_JSON_MAX_BYTES:
@@ -1286,4 +1291,4 @@ def _operator_config_json(
         payload["operators"] = dict(operators)
     if redact_string is not None:
         payload["redactString"] = redact_string
-    return json.dumps(payload, separators=(",", ":"))
+    return json.dumps(payload, separators=(",", ":"), ensure_ascii=False)

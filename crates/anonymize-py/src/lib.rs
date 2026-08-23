@@ -285,10 +285,8 @@ impl PyPreparedRedactionSession {
     let mut inputs = SessionCallerInputs::with_capacity(raw_inputs.len())
       .map_err(to_py_facade_error)?;
     for input in raw_inputs {
-      let request = caller_detection_request_from_json(&input.request_json)
-        .map_err(to_py_facade_error)?;
       inputs
-        .push_utf16_binding(request, input.full_text)
+        .push_utf16_binding_json(&input.request_json, input.full_text)
         .map_err(to_py_facade_error)?;
     }
     let operators =

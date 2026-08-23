@@ -82,7 +82,7 @@ pub const CALLER_DETECTION_TEXT_MAX_BYTES: usize = 64 * 1024 * 1024;
 pub const CALLER_DETECTION_REQUEST_JSON_MAX_BYTES: usize = 16 * 1024 * 1024;
 /// Maximum number of caller-assisted inputs accepted by one atomic session plan.
 pub const SESSION_CALLER_MAX_INPUTS: usize = 100_000;
-/// Maximum encoded bytes accepted by a raw session-plan input array.
+/// Maximum canonical encoded bytes accepted by one session-plan input batch.
 pub const SESSION_CALLER_INPUTS_JSON_MAX_BYTES: usize = 64 * 1024 * 1024;
 
 /// Digest verification policy for a prepared package.
@@ -549,6 +549,7 @@ pub struct SessionCallerInputs {
   inputs: Vec<SessionCallerInput>,
   detection_count: usize,
   text_bytes: usize,
+  encoded_json_bytes: usize,
 }
 
 impl SessionCallerInputs {
@@ -563,20 +564,41 @@ impl SessionCallerInputs {
       inputs: Vec::with_capacity(capacity),
       detection_count: 0,
       text_bytes: 0,
+      encoded_json_bytes: 2,
     })
   }
 
-  /// Checks aggregate limits before converting and retaining one input.
-  pub fn push_utf16_binding(
+  /// Checks canonical and aggregate limits before decoding and retaining one input.
+  pub fn push_utf16_binding_json(
     &mut self,
-    request: BindingCallerDetectionRequest,
+    request_json: &str,
     full_text: String,
   ) -> Result<()> {
+    validate_byte_limit(
+      "Caller detection request JSON",
+      request_json.len(),
+      CALLER_DETECTION_REQUEST_JSON_MAX_BYTES,
+    )?;
+    validate_caller_detection_text(&full_text)?;
     validate_item_limit(
       "Session caller inputs",
       self.inputs.len().saturating_add(1),
       SESSION_CALLER_MAX_INPUTS,
     )?;
+    let encoded_json_bytes = self
+      .encoded_json_bytes
+      .saturating_add(usize::from(!self.inputs.is_empty()))
+      .saturating_add(canonical_session_input_json_bytes(
+        &full_text,
+        request_json,
+      )?);
+    validate_byte_limit(
+      "Session caller inputs JSON",
+      encoded_json_bytes,
+      SESSION_CALLER_INPUTS_JSON_MAX_BYTES,
+    )?;
+
+    let request = caller_detection_request_from_json(request_json)?;
     let detection_count = self
       .detection_count
       .saturating_add(request.detections.len());
@@ -597,8 +619,46 @@ impl SessionCallerInputs {
     self.inputs.push(SessionCallerInput { detections });
     self.detection_count = detection_count;
     self.text_bytes = text_bytes;
+    self.encoded_json_bytes = encoded_json_bytes;
     Ok(())
   }
+}
+
+#[derive(Serialize)]
+struct CanonicalSessionCallerInput<'input> {
+  full_text: &'input str,
+  request_json: &'input str,
+}
+
+#[derive(Default)]
+struct JsonByteCounter {
+  bytes: usize,
+}
+
+impl std::io::Write for JsonByteCounter {
+  fn write(&mut self, buffer: &[u8]) -> std::io::Result<usize> {
+    self.bytes = self.bytes.saturating_add(buffer.len());
+    Ok(buffer.len())
+  }
+
+  fn flush(&mut self) -> std::io::Result<()> {
+    Ok(())
+  }
+}
+
+fn canonical_session_input_json_bytes(
+  full_text: &str,
+  request_json: &str,
+) -> Result<usize> {
+  let mut counter = JsonByteCounter::default();
+  serde_json::to_writer(
+    &mut counter,
+    &CanonicalSessionCallerInput {
+      full_text,
+      request_json,
+    },
+  )?;
+  Ok(counter.bytes)
 }
 
 /// Session inspection data independent of the host runtime.
@@ -1058,10 +1118,11 @@ mod tests {
         },
       ],
     };
+    let request_json = serde_json::to_string(&invalid_request)?;
     let mut detection_limited = SessionCallerInputs::with_capacity(1)?;
     detection_limited.detection_count = CALLER_DETECTION_MAX_COUNT;
-    let detection_result = detection_limited
-      .push_utf16_binding(invalid_request.clone(), "x".to_owned());
+    let detection_result =
+      detection_limited.push_utf16_binding_json(&request_json, "x".to_owned());
     assert!(matches!(
       detection_result,
       Err(BindingFacadeError::ItemLimitExceeded {
@@ -1074,7 +1135,7 @@ mod tests {
     let mut text_limited = SessionCallerInputs::with_capacity(1)?;
     text_limited.text_bytes = CALLER_DETECTION_TEXT_MAX_BYTES;
     let text_result =
-      text_limited.push_utf16_binding(invalid_request, "x".to_owned());
+      text_limited.push_utf16_binding_json(&request_json, "x".to_owned());
     assert!(matches!(
       text_result,
       Err(BindingFacadeError::ByteLimitExceeded {
@@ -1083,6 +1144,48 @@ mod tests {
         max_bytes: CALLER_DETECTION_TEXT_MAX_BYTES,
       }) if actual_bytes == CALLER_DETECTION_TEXT_MAX_BYTES + 1
     ));
+
+    let mut encoded_limited = SessionCallerInputs::with_capacity(1)?;
+    encoded_limited.encoded_json_bytes = SESSION_CALLER_INPUTS_JSON_MAX_BYTES;
+    let encoded_result =
+      encoded_limited.push_utf16_binding_json("{", "x".to_owned());
+    assert!(matches!(
+      encoded_result,
+      Err(BindingFacadeError::ByteLimitExceeded {
+        field: "Session caller inputs JSON",
+        actual_bytes,
+        max_bytes: SESSION_CALLER_INPUTS_JSON_MAX_BYTES,
+      }) if actual_bytes > SESSION_CALLER_INPUTS_JSON_MAX_BYTES
+    ));
+    Ok(())
+  }
+
+  #[test]
+  fn session_input_builder_matches_canonical_transport_budget() -> Result<()> {
+    let request_json = format!(
+      "\n{}\t",
+      serde_json::to_string(&BindingCallerDetectionRequest {
+        version:
+          stella_anonymize_adapter_contract::CALLER_DETECTION_CONTRACT_VERSION,
+        detections: Vec::new(),
+      })?
+    );
+    let full_texts = ["quote: \"", "line\n😀"];
+    let canonical = full_texts
+      .iter()
+      .map(|full_text| CanonicalSessionCallerInput {
+        full_text,
+        request_json: &request_json,
+      })
+      .collect::<Vec<_>>();
+    let expected = serde_json::to_vec(&canonical)?.len();
+
+    let mut inputs = SessionCallerInputs::with_capacity(full_texts.len())?;
+    for full_text in full_texts {
+      inputs.push_utf16_binding_json(&request_json, full_text.to_owned())?;
+    }
+
+    assert_eq!(inputs.encoded_json_bytes, expected);
     Ok(())
   }
 

@@ -5,8 +5,11 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+  CALLER_DETECTION_REQUEST_JSON_MAX_BYTES,
   NATIVE_BINDING_PARITY_MEMBERS,
+  PreparedNativeAnonymizer,
   type NativeAnonymizeBinding,
+  type NativeCallerDetection,
   type NativeDiagnosticsBatchCallback,
   type NativePreparedRedactionSessionBinding,
   type NativePreparedSearchBinding,
@@ -1008,12 +1011,14 @@ const fakeNativeBinding = (
 };
 
 type FakePreparedSearchOptions = {
+  onCallerRequestJson?: (requestJson: string) => void;
   onRedactStaticEntitiesJson?: () => string;
   onDiagnosticsStreamJson?: (onBatch: NativeDiagnosticsBatchCallback) => string;
   onWarmLazyRegex?: () => void;
 };
 
 const fakePreparedSearch = ({
+  onCallerRequestJson,
   onRedactStaticEntitiesJson,
   onDiagnosticsStreamJson,
   onWarmLazyRegex,
@@ -1062,7 +1067,13 @@ const fakePreparedSearch = ({
   redactStaticEntities: emptyStaticRedactionBindingResult,
   redactStaticEntitiesJson:
     onRedactStaticEntitiesJson ?? emptyStaticRedactionJson,
-  redactStaticEntitiesWithCallerDetectionsJson: emptyStaticRedactionJson,
+  redactStaticEntitiesWithCallerDetectionsJson: (
+    _fullText,
+    { requestJson },
+  ) => {
+    onCallerRequestJson?.(requestJson);
+    return emptyStaticRedactionJson();
+  },
   redactStaticEntitiesWithCallerDetectionsDiagnosticsJson:
     emptyStaticRedactionDiagnosticJson,
   redactStaticEntitiesResultStreamJson: (
@@ -1173,3 +1184,85 @@ const fakePreparedRedactionSession = (
     }),
   };
 };
+
+describe("caller detection request serialization", () => {
+  test("serializes only the exact caller-detection wire shape", () => {
+    let requestJson = "";
+    const prepared = new PreparedNativeAnonymizer(
+      fakePreparedSearch({
+        onCallerRequestJson: (value) => {
+          requestJson = value;
+        },
+      }),
+    );
+    const detection = Object.assign(
+      {
+        start: 0,
+        end: 4,
+        label: 'PER"SON\n😀\ud800',
+        score: 1,
+        providerId: "test\\provider",
+        detectionId: "detection\t1",
+      },
+      {
+        extra: "ignored",
+        toJSON: () => {
+          throw new Error("caller toJSON must not run");
+        },
+      },
+    );
+
+    prepared.redactStaticEntitiesWithCallerDetections("text", {
+      detections: [detection],
+    });
+
+    expect(requestJson).toBe(
+      JSON.stringify({
+        version: 2,
+        detections: [
+          {
+            start: 0,
+            end: 4,
+            label: 'PER"SON\n😀\ud800',
+            score: 1,
+            provider_id: "test\\provider",
+            detection_id: "detection\t1",
+          },
+        ],
+      }),
+    );
+  });
+
+  test("stops at the byte limit before reading a later hostile item", () => {
+    let laterItemRead = false;
+    const oversized: NativeCallerDetection = {
+      start: 0,
+      end: 1,
+      label: "x".repeat(CALLER_DETECTION_REQUEST_JSON_MAX_BYTES),
+      score: 1,
+      providerId: "test",
+      detectionId: "oversized",
+    };
+    const later: NativeCallerDetection = {
+      get start(): number {
+        laterItemRead = true;
+        throw new Error("later item must not be read");
+      },
+      end: 1,
+      label: "PERSON",
+      score: 1,
+      providerId: "test",
+      detectionId: "later",
+    };
+    const prepared = new PreparedNativeAnonymizer(fakePreparedSearch({}));
+
+    expect(() =>
+      prepared.redactStaticEntitiesWithCallerDetections("x", {
+        detections: [oversized, later],
+      }),
+    ).toThrow(
+      `Caller detection request JSON exceeds the ${CALLER_DETECTION_REQUEST_JSON_MAX_BYTES}-byte maximum`,
+    );
+    expect(laterItemRead).toBe(false);
+  });
+});

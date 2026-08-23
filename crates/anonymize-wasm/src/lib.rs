@@ -17,8 +17,7 @@ use stella_anonymize_adapter_contract::{
 use stella_anonymize_binding_core::{
   PackageEncoding, PackageVerification, PreparedBinding, PreparedSessionPlan,
   SessionCallerInputs, assemble_config,
-  assemble_package as binding_assemble_package,
-  caller_detection_request_from_json, create_session,
+  assemble_package as binding_assemble_package, create_session,
   create_session_with_lifecycle, delete_session, encrypted_session_archive,
   inspect_session, operators_from_json, plaintext_session_json,
   plan_session_redactions,
@@ -679,10 +678,8 @@ impl WasmPreparedRedactionSession {
     let mut inputs =
       SessionCallerInputs::with_capacity(raw_inputs.len()).map_err(js_error)?;
     for input in raw_inputs {
-      let request = caller_detection_request_from_json(&input.request_json)
-        .map_err(js_error)?;
       inputs
-        .push_utf16_binding(request, input.full_text)
+        .push_utf16_binding_json(&input.request_json, input.full_text)
         .map_err(js_error)?;
     }
     let operators =

@@ -35,6 +35,7 @@ import { join } from "node:path";
 import { afterAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 
 import {
+  CALLER_DETECTION_CONTRACT_VERSION,
   EXTERNAL_DETECTION_BATCH_MAX_BYTES,
   EXTERNAL_DETECTION_DOCUMENT_MAX_BYTES,
   EXTERNAL_DETECTION_MAX_DETECTIONS,
@@ -141,6 +142,10 @@ type PythonParityOutput = {
     masked_text: string;
     mask_map_count: number;
     mask_operator: string;
+  };
+  unicode_json_serialization: {
+    caller_request_json: string;
+    session_inputs_json: string;
   };
   external_detection_results: {
     start: number;
@@ -343,6 +348,32 @@ caller_result = json.loads(
         [{"start": 1, "end": 6, "label": "person", "score": 0.9,
           "provider_id": "parity-provider", "detection_id": "person-1"}],
     )
+)
+unicode_full_text = "😀Žluťoučký"
+unicode_detection = {
+    "start": 0,
+    "end": 1,
+    "label": "osoba-😀",
+    "score": 0.9,
+    "provider_id": "poskytovatel-Ž",
+    "detection_id": "detekce-č",
+}
+unicode_caller_request_json = anonymize._caller_detection_request_json(
+    [unicode_detection], unicode_full_text
+)
+
+class CapturingSession:
+    def plan_docx_text_batch(
+        self, inputs_json, _operators_json, _observed_at_epoch_seconds
+    ):
+        self.inputs_json = inputs_json
+        return None
+
+unicode_session_capture = CapturingSession()
+anonymize.PreparedRedactionSession(unicode_session_capture)._plan_docx_text_batch(
+    [{"full_text": unicode_full_text, "detections": [unicode_detection]}],
+    None,
+    None,
 )
 external_detection_results = []
 for offset_unit, start, end in [
@@ -893,6 +924,10 @@ print(
                 "mask_map_count": len(caller_mask_result["redaction"]["redaction_map"]),
                 "mask_operator": caller_mask_result["redaction"]["operator_map"][0]["operator"],
             },
+            "unicode_json_serialization": {
+                "caller_request_json": unicode_caller_request_json,
+                "session_inputs_json": unicode_session_capture.inputs_json,
+            },
             "external_detection_results": external_detection_results,
             "external_detection_error_messages": external_detection_error_messages,
             "external_detection_limits": external_detection_limits,
@@ -1411,6 +1446,34 @@ describe("python binding parity", () => {
       mask_operator: "mask",
     });
   });
+
+  pythonParityTest(
+    "caller and session request JSON matches JavaScript UTF-8 serialization",
+    () => {
+      const python = runPythonParity([]);
+      const fullText = "😀Žluťoučký";
+      const requestJson = JSON.stringify({
+        version: CALLER_DETECTION_CONTRACT_VERSION,
+        detections: [
+          {
+            start: 0,
+            end: 1,
+            label: "osoba-😀",
+            score: 0.9,
+            provider_id: "poskytovatel-Ž",
+            detection_id: "detekce-č",
+          },
+        ],
+      });
+
+      expect(python.unicode_json_serialization).toEqual({
+        caller_request_json: requestJson,
+        session_inputs_json: JSON.stringify([
+          { full_text: fullText, request_json: requestJson },
+        ]),
+      });
+    },
+  );
 
   pythonParityTest(
     "external detection batches share validation and host offset semantics",
