@@ -8,6 +8,7 @@ import {
   CALLER_DETECTION_REQUEST_JSON_MAX_BYTES,
   NATIVE_BINDING_PARITY_MEMBERS,
   PreparedNativeAnonymizer,
+  SESSION_CALLER_INPUTS_JSON_MAX_BYTES,
   type NativeAnonymizeBinding,
   type NativeCallerDetection,
   type NativeDiagnosticsBatchCallback,
@@ -1230,6 +1231,44 @@ describe("caller detection request serialization", () => {
           },
         ],
       }),
+    );
+  });
+
+  test("bounds aggregate session JSON before reading later inputs", () => {
+    class UnreadSessionInput {
+      get fullText(): string {
+        throw new Error("later session input was read");
+      }
+
+      get detections(): readonly NativeCallerDetection[] {
+        throw new Error("later session input was read");
+      }
+    }
+
+    const session = new PreparedNativeAnonymizer(
+      fakePreparedSearch({}),
+    ).createRedactionSession("bounded-session");
+    const detection = {
+      start: 0,
+      end: 1,
+      label: "x".repeat(11 * 1024 * 1024),
+      score: 1,
+      providerId: "provider",
+      detectionId: "detection",
+    };
+
+    expect(() =>
+      session.planTextBatchWithCallerDetections({
+        inputs: [
+          ...Array.from({ length: 6 }, () => ({
+            fullText: "x",
+            detections: [detection],
+          })),
+          new UnreadSessionInput(),
+        ],
+      }),
+    ).toThrow(
+      `Session caller inputs JSON exceeds the ${SESSION_CALLER_INPUTS_JSON_MAX_BYTES}-byte maximum`,
     );
   });
 
