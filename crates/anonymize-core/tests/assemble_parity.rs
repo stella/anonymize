@@ -89,6 +89,82 @@ fn assemble_fixture(
   .map_err(|error| format!("{name}: assemble failed: {error}"))
 }
 
+fn is_typescript_optional_null_member(key: &str) -> bool {
+  matches!(
+    key,
+    "distance"
+      | "case_insensitive"
+      | "whole_words"
+      | "lazy"
+      | "prefilter_any"
+      | "prefilter_case_insensitive"
+      | "prefilter_regex"
+      | "prefilter_window_bytes"
+      | "prepared_artifact_policy"
+      | "literal_case_insensitive"
+      | "literal_whole_words"
+      | "regex_whole_words"
+      | "regex_overlap_all"
+      | "regex_artifact_policy"
+      | "fuzzy_case_insensitive"
+      | "fuzzy_whole_words"
+      | "fuzzy_normalize_diacritics"
+      | "source_detail"
+      | "requires_validation"
+      | "validator_id"
+      | "validator_input"
+      | "min_byte_length"
+      | "reclassify_to"
+      | "max_length"
+      | "max_chars"
+      | "flags"
+      | "standalone_street"
+      | "gazetteer_data"
+  )
+}
+
+fn omit_typescript_optional_members(value: &mut Value) {
+  match value {
+    Value::Object(object) => {
+      object.retain(|key, member| {
+        !(member.is_null() && is_typescript_optional_null_member(key)
+          || key == "stop_words"
+            && member.as_array().is_some_and(Vec::is_empty))
+      });
+      for member in object.values_mut() {
+        omit_typescript_optional_members(member);
+      }
+    }
+    Value::Array(array) => {
+      for member in array {
+        omit_typescript_optional_members(member);
+      }
+    }
+    _ => {}
+  }
+}
+
+fn canonical_oracle_value(
+  config: &BindingPreparedSearchConfig,
+) -> Result<Value, String> {
+  let mut value = serde_json::to_value(config)
+    .map_err(|error| format!("serialize assembled config: {error}"))?;
+  omit_typescript_optional_members(&mut value);
+
+  if let Some(deny_list) = value
+    .get_mut("deny_list_data")
+    .and_then(Value::as_object_mut)
+  {
+    deny_list.retain(|key, member| {
+      !matches!(
+        key.as_str(),
+        "labels" | "custom_labels" | "custom_label_indices" | "sources"
+      ) || !member.as_array().is_some_and(Vec::is_empty)
+    });
+  }
+  Ok(value)
+}
+
 fn first_json_difference(
   path: &str,
   actual: &Value,
@@ -785,8 +861,7 @@ fn refresh_delta_snapshots(
     .ok_or_else(|| String::from("baseline input fixture is missing"))?;
   let baseline_value = read_expected_value(dir, BASELINE_FIXTURE)?;
   let baseline_actual = assemble_fixture(baseline_path)?;
-  let baseline_actual_value = serde_json::to_value(&baseline_actual)
-    .map_err(|error| format!("serialize assembled baseline: {error}"))?;
+  let baseline_actual_value = canonical_oracle_value(&baseline_actual)?;
   if !json_values_equal(&baseline_actual_value, &baseline_value) {
     return Err({
       let difference = first_json_difference(
@@ -807,8 +882,7 @@ fn refresh_delta_snapshots(
       continue;
     }
     let actual = assemble_fixture(input_path)?;
-    let mut actual_value = serde_json::to_value(actual)
-      .map_err(|error| format!("{name}: serialize config: {error}"))?;
+    let mut actual_value = canonical_oracle_value(&actual)?;
     preserve_omission_oracle(dir, name, &mut actual_value)?;
     write_expected_delta(dir, name, &baseline_value, &actual_value)?;
   }
@@ -819,8 +893,7 @@ fn refresh_delta_snapshots(
 fn baseline_oracle_has_exact_serialized_shape() -> Result<(), String> {
   let dir = fixtures_dir();
   let baseline_input = dir.join(format!("{BASELINE_FIXTURE}.input.json"));
-  let actual = serde_json::to_value(assemble_fixture(&baseline_input)?)
-    .map_err(|error| format!("serialize assembled baseline: {error}"))?;
+  let actual = canonical_oracle_value(&assemble_fixture(&baseline_input)?)?;
   let expected = read_expected_value(&dir, BASELINE_FIXTURE)?;
   if json_values_equal(&actual, &expected) {
     return Ok(());
@@ -845,8 +918,7 @@ fn refresh_rejects_lossy_baseline_default_omission() -> Result<(), String> {
     let baseline_input =
       source_dir.join(format!("{BASELINE_FIXTURE}.input.json"));
     let assembled = assemble_fixture(&baseline_input)?;
-    let mut baseline = serde_json::to_value(&assembled)
-      .map_err(|error| format!("serialize assembled baseline: {error}"))?;
+    let mut baseline = canonical_oracle_value(&assembled)?;
     baseline
       .as_object_mut()
       .ok_or_else(|| String::from("baseline oracle is not an object"))?
@@ -904,8 +976,10 @@ fn refresh_replaces_a_delta_that_no_longer_applies_to_the_baseline()
   let result = (|| {
     let baseline_input =
       source_dir.join(format!("{BASELINE_FIXTURE}.input.json"));
-    let baseline = serde_json::to_vec(&assemble_fixture(&baseline_input)?)
-      .map_err(|error| format!("serialize assembled baseline: {error}"))?;
+    let baseline = serde_json::to_vec(&canonical_oracle_value(
+      &assemble_fixture(&baseline_input)?,
+    )?)
+    .map_err(|error| format!("serialize assembled baseline: {error}"))?;
     fs::write(
       dir.join(format!("{BASELINE_FIXTURE}.expected.json")),
       baseline,

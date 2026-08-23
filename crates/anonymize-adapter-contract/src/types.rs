@@ -10,44 +10,27 @@ use serde::{Deserialize, Serialize};
 pub struct BindingSearchPattern {
   pub kind: String,
   pub pattern: String,
-  #[serde(skip_serializing_if = "Option::is_none")]
   pub distance: Option<u32>,
-  #[serde(skip_serializing_if = "Option::is_none")]
   pub case_insensitive: Option<bool>,
-  #[serde(skip_serializing_if = "Option::is_none")]
   pub whole_words: Option<bool>,
-  #[serde(skip_serializing_if = "Option::is_none")]
   pub lazy: Option<bool>,
-  #[serde(skip_serializing_if = "Option::is_none")]
   pub prefilter_any: Option<Vec<String>>,
-  #[serde(skip_serializing_if = "Option::is_none")]
   pub prefilter_case_insensitive: Option<bool>,
-  #[serde(skip_serializing_if = "Option::is_none")]
   pub prefilter_regex: Option<String>,
-  #[serde(skip_serializing_if = "Option::is_none")]
   pub prefilter_window_bytes: Option<u32>,
-  #[serde(skip_serializing_if = "Option::is_none")]
   pub prepared_artifact_policy: Option<BindingPreparedArtifactPolicy>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct BindingSearchOptions {
-  #[serde(skip_serializing_if = "Option::is_none")]
   pub literal_case_insensitive: Option<bool>,
-  #[serde(skip_serializing_if = "Option::is_none")]
   pub literal_whole_words: Option<bool>,
-  #[serde(skip_serializing_if = "Option::is_none")]
   pub regex_whole_words: Option<bool>,
-  #[serde(skip_serializing_if = "Option::is_none")]
   pub regex_overlap_all: Option<bool>,
-  #[serde(skip_serializing_if = "Option::is_none")]
   pub regex_artifact_policy: Option<BindingRegexArtifactPolicy>,
-  #[serde(skip_serializing_if = "Option::is_none")]
   pub fuzzy_case_insensitive: Option<bool>,
-  #[serde(skip_serializing_if = "Option::is_none")]
   pub fuzzy_whole_words: Option<bool>,
-  #[serde(skip_serializing_if = "Option::is_none")]
   pub fuzzy_normalize_diacritics: Option<bool>,
 }
 
@@ -95,15 +78,10 @@ pub struct BindingPreparedSearchSlices {
 pub struct BindingRegexMatchMeta {
   pub label: String,
   pub score: f64,
-  #[serde(skip_serializing_if = "Option::is_none")]
   pub source_detail: Option<String>,
-  #[serde(skip_serializing_if = "Option::is_none")]
   pub requires_validation: Option<bool>,
-  #[serde(skip_serializing_if = "Option::is_none")]
   pub validator_id: Option<String>,
-  #[serde(skip_serializing_if = "Option::is_none")]
   pub validator_input: Option<String>,
-  #[serde(skip_serializing_if = "Option::is_none")]
   pub min_byte_length: Option<u32>,
 }
 
@@ -149,7 +127,6 @@ pub struct BindingHotwordRule {
   #[serde(default)]
   pub target_labels: Vec<String>,
   pub score_adjustment: f64,
-  #[serde(skip_serializing_if = "Option::is_none")]
   pub reclassify_to: Option<String>,
   pub proximity_before: u32,
   pub proximity_after: u32,
@@ -215,9 +192,8 @@ pub struct BindingTriggerRule {
 #[allow(clippy::empty_enum_variants_with_brackets)]
 pub enum BindingTriggerStrategy {
   ToNextComma {
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
     stop_words: Vec<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     max_length: Option<u32>,
   },
   ToEndOfLine {},
@@ -226,12 +202,10 @@ pub enum BindingTriggerStrategy {
   },
   CompanyIdValue {},
   Address {
-    #[serde(skip_serializing_if = "Option::is_none")]
     max_chars: Option<u32>,
   },
   MatchPattern {
     pattern: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
     flags: Option<String>,
   },
 }
@@ -252,7 +226,6 @@ pub enum BindingTriggerValidation {
   HasDigits {},
   MatchesPattern {
     pattern: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
     flags: Option<String>,
   },
   ValidId {
@@ -427,7 +400,7 @@ pub struct BindingAddressSeedData {
   #[serde(default)]
   pub unit_abbreviations: Vec<String>,
   /// Present only when the caller opts into standalone street detection.
-  #[serde(default, skip_serializing_if = "Option::is_none")]
+  #[serde(default)]
   pub standalone_street: Option<BindingStandaloneStreetData>,
 }
 
@@ -533,18 +506,18 @@ pub struct BindingNameCorpusData {
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct BindingDenyListMatchData {
-  #[serde(default, skip_serializing_if = "Vec::is_empty")]
+  #[serde(default)]
   pub labels: Vec<Vec<String>>,
   #[serde(default)]
   pub label_table: Vec<String>,
   #[serde(default)]
   pub label_indices: Vec<Vec<u32>>,
-  #[serde(default, skip_serializing_if = "Vec::is_empty")]
+  #[serde(default)]
   pub custom_labels: Vec<Vec<String>>,
-  #[serde(default, skip_serializing_if = "Vec::is_empty")]
+  #[serde(default)]
   pub custom_label_indices: Vec<Vec<u32>>,
   pub originals: Vec<String>,
-  #[serde(default, skip_serializing_if = "Vec::is_empty")]
+  #[serde(default)]
   pub sources: Vec<Vec<String>>,
   #[serde(default)]
   pub source_table: Vec<String>,
@@ -638,7 +611,7 @@ pub struct BindingPreparedSearchConfig {
   pub deny_list_data: Option<BindingDenyListMatchData>,
   #[serde(default)]
   pub false_positive_filters: Option<BindingDenyListFilterData>,
-  #[serde(default, skip_serializing_if = "Option::is_none")]
+  #[serde(default)]
   pub gazetteer_data: Option<BindingGazetteerMatchData>,
   #[serde(default)]
   pub country_data: Option<BindingCountryMatchData>,
