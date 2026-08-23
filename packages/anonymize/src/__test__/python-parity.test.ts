@@ -144,6 +144,7 @@ type PythonParityOutput = {
     mask_operator: string;
   };
   unicode_json_serialization: {
+    bounded_caller_request_rejected_before_later: boolean;
     caller_request_json: string;
     session_inputs_json: string;
   };
@@ -361,6 +362,22 @@ unicode_detection = {
 unicode_caller_request_json = anonymize._caller_detection_request_json(
     [unicode_detection], unicode_full_text
 )
+
+class UnreadCallerDetection(dict):
+    def __getitem__(self, _key):
+        raise AssertionError("later caller detection was read")
+
+try:
+    anonymize._caller_detection_request_json(
+        [
+            {**unicode_detection, "label": "x" * anonymize.CALLER_DETECTION_REQUEST_JSON_MAX_BYTES},
+            UnreadCallerDetection(),
+        ],
+        "x",
+    )
+    raise AssertionError("oversized caller request was accepted")
+except ValueError:
+    bounded_caller_request_rejected_before_later = True
 
 class CapturingSession:
     def plan_docx_text_batch(
@@ -925,6 +942,7 @@ print(
                 "mask_operator": caller_mask_result["redaction"]["operator_map"][0]["operator"],
             },
             "unicode_json_serialization": {
+                "bounded_caller_request_rejected_before_later": bounded_caller_request_rejected_before_later,
                 "caller_request_json": unicode_caller_request_json,
                 "session_inputs_json": unicode_session_capture.inputs_json,
             },
@@ -1467,6 +1485,7 @@ describe("python binding parity", () => {
       });
 
       expect(python.unicode_json_serialization).toEqual({
+        bounded_caller_request_rejected_before_later: true,
         caller_request_json: requestJson,
         session_inputs_json: JSON.stringify([
           { full_text: fullText, request_json: requestJson },

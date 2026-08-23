@@ -612,11 +612,22 @@ class BoundedJsonWriter {
     this.#chunks.push(value);
   }
 
-  appendNumber(value: number, field: string): void {
-    if (typeof value !== "number") {
-      throw new TypeError(`${field} must be a number`);
+  appendOffset(value: number, field: string): void {
+    this.#requireNumber(value, field);
+    if (!Number.isInteger(value) || value < 0 || value > 0xff_ff_ff_ff) {
+      throw new RangeError(
+        `${field} must be an integer between 0 and 4294967295`,
+      );
     }
-    this.appendRaw(JSON.stringify(value));
+    this.#appendNumber(value);
+  }
+
+  appendScore(value: number, field: string): void {
+    this.#requireNumber(value, field);
+    if (!Number.isFinite(value) || value < 0 || value > 1) {
+      throw new RangeError(`${field} must be finite and between 0 and 1`);
+    }
+    this.#appendNumber(value);
   }
 
   appendString(value: string, field: string): void {
@@ -670,6 +681,16 @@ class BoundedJsonWriter {
   #appendReservedRun(value: string, start: number, end: number): void {
     if (end > start) {
       this.#chunks.push(value.slice(start, end));
+    }
+  }
+
+  #appendNumber(value: number): void {
+    this.appendRaw(JSON.stringify(value));
+  }
+
+  #requireNumber(value: number, field: string): void {
+    if (typeof value !== "number") {
+      throw new TypeError(`${field} must be a number`);
     }
   }
 
@@ -727,13 +748,13 @@ const callerDetectionRequestJson = (
       writer.appendRaw(",");
     }
     writer.appendRaw('{"start":');
-    writer.appendNumber(detection.start, "Caller detection start");
+    writer.appendOffset(detection.start, "Caller detection start");
     writer.appendRaw(',"end":');
-    writer.appendNumber(detection.end, "Caller detection end");
+    writer.appendOffset(detection.end, "Caller detection end");
     writer.appendRaw(',"label":');
     writer.appendString(detection.label, "Caller detection label");
     writer.appendRaw(',"score":');
-    writer.appendNumber(detection.score, "Caller detection score");
+    writer.appendScore(detection.score, "Caller detection score");
     writer.appendRaw(',"provider_id":');
     writer.appendString(detection.providerId, "Caller detection providerId");
     writer.appendRaw(',"detection_id":');

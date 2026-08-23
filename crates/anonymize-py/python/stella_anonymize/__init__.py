@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 from collections.abc import Callable, Mapping, Sequence
 from functools import lru_cache
@@ -1247,32 +1248,85 @@ def _caller_detection_request_json(
             f"Caller detection text contains {text_bytes} bytes; the maximum is "
             f"{CALLER_DETECTION_TEXT_MAX_BYTES}"
         )
-    request_json = json.dumps(
-        {
-            "version": CALLER_DETECTION_CONTRACT_VERSION,
-            "detections": [
-                {
-                    "start": detection["start"],
-                    "end": detection["end"],
-                    "label": detection["label"],
-                    "score": detection["score"],
-                    "provider_id": detection["provider_id"],
-                    "detection_id": detection["detection_id"],
-                }
-                for detection in detections
-            ],
-        },
-        separators=(",", ":"),
-        ensure_ascii=False,
+    suffix = "]}"
+    writer = _BoundedCallerJsonWriter(
+        CALLER_DETECTION_REQUEST_JSON_MAX_BYTES - len(suffix)
     )
-    request_json_bytes = len(request_json.encode("utf-8"))
-    if request_json_bytes > CALLER_DETECTION_REQUEST_JSON_MAX_BYTES:
-        raise ValueError(
-            "Caller detection request JSON contains "
-            f"{request_json_bytes} bytes; the maximum is "
-            f"{CALLER_DETECTION_REQUEST_JSON_MAX_BYTES}"
-        )
-    return request_json
+    writer.append_ascii(
+        f'{{"version":{CALLER_DETECTION_CONTRACT_VERSION},"detections":['
+    )
+    for index, detection in enumerate(detections):
+        if index > 0:
+            writer.append_ascii(",")
+        writer.append_ascii('{"start":')
+        writer.append_offset(detection["start"], "Caller detection start")
+        writer.append_ascii(',"end":')
+        writer.append_offset(detection["end"], "Caller detection end")
+        writer.append_ascii(',"label":')
+        writer.append_string(detection["label"], "Caller detection label")
+        writer.append_ascii(',"score":')
+        writer.append_score(detection["score"], "Caller detection score")
+        writer.append_ascii(',"provider_id":')
+        writer.append_string(detection["provider_id"], "Caller detection provider_id")
+        writer.append_ascii(',"detection_id":')
+        writer.append_string(detection["detection_id"], "Caller detection detection_id")
+        writer.append_ascii("}")
+    return writer.finish(suffix)
+
+
+_CALLER_JSON_STRING_CHUNK_CHARACTERS = 64 * 1024
+
+
+class _BoundedCallerJsonWriter:
+    def __init__(self, maximum_bytes: int) -> None:
+        self._chunks: list[str] = []
+        self._maximum_bytes = maximum_bytes
+        self._bytes = 0
+
+    def append_ascii(self, value: str) -> None:
+        self._reserve(len(value))
+        self._chunks.append(value)
+
+    def append_offset(self, value: object, field: str) -> None:
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, int)
+            or value < 0
+            or value > 0xFFFFFFFF
+        ):
+            raise ValueError(f"{field} must be an unsigned 32-bit integer")
+        self.append_ascii(str(value))
+
+    def append_score(self, value: object, field: str) -> None:
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise TypeError(f"{field} must be a number")
+        if not 0 <= value <= 1 or not math.isfinite(value):
+            raise ValueError(f"{field} must be finite and between 0 and 1")
+        self.append_ascii(json.dumps(value, separators=(",", ":"), allow_nan=False))
+
+    def append_string(self, value: object, field: str) -> None:
+        if not isinstance(value, str):
+            raise TypeError(f"{field} must be a string")
+        self.append_ascii('"')
+        for offset in range(0, len(value), _CALLER_JSON_STRING_CHUNK_CHARACTERS):
+            chunk = value[offset : offset + _CALLER_JSON_STRING_CHUNK_CHARACTERS]
+            encoded_chunk = json.dumps(
+                chunk, separators=(",", ":"), ensure_ascii=False
+            )[1:-1]
+            self._reserve(len(encoded_chunk.encode("utf-8")))
+            self._chunks.append(encoded_chunk)
+        self.append_ascii('"')
+
+    def finish(self, suffix: str) -> str:
+        return "".join(self._chunks) + suffix
+
+    def _reserve(self, byte_count: int) -> None:
+        if byte_count > self._maximum_bytes - self._bytes:
+            raise ValueError(
+                "Caller detection request JSON exceeds the "
+                f"{CALLER_DETECTION_REQUEST_JSON_MAX_BYTES}-byte maximum"
+            )
+        self._bytes += byte_count
 
 
 def _operator_config_json(
