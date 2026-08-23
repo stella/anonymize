@@ -23,7 +23,6 @@ import {
   copyFileSync,
   cpSync,
   existsSync,
-  mkdirSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
@@ -1041,26 +1040,11 @@ const getPythonModule = (): string => {
   const tempDir = mkdtempSync(join(tmpdir(), "stella-anonymize-py-parity-"));
   pythonModuleTempDir = tempDir;
   const packageDir = join(tempDir, "stella_anonymize");
-  mkdirSync(packageDir);
+  cpSync(join(PYTHON_SOURCE_DIR, "stella_anonymize"), packageDir, {
+    recursive: true,
+  });
   const modulePath = join(packageDir, "_native.so");
   copyFileSync(nativeLibraryPath("stella_anonymize_core_py"), modulePath);
-  copyFileSync(
-    join(PYTHON_SOURCE_DIR, "stella_anonymize", "__init__.py"),
-    join(packageDir, "__init__.py"),
-  );
-  copyFileSync(
-    join(PYTHON_SOURCE_DIR, "stella_anonymize", "docx.py"),
-    join(packageDir, "docx.py"),
-  );
-  copyFileSync(
-    join(PYTHON_SOURCE_DIR, "stella_anonymize", "pdf.py"),
-    join(packageDir, "pdf.py"),
-  );
-  cpSync(
-    join(PYTHON_SOURCE_DIR, "stella_anonymize", "native_packages"),
-    join(packageDir, "native_packages"),
-    { recursive: true },
-  );
   pythonModulePath = modulePath;
   return pythonModulePath;
 };
