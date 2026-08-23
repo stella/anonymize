@@ -1028,6 +1028,17 @@ fn connector_has_boundary_evidence(
   }
 
   let next = word_tokens(text, connector.end, text.len()).next();
+  if connector.text.chars().all(char::is_alphabetic)
+    && list_separator_precedes(text, connector.start)
+    && next.is_some_and(|word| {
+      data
+        .role_heads
+        .contains(lowercase_lookup(word.text).as_ref())
+    })
+  {
+    return true;
+  }
+
   let Some(previous) = simple_word_before(text, connector.start) else {
     return false;
   };
@@ -4565,7 +4576,6 @@ mod tests {
     let data = PreparedLegalFormData::new(LegalFormData {
       suffixes: vec![String::from(suffix)],
       connector_words: vec![String::from("a")],
-      and_connector_words: vec![String::from("a")],
       role_heads: vec![
         String::from("smluvní"),
         String::from("strany"),
