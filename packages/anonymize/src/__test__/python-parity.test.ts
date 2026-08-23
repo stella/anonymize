@@ -145,6 +145,8 @@ type PythonParityOutput = {
   };
   unicode_json_serialization: {
     bounded_caller_request_rejected_before_later: boolean;
+    bounded_session_inputs_rejected_before_later: boolean;
+    canonical_score_requests: string[];
     caller_request_json: string;
     session_inputs_json: string;
   };
@@ -362,6 +364,12 @@ unicode_detection = {
 unicode_caller_request_json = anonymize._caller_detection_request_json(
     [unicode_detection], unicode_full_text
 )
+canonical_score_requests = [
+    anonymize._caller_detection_request_json(
+        [{**unicode_detection, "score": score}], unicode_full_text
+    )
+    for score in [1.0, 1e-6, 1e-7, -0.0]
+]
 
 class UnreadCallerDetection(dict):
     def __getitem__(self, _key):
@@ -392,6 +400,30 @@ anonymize.PreparedRedactionSession(unicode_session_capture)._plan_docx_text_batc
     None,
     None,
 )
+
+class UnreadSessionInput(dict):
+    def __getitem__(self, _key):
+        raise AssertionError("later session input was read")
+
+original_session_json_maximum = anonymize.SESSION_CALLER_INPUTS_JSON_MAX_BYTES
+anonymize.SESSION_CALLER_INPUTS_JSON_MAX_BYTES = 256
+try:
+    anonymize.PreparedRedactionSession(CapturingSession())._plan_docx_text_batch(
+        [
+            {
+                "full_text": "x",
+                "detections": [{**unicode_detection, "label": "x" * 256}],
+            },
+            UnreadSessionInput(),
+        ],
+        None,
+        None,
+    )
+    raise AssertionError("oversized session inputs were accepted")
+except ValueError:
+    bounded_session_inputs_rejected_before_later = True
+finally:
+    anonymize.SESSION_CALLER_INPUTS_JSON_MAX_BYTES = original_session_json_maximum
 external_detection_results = []
 for offset_unit, start, end in [
     ("utf8-byte", 4, 9),
@@ -943,6 +975,8 @@ print(
             },
             "unicode_json_serialization": {
                 "bounded_caller_request_rejected_before_later": bounded_caller_request_rejected_before_later,
+                "bounded_session_inputs_rejected_before_later": bounded_session_inputs_rejected_before_later,
+                "canonical_score_requests": canonical_score_requests,
                 "caller_request_json": unicode_caller_request_json,
                 "session_inputs_json": unicode_session_capture.inputs_json,
             },
@@ -1486,6 +1520,22 @@ describe("python binding parity", () => {
 
       expect(python.unicode_json_serialization).toEqual({
         bounded_caller_request_rejected_before_later: true,
+        bounded_session_inputs_rejected_before_later: true,
+        canonical_score_requests: [1, 1e-6, 1e-7, -0].map((score) =>
+          JSON.stringify({
+            version: CALLER_DETECTION_CONTRACT_VERSION,
+            detections: [
+              {
+                start: 0,
+                end: 1,
+                label: "osoba-😀",
+                score,
+                provider_id: "poskytovatel-Ž",
+                detection_id: "detekce-č",
+              },
+            ],
+          }),
+        ),
         caller_request_json: requestJson,
         session_inputs_json: JSON.stringify([
           { full_text: fullText, request_json: requestJson },

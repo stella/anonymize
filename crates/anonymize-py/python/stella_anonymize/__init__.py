@@ -350,8 +350,13 @@ class PreparedRedactionSession:
             )
         detection_count = 0
         text_bytes = 0
-        native_inputs: list[dict[str, str]] = []
-        for item in inputs:
+        writer = _BoundedJsonWriter(
+            SESSION_CALLER_INPUTS_JSON_MAX_BYTES,
+            "Session caller inputs JSON",
+            suffix="]",
+        )
+        writer.append_ascii("[")
+        for index, item in enumerate(inputs):
             full_text = str(item["full_text"])
             detections = cast(Sequence[CallerDetection], item.get("detections", ()))
             detection_count += len(detections)
@@ -368,24 +373,15 @@ class PreparedRedactionSession:
                     f"{text_bytes} bytes; the maximum is "
                     f"{CALLER_DETECTION_TEXT_MAX_BYTES}"
                 )
-            native_inputs.append(
-                {
-                    "full_text": full_text,
-                    "request_json": _caller_detection_request_json(
-                        detections, full_text
-                    ),
-                }
-            )
-        inputs_json = json.dumps(
-            native_inputs, separators=(",", ":"), ensure_ascii=False
-        )
-        inputs_json_bytes = len(inputs_json.encode("utf-8"))
-        if inputs_json_bytes > SESSION_CALLER_INPUTS_JSON_MAX_BYTES:
-            raise ValueError(
-                "Session caller inputs JSON contains "
-                f"{inputs_json_bytes} bytes; the maximum is "
-                f"{SESSION_CALLER_INPUTS_JSON_MAX_BYTES}"
-            )
+            request_json = _caller_detection_request_json(detections, full_text)
+            if index > 0:
+                writer.append_ascii(",")
+            writer.append_ascii('{"full_text":')
+            writer.append_string(full_text, "Session caller full_text")
+            writer.append_ascii(',"request_json":')
+            writer.append_string(request_json, "Session caller request_json")
+            writer.append_ascii("}")
+        inputs_json = writer.finish()
         return self._session.plan_docx_text_batch(
             inputs_json,
             _operator_config_json(operators, redact_string=None),
@@ -1248,9 +1244,10 @@ def _caller_detection_request_json(
             f"Caller detection text contains {text_bytes} bytes; the maximum is "
             f"{CALLER_DETECTION_TEXT_MAX_BYTES}"
         )
-    suffix = "]}"
-    writer = _BoundedCallerJsonWriter(
-        CALLER_DETECTION_REQUEST_JSON_MAX_BYTES - len(suffix)
+    writer = _BoundedJsonWriter(
+        CALLER_DETECTION_REQUEST_JSON_MAX_BYTES,
+        "Caller detection request JSON",
+        suffix="]}",
     )
     writer.append_ascii(
         f'{{"version":{CALLER_DETECTION_CONTRACT_VERSION},"detections":['
@@ -1271,16 +1268,19 @@ def _caller_detection_request_json(
         writer.append_ascii(',"detection_id":')
         writer.append_string(detection["detection_id"], "Caller detection detection_id")
         writer.append_ascii("}")
-    return writer.finish(suffix)
+    return writer.finish()
 
 
 _CALLER_JSON_STRING_CHUNK_CHARACTERS = 64 * 1024
 
 
-class _BoundedCallerJsonWriter:
-    def __init__(self, maximum_bytes: int) -> None:
+class _BoundedJsonWriter:
+    def __init__(self, maximum_bytes: int, label: str, *, suffix: str) -> None:
         self._chunks: list[str] = []
-        self._maximum_bytes = maximum_bytes
+        self._suffix = suffix
+        self._maximum_bytes = maximum_bytes - len(suffix.encode("utf-8"))
+        self._reported_maximum_bytes = maximum_bytes
+        self._label = label
         self._bytes = 0
 
     def append_ascii(self, value: str) -> None:
@@ -1302,7 +1302,7 @@ class _BoundedCallerJsonWriter:
             raise TypeError(f"{field} must be a number")
         if not 0 <= value <= 1 or not math.isfinite(value):
             raise ValueError(f"{field} must be finite and between 0 and 1")
-        self.append_ascii(json.dumps(value, separators=(",", ":"), allow_nan=False))
+        self.append_ascii(_ecmascript_score_json(value))
 
     def append_string(self, value: object, field: str) -> None:
         if not isinstance(value, str):
@@ -1317,16 +1317,41 @@ class _BoundedCallerJsonWriter:
             self._chunks.append(encoded_chunk)
         self.append_ascii('"')
 
-    def finish(self, suffix: str) -> str:
-        return "".join(self._chunks) + suffix
+    def finish(self) -> str:
+        return "".join(self._chunks) + self._suffix
 
     def _reserve(self, byte_count: int) -> None:
         if byte_count > self._maximum_bytes - self._bytes:
             raise ValueError(
-                "Caller detection request JSON exceeds the "
-                f"{CALLER_DETECTION_REQUEST_JSON_MAX_BYTES}-byte maximum"
+                f"{self._label} exceeds the {self._reported_maximum_bytes}-byte maximum"
             )
         self._bytes += byte_count
+
+
+def _ecmascript_score_json(value: int | float) -> str:
+    number = float(value)
+    if number == 0:
+        return "0"
+    if number == 1:
+        return "1"
+
+    rendered = repr(number).lower()
+    if "e" not in rendered:
+        return rendered
+
+    mantissa, exponent_text = rendered.split("e")
+    exponent = int(exponent_text)
+    if number < 1e-6:
+        return f"{mantissa}e{exponent}"
+
+    integer, _, fraction = mantissa.partition(".")
+    digits = integer + fraction
+    decimal_position = len(integer) + exponent
+    if decimal_position <= 0:
+        return f"0.{('0' * -decimal_position)}{digits}"
+    if decimal_position >= len(digits):
+        return digits + ("0" * (decimal_position - len(digits)))
+    return f"{digits[:decimal_position]}.{digits[decimal_position:]}"
 
 
 def _operator_config_json(
