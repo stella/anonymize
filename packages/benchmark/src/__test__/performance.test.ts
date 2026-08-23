@@ -75,40 +75,55 @@ describe("canonical performance statistics", () => {
     expect(input.text).not.toContain("Silver Orchard Labs LLC");
   });
 
-  test("hashes only fixtures used by performance scenarios", () => {
+  test("hashes only fixtures used by performance scenarios", async () => {
     const requestedFixtures: string[] = [];
-    performanceInputSourceDigest({
+    await performanceInputSourceDigest({
       scenarioIds: PERFORMANCE_SCENARIO_IDS,
-      readFixture: (file) => {
+      loadFixture: async (file) => {
         requestedFixtures.push(file);
-        return new TextEncoder().encode(`contents of ${file}`);
+        return [{ text: `contents of ${file}` }];
       },
     });
 
     expect(requestedFixtures).toEqual(["en.json"]);
   });
 
-  test("excludes unconfigured local scenarios from the canonical source digest", () => {
-    const fixture = new TextEncoder().encode("canonical fixture");
-    const digest = performanceInputSourceDigest({
+  test("excludes unconfigured local scenarios from the canonical source digest", async () => {
+    const fixtureSeed = "canonical fixture\n\n";
+    const digest = await performanceInputSourceDigest({
       scenarioIds: ["fixture-mixed"],
-      readFixture: () => fixture,
+      loadFixture: async () => [{ text: "canonical fixture" }],
     });
     const expected = createHash("sha256")
       .update("1\0")
       .update("fixture-mixed\0")
       .update("fixture\0")
       .update("en.json\0")
-      .update(fixture)
+      .update(fixtureSeed)
       .digest("hex");
 
     expect(digest).toBe(expected);
     expect(
-      performanceInputSourceDigest({
+      await performanceInputSourceDigest({
         scenarioIds: PERFORMANCE_SCENARIO_IDS,
-        readFixture: () => fixture,
+        loadFixture: async () => [{ text: "canonical fixture" }],
       }),
     ).not.toBe(digest);
+  });
+
+  test("ignores fixture metadata that does not reach the performance seed", async () => {
+    const before = [{ text: "measured text", title: "Before" }];
+    const after = [{ text: "measured text", title: "After" }];
+    const first = await performanceInputSourceDigest({
+      scenarioIds: ["fixture-mixed"],
+      loadFixture: async () => before,
+    });
+    const second = await performanceInputSourceDigest({
+      scenarioIds: ["fixture-mixed"],
+      loadFixture: async () => after,
+    });
+
+    expect(second).toBe(first);
   });
 
   test("builds deterministic short inputs for every entity-density scenario", async () => {

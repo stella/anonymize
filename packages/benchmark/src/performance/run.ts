@@ -387,7 +387,7 @@ export const runPerformance = async (
     fixture: {
       kind: "public-safe-synthetic",
       source: PERFORMANCE_INPUT_SOURCE,
-      sha256: performanceInputSourceDigest({
+      sha256: await performanceInputSourceDigest({
         scenarioIds: options.scenarios,
       }),
     },

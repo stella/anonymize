@@ -1,8 +1,5 @@
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-
-import { FIXTURES_DIR, loadGroundTruthFile } from "../ground-truth";
+import { loadGroundTruthFile } from "../ground-truth";
 
 export const PERFORMANCE_INPUT_SOURCE =
   "versioned performance scenarios and packages/benchmark/fixtures/en.json";
@@ -75,20 +72,19 @@ const truncateUtf8 = (bytes: Uint8Array, targetBytes: number): string => {
   throw new Error("could not truncate performance input at a UTF-8 boundary");
 };
 
-type ReadPerformanceFixture = (file: string) => Uint8Array;
-
-const readPerformanceFixture: ReadPerformanceFixture = (file) =>
-  readFileSync(join(FIXTURES_DIR, file));
+type LoadPerformanceFixture = (
+  file: string,
+) => Promise<readonly { readonly text: string }[]>;
 
 type PerformanceInputSourceDigestOptions = {
   readonly scenarioIds: readonly PerformanceScenarioId[];
-  readonly readFixture?: ReadPerformanceFixture | undefined;
+  readonly loadFixture?: LoadPerformanceFixture | undefined;
 };
 
-export const performanceInputSourceDigest = ({
+export const performanceInputSourceDigest = async ({
   scenarioIds,
-  readFixture = readPerformanceFixture,
-}: PerformanceInputSourceDigestOptions): string => {
+  loadFixture = loadGroundTruthFile,
+}: PerformanceInputSourceDigestOptions): Promise<string> => {
   const hash = createHash("sha256");
   hash.update(`${PERFORMANCE_SCENARIO_SCHEMA_VERSION}\0`);
   for (const scenario of scenarioIds) {
@@ -98,7 +94,7 @@ export const performanceInputSourceDigest = ({
     switch (source.type) {
       case "fixture":
         hash.update(`${source.file}\0`);
-        hash.update(readFixture(source.file));
+        hash.update(await fixtureSeed(source.file, loadFixture));
         break;
       case "literal":
         hash.update(source.seed);
@@ -150,6 +146,17 @@ const sparseEntitySeed = (
   return source.marker + repeatToUtf8Bytes(source.filler, remainingBytes);
 };
 
+const fixtureSeed = async (
+  file: string,
+  loadFixture: LoadPerformanceFixture = loadGroundTruthFile,
+): Promise<string> => {
+  const documents = await loadFixture(file);
+  if (documents.length === 0) {
+    throw new Error("English synthetic performance fixtures are unavailable");
+  }
+  return documents.map(({ text }) => text).join("\n\n") + "\n\n";
+};
+
 const scenarioSeed = async (id: PerformanceScenarioId): Promise<string> => {
   const source = PERFORMANCE_SCENARIO_SOURCES[id];
   switch (source.type) {
@@ -157,15 +164,8 @@ const scenarioSeed = async (id: PerformanceScenarioId): Promise<string> => {
       return source.seed;
     case "sparse":
       return sparseEntitySeed(source);
-    case "fixture": {
-      const documents = await loadGroundTruthFile(source.file);
-      if (documents.length === 0) {
-        throw new Error(
-          "English synthetic performance fixtures are unavailable",
-        );
-      }
-      return documents.map(({ text }) => text).join("\n\n") + "\n\n";
-    }
+    case "fixture":
+      return fixtureSeed(source.file);
     default: {
       const unreachable: never = source;
       throw new Error(`unhandled performance source ${String(unreachable)}`);
