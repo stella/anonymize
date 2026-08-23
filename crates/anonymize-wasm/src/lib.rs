@@ -16,7 +16,7 @@ use stella_anonymize_adapter_contract::{
 };
 use stella_anonymize_binding_core::{
   PackageEncoding, PackageVerification, PreparedBinding, PreparedSessionPlan,
-  SessionCallerInput, ValidatedCallerDetections, assemble_config,
+  SessionCallerInputs, assemble_config,
   assemble_package as binding_assemble_package,
   caller_detection_request_from_json, create_session,
   create_session_with_lifecycle, delete_session, encrypted_session_archive,
@@ -676,14 +676,14 @@ impl WasmPreparedRedactionSession {
     let raw_inputs =
       serde_json::from_str::<Vec<WasmSessionCallerInput>>(inputs_json)
         .map_err(js_error)?;
-    let mut inputs = Vec::with_capacity(raw_inputs.len());
+    let mut inputs =
+      SessionCallerInputs::with_capacity(raw_inputs.len()).map_err(js_error)?;
     for input in raw_inputs {
       let request = caller_detection_request_from_json(&input.request_json)
         .map_err(js_error)?;
-      let detections =
-        ValidatedCallerDetections::from_utf16_binding(request, input.full_text)
-          .map_err(js_error)?;
-      inputs.push(SessionCallerInput::new(detections));
+      inputs
+        .push_utf16_binding(request, input.full_text)
+        .map_err(js_error)?;
     }
     let operators =
       operators_from_json(operators_json.as_deref()).map_err(js_error)?;

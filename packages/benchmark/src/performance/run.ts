@@ -152,6 +152,20 @@ const objectValue = (
   return value;
 };
 
+const exactKeys = (
+  value: Record<string, unknown>,
+  expected: readonly string[],
+  label: string,
+): void => {
+  const keys = Object.keys(value);
+  if (
+    keys.length !== expected.length ||
+    keys.some((key) => !expected.includes(key))
+  ) {
+    throw new Error(`${label} contains unknown or missing fields`);
+  }
+};
+
 const stringValue = (value: unknown, label: string): string => {
   if (typeof value !== "string") {
     throw new Error(`${label} must be a string`);
@@ -193,13 +207,32 @@ export const parsePerformanceWorkerMessage = (line: string): WorkerMessage => {
   const value: unknown = JSON.parse(line);
   const message = objectValue(value, "performance worker message");
   if (message["type"] === "ready") {
+    exactKeys(message, ["type"], "performance worker ready message");
     return { type: "ready" };
   }
   if (message["type"] !== "result") {
     throw new Error("performance worker message has an unknown type");
   }
+  exactKeys(message, ["type", "sample"], "performance worker result message");
   const sample = objectValue(message["sample"], "performance worker sample");
+  exactKeys(
+    sample,
+    [
+      "scenario",
+      "runtime",
+      "inputBytes",
+      "inputCharacters",
+      "inputSha256",
+      "outputCount",
+      "outputDigest",
+      "initSeconds",
+      "coldSeconds",
+      "warmSeconds",
+    ],
+    "performance worker sample",
+  );
   const scenario = objectValue(sample["scenario"], "performance scenario");
+  exactKeys(scenario, ["type", "schemaVersion", "id"], "performance scenario");
   if (
     scenario["type"] !== "performance-input-scenario" ||
     scenario["schemaVersion"] !== PERFORMANCE_SCENARIO_SCHEMA_VERSION
@@ -207,6 +240,7 @@ export const parsePerformanceWorkerMessage = (line: string): WorkerMessage => {
     throw new Error("performance worker scenario has an invalid contract");
   }
   const runtime = objectValue(sample["runtime"], "performance runtime");
+  exactKeys(runtime, ["type", "version"], "performance runtime");
   if (runtime["type"] !== "bun-native-binding") {
     throw new Error("performance worker runtime has an invalid type");
   }

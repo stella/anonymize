@@ -30,8 +30,7 @@ use stella_anonymize_adapter_contract::{
   static_redaction_stream_event_to_utf16_binding,
 };
 use stella_anonymize_binding_core::{
-  PreparedSessionPlan, SessionCallerInput, ValidatedCallerDetections,
-  caller_detection_request_from_json,
+  PreparedSessionPlan, SessionCallerInputs, caller_detection_request_from_json,
   plan_session_redactions as binding_plan_session_redactions,
   validate_caller_detection_text, validate_session_caller_inputs_json,
 };
@@ -283,14 +282,14 @@ impl PyPreparedRedactionSession {
     let raw_inputs =
       serde_json::from_str::<Vec<PySessionCallerInput>>(inputs_json)
         .map_err(|error| to_py_serde_error(&error))?;
-    let mut inputs = Vec::with_capacity(raw_inputs.len());
+    let mut inputs = SessionCallerInputs::with_capacity(raw_inputs.len())
+      .map_err(to_py_facade_error)?;
     for input in raw_inputs {
       let request = caller_detection_request_from_json(&input.request_json)
         .map_err(to_py_facade_error)?;
-      let detections =
-        ValidatedCallerDetections::from_utf16_binding(request, input.full_text)
-          .map_err(to_py_facade_error)?;
-      inputs.push(SessionCallerInput::new(detections));
+      inputs
+        .push_utf16_binding(request, input.full_text)
+        .map_err(to_py_facade_error)?;
     }
     let operators =
       operator_config_from_binding(parse_operator_config(operators_json)?)

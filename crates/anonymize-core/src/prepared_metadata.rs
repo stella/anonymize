@@ -280,8 +280,7 @@ fn validate_length(
 }
 
 fn is_supported_validator(id: &str) -> bool {
-  matches!(id, "phone.international" | "phone.nanp")
-    || stella_stdnum_core::supported_validator_ids().contains(&id)
+  crate::validators::supports_id(id)
 }
 
 #[cfg(test)]

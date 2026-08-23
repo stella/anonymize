@@ -9,6 +9,14 @@ from os import PathLike
 from typing import Literal, TypedDict, cast
 from weakref import WeakSet
 
+from ._caller_limits import (
+    CALLER_DETECTION_MAX_COUNT,
+    CALLER_DETECTION_REQUEST_JSON_MAX_BYTES,
+    CALLER_DETECTION_TEXT_MAX_BYTES,
+    SESSION_CALLER_INPUTS_JSON_MAX_BYTES,
+    SESSION_CALLER_MAX_INPUTS,
+)
+
 from ._native import (
     OperatorEntry,
     PipelineEntity,
@@ -200,26 +208,15 @@ class MaskOperatorConfig(TypedDict):
 OperatorSelection = Literal["replace", "redact", "keep"] | MaskOperatorConfig
 OperatorConfig = Mapping[str, OperatorSelection] | str | None
 CALLER_DETECTION_CONTRACT_VERSION = 2
-CALLER_DETECTION_MAX_COUNT = 100_000
-CALLER_DETECTION_TEXT_MAX_BYTES = 64 * 1024 * 1024
-CALLER_DETECTION_REQUEST_JSON_MAX_BYTES = 16 * 1024 * 1024
-SESSION_CALLER_MAX_INPUTS = 100_000
-SESSION_CALLER_INPUTS_JSON_MAX_BYTES = 64 * 1024 * 1024
 EXTERNAL_DETECTION_BATCH_VERSION = 1
 _EXTERNAL_DETECTION_LIMITS = cast(
     dict[str, int], json.loads(_native_external_detection_limits_json())
 )
 EXTERNAL_DETECTION_BATCH_MAX_BYTES = _EXTERNAL_DETECTION_LIMITS["batchMaxBytes"]
-EXTERNAL_DETECTION_DOCUMENT_MAX_BYTES = _EXTERNAL_DETECTION_LIMITS[
-    "documentMaxBytes"
-]
+EXTERNAL_DETECTION_DOCUMENT_MAX_BYTES = _EXTERNAL_DETECTION_LIMITS["documentMaxBytes"]
 EXTERNAL_DETECTION_MAX_DETECTIONS = _EXTERNAL_DETECTION_LIMITS["maxDetections"]
-EXTERNAL_DETECTION_MAX_LABEL_MAPPINGS = _EXTERNAL_DETECTION_LIMITS[
-    "maxLabelMappings"
-]
-EXTERNAL_DETECTION_MAX_METADATA_BYTES = _EXTERNAL_DETECTION_LIMITS[
-    "maxMetadataBytes"
-]
+EXTERNAL_DETECTION_MAX_LABEL_MAPPINGS = _EXTERNAL_DETECTION_LIMITS["maxLabelMappings"]
+EXTERNAL_DETECTION_MAX_METADATA_BYTES = _EXTERNAL_DETECTION_LIMITS["maxMetadataBytes"]
 EXTERNAL_DETECTION_PROVIDER_ID_MAX_BYTES = _EXTERNAL_DETECTION_LIMITS[
     "providerIdMaxBytes"
 ]
@@ -353,9 +350,7 @@ class PreparedRedactionSession:
         native_inputs: list[dict[str, str]] = []
         for item in inputs:
             full_text = str(item["full_text"])
-            detections = cast(
-                Sequence[CallerDetection], item.get("detections", ())
-            )
+            detections = cast(Sequence[CallerDetection], item.get("detections", ()))
             detection_count += len(detections)
             if detection_count > CALLER_DETECTION_MAX_COUNT:
                 raise ValueError(

@@ -449,7 +449,7 @@ export type NativeOperatorConfig = {
 };
 
 export const CALLER_DETECTION_CONTRACT_VERSION = 2;
-export const CALLER_DETECTION_MAX_COUNT = 100_000;
+export const CALLER_DETECTION_MAX_COUNT = 1_000_000;
 export const CALLER_DETECTION_TEXT_MAX_BYTES = 64 * 1024 * 1024;
 export const CALLER_DETECTION_REQUEST_JSON_MAX_BYTES = 16 * 1024 * 1024;
 export const SESSION_CALLER_MAX_INPUTS = 100_000;
@@ -544,7 +544,10 @@ export type NativeSessionBlockRedactionPlan = {
   callerEntityCount: number;
 };
 
-const utf8ByteLengthAtMost = (text: string, maximum: number): number => {
+const utf8ByteLengthWithin = (
+  text: string,
+  maximum: number,
+): number | undefined => {
   let bytes = 0;
   for (let index = 0; index < text.length; index += 1) {
     const unit = text.charCodeAt(index);
@@ -565,7 +568,7 @@ const utf8ByteLengthAtMost = (text: string, maximum: number): number => {
       bytes += 3;
     }
     if (bytes > maximum) {
-      return bytes;
+      return undefined;
     }
   }
   return bytes;
@@ -583,13 +586,13 @@ const validateCallerDetectionInput = (
       `Caller detections contains ${detections.length} items; the maximum is ${CALLER_DETECTION_MAX_COUNT}`,
     );
   }
-  const textBytes = utf8ByteLengthAtMost(
+  const textBytes = utf8ByteLengthWithin(
     fullText,
     CALLER_DETECTION_TEXT_MAX_BYTES,
   );
-  if (textBytes > CALLER_DETECTION_TEXT_MAX_BYTES) {
+  if (textBytes === undefined) {
     throw new RangeError(
-      `Caller detection text contains ${textBytes} bytes; the maximum is ${CALLER_DETECTION_TEXT_MAX_BYTES}`,
+      `Caller detection text exceeds the ${CALLER_DETECTION_TEXT_MAX_BYTES}-byte maximum`,
     );
   }
   return textBytes;
@@ -613,13 +616,13 @@ const callerDetectionRequestJson = (
       }),
     ),
   });
-  const requestBytes = utf8ByteLengthAtMost(
+  const requestBytes = utf8ByteLengthWithin(
     requestJson,
     CALLER_DETECTION_REQUEST_JSON_MAX_BYTES,
   );
-  if (requestBytes > CALLER_DETECTION_REQUEST_JSON_MAX_BYTES) {
+  if (requestBytes === undefined) {
     throw new RangeError(
-      `Caller detection request JSON contains ${requestBytes} bytes; the maximum is ${CALLER_DETECTION_REQUEST_JSON_MAX_BYTES}`,
+      `Caller detection request JSON exceeds the ${CALLER_DETECTION_REQUEST_JSON_MAX_BYTES}-byte maximum`,
     );
   }
   return requestJson;

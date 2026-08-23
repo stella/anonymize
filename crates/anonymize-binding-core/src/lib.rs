@@ -6,6 +6,7 @@
 //! logic.
 
 use serde::Serialize;
+pub use stella_anonymize_adapter_contract::CALLER_DETECTION_MAX_COUNT;
 use stella_anonymize_adapter_contract::{
   BindingCallerDetectionRequest, BindingOperatorConfig,
   BindingPreparedSearchConfig, BindingStaticRedactionPlanResult,
@@ -75,8 +76,6 @@ pub enum BindingFacadeError {
   Serialization(#[from] serde_json::Error),
 }
 
-/// Maximum number of caller detections accepted by one operation or session plan.
-pub const CALLER_DETECTION_MAX_COUNT: usize = 100_000;
 /// Maximum UTF-8 text bytes accepted by one caller-assisted operation or plan.
 pub const CALLER_DETECTION_TEXT_MAX_BYTES: usize = 64 * 1024 * 1024;
 /// Maximum encoded bytes accepted by one caller-detection JSON request.
@@ -280,11 +279,10 @@ pub fn redact_with_caller_detections_json(
   request_json: &str,
   operators: &OperatorConfig,
 ) -> Result<String> {
-  let request = caller_detection_request_from_json(request_json)?;
-  let detections =
-    BorrowedValidatedCallerDetections::from_bounded_utf16_binding(
-      request, full_text,
-    )?;
+  let detections = BorrowedValidatedCallerDetections::from_utf16_binding_json(
+    request_json,
+    full_text,
+  )?;
   Ok(serde_json::to_string(&redact_with_validated_parts(
     engine,
     detections.full_text(),
@@ -331,11 +329,10 @@ pub fn redact_with_caller_detections_diagnostics_json(
   request_json: &str,
   operators: &OperatorConfig,
 ) -> Result<String> {
-  let request = caller_detection_request_from_json(request_json)?;
-  let detections =
-    BorrowedValidatedCallerDetections::from_bounded_utf16_binding(
-      request, full_text,
-    )?;
+  let detections = BorrowedValidatedCallerDetections::from_utf16_binding_json(
+    request_json,
+    full_text,
+  )?;
   redact_with_validated_parts_diagnostics_json(
     engine,
     prepare_diagnostics,
@@ -462,10 +459,11 @@ struct BorrowedValidatedCallerDetections<'text> {
 }
 
 impl<'text> BorrowedValidatedCallerDetections<'text> {
-  fn from_bounded_utf16_binding(
-    request: BindingCallerDetectionRequest,
+  fn from_utf16_binding_json(
+    request_json: &str,
     full_text: &'text str,
   ) -> Result<Self> {
+    let request = caller_detection_request_from_json(request_json)?;
     validate_caller_detection_text(full_text)?;
     let detections = caller_detections_from_utf16_binding(request, full_text)?;
     Ok(Self {
@@ -541,17 +539,65 @@ pub const fn validate_session_caller_inputs_json(
   )
 }
 
-/// Input for one operation in an atomic session plan.
 #[derive(Clone, PartialEq)]
-pub struct SessionCallerInput {
+struct SessionCallerInput {
   detections: ValidatedCallerDetections,
 }
 
-impl SessionCallerInput {
-  /// Creates a session input from detections validated for this text.
-  #[must_use]
-  pub const fn new(detections: ValidatedCallerDetections) -> Self {
-    Self { detections }
+/// An aggregate-bounded collection of validated session inputs.
+pub struct SessionCallerInputs {
+  inputs: Vec<SessionCallerInput>,
+  detection_count: usize,
+  text_bytes: usize,
+}
+
+impl SessionCallerInputs {
+  /// Creates a bounded collection with capacity for the decoded input count.
+  pub fn with_capacity(capacity: usize) -> Result<Self> {
+    validate_item_limit(
+      "Session caller inputs",
+      capacity,
+      SESSION_CALLER_MAX_INPUTS,
+    )?;
+    Ok(Self {
+      inputs: Vec::with_capacity(capacity),
+      detection_count: 0,
+      text_bytes: 0,
+    })
+  }
+
+  /// Checks aggregate limits before converting and retaining one input.
+  pub fn push_utf16_binding(
+    &mut self,
+    request: BindingCallerDetectionRequest,
+    full_text: String,
+  ) -> Result<()> {
+    validate_item_limit(
+      "Session caller inputs",
+      self.inputs.len().saturating_add(1),
+      SESSION_CALLER_MAX_INPUTS,
+    )?;
+    let detection_count = self
+      .detection_count
+      .saturating_add(request.detections.len());
+    validate_item_limit(
+      "Session caller detections",
+      detection_count,
+      CALLER_DETECTION_MAX_COUNT,
+    )?;
+    let text_bytes = self.text_bytes.saturating_add(full_text.len());
+    validate_byte_limit(
+      "Session caller text",
+      text_bytes,
+      CALLER_DETECTION_TEXT_MAX_BYTES,
+    )?;
+
+    let detections =
+      ValidatedCallerDetections::from_utf16_binding(request, full_text)?;
+    self.inputs.push(SessionCallerInput { detections });
+    self.detection_count = detection_count;
+    self.text_bytes = text_bytes;
+    Ok(())
   }
 }
 
@@ -759,17 +805,16 @@ pub fn redact_with_session_json(
 pub fn plan_session_redactions(
   engine: &PreparedEngine,
   session: &RedactionSession,
-  inputs: Vec<SessionCallerInput>,
+  inputs: SessionCallerInputs,
   operators: &OperatorConfig,
   observed_at_epoch_seconds: Option<u32>,
 ) -> Result<PreparedSessionPlan> {
-  validate_session_caller_inputs(&inputs)?;
   let base = session.clone();
   let mut planned = base.clone();
   let observed_at =
     observed_at_epoch_seconds.map(SessionTimestamp::from_epoch_seconds);
-  let mut results = Vec::with_capacity(inputs.len());
-  for input in inputs {
+  let mut results = Vec::with_capacity(inputs.inputs.len());
+  for input in inputs.inputs {
     let full_text = input.detections.full_text();
     let result = engine
       .redact_static_entities_with_caller_detections_and_session(
@@ -800,32 +845,6 @@ const fn validate_caller_detection_request(
     request.detections.len(),
     CALLER_DETECTION_MAX_COUNT,
   )
-}
-
-fn validate_session_caller_inputs(inputs: &[SessionCallerInput]) -> Result<()> {
-  validate_item_limit(
-    "Session caller inputs",
-    inputs.len(),
-    SESSION_CALLER_MAX_INPUTS,
-  )?;
-  let mut detection_count = 0_usize;
-  let mut text_bytes = 0_usize;
-  for input in inputs {
-    detection_count =
-      detection_count.saturating_add(input.detections.detections.len());
-    text_bytes = text_bytes.saturating_add(input.detections.full_text.len());
-    validate_item_limit(
-      "Session caller detections",
-      detection_count,
-      CALLER_DETECTION_MAX_COUNT,
-    )?;
-    validate_byte_limit(
-      "Session caller text",
-      text_bytes,
-      CALLER_DETECTION_TEXT_MAX_BYTES,
-    )?;
-  }
-  Ok(())
 }
 
 const fn validate_item_limit(
@@ -1020,5 +1039,57 @@ mod tests {
     );
 
     assert!(matches!(result, Err(BindingFacadeError::Contract(_))));
+  }
+
+  #[test]
+  fn session_input_builder_rejects_aggregate_limits_before_conversion()
+  -> Result<()> {
+    let invalid_request = BindingCallerDetectionRequest {
+      version:
+        stella_anonymize_adapter_contract::CALLER_DETECTION_CONTRACT_VERSION,
+      detections: vec![
+        stella_anonymize_adapter_contract::BindingCallerDetection {
+          start: 1,
+          end: 0,
+          label: "PERSON".to_owned(),
+          score: 1.0,
+          provider_id: "test".to_owned(),
+          detection_id: "detection-1".to_owned(),
+        },
+      ],
+    };
+    let mut detection_limited = SessionCallerInputs::with_capacity(1)?;
+    detection_limited.detection_count = CALLER_DETECTION_MAX_COUNT;
+    let detection_result = detection_limited
+      .push_utf16_binding(invalid_request.clone(), "x".to_owned());
+    assert!(matches!(
+      detection_result,
+      Err(BindingFacadeError::ItemLimitExceeded {
+        field: "Session caller detections",
+        actual,
+        maximum: CALLER_DETECTION_MAX_COUNT,
+      }) if actual == CALLER_DETECTION_MAX_COUNT + 1
+    ));
+
+    let mut text_limited = SessionCallerInputs::with_capacity(1)?;
+    text_limited.text_bytes = CALLER_DETECTION_TEXT_MAX_BYTES;
+    let text_result =
+      text_limited.push_utf16_binding(invalid_request, "x".to_owned());
+    assert!(matches!(
+      text_result,
+      Err(BindingFacadeError::ByteLimitExceeded {
+        field: "Session caller text",
+        actual_bytes,
+        max_bytes: CALLER_DETECTION_TEXT_MAX_BYTES,
+      }) if actual_bytes == CALLER_DETECTION_TEXT_MAX_BYTES + 1
+    ));
+    Ok(())
+  }
+
+  #[test]
+  fn borrowed_caller_detections_own_json_validation() {
+    let result =
+      BorrowedValidatedCallerDetections::from_utf16_binding_json("{", "text");
+    assert!(matches!(result, Err(BindingFacadeError::Serialization(_))));
   }
 }

@@ -23,8 +23,8 @@ use stella_anonymize_adapter_contract::{
   static_redaction_result_to_utf16_binding,
 };
 use stella_anonymize_binding_core::{
-  PackageEncoding, PreparedBinding, PreparedSessionPlan, SessionCallerInput,
-  ValidatedCallerDetections, caller_detection_request_from_json,
+  PackageEncoding, PreparedBinding, PreparedSessionPlan, SessionCallerInputs,
+  caller_detection_request_from_json,
   operators_from_json as binding_operators_from_json,
   package_from_binding_config as binding_package_from_config,
   plan_session_redactions as binding_plan_session_redactions,
@@ -924,20 +924,15 @@ impl NativePreparedRedactionSession {
     options: JsSessionCallerRedactionPlanOptions,
   ) -> Result<NativePreparedSessionRedactionPlan> {
     let operators = operator_config_from_js(options.operators)?;
-    let inputs = options
-      .inputs
-      .into_iter()
-      .map(|input| {
-        let request = caller_detection_request_from_json(&input.request_json)
-          .map_err(to_napi_facade_error)?;
-        let detections = ValidatedCallerDetections::from_utf16_binding(
-          request,
-          input.full_text,
-        )
+    let mut inputs = SessionCallerInputs::with_capacity(options.inputs.len())
+      .map_err(to_napi_facade_error)?;
+    for input in options.inputs {
+      let request = caller_detection_request_from_json(&input.request_json)
         .map_err(to_napi_facade_error)?;
-        Ok(SessionCallerInput::new(detections))
-      })
-      .collect::<Result<Vec<_>>>()?;
+      inputs
+        .push_utf16_binding(request, input.full_text)
+        .map_err(to_napi_facade_error)?;
+    }
     let session = self.lock_session()?;
     let plan = binding_plan_session_redactions(
       &self.inner,
