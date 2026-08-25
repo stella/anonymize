@@ -32,6 +32,7 @@ No detector catches everything. Reversible placeholder replacement is
 pseudonymization, and its maps contain original PII; do not log or treat them as
 anonymous output. The default pipeline targets personal identifiers, not
 passwords, authentication tokens, API keys, or private cryptographic material.
+IP addresses, MAC addresses, and URLs require explicit opt-in capabilities.
 
 Contributing to the project is welcome.
 
@@ -219,9 +220,11 @@ you need the browser runtime.
 
 The deterministic pipeline is evaluated against publicly available tools on
 TAB-ECHR, RedactionBench, MEDDOCAN, MultiGraSCCo, and German Legal Entity
-Recognition. Read the [methodology](packages/benchmark/README.md), browse the
-[aggregate results](packages/benchmark/results/), or follow the
-[reproduction guide](packages/benchmark/REPRODUCING.md).
+Recognition. Tracks use different task semantics, and synthetic scores are not
+necessarily representative or directly comparable. Read the
+[methodology](packages/benchmark/README.md), browse the [aggregate
+results](packages/benchmark/results/), or follow the [reproduction
+guide](packages/benchmark/REPRODUCING.md).
 
 ## Development
 
