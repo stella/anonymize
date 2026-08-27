@@ -46,6 +46,11 @@ import {
   summary_diagnostics_json as summaryDiagnosticsJsonWithBinding,
 } from "./native";
 import { createWasmBinding, isRawWasmModule } from "./wasm-binding";
+import { createScopedPipeline } from "./create-pipeline";
+import {
+  normalizePipelineLanguageSelection,
+  type PipelineLanguageSelection,
+} from "./pipeline-language";
 
 export * from "./native";
 export { deanonymise, exportRedactionKey } from "./redact";
@@ -89,6 +94,11 @@ export type {
   ReviewDecision,
   ReviewedEntity,
 } from "./types";
+export { SUPPORTED_LANGUAGES } from "./pipeline-language";
+export type {
+  PipelineLanguageSelection,
+  SupportedLanguage,
+} from "./pipeline-language";
 // Config-driven pipeline surface: pure TS that delegates to
 // `binding.assembleStaticSearchConfigJson` / `assembleStaticSearchPackageBytes`,
 // which the wasm binding exposes with no cfg gating (crates/anonymize-napi/src/lib.rs),
@@ -265,6 +275,10 @@ const readFileUrlBytes = async (fileUrl: string): Promise<Uint8Array> => {
 
 export type LoadPreparedPackageOptions = WasmBindingOptions;
 
+export type CreatePipelineOptions = WasmBindingOptions & {
+  language?: PipelineLanguageSelection;
+};
+
 /** Load a prepared package and return a pipeline ready to redact text. */
 export const loadPipeline = async (
   source: PreparedPackageSource,
@@ -390,6 +404,22 @@ export const getDefaultPipeline = (
   touchDefaultPipelineCacheEntry(key, pipeline);
   return pipeline;
 };
+
+export const createPipeline = async ({
+  language,
+  ...bindingOptions
+}: CreatePipelineOptions = {}): Promise<PreparedNativePipeline> => {
+  const selection = normalizePipelineLanguageSelection(language);
+  if (selection.type === "all") {
+    return getDefaultPipeline(undefined, bindingOptions);
+  }
+  return createScopedPipeline({
+    binding: await resolveBinding(bindingOptions),
+    selection,
+  });
+};
+
+export const create_pipeline = createPipeline;
 
 export const redactDefaultText = async (
   fullText: string,

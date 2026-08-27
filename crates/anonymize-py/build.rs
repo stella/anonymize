@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 const NATIVE_PACKAGE_SCOPED_PREFIX: &str = "native-pipeline.";
 const NATIVE_PACKAGE_SUFFIX: &str = ".stlanonpkg";
 const DEFAULT_NATIVE_PACKAGE: &str = "native-pipeline.stlanonpkg";
+const DEFAULT_PIPELINE_INPUT: &str = "default-pipeline-input.json.gz";
 // Set by the wheel build (`bun run python:wheel`) so a wheel is never produced
 // without the bundled native pipeline packages. Plain `cargo build`/`test` runs
 // before the JS build has generated the packages, so those flows only warn.
@@ -70,6 +71,15 @@ fn copy_generated_native_packages() -> io::Result<()> {
       &format!(
         "default native pipeline package `{DEFAULT_NATIVE_PACKAGE}` is missing from {}; run `bun run build` before building the wheel",
         source_dir.display()
+      ),
+    );
+  }
+  if !target_dir.join(DEFAULT_PIPELINE_INPUT).is_file() {
+    return report_missing_native_packages(
+      require_native,
+      &format!(
+        "semantic pipeline input `{DEFAULT_PIPELINE_INPUT}` is missing from {}; run `bun run build` before building the wheel",
+        target_dir.display()
       ),
     );
   }

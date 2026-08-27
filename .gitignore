@@ -8,6 +8,7 @@ dist
 .turbo
 target/
 *.stlanonpkg
+default-pipeline-input.json.gz
 
 # Claude Code local worktrees.
 .claude/worktrees/

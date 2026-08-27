@@ -5,9 +5,11 @@ import {
   mkdirSync,
   readdirSync,
   rmSync,
+  writeFileSync,
 } from "node:fs";
 import { basename, dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { gzipSync } from "node:zlib";
 
 const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const repoRoot = dirname(dirname(packageRoot));
@@ -20,6 +22,7 @@ const pythonNativePackageRoot = join(
   "native_packages",
 );
 const DEFAULT_SCOPED_PACKAGE_LANGUAGES = ["cs", "de", "en"];
+const DEFAULT_PIPELINE_INPUT_FILE = "default-pipeline-input.json.gz";
 const NATIVE_PACKAGE_PATTERN =
   /^native-pipeline(?:\.[a-z0-9]+(?:-[a-z0-9]+)*)?\.stlanonpkg$/u;
 const scopedPackageLanguages = languageListFromEnv(
@@ -64,6 +67,7 @@ if (sidecarRoot !== null) {
 removeNativePipelinePackages(packageRoot);
 removeNativePipelinePackages(pythonNativePackageRoot);
 mkdirSync(pythonNativePackageRoot, { recursive: true });
+await writePythonDefaultPipelineInput();
 
 const defaultPackagePath = join(packageRoot, "native-pipeline.stlanonpkg");
 buildNativePipelinePackage([
@@ -106,6 +110,27 @@ function copyNativePipelinePackageToPython(packagePath) {
   copyFileSync(
     packagePath,
     join(pythonNativePackageRoot, basename(packagePath)),
+  );
+}
+
+async function writePythonDefaultPipelineInput() {
+  const [
+    { DEFAULT_NATIVE_PIPELINE_CONFIG, SUPPORTED_LANGUAGES },
+    { loadDictionaryBundle },
+  ] = await Promise.all([
+    // eslint-disable-next-line stll/no-dynamic-import-specifier -- This build script imports its just-generated local SDK entry by absolute URL.
+    import(pathToFileURL(join(packageRoot, "dist", "index.mjs")).href),
+    import("@stll/anonymize-data/cities"),
+  ]);
+  const dictionaries = await loadDictionaryBundle();
+  const input = JSON.stringify({
+    config: DEFAULT_NATIVE_PIPELINE_CONFIG,
+    dictionaries,
+    supportedLanguages: SUPPORTED_LANGUAGES,
+  });
+  writeFileSync(
+    join(pythonNativePackageRoot, DEFAULT_PIPELINE_INPUT_FILE),
+    gzipSync(input),
   );
 }
 

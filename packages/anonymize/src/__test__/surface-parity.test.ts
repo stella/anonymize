@@ -44,7 +44,7 @@ const coreSurface = {
     "redact_text_with_caller_detections",
   ),
   "text.operators": prototypeMethod(preparedPrototype, "redact_text"),
-  "package.default": nativeNode.getDefaultNativePipeline,
+  "package.default": nativeNode.createPipeline,
   "document.pdf.inspect":
     nativeNode.loadNativeAnonymizeBinding().inspectPdfJson,
 } as const;
@@ -88,7 +88,7 @@ const wasmSurface = {
     wasm.PreparedNativeAnonymizer?.prototype,
     "redact_text",
   ),
-  "package.default": wasm.loadDefaultPipeline,
+  "package.default": wasm.createPipeline,
   "session.cross-document": prototypeMethod(
     wasm.PreparedNativeAnonymizer?.prototype,
     "createRedactionSession",
