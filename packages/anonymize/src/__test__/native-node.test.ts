@@ -638,10 +638,10 @@ describe("native node loader", () => {
   });
 
   test("bounds the exact-scope pipeline cache", async () => {
-    let assemblyCount = 0;
+    let preparedPipelineCount = 0;
     const binding = fakeNativeBinding(PACKAGE_VERSION, {
-      onAssembleStaticSearchPackageBytes: () => {
-        assemblyCount += 1;
+      onPreparedPackageBytes: () => {
+        preparedPipelineCount += 1;
       },
     });
     const selections = [
@@ -669,7 +669,7 @@ describe("native node loader", () => {
     });
 
     expect(repeated).not.toBe(first);
-    expect(assemblyCount).toBe(selections.length + 1);
+    expect(preparedPipelineCount).toBe(selections.length + 1);
   });
 
   test("uses an existing single-language artifact", async () => {
