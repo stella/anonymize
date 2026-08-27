@@ -163,8 +163,8 @@ describe("full runtime surface parity", () => {
     const cases = [
       { fullText: "Adrese: Riga", language: "lv" },
       {
-        fullText: "Offices: Praha and London.",
-        language: ["cs", "en"],
+        fullText: "Büros: Berlin und Paris.",
+        language: ["de", "fr"],
       },
     ] as const;
 
