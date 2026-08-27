@@ -115,6 +115,18 @@ const runtimeSurfaces = {
   Record<CapabilityRuntime, Partial<RuntimeSurface>>
 >;
 
+const invokeWasmCreatePipeline = (options: unknown) =>
+  Promise.resolve(Reflect.apply(wasm.createPipeline, undefined, [options]));
+
+const captureWasmCreatePipelineFailure = async (options: unknown) => {
+  try {
+    await invokeWasmCreatePipeline(options);
+  } catch (error) {
+    return error;
+  }
+  throw new Error("WASM createPipeline did not reject invalid options");
+};
+
 describe("full runtime surface parity", () => {
   for (const runtime of ["node", "wasm"] as const) {
     test(`${runtime} exposes every surface in its parity profiles`, () => {
@@ -144,4 +156,44 @@ describe("full runtime surface parity", () => {
     ).rejects.toThrow(
       "wasm binding module does not expose the native anonymize surface",
     ));
+
+  test("WASM pipeline factory matches Node for exact language scopes", async () => {
+    const nodeBinding = nativeNode.loadNativeAnonymizeBinding();
+    const wasmBinding = { ...nodeBinding };
+    const cases = [
+      { fullText: "Adrese: Riga", language: "lv" },
+      {
+        fullText: "Offices: Praha and London.",
+        language: ["cs", "en"],
+      },
+    ] as const;
+
+    for (const { fullText, language } of cases) {
+      const [nodePipeline, wasmPipeline] = await Promise.all([
+        nativeNode.createPipeline({ binding: nodeBinding, language }),
+        wasm.createPipeline({ binding: wasmBinding, language }),
+      ]);
+      const nodeResult = nodePipeline.redactText(fullText);
+      const wasmResult = wasmPipeline.redactText(fullText);
+
+      expect(wasmResult).toEqual(nodeResult);
+      expect(wasmResult.redaction.entityCount).toBeGreaterThan(0);
+    }
+  });
+
+  test("WASM pipeline factory rejects invalid language selections", async () => {
+    const [unsupported, empty] = await Promise.all([
+      captureWasmCreatePipelineFailure({ language: "nl" }),
+      captureWasmCreatePipelineFailure({ language: [] }),
+    ]);
+
+    expect(unsupported).toHaveProperty(
+      "message",
+      expect.stringContaining("Unsupported pipeline language"),
+    );
+    expect(empty).toHaveProperty(
+      "message",
+      expect.stringContaining("must not be empty"),
+    );
+  });
 });
