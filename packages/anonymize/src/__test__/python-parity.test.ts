@@ -109,6 +109,7 @@ type ParityCase = {
 
 type PythonParityOutput = {
   surface_ids: CapabilitySurfaceId[];
+  factory_fast_path_avoids_fallback: boolean;
   results: unknown[];
   available_languages: string[];
   version: string;
@@ -246,6 +247,20 @@ sys.path.insert(0, str(module_root))
 
 import stella_anonymize as anonymize
 
+default_pipeline_input = anonymize._default_pipeline_input
+
+
+def reject_fallback_dictionaries():
+    raise AssertionError("bundled language factory loaded fallback dictionaries")
+
+
+anonymize._default_pipeline_input = reject_fallback_dictionaries
+try:
+    anonymize.create_pipeline(language="en", warmup="none")
+    factory_fast_path_avoids_fallback = True
+finally:
+    anonymize._default_pipeline_input = default_pipeline_input
+
 pdf_inspection = anonymize.inspect_pdf(base64.b64decode(payload["pdf_base64"]))
 pdf_risky_inspection = anonymize.inspect_pdf(
     base64.b64decode(payload["pdf_risky_base64"])
@@ -321,7 +336,7 @@ surface_probes = {
         anonymize, "convert_external_detection_batch"
     ),
     "text.operators": hasattr(prepared_anonymizer, "redact_text"),
-    "package.default": hasattr(anonymize, "get_default_native_pipeline"),
+    "package.default": hasattr(anonymize, "create_pipeline"),
     "session.cross-document": hasattr(
         prepared_anonymizer, "create_redaction_session"
     ),
@@ -346,7 +361,7 @@ surface_probes = {
 }
 
 caller_result = json.loads(
-    anonymize.get_default_native_pipeline(language="en").redact_text_with_caller_detections_json(
+    anonymize.create_pipeline(language="en").redact_text_with_caller_detections_json(
         "😀Alice signed.",
         [{"start": 1, "end": 6, "label": "person", "score": 0.9,
           "provider_id": "parity-provider", "detection_id": "person-1"}],
@@ -461,7 +476,7 @@ external_detection_limits = {
     "provider_id_max_bytes": anonymize.EXTERNAL_DETECTION_PROVIDER_ID_MAX_BYTES,
 }
 caller_diagnostics = json.loads(
-    anonymize.get_default_native_pipeline(language="en").redact_text_with_caller_detections_diagnostics_json(
+    anonymize.create_pipeline(language="en").redact_text_with_caller_detections_diagnostics_json(
         "😀Alice signed.",
         [{"start": 1, "end": 6, "label": "person", "score": 0.9,
           "provider_id": "parity-provider", "detection_id": "person-1"}],
@@ -472,7 +487,7 @@ caller_diagnostic_entity = next(
     if event.get("stage") == "entity.caller.input" and event.get("kind") == "entity"
 )
 caller_keep_result = json.loads(
-    anonymize.get_default_native_pipeline(language="en").redact_text_with_caller_detections_json(
+    anonymize.create_pipeline(language="en").redact_text_with_caller_detections_json(
         "😀Alice signed.",
         [{"start": 1, "end": 6, "label": "person", "score": 0.9,
           "provider_id": "parity-provider", "detection_id": "person-1"}],
@@ -480,7 +495,7 @@ caller_keep_result = json.loads(
     )
 )
 caller_mask_result = json.loads(
-    anonymize.get_default_native_pipeline(language="en").redact_text_with_caller_detections_json(
+    anonymize.create_pipeline(language="en").redact_text_with_caller_detections_json(
         "A👨‍👩‍👧‍👦éZ signed.",
         [{"start": 0, "end": 11, "label": "person", "score": 0.9,
           "provider_id": "parity-provider", "detection_id": "person-mask-1"}],
@@ -488,7 +503,7 @@ caller_mask_result = json.loads(
                     "characters_to_mask": 2, "direction": "end"}},
     )
 )
-prepared = anonymize.get_default_native_pipeline(language="en")
+prepared = anonymize.create_pipeline(language="en")
 pdf_external_batch = {
     "version": 1,
     "document": {"sha256": __import__("hashlib").sha256(b"Public fixture").hexdigest()},
@@ -930,6 +945,7 @@ print(
                 for surface_id, implemented in surface_probes.items()
                 if implemented
             ],
+            "factory_fast_path_avoids_fallback": factory_fast_path_avoids_fallback,
             "results": [
                 json.loads(
                     anonymize.redact_default_text_json(
@@ -1226,6 +1242,7 @@ describe("python binding parity", () => {
       ).map(({ id }) => id);
 
       expect(python.surface_ids).toEqual(expected);
+      expect(python.factory_fast_path_avoids_fallback).toBe(true);
     },
   );
 

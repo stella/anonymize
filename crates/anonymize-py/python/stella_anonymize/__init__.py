@@ -948,6 +948,7 @@ def create_pipeline(
     ):
         return get_default_native_pipeline(language=selection[0], warmup=warmup)
     resolved_warmup = _normalize_default_native_pipeline_warmup(warmup)
+    _validate_supported_pipeline_languages(selection)
     return _apply_default_native_pipeline_warmup(
         _get_scoped_pipeline(selection),
         resolved_warmup,
@@ -1095,15 +1096,18 @@ def _normalize_pipeline_language_selection(
         raise TypeError("Pipeline language must be a string or a sequence of strings")
     if not requested:
         raise ValueError("Pipeline language selection must not be empty")
+    return tuple(sorted(set(requested)))
+
+
+def _validate_supported_pipeline_languages(languages: tuple[str, ...]) -> None:
     supported_languages = _default_pipeline_input()[2]
-    unsupported = sorted(set(requested).difference(supported_languages))
+    unsupported = sorted(set(languages).difference(supported_languages))
     if unsupported:
         raise ValueError(
             "Unsupported pipeline language(s): "
             f"{', '.join(unsupported)}; expected one of: "
             f"{', '.join(sorted(supported_languages))}"
         )
-    return tuple(sorted(set(requested)))
 
 
 def _raise_pipeline_language_type_error() -> str:

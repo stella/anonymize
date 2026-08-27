@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
 import languageScopes from "../data/language-scopes.json";
+import { applyPipelineLanguageScope } from "../language-scope";
+import { DEFAULT_NATIVE_PIPELINE_CONFIG } from "../native-default-config";
 import {
   normalizePipelineLanguageSelection,
   pipelineLanguageSelectionKey,
@@ -45,5 +47,15 @@ describe("pipeline language selection", () => {
         "toString",
       ]),
     ).toThrow("Unsupported pipeline language");
+  });
+
+  test("preserves a supported language's explicit empty name scope", () => {
+    const scoped = applyPipelineLanguageScope({
+      ...DEFAULT_NATIVE_PIPELINE_CONFIG,
+      language: "lv",
+    });
+
+    expect(scoped.nameCorpusLanguages).toEqual([]);
+    expect(scoped.denyListCountries).toEqual(["LV"]);
   });
 });

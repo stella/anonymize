@@ -21,4 +21,14 @@ describe("dictionary bundle scoping", () => {
       expect.objectContaining({ category: "Names" }),
     );
   });
+
+  test("explicit empty name language scope keeps names empty", async () => {
+    const bundle = await loadDictionaryBundle({ nameLanguages: [] });
+
+    expect(bundle.firstNames).toEqual({});
+    expect(bundle.surnames).toEqual({});
+    expect(Object.values(bundle.denyListMeta)).not.toContainEqual(
+      expect.objectContaining({ category: "Names" }),
+    );
+  });
 });

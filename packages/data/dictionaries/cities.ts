@@ -178,7 +178,7 @@ const isNameLanguage = (language: string): language is NameLanguage =>
 const normalizeNameLanguages = (
   languages: readonly string[] | undefined,
 ): NameLanguage[] => {
-  if (languages === undefined || languages.length === 0) {
+  if (languages === undefined) {
     return [...NAME_LANGUAGES];
   }
   const result: NameLanguage[] = [];
@@ -212,8 +212,7 @@ export const loadDictionaryBundle = async ({
 }: LoadDictionaryBundleOptions = {}): Promise<DictionaryBundle> => {
   const countryScope = normalizeCountryCodes(countries);
   const scopedNameLanguages = normalizeNameLanguages(nameLanguages);
-  const hasScopedNames =
-    nameLanguages !== undefined && nameLanguages.length > 0;
+  const hasScopedNames = nameLanguages !== undefined;
   const dictionaryIds = ALL_DICTIONARY_IDS.filter((id) =>
     dictionaryIdIsInScope(id, countryScope, hasScopedNames),
   );

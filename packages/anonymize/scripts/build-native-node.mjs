@@ -11,6 +11,8 @@ import { basename, dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { gzipSync } from "node:zlib";
 
+import languageScopes from "../src/data/language-scopes.json" with { type: "json" };
+
 const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const repoRoot = dirname(dirname(packageRoot));
 const pythonNativePackageRoot = join(
@@ -29,6 +31,13 @@ const scopedPackageLanguages = languageListFromEnv(
   process.env.STELLA_ANONYMIZE_NATIVE_PACKAGE_LANGUAGES,
   DEFAULT_SCOPED_PACKAGE_LANGUAGES,
 );
+const supportedCityCountries = [
+  ...new Set(
+    Object.values(languageScopes.languages).flatMap(
+      ({ denyListCountries }) => denyListCountries,
+    ),
+  ),
+].toSorted();
 
 const sourceByPlatform = {
   darwin: "libstella_anonymize_napi.dylib",
@@ -122,7 +131,9 @@ async function writeDefaultPipelineInput() {
     import(pathToFileURL(join(packageRoot, "dist", "index.mjs")).href),
     import("@stll/anonymize-data/cities"),
   ]);
-  const dictionaries = await loadDictionaryBundle();
+  const dictionaries = await loadDictionaryBundle({
+    cityCountries: supportedCityCountries,
+  });
   const input = JSON.stringify({
     config: DEFAULT_NATIVE_PIPELINE_CONFIG,
     dictionaries,
