@@ -28,7 +28,7 @@ import {
   summary_diagnostics_json as summaryDiagnosticsJsonWithBinding,
 } from "./native";
 import { assertSupportedBunRuntime } from "./bun-version";
-import { createScopedPipeline } from "./create-pipeline";
+import { createSemanticPipeline } from "./create-pipeline";
 import {
   normalizePipelineLanguageSelection,
   type PipelineLanguageSelection,
@@ -473,7 +473,7 @@ export const createPipeline = async ({
     });
   }
   const resolvedWarmup = normalizeDefaultNativePipelineWarmup(warmup);
-  const pipeline = await createScopedPipeline({
+  const pipeline = await createSemanticPipeline({
     binding: resolveNativeSdkBinding(bindingOptions),
     selection,
   });

@@ -162,6 +162,7 @@ describe("full runtime surface parity", () => {
     const wasmBinding = { ...nodeBinding };
     const cases = [
       { fullText: "Adrese: Riga", language: "lv" },
+      { fullText: "Adrese: Riga", language: "all" },
       {
         fullText: "Büros: Berlin und Paris.",
         language: ["de", "fr"],

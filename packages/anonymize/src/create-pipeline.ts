@@ -9,14 +9,9 @@ import {
   type NormalizedPipelineLanguageSelection,
 } from "./pipeline-language";
 
-type ScopedPipelineLanguageSelection = Extract<
-  NormalizedPipelineLanguageSelection,
-  { type: "languages" }
->;
-
-type CreateScopedPipelineOptions = {
+type CreateSemanticPipelineOptions = {
   binding: NativeAnonymizeBinding;
-  selection: ScopedPipelineLanguageSelection;
+  selection: NormalizedPipelineLanguageSelection;
 };
 
 type AnonymizeDataModule = {
@@ -28,11 +23,11 @@ type AnonymizeDataModule = {
 };
 
 const dictionaryCache = new Map<string, Promise<Dictionaries>>();
-const scopedPipelineCache = new WeakMap<
+const semanticPipelineCache = new WeakMap<
   NativeAnonymizeBinding,
   Map<string, Promise<PreparedNativePipeline>>
 >();
-const MAX_SCOPED_PIPELINE_CACHE_ENTRIES = 8;
+const MAX_SEMANTIC_PIPELINE_CACHE_ENTRIES = 8;
 
 const getCachedEntry = <Value>(
   cache: Map<string, Value>,
@@ -53,7 +48,7 @@ const setCachedEntry = <Value>(
   value: Value,
 ): void => {
   cache.set(key, value);
-  if (cache.size <= MAX_SCOPED_PIPELINE_CACHE_ENTRIES) {
+  if (cache.size <= MAX_SEMANTIC_PIPELINE_CACHE_ENTRIES) {
     return;
   }
   const oldestKey = cache.keys().next().value;
@@ -62,7 +57,7 @@ const setCachedEntry = <Value>(
   }
 };
 
-const loadScopedDictionaries = (
+const loadSemanticDictionaries = (
   key: string,
   config: PipelineConfig,
 ): Promise<Dictionaries> => {
@@ -85,8 +80,14 @@ const loadScopedDictionaries = (
 };
 
 const pipelineConfigFor = (
-  selection: ScopedPipelineLanguageSelection,
+  selection: NormalizedPipelineLanguageSelection,
 ): PipelineConfig => {
+  if (selection.type === "all") {
+    return {
+      ...DEFAULT_NATIVE_PIPELINE_CONFIG,
+      labels: [...DEFAULT_NATIVE_PIPELINE_CONFIG.labels],
+    };
+  }
   const [language, ...languages] = selection.languages;
   return applyPipelineLanguageScope({
     ...DEFAULT_NATIVE_PIPELINE_CONFIG,
@@ -98,30 +99,30 @@ const pipelineConfigFor = (
   });
 };
 
-const scopedPipelineCacheFor = (
+const semanticPipelineCacheFor = (
   binding: NativeAnonymizeBinding,
 ): Map<string, Promise<PreparedNativePipeline>> => {
-  const cached = scopedPipelineCache.get(binding);
+  const cached = semanticPipelineCache.get(binding);
   if (cached !== undefined) {
     return cached;
   }
   const created = new Map<string, Promise<PreparedNativePipeline>>();
-  scopedPipelineCache.set(binding, created);
+  semanticPipelineCache.set(binding, created);
   return created;
 };
 
-export const createScopedPipeline = ({
+export const createSemanticPipeline = ({
   binding,
   selection,
-}: CreateScopedPipelineOptions): Promise<PreparedNativePipeline> => {
+}: CreateSemanticPipelineOptions): Promise<PreparedNativePipeline> => {
   const key = pipelineLanguageSelectionKey(selection);
-  const cache = scopedPipelineCacheFor(binding);
+  const cache = semanticPipelineCacheFor(binding);
   const cached = getCachedEntry(cache, key);
   if (cached !== undefined) {
     return cached;
   }
   const config = pipelineConfigFor(selection);
-  const pipeline = loadScopedDictionaries(key, config)
+  const pipeline = loadSemanticDictionaries(key, config)
     .then((dictionaries) =>
       createNativePipelineFromConfig({
         binding,

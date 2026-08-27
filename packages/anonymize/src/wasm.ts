@@ -46,7 +46,7 @@ import {
   summary_diagnostics_json as summaryDiagnosticsJsonWithBinding,
 } from "./native";
 import { createWasmBinding, isRawWasmModule } from "./wasm-binding";
-import { createScopedPipeline } from "./create-pipeline";
+import { createSemanticPipeline } from "./create-pipeline";
 import {
   normalizePipelineLanguageSelection,
   type PipelineLanguageSelection,
@@ -149,7 +149,7 @@ const DEFAULT_PIPELINE_CACHE_MAX_ENTRIES = 32;
 
 let bindingPromise: Promise<NativeAnonymizeBinding> | undefined;
 const defaultPipelineCache = new Map<string, Promise<PreparedNativePipeline>>();
-const unavailableLanguagePackageUrls = new Set<string>();
+const unavailablePackageUrls = new Set<string>();
 
 class PreparedPackageUnavailableError extends Error {
   constructor(href: string, options?: ErrorOptions) {
@@ -448,23 +448,37 @@ export const createPipeline = async ({
 }: CreatePipelineOptions = {}): Promise<PreparedNativePipeline> => {
   const selection = normalizePipelineLanguageSelection(language);
   if (selection.type === "all") {
-    return getDefaultPipeline(undefined, bindingOptions);
+    const packageUrl = defaultPackageUrl();
+    if (!unavailablePackageUrls.has(packageUrl.href)) {
+      try {
+        return await getDefaultPipeline(undefined, bindingOptions);
+      } catch (error) {
+        if (!(error instanceof PreparedPackageUnavailableError)) {
+          throw error;
+        }
+        unavailablePackageUrls.add(packageUrl.href);
+      }
+    }
+    return createSemanticPipeline({
+      binding: await resolveBinding(bindingOptions),
+      selection,
+    });
   }
   const [singleLanguage, ...additionalLanguages] = selection.languages;
   if (additionalLanguages.length === 0) {
     const packageUrl = defaultPackageUrl(singleLanguage);
-    if (!unavailableLanguagePackageUrls.has(packageUrl.href)) {
+    if (!unavailablePackageUrls.has(packageUrl.href)) {
       try {
         return await getDefaultPipeline(singleLanguage, bindingOptions);
       } catch (error) {
         if (!(error instanceof PreparedPackageUnavailableError)) {
           throw error;
         }
-        unavailableLanguagePackageUrls.add(packageUrl.href);
+        unavailablePackageUrls.add(packageUrl.href);
       }
     }
   }
-  return createScopedPipeline({
+  return createSemanticPipeline({
     binding: await resolveBinding(bindingOptions),
     selection,
   });
