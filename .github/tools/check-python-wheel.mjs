@@ -23,6 +23,12 @@ const nativePackagePattern =
 const defaultPipelineInput = "default-pipeline-input.json.gz";
 const legalFiles = ["LICENSE", "NOTICE"];
 const nativePackageSourceDir = join("packages", "anonymize");
+const pipelineLanguageScopesSource = join(
+  nativePackageSourceDir,
+  "src",
+  "data",
+  "language-scopes.json",
+);
 const attributionSource = join(nativePackageSourceDir, "ATTRIBUTION.md");
 const pythonNativePackageDir = join(
   "crates",
@@ -126,6 +132,7 @@ function assertWheelContents(wheelPath) {
     "stella_anonymize/native_packages/native-pipeline.de.stlanonpkg",
     "stella_anonymize/native_packages/native-pipeline.en.stlanonpkg",
     "stella_anonymize/native_packages/default-pipeline-input.json.gz",
+    "stella_anonymize/native_packages/pipeline-language-scopes.json",
   ];
   const missing = required.filter((file) => !files.has(file));
   if (missing.length > 0) {
@@ -133,6 +140,14 @@ function assertWheelContents(wheelPath) {
   }
   if (![...files].some(isNativeExtension)) {
     throw new Error("wheel is missing the native _native extension");
+  }
+  const languageScopesEntry =
+    "stella_anonymize/native_packages/pipeline-language-scopes.json";
+  if (
+    readWheelEntry(wheelPath, languageScopesEntry) !==
+    readFileSync(pipelineLanguageScopesSource, "utf8")
+  ) {
+    throw new Error("wheel pipeline language scopes must match the SDK source");
   }
   for (const file of legalFiles) {
     const suffix = `.dist-info/licenses/${file}`;
@@ -337,6 +352,12 @@ function smokeInstalledWheel(wheelPath) {
         "semantic_all = anonymize.create_pipeline(language='all')",
         "if semantic_all is not anonymize.get_default_native_pipeline():",
         "    raise SystemExit('all-language semantic pipeline missed default cache')",
+        "try:",
+        "    anonymize.create_pipeline(language='nl')",
+        "except ValueError:",
+        "    pass",
+        "else:",
+        "    raise SystemExit('semantic pipeline accepted an unsupported language')",
         "semantic_result = semantic_es.redact_text('Email test@example.com')",
         "if semantic_result.redaction.entity_count != 1:",
         "    raise SystemExit('semantic pipeline did not redact the email fixture')",

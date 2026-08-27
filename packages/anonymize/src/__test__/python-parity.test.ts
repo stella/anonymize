@@ -46,6 +46,7 @@ import {
   getDefaultNativePipeline,
   loadNativeAnonymizeBinding,
   redact_default_text_json,
+  SUPPORTED_LANGUAGES,
 } from "../native-node";
 import {
   CAPABILITY_PARITY_PROFILES,
@@ -112,6 +113,7 @@ type PythonParityOutput = {
   factory_fast_path_avoids_fallback: boolean;
   results: unknown[];
   available_languages: string[];
+  supported_languages: string[];
   version: string;
   module_version: string;
   pdf_constants: {
@@ -957,6 +959,9 @@ print(
             "available_languages": list(
                 anonymize.available_default_native_pipeline_languages()
             ),
+            "supported_languages": sorted(
+                anonymize._supported_pipeline_languages()
+            ),
             "version": anonymize.native_package_version(),
             "module_version": anonymize.__version__,
             "pdf_constants": {
@@ -1243,6 +1248,7 @@ describe("python binding parity", () => {
 
       expect(python.surface_ids).toEqual(expected);
       expect(python.factory_fast_path_avoids_fallback).toBe(true);
+      expect(python.supported_languages).toEqual([...SUPPORTED_LANGUAGES]);
     },
   );
 

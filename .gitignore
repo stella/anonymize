@@ -9,6 +9,7 @@ dist
 target/
 *.stlanonpkg
 default-pipeline-input.json.gz
+pipeline-language-scopes.json
 
 # Claude Code local worktrees.
 .claude/worktrees/

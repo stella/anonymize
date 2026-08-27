@@ -825,6 +825,7 @@ _warmed_default_native_pipelines: WeakSet[PreparedAnonymizer] = WeakSet()
 SupportedLanguage = str
 PipelineLanguageSelection = SupportedLanguage | Sequence[SupportedLanguage]
 _DEFAULT_PIPELINE_INPUT = "default-pipeline-input.json.gz"
+_PIPELINE_LANGUAGE_SCOPES = "pipeline-language-scopes.json"
 
 
 def prepare_search_package(
@@ -941,14 +942,16 @@ def create_pipeline(
     warmup: DefaultNativePipelineWarmup | None = None,
 ) -> PreparedAnonymizer:
     selection = _normalize_pipeline_language_selection(language)
+    resolved_warmup = _normalize_default_native_pipeline_warmup(warmup)
     if selection is None:
-        return get_default_native_pipeline(warmup=warmup)
+        return get_default_native_pipeline(warmup=resolved_warmup)
+    _validate_supported_pipeline_languages(selection)
     if len(selection) == 1 and _default_native_pipeline_language_package_exists(
         selection[0]
     ):
-        return get_default_native_pipeline(language=selection[0], warmup=warmup)
-    resolved_warmup = _normalize_default_native_pipeline_warmup(warmup)
-    _validate_supported_pipeline_languages(selection)
+        return get_default_native_pipeline(
+            language=selection[0], warmup=resolved_warmup
+        )
     return _apply_default_native_pipeline_warmup(
         _get_scoped_pipeline(selection),
         resolved_warmup,
@@ -1072,7 +1075,35 @@ def _default_pipeline_input() -> tuple[
         isinstance(language, str) for language in supported_languages
     ):
         raise TypeError("Default pipeline input has invalid supported languages")
-    return config, dictionaries, frozenset(supported_languages)
+    supported = frozenset(supported_languages)
+    if supported != _supported_pipeline_languages():
+        raise TypeError("Default pipeline input language metadata does not match")
+    return config, dictionaries, supported
+
+
+@lru_cache(maxsize=1)
+def _supported_pipeline_languages() -> frozenset[str]:
+    try:
+        resource = files(__name__).joinpath(
+            "native_packages", _PIPELINE_LANGUAGE_SCOPES
+        )
+        payload = json.loads(resource.read_bytes())
+    except (FileNotFoundError, ModuleNotFoundError, OSError) as error:
+        raise FileNotFoundError(
+            "Pipeline language metadata is unavailable; reinstall "
+            "stella-anonymize-core from a complete wheel"
+        ) from error
+    if not isinstance(payload, dict):
+        raise TypeError("Pipeline language metadata must be an object")
+    languages = payload.get("languages")
+    if not isinstance(languages, dict) or not languages:
+        raise TypeError("Pipeline language metadata has invalid languages")
+    if not all(
+        isinstance(language, str) and language and isinstance(scope, dict)
+        for language, scope in languages.items()
+    ):
+        raise TypeError("Pipeline language metadata has invalid language scopes")
+    return frozenset(languages)
 
 
 def _normalize_pipeline_language_selection(
@@ -1100,7 +1131,7 @@ def _normalize_pipeline_language_selection(
 
 
 def _validate_supported_pipeline_languages(languages: tuple[str, ...]) -> None:
-    supported_languages = _default_pipeline_input()[2]
+    supported_languages = _supported_pipeline_languages()
     unsupported = sorted(set(languages).difference(supported_languages))
     if unsupported:
         raise ValueError(

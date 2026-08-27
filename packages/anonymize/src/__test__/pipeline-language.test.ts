@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
 import languageScopes from "../data/language-scopes.json";
+import { defaultDictionaryBundleOptions } from "../build-native-package";
 import { applyPipelineLanguageScope } from "../language-scope";
 import { DEFAULT_NATIVE_PIPELINE_CONFIG } from "../native-default-config";
+import { loadDictionaryBundle } from "../../../data/dictionaries/cities";
 import {
   normalizePipelineLanguageSelection,
   pipelineLanguageSelectionKey,
@@ -57,5 +59,34 @@ describe("pipeline language selection", () => {
 
     expect(scoped.nameCorpusLanguages).toEqual([]);
     expect(scoped.denyListCountries).toEqual(["LV"]);
+  });
+
+  test("loads an exact Latvian dictionary scope through the published data API", async () => {
+    const scoped = applyPipelineLanguageScope({
+      ...DEFAULT_NATIVE_PIPELINE_CONFIG,
+      language: "lv",
+    });
+    const dictionaries = await loadDictionaryBundle(
+      defaultDictionaryBundleOptions(scoped),
+    );
+
+    expect(dictionaries.firstNames).toEqual({});
+    expect(dictionaries.surnames).toEqual({});
+    expect(Object.keys(dictionaries.citiesByCountry)).toEqual(["LV"]);
+    expect(Object.values(dictionaries.denyListMeta)).not.toContainEqual(
+      expect.objectContaining({ category: "Names" }),
+    );
+  });
+
+  test("derives Spanish city countries before package dictionary loading", () => {
+    const scoped = applyPipelineLanguageScope({
+      ...DEFAULT_NATIVE_PIPELINE_CONFIG,
+      language: "es",
+    });
+    const options = defaultDictionaryBundleOptions(scoped);
+
+    expect(options.cityCountries).toContain("MX");
+    expect(options.cityCountries).toContain("AR");
+    expect(options.nameLanguages).toEqual(["es"]);
   });
 });
