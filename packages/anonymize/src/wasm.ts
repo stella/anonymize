@@ -137,6 +137,7 @@ const NODE_FS_MODULE = "node:fs/promises";
 const NATIVE_ASSET_DIR = "native";
 const ASSET_DIR_ENV = "STLL_ANONYMIZE_ASSET_DIR";
 const DEFAULT_PACKAGE_FILE = "native-pipeline.stlanonpkg";
+const BUNDLED_LANGUAGE_PACKAGES = ["cs", "de", "en"] as const;
 const LANGUAGE_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 const DEFAULT_PIPELINE_CACHE_KEY = "<default>";
 // Bounds `defaultPipelineCache` to a small, fixed number of prepared
@@ -412,6 +413,15 @@ export const createPipeline = async ({
   const selection = normalizePipelineLanguageSelection(language);
   if (selection.type === "all") {
     return getDefaultPipeline(undefined, bindingOptions);
+  }
+  const [singleLanguage, ...additionalLanguages] = selection.languages;
+  if (
+    additionalLanguages.length === 0 &&
+    BUNDLED_LANGUAGE_PACKAGES.some(
+      (bundledLanguage) => bundledLanguage === singleLanguage,
+    )
+  ) {
+    return getDefaultPipeline(singleLanguage, bindingOptions);
   }
   return createScopedPipeline({
     binding: await resolveBinding(bindingOptions),

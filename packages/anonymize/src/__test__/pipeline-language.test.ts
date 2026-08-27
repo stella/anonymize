@@ -89,4 +89,20 @@ describe("pipeline language selection", () => {
     expect(options.cityCountries).toContain("AR");
     expect(options.nameLanguages).toEqual(["es"]);
   });
+
+  test("all-language package cities cover every supported language scope", () => {
+    const options = defaultDictionaryBundleOptions(
+      DEFAULT_NATIVE_PIPELINE_CONFIG,
+    );
+    const supportedCountries = Object.values(languageScopes.languages).flatMap(
+      ({ denyListCountries }) => denyListCountries,
+    );
+
+    expect(options.cityCountries).toEqual(
+      expect.arrayContaining(supportedCountries),
+    );
+    expect(options.cityCountries).toEqual(
+      languageScopes.allLanguageCityCountries,
+    );
+  });
 });

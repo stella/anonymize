@@ -1,5 +1,6 @@
 import type { PipelineConfig } from "./types";
 import { applyPipelineLanguageScope } from "./language-scope";
+import languageScopes from "./data/language-scopes.json";
 
 type DictionaryBundleOptions = {
   countries?: readonly string[];
@@ -15,7 +16,7 @@ export const defaultDictionaryBundleOptions = (
   config: PipelineConfig,
 ): DictionaryBundleOptions => ({
   ...(config.denyListCountries === undefined
-    ? {}
+    ? { cityCountries: languageScopes.allLanguageCityCountries }
     : {
         countries: config.denyListCountries,
         cityCountries: config.denyListCountries,
