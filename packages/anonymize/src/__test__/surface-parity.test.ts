@@ -8,6 +8,9 @@
  * feature therefore fails here until its peer bindings land.
  */
 import { describe, expect, test } from "bun:test";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import {
   CAPABILITY_PARITY_PROFILES,
@@ -118,6 +121,8 @@ const runtimeSurfaces = {
 const invokeWasmCreatePipeline = (options: unknown) =>
   Promise.resolve(Reflect.apply(wasm.createPipeline, undefined, [options]));
 
+const WASM_ASSET_DIR_ENV = "STLL_ANONYMIZE_ASSET_DIR";
+
 const captureWasmCreatePipelineFailure = async (options: unknown) => {
   try {
     await invokeWasmCreatePipeline(options);
@@ -209,6 +214,43 @@ describe("full runtime surface parity", () => {
       );
     } finally {
       globalThis.fetch = fetchBeforeTest;
+    }
+  });
+
+  test("WASM pipeline factory rejects a corrupt exact regional package", async () => {
+    const assetDirectory = await mkdtemp(
+      join(tmpdir(), "anonymize-wasm-corrupt-package-"),
+    );
+    const previousAssetDirectory = process.env[WASM_ASSET_DIR_ENV];
+    process.env[WASM_ASSET_DIR_ENV] = assetDirectory;
+    await writeFile(
+      join(assetDirectory, "native-pipeline.pt-br.stlanonpkg"),
+      new Uint8Array([0]),
+    );
+
+    try {
+      const failure = await wasm
+        .createPipeline({
+          binding: nativeNode.loadNativeAnonymizeBinding(),
+          language: "pt-br",
+        })
+        .then(
+          () => {
+            throw new Error("corrupt exact package did not reject");
+          },
+          (error: unknown) => error,
+        );
+      expect(failure).not.toHaveProperty(
+        "name",
+        "PreparedPackageUnavailableError",
+      );
+    } finally {
+      if (previousAssetDirectory === undefined) {
+        Reflect.deleteProperty(process.env, WASM_ASSET_DIR_ENV);
+      } else {
+        process.env[WASM_ASSET_DIR_ENV] = previousAssetDirectory;
+      }
+      await rm(assetDirectory, { recursive: true });
     }
   });
 

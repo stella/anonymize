@@ -362,6 +362,9 @@ export const loadDefaultPipeline = async (
   try {
     return await loadPipeline(defaultPackageUrl(language), options);
   } catch (error) {
+    if (!(error instanceof PreparedPackageUnavailableError)) {
+      throw error;
+    }
     const normalized =
       language === undefined ? undefined : normalizeLanguage(language);
     const baseLanguage = normalized?.split("-").at(0);
