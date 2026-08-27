@@ -78,9 +78,10 @@ pub enum BindingFacadeError {
 
 /// Maximum UTF-8 text bytes accepted by one redaction or restoration call.
 ///
-/// Every host binding reaches the engine through this crate, so bounding the
-/// text here bounds the napi, wasm, and Python surfaces alike.
-pub const REDACTION_TEXT_MAX_BYTES: usize = 64 * 1024 * 1024;
+/// The engine owns the bound and rejects oversized text on every path; the
+/// facade checks it early so callers fail before any conversion work.
+pub const REDACTION_TEXT_MAX_BYTES: usize =
+  stella_anonymize_core::REDACTION_TEXT_MAX_BYTES;
 /// Caller-assisted operations and plans share the redaction text bound.
 pub const CALLER_DETECTION_TEXT_MAX_BYTES: usize = REDACTION_TEXT_MAX_BYTES;
 /// Maximum encoded bytes accepted by one caller-detection JSON request.

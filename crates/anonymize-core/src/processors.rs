@@ -775,6 +775,12 @@ struct RawDenyListMatch {
 #[derive(Debug, Default)]
 struct SurnameEvidenceIndex {
   spans: HashSet<(u32, u32)>,
+  /// Structural work counters: one visit per hit at build, one probe per
+  /// query. Together they pin the total work at hits + queries.
+  #[cfg(test)]
+  build_visits: usize,
+  #[cfg(test)]
+  probes: std::cell::Cell<usize>,
 }
 
 impl SurnameEvidenceIndex {
@@ -785,10 +791,16 @@ impl SurnameEvidenceIndex {
         .filter(|hit| hit.has_surname_evidence)
         .map(|hit| (hit.start, hit.end))
         .collect(),
+      #[cfg(test)]
+      build_visits: hits.len(),
+      #[cfg(test)]
+      probes: std::cell::Cell::new(0),
     }
   }
 
   fn covers(&self, start: u32, end: u32) -> bool {
+    #[cfg(test)]
+    self.probes.set(self.probes.get().saturating_add(1));
     self.spans.contains(&(start, end))
   }
 }
@@ -4371,6 +4383,23 @@ mod tests {
           "span {start}..{end} disagrees with the reference scan"
         );
       }
+    }
+  }
+
+  /// The index must cost one visit per hit to build and one probe per query,
+  /// never a scan per candidate. Doubling the hit count must not change the
+  /// per-query probe count.
+  #[test]
+  fn surname_evidence_index_work_stays_linear_in_hits_and_queries() {
+    for count in [64_u32, 1_024] {
+      let hits = surname_evidence_fixture(count);
+      let index = SurnameEvidenceIndex::build(&hits);
+      assert_eq!(index.build_visits, hits.len());
+
+      for hit in &hits {
+        index.covers(hit.start, hit.end);
+      }
+      assert_eq!(index.probes.get(), hits.len());
     }
   }
 
