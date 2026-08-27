@@ -138,6 +138,7 @@ const NATIVE_ASSET_DIR = "native";
 const ASSET_DIR_ENV = "STLL_ANONYMIZE_ASSET_DIR";
 const DEFAULT_PACKAGE_FILE = "native-pipeline.stlanonpkg";
 const LANGUAGE_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
+const HTML_MEDIA_TYPES = new Set(["application/xhtml+xml", "text/html"]);
 const DEFAULT_PIPELINE_CACHE_KEY = "<default>";
 // Bounds `defaultPipelineCache` to a small, fixed number of prepared
 // pipelines: without a cap, a caller that varies `language` (e.g. many
@@ -276,7 +277,19 @@ const toPackageBytes = async (
       `Failed to fetch prepared package (${response.status} ${response.statusText})`,
     );
   }
+  if (isHtmlResponse(response)) {
+    throw new PreparedPackageUnavailableError(href);
+  }
   return new Uint8Array(await response.arrayBuffer());
+};
+
+const isHtmlResponse = (response: Response): boolean => {
+  const contentType = response.headers.get("content-type");
+  if (contentType === null) {
+    return false;
+  }
+  const mediaType = contentType.split(";", 1).at(0)?.trim().toLowerCase();
+  return mediaType !== undefined && HTML_MEDIA_TYPES.has(mediaType);
 };
 
 const isMissingFileError = (error: unknown): boolean =>

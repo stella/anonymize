@@ -181,6 +181,36 @@ describe("full runtime surface parity", () => {
     }
   });
 
+  test("WASM treats an SPA HTML fallback as a missing package", async () => {
+    const fetchBeforeTest = globalThis.fetch;
+    const spaFetch = () =>
+      Promise.resolve(
+        new Response("<!doctype html><title>SPA</title>", {
+          headers: { "content-type": "text/html; charset=utf-8" },
+        }),
+      );
+    spaFetch.preconnect = fetchBeforeTest.preconnect;
+    globalThis.fetch = spaFetch;
+    try {
+      const failure = await wasm
+        .loadPipeline(new URL("https://example.test/missing.stlanonpkg"), {
+          binding: nativeNode.loadNativeAnonymizeBinding(),
+        })
+        .then(
+          () => {
+            throw new Error("HTML fallback did not reject");
+          },
+          (error: unknown) => error,
+        );
+      expect(failure).toHaveProperty(
+        "message",
+        expect.stringContaining("Prepared package is unavailable"),
+      );
+    } finally {
+      globalThis.fetch = fetchBeforeTest;
+    }
+  });
+
   test("WASM pipeline factory rejects invalid language selections", async () => {
     const [unsupported, empty] = await Promise.all([
       captureWasmCreatePipelineFailure({ language: "nl" }),
