@@ -137,7 +137,6 @@ const NODE_FS_MODULE = "node:fs/promises";
 const NATIVE_ASSET_DIR = "native";
 const ASSET_DIR_ENV = "STLL_ANONYMIZE_ASSET_DIR";
 const DEFAULT_PACKAGE_FILE = "native-pipeline.stlanonpkg";
-const BUNDLED_LANGUAGE_PACKAGES = ["cs", "de", "en"] as const;
 const LANGUAGE_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 const DEFAULT_PIPELINE_CACHE_KEY = "<default>";
 // Bounds `defaultPipelineCache` to a small, fixed number of prepared
@@ -149,6 +148,14 @@ const DEFAULT_PIPELINE_CACHE_MAX_ENTRIES = 32;
 
 let bindingPromise: Promise<NativeAnonymizeBinding> | undefined;
 const defaultPipelineCache = new Map<string, Promise<PreparedNativePipeline>>();
+const unavailableLanguagePackageUrls = new Set<string>();
+
+class PreparedPackageUnavailableError extends Error {
+  constructor(href: string, options?: ErrorOptions) {
+    super(`Prepared package is unavailable: ${href}`, options);
+    this.name = "PreparedPackageUnavailableError";
+  }
+}
 
 /** Instantiate (once) and return the wasm binding. Safe to call repeatedly:
  * the underlying wasm module is instantiated a single time and cached. */
@@ -251,16 +258,32 @@ const toPackageBytes = async (
   // from import.meta.url (loadDefaultPipeline, `new URL(..., import.meta.url)`)
   // fail there. Read those through node:fs instead of fetch.
   if (href.startsWith("file:")) {
-    return readFileUrlBytes(href);
+    try {
+      return await readFileUrlBytes(href);
+    } catch (error) {
+      if (isMissingFileError(error)) {
+        throw new PreparedPackageUnavailableError(href, { cause: error });
+      }
+      throw error;
+    }
   }
   const response = await fetch(href);
   if (!response.ok) {
+    if (response.status === 404) {
+      throw new PreparedPackageUnavailableError(href);
+    }
     throw new Error(
       `Failed to fetch prepared package (${response.status} ${response.statusText})`,
     );
   }
   return new Uint8Array(await response.arrayBuffer());
 };
+
+const isMissingFileError = (error: unknown): boolean =>
+  typeof error === "object" &&
+  error !== null &&
+  "code" in error &&
+  error.code === "ENOENT";
 
 /** Read a `file:` URL through node:fs. The import is dynamic and gated behind
  * the `file:` check (never reached in browsers); the specifier is a runtime
@@ -415,13 +438,18 @@ export const createPipeline = async ({
     return getDefaultPipeline(undefined, bindingOptions);
   }
   const [singleLanguage, ...additionalLanguages] = selection.languages;
-  if (
-    additionalLanguages.length === 0 &&
-    BUNDLED_LANGUAGE_PACKAGES.some(
-      (bundledLanguage) => bundledLanguage === singleLanguage,
-    )
-  ) {
-    return getDefaultPipeline(singleLanguage, bindingOptions);
+  if (additionalLanguages.length === 0) {
+    const packageUrl = defaultPackageUrl(singleLanguage);
+    if (!unavailableLanguagePackageUrls.has(packageUrl.href)) {
+      try {
+        return await getDefaultPipeline(singleLanguage, bindingOptions);
+      } catch (error) {
+        if (!(error instanceof PreparedPackageUnavailableError)) {
+          throw error;
+        }
+        unavailableLanguagePackageUrls.add(packageUrl.href);
+      }
+    }
   }
   return createScopedPipeline({
     binding: await resolveBinding(bindingOptions),

@@ -669,7 +669,7 @@ describe("native node loader", () => {
     });
 
     expect(repeated).not.toBe(first);
-    expect(assemblyCount).toBe(selections.length);
+    expect(assemblyCount).toBe(selections.length + 1);
   });
 
   test("uses an existing single-language artifact", async () => {
