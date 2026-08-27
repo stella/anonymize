@@ -76,8 +76,13 @@ pub enum BindingFacadeError {
   Serialization(#[from] serde_json::Error),
 }
 
-/// Maximum UTF-8 text bytes accepted by one caller-assisted operation or plan.
-pub const CALLER_DETECTION_TEXT_MAX_BYTES: usize = 64 * 1024 * 1024;
+/// Maximum UTF-8 text bytes accepted by one redaction or restoration call.
+///
+/// Every host binding reaches the engine through this crate, so bounding the
+/// text here bounds the napi, wasm, and Python surfaces alike.
+pub const REDACTION_TEXT_MAX_BYTES: usize = 64 * 1024 * 1024;
+/// Caller-assisted operations and plans share the redaction text bound.
+pub const CALLER_DETECTION_TEXT_MAX_BYTES: usize = REDACTION_TEXT_MAX_BYTES;
 /// Maximum encoded bytes accepted by one caller-detection JSON request.
 pub const CALLER_DETECTION_REQUEST_JSON_MAX_BYTES: usize = 16 * 1024 * 1024;
 /// Maximum number of caller-assisted inputs accepted by one atomic session plan.
@@ -268,6 +273,7 @@ pub fn redact_json(
   full_text: &str,
   operators: &OperatorConfig,
 ) -> Result<String> {
+  validate_redaction_text(full_text)?;
   let result = engine.redact_static_entities(full_text, operators)?;
   serialize_redaction_result(result, full_text)
 }
@@ -385,6 +391,7 @@ pub fn redact_diagnostics_json(
   operators: &OperatorConfig,
   detail: DiagnosticDetail,
 ) -> Result<String> {
+  validate_redaction_text(full_text)?;
   let mut result = match detail {
     DiagnosticDetail::Detailed => {
       engine.redact_static_entities_with_diagnostics(full_text, operators)
@@ -403,6 +410,7 @@ pub fn redact_result_stream_json(
   operators: &OperatorConfig,
   mut on_event: impl FnMut(String) -> std::result::Result<(), String>,
 ) -> Result<String> {
+  validate_redaction_text(full_text)?;
   let result = engine.redact_static_entities_with_result_observer(
     full_text,
     operators,
@@ -426,6 +434,7 @@ pub fn redact_diagnostics_stream_json(
   operators: &OperatorConfig,
   mut on_batch: impl FnMut(String) -> std::result::Result<(), String>,
 ) -> Result<String> {
+  validate_redaction_text(full_text)?;
   if !prepare_diagnostics.events.is_empty() {
     on_batch(prepare_diagnostics_json(prepare_diagnostics)?).map_err(
       |error| BindingFacadeError::Core(diagnostics_observer_error(&error)),
@@ -517,6 +526,15 @@ pub fn caller_detection_request_from_json(
   let request = serde_json::from_str(request_json)?;
   validate_caller_detection_request(&request)?;
   Ok(request)
+}
+
+/// Bounds untrusted text before redaction or restoration.
+pub const fn validate_redaction_text(full_text: &str) -> Result<()> {
+  validate_byte_limit(
+    "Redaction text",
+    full_text.len(),
+    REDACTION_TEXT_MAX_BYTES,
+  )
 }
 
 /// Bounds caller-assisted text before offset conversion or detector execution.
@@ -805,6 +823,7 @@ pub fn restore_session_text(
   full_text: &str,
   observed_at_epoch_seconds: Option<u32>,
 ) -> Result<String> {
+  validate_redaction_text(full_text)?;
   Ok(session.restore_text(
     full_text,
     observed_at_epoch_seconds.map(SessionTimestamp::from_epoch_seconds),
@@ -849,6 +868,7 @@ pub fn redact_with_session_json(
   operators: &OperatorConfig,
   observed_at_epoch_seconds: Option<u32>,
 ) -> Result<String> {
+  validate_redaction_text(full_text)?;
   let result = engine.redact_static_entities_with_session(
     full_text,
     PreparedSessionRedactionOptions {
@@ -1002,6 +1022,30 @@ pub type Result<T> = std::result::Result<T, BindingFacadeError>;
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn redaction_text_bound_rejects_only_oversized_input() -> Result<()> {
+    let session = create_session("bounded-session".to_owned())?;
+    let oversized = "a".repeat(REDACTION_TEXT_MAX_BYTES.saturating_add(1));
+    let at_limit = oversized
+      .get(..REDACTION_TEXT_MAX_BYTES)
+      .unwrap_or_default();
+
+    assert!(validate_redaction_text(at_limit).is_ok());
+    assert!(matches!(
+      validate_redaction_text(&oversized),
+      Err(BindingFacadeError::ByteLimitExceeded {
+        field: "Redaction text",
+        max_bytes: REDACTION_TEXT_MAX_BYTES,
+        ..
+      })
+    ));
+    assert!(matches!(
+      restore_session_text(&session, &oversized, None),
+      Err(BindingFacadeError::ByteLimitExceeded { .. })
+    ));
+    Ok(())
+  }
 
   #[test]
   fn archive_key_validation_is_runtime_neutral() {
