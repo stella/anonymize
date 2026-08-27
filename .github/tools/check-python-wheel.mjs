@@ -20,6 +20,7 @@ const profile = process.env.ANONYMIZE_PYTHON_WHEEL_PROFILE ?? "ci";
 const prebuiltWheel = process.env.ANONYMIZE_PYTHON_WHEEL_PATH?.trim();
 const nativePackagePattern =
   /^native-pipeline(?:\.[a-z0-9]+(?:-[a-z0-9]+)*)?\.stlanonpkg$/u;
+const defaultPipelineInput = "default-pipeline-input.json.gz";
 const legalFiles = ["LICENSE", "NOTICE"];
 const nativePackageSourceDir = join("packages", "anonymize");
 const attributionSource = join(nativePackageSourceDir, "ATTRIBUTION.md");
@@ -172,6 +173,17 @@ function syncNativePipelinePackages() {
   if (!copied.includes("native-pipeline.stlanonpkg")) {
     throw new Error("native-pipeline.stlanonpkg has not been built");
   }
+  const defaultPipelineInputSource = join(
+    nativePackageSourceDir,
+    defaultPipelineInput,
+  );
+  if (!existsSync(defaultPipelineInputSource)) {
+    throw new Error(`${defaultPipelineInput} has not been built`);
+  }
+  copyFileSync(
+    defaultPipelineInputSource,
+    join(pythonNativePackageDir, defaultPipelineInput),
+  );
 }
 
 function assertPythonAttributionMatchesRuntimePackage() {

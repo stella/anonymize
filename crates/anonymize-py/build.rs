@@ -74,15 +74,20 @@ fn copy_generated_native_packages() -> io::Result<()> {
       ),
     );
   }
-  if !target_dir.join(DEFAULT_PIPELINE_INPUT).is_file() {
+  let default_pipeline_input = source_dir.join(DEFAULT_PIPELINE_INPUT);
+  if !default_pipeline_input.is_file() {
     return report_missing_native_packages(
       require_native,
       &format!(
         "semantic pipeline input `{DEFAULT_PIPELINE_INPUT}` is missing from {}; run `bun run build` before building the wheel",
-        target_dir.display()
+        source_dir.display()
       ),
     );
   }
+  fs::copy(
+    default_pipeline_input,
+    target_dir.join(DEFAULT_PIPELINE_INPUT),
+  )?;
   Ok(())
 }
 

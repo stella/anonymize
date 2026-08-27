@@ -67,7 +67,7 @@ if (sidecarRoot !== null) {
 removeNativePipelinePackages(packageRoot);
 removeNativePipelinePackages(pythonNativePackageRoot);
 mkdirSync(pythonNativePackageRoot, { recursive: true });
-await writePythonDefaultPipelineInput();
+await writeDefaultPipelineInput();
 
 const defaultPackagePath = join(packageRoot, "native-pipeline.stlanonpkg");
 buildNativePipelinePackage([
@@ -113,7 +113,7 @@ function copyNativePipelinePackageToPython(packagePath) {
   );
 }
 
-async function writePythonDefaultPipelineInput() {
+async function writeDefaultPipelineInput() {
   const [
     { DEFAULT_NATIVE_PIPELINE_CONFIG, SUPPORTED_LANGUAGES },
     { loadDictionaryBundle },
@@ -128,9 +128,11 @@ async function writePythonDefaultPipelineInput() {
     dictionaries,
     supportedLanguages: SUPPORTED_LANGUAGES,
   });
-  writeFileSync(
+  const outputPath = join(packageRoot, DEFAULT_PIPELINE_INPUT_FILE);
+  writeFileSync(outputPath, gzipSync(input));
+  copyFileSync(
+    outputPath,
     join(pythonNativePackageRoot, DEFAULT_PIPELINE_INPUT_FILE),
-    gzipSync(input),
   );
 }
 
