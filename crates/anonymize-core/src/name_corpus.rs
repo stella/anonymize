@@ -141,6 +141,11 @@ struct WordSegment<'a> {
   end: usize,
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct AllCapsLineContext {
+  is_recovery_candidate: bool,
+}
+
 #[derive(Clone, Debug)]
 struct ClassifiedToken<'a> {
   text: &'a str,
@@ -280,10 +285,16 @@ impl PreparedNameCorpusData {
     }
 
     let classify_start = Instant::now();
+    let all_caps_line_contexts = all_caps_line_contexts(full_text, &words);
     let token_windows = if mode == NameCorpusMode::Supplemental {
-      self.classify_supplemental_windows(full_text, &words, &seed_indexes)
+      self.classify_supplemental_windows(
+        full_text,
+        &words,
+        &all_caps_line_contexts,
+        &seed_indexes,
+      )
     } else {
-      vec![self.classify_tokens(full_text, &words)]
+      vec![self.classify_tokens(full_text, &words, &all_caps_line_contexts)]
     };
     profile.classify_elapsed_us = elapsed_us(classify_start);
     profile.token_count = token_windows.iter().map(Vec::len).sum();
@@ -303,6 +314,7 @@ impl PreparedNameCorpusData {
     &self,
     full_text: &'a str,
     words: &[WordSegment<'a>],
+    all_caps_line_contexts: &[AllCapsLineContext],
   ) -> Vec<ClassifiedToken<'a>> {
     let mut tokens = Vec::with_capacity(words.len());
     let mut word_index = 0usize;
@@ -321,7 +333,11 @@ impl PreparedNameCorpusData {
         word_index = word_index.saturating_add(consumed);
         continue;
       }
-      tokens.push(self.classify_token(word, full_text));
+      let all_caps_line_context = all_caps_line_contexts
+        .get(word_index)
+        .copied()
+        .unwrap_or_default();
+      tokens.push(self.classify_token(word, full_text, all_caps_line_context));
       word_index = word_index.saturating_add(1);
     }
     tokens
@@ -331,14 +347,16 @@ impl PreparedNameCorpusData {
     &self,
     full_text: &'a str,
     words: &[WordSegment<'a>],
+    all_caps_line_contexts: &[AllCapsLineContext],
     seed_indexes: &[usize],
   ) -> Vec<Vec<ClassifiedToken<'a>>> {
     supplemental_seed_windows(seed_indexes, words.len())
       .into_iter()
       .filter_map(|window| {
-        words
-          .get(window)
-          .map(|window_words| self.classify_tokens(full_text, window_words))
+        let window_contexts = all_caps_line_contexts.get(window.clone())?;
+        words.get(window).map(|window_words| {
+          self.classify_tokens(full_text, window_words, window_contexts)
+        })
       })
       .collect()
   }
@@ -404,6 +422,7 @@ impl PreparedNameCorpusData {
     &self,
     word: &WordSegment<'a>,
     full_text: &str,
+    all_caps_line_context: AllCapsLineContext,
   ) -> ClassifiedToken<'a> {
     let text = word.text;
     let lower = text.to_lowercase();
@@ -454,9 +473,7 @@ impl PreparedNameCorpusData {
       if non_western && !self.is_first_name_token(&title_cased) {
         return classified(word, TokenKind::Name, true);
       }
-      if is_all_caps_context_line(full_text, word.start)
-        && is_all_caps_line_name_shaped(full_text, word.start)
-      {
+      if all_caps_line_context.is_recovery_candidate {
         if self.is_first_name_token(&title_cased) {
           return classified(word, TokenKind::Name, non_western);
         }
@@ -1012,11 +1029,59 @@ fn is_sentence_start(text: &str, pos: usize) -> bool {
   true
 }
 
-fn is_all_caps_context_line(full_text: &str, start: usize) -> bool {
-  let line = current_line(full_text, start);
+fn all_caps_line_contexts(
+  full_text: &str,
+  words: &[WordSegment<'_>],
+) -> Vec<AllCapsLineContext> {
+  let mut contexts = vec![AllCapsLineContext::default(); words.len()];
+  let mut word_index = 0usize;
+  let mut line_start = 0usize;
+  for line_with_terminator in full_text.split_inclusive('\n') {
+    let line = line_with_terminator
+      .strip_suffix('\n')
+      .unwrap_or(line_with_terminator);
+    let context_start = word_index;
+    let line_end = line_start.saturating_add(line.len());
+    let context =
+      all_caps_line_context(line, words, &mut word_index, line_start, line_end);
+    if let Some(line_contexts) = contexts.get_mut(context_start..word_index) {
+      for slot in line_contexts {
+        *slot = context;
+      }
+    }
+    line_start = line_start.saturating_add(line_with_terminator.len());
+  }
+  if line_start == full_text.len() {
+    return contexts;
+  }
+  let line = full_text.get(line_start..).unwrap_or_default();
+  let context_start = word_index;
+  let line_end = full_text.len();
+  let context =
+    all_caps_line_context(line, words, &mut word_index, line_start, line_end);
+  if let Some(line_contexts) = contexts.get_mut(context_start..word_index) {
+    for slot in line_contexts {
+      *slot = context;
+    }
+  }
+  contexts
+}
+
+fn all_caps_line_context(
+  line: &str,
+  words: &[WordSegment<'_>],
+  word_index: &mut usize,
+  line_start: usize,
+  line_end: usize,
+) -> AllCapsLineContext {
   let mut letters = 0usize;
   let mut upper = 0usize;
+  let mut has_ascii_digit = false;
   for ch in line.chars() {
+    if ch.is_ascii_digit() {
+      has_ascii_digit = true;
+      continue;
+    }
     if ch.is_alphabetic() {
       letters = letters.saturating_add(1);
       if ch.is_uppercase() {
@@ -1024,35 +1089,33 @@ fn is_all_caps_context_line(full_text: &str, start: usize) -> bool {
       }
     }
   }
-  if letters < ALL_CAPS_NAME_LINE_MIN_LETTERS {
-    return false;
-  }
-  let upper =
-    u32::try_from(upper).map_or_else(|_| f64::from(u32::MAX), f64::from);
-  let letters =
-    u32::try_from(letters).map_or_else(|_| f64::from(u32::MAX), f64::from);
-  upper / letters >= ALL_CAPS_NAME_LINE_RATIO
-}
 
-fn is_all_caps_line_name_shaped(full_text: &str, start: usize) -> bool {
-  let line = current_line(full_text, start);
-  if line.chars().any(|ch| ch.is_ascii_digit()) {
-    return false;
+  let mut token_count = 0usize;
+  while let Some(word) = words.get(*word_index) {
+    if word.start < line_start {
+      *word_index = word_index.saturating_add(1);
+      continue;
+    }
+    if word.start >= line_end {
+      break;
+    }
+    token_count = token_count.saturating_add(1);
+    *word_index = word_index.saturating_add(1);
   }
-  let tokens = segment_words(line).len();
-  tokens > 0 && tokens <= ALL_CAPS_NAME_LINE_MAX_TOKENS
-}
 
-fn current_line(full_text: &str, start: usize) -> &str {
-  let line_start = full_text
-    .get(..start)
-    .and_then(|head| head.rfind('\n').map(|index| index.saturating_add(1)))
-    .unwrap_or(0);
-  let line_end = full_text
-    .get(start..)
-    .and_then(|tail| tail.find('\n').map(|index| start.saturating_add(index)))
-    .unwrap_or(full_text.len());
-  full_text.get(line_start..line_end).unwrap_or_default()
+  let all_caps_context = letters >= ALL_CAPS_NAME_LINE_MIN_LETTERS && {
+    let upper =
+      u32::try_from(upper).map_or_else(|_| f64::from(u32::MAX), f64::from);
+    let letters =
+      u32::try_from(letters).map_or_else(|_| f64::from(u32::MAX), f64::from);
+    upper / letters >= ALL_CAPS_NAME_LINE_RATIO
+  };
+  AllCapsLineContext {
+    is_recovery_candidate: all_caps_context
+      && !has_ascii_digit
+      && token_count > 0
+      && token_count <= ALL_CAPS_NAME_LINE_MAX_TOKENS,
+  }
 }
 
 fn line_before(full_text: &str, start: usize) -> &str {
@@ -1137,6 +1200,36 @@ mod tests {
     assert_eq!(entities[0].text, "Mina Roe");
     assert!(
       (entities[0].score - HIGH_CONFIDENCE_NAME_SCORE).abs() < f64::EPSILON
+    );
+  }
+
+  #[test]
+  fn full_mode_recovers_short_all_caps_name_line() {
+    let data = PreparedNameCorpusData::new(NameCorpusData {
+      first_names: vec![String::from("Elon")],
+      surnames: vec![String::from("Musk")],
+      ..NameCorpusData::default()
+    });
+
+    let entities = data
+      .detect("SIGNED BY:\nELON R. MUSK", NameCorpusMode::Full, &[])
+      .expect("all-caps name-corpus detection should succeed");
+
+    assert_eq!(entities.len(), 1);
+    assert_eq!(entities[0].text, "ELON R. MUSK");
+  }
+
+  #[test]
+  fn all_caps_line_context_rejects_overlong_recovery_lines() {
+    let text = "MARK MARK MARK MARK MARK MARK MARK";
+    let words = segment_words(text);
+    let contexts = all_caps_line_contexts(text, &words);
+
+    assert_eq!(contexts.len(), words.len());
+    assert!(
+      contexts
+        .iter()
+        .all(|context| !context.is_recovery_candidate)
     );
   }
 
