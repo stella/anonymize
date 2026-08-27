@@ -947,9 +947,10 @@ def create_pipeline(
         selection[0]
     ):
         return get_default_native_pipeline(language=selection[0], warmup=warmup)
+    resolved_warmup = _normalize_default_native_pipeline_warmup(warmup)
     return _apply_default_native_pipeline_warmup(
         _get_scoped_pipeline(selection),
-        _normalize_default_native_pipeline_warmup(warmup),
+        resolved_warmup,
     )
 
 

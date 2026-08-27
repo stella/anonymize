@@ -78,6 +78,15 @@ const PACKAGE_VERSION = packageJsonVersion();
 const MISMATCHED_PACKAGE_VERSION =
   PACKAGE_VERSION === "0.0.0" ? "999.999.999" : "0.0.0";
 
+const captureCreatePipelineFailure = async (options: unknown) => {
+  try {
+    await Promise.resolve(Reflect.apply(createPipeline, undefined, [options]));
+  } catch (error) {
+    return error;
+  }
+  throw new Error("createPipeline did not reject invalid options");
+};
+
 describe("native node loader", () => {
   test("uses the embedded loader for explicit host target values", () => {
     const loaded = loadNativeAnonymizeBinding({
@@ -691,13 +700,20 @@ describe("native node loader", () => {
     }
   });
 
-  test("rejects unsupported semantic language selections before binding", () => {
-    expect(
-      Reflect.apply(createPipeline, undefined, [{ language: "nl" }]),
-    ).rejects.toThrow("Unsupported pipeline language");
-    expect(
-      Reflect.apply(createPipeline, undefined, [{ language: [] }]),
-    ).rejects.toThrow("must not be empty");
+  test("rejects unsupported semantic language selections before binding", async () => {
+    const unsupported = await captureCreatePipelineFailure({ language: "nl" });
+    const empty = await captureCreatePipelineFailure({ language: [] });
+
+    expect(unsupported).toBeInstanceOf(Error);
+    expect(unsupported).toHaveProperty(
+      "message",
+      expect.stringContaining("Unsupported pipeline language"),
+    );
+    expect(empty).toBeInstanceOf(Error);
+    expect(empty).toHaveProperty(
+      "message",
+      expect.stringContaining("must not be empty"),
+    );
   });
 
   test("shared default package SDK helpers expose snake-case aliases", () => {
@@ -815,6 +831,30 @@ describe("native node loader", () => {
         },
       ]),
     ).toThrow('Default native pipeline warmup must be "lazy-regex" or "none"');
+  });
+
+  test("rejects unknown scoped pipeline warmup modes before assembly", async () => {
+    let assemblyCount = 0;
+    const binding = fakeNativeBinding(PACKAGE_VERSION, {
+      onAssembleStaticSearchPackageBytes: () => {
+        assemblyCount += 1;
+      },
+    });
+
+    const failure = await captureCreatePipelineFailure({
+      binding,
+      language: ["es", "sv"],
+      warmup: "eager",
+    });
+
+    expect(failure).toBeInstanceOf(Error);
+    expect(failure).toHaveProperty(
+      "message",
+      expect.stringContaining(
+        'Default native pipeline warmup must be "lazy-regex" or "none"',
+      ),
+    );
+    expect(assemblyCount).toBe(0);
   });
 
   test("shared SDK helpers delegate through the native binding", () => {

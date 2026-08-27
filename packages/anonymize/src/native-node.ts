@@ -472,14 +472,12 @@ export const createPipeline = async ({
       ...(warmup !== undefined ? { warmup } : {}),
     });
   }
+  const resolvedWarmup = normalizeDefaultNativePipelineWarmup(warmup);
   const pipeline = await createScopedPipeline({
     binding: resolveNativeSdkBinding(bindingOptions),
     selection,
   });
-  return applyDefaultNativePipelineWarmup(
-    pipeline,
-    normalizeDefaultNativePipelineWarmup(warmup),
-  );
+  return applyDefaultNativePipelineWarmup(pipeline, resolvedWarmup);
 };
 
 export const create_pipeline = createPipeline;
