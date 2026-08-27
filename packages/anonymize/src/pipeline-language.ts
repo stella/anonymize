@@ -1,20 +1,26 @@
-export const SUPPORTED_LANGUAGES = [
-  "cs",
-  "de",
-  "en",
-  "es",
-  "fr",
-  "hu",
-  "it",
-  "lv",
-  "pl",
-  "pt-br",
-  "ro",
-  "sk",
-  "sv",
-] as const;
+import languageScopes from "./data/language-scopes.json";
 
-export type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number];
+export type SupportedLanguage =
+  | "cs"
+  | "de"
+  | "en"
+  | "es"
+  | "fr"
+  | "hu"
+  | "it"
+  | "lv"
+  | "pl"
+  | "pt-br"
+  | "ro"
+  | "sk"
+  | "sv";
+
+const isSupportedLanguage = (language: string): language is SupportedLanguage =>
+  Object.hasOwn(languageScopes.languages, language);
+
+export const SUPPORTED_LANGUAGES = Object.freeze(
+  Object.keys(languageScopes.languages).filter(isSupportedLanguage).toSorted(),
+);
 
 export type PipelineLanguageSelection =
   | SupportedLanguage
@@ -27,9 +33,6 @@ export type NormalizedPipelineLanguageSelection =
       type: "languages";
       languages: readonly [SupportedLanguage, ...SupportedLanguage[]];
     };
-
-const isSupportedLanguage = (language: string): language is SupportedLanguage =>
-  SUPPORTED_LANGUAGES.some((supported) => supported === language);
 
 const normalizeLanguage = (language: unknown): SupportedLanguage => {
   if (typeof language !== "string") {
