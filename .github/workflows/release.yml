@@ -41,6 +41,20 @@ jobs:
       publish_runtime: ${{ steps.release-scope.outputs.publish_runtime }}
       version: ${{ steps.dist-tag.outputs.version }}
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: package.json
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
+        with:
+          node-version: "22.21.1"
+          registry-url: https://registry.npmjs.org
+
       - name: Require main for manual publishing
         if: >-
           github.event_name == 'workflow_dispatch'
@@ -49,11 +63,6 @@ jobs:
         run: |
           echo "::error::Manual publishing must run from main."
           exit 1
-
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-          persist-credentials: false
 
       - name: Classify release scope
         id: release-scope
@@ -128,17 +137,8 @@ jobs:
           echo "dist_tag=$dist_tag" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
-        with:
-          node-version: "22.21.1"
-          registry-url: https://registry.npmjs.org
-
       - name: Verify Bun workflow pin
         run: node .github/tools/check-bun-workflows.mjs
-
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version: "1.4.0"
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -212,6 +212,10 @@ jobs:
         with:
           persist-credentials: false
 
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: package.json
+
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
         with:
           node-version: "22.21.1"
@@ -224,10 +228,6 @@ jobs:
 
       - name: Verify Bun workflow pin
         run: node .github/tools/check-bun-workflows.mjs
-
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version: "1.4.0"
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -324,6 +324,10 @@ jobs:
         with:
           persist-credentials: false
 
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: package.json
+
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
         with:
           node-version: "22.21.1"
@@ -336,10 +340,6 @@ jobs:
 
       - name: Verify Bun workflow pin
         run: node .github/tools/check-bun-workflows.mjs
-
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version: "1.4.0"
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -414,6 +414,10 @@ jobs:
         with:
           persist-credentials: false
 
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: package.json
+
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
         with:
           node-version: "22.21.1"
@@ -425,10 +429,6 @@ jobs:
 
       - name: Verify Bun workflow pin
         run: node .github/tools/check-bun-workflows.mjs
-
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version: "1.4.0"
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -500,7 +500,7 @@ jobs:
         && needs.pack-data.result == 'success'
         && (github.event_name == 'push'
             || inputs.publish_to_npm == true))
-    uses: stella/.github/.github/workflows/npm-artifact-publish.yml@06d3be1f42585ac33635102120f917bb74f9ecab
+    uses: stella/.github/.github/workflows/npm-artifact-publish.yml@437d9d78c38114a15c368daed7d3d1b36fd6b8fc
     with:
       artifact-name: data-package-stll-anonymize-data
       package-name: "@stll/anonymize-data"
@@ -544,16 +544,16 @@ jobs:
         with:
           persist-credentials: false
 
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: package.json
+
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
         with:
           node-version: "22.21.1"
 
       - name: Verify Bun workflow pin
         run: node .github/tools/check-bun-workflows.mjs
-
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version: "1.4.0"
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -655,7 +655,7 @@ jobs:
       id-token: write # Required only for PyPI trusted publishing.
     steps:
       - name: Validate and publish exact Python wheel set
-        uses: stella/.github/.github/actions/pypi-publish-hardened@06d3be1f42585ac33635102120f917bb74f9ecab
+        uses: stella/.github/.github/actions/pypi-publish-hardened@437d9d78c38114a15c368daed7d3d1b36fd6b8fc
         with:
           expected-version: ${{ needs.verify.outputs.version }}
           project-name: stella-anonymize-core
@@ -674,7 +674,7 @@ jobs:
         && needs.publish-pypi.result == 'success'
         && (github.event_name == 'push'
             || inputs.publish_to_npm == true))
-    uses: stella/.github/.github/workflows/npm-version-finalize.yml@06d3be1f42585ac33635102120f917bb74f9ecab
+    uses: stella/.github/.github/workflows/npm-version-finalize.yml@437d9d78c38114a15c368daed7d3d1b36fd6b8fc
     with:
       package-files: |
         packages/anonymize/package.json
