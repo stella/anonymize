@@ -3,7 +3,6 @@ name: Package quarantine prune
 on:
   schedule:
     - cron: "31 * * * *"
-  workflow_dispatch:
 
 permissions:
   contents: read
@@ -14,7 +13,7 @@ jobs:
     if: github.repository == 'stella/anonymize'
     permissions:
       contents: read
-    uses: stella/.github/.github/workflows/quarantine-prune.yml@8cd71d93edeb4d7c433c6a75c4be409fbd1c50bb
+    uses: stella/.github/.github/workflows/quarantine-prune.yml@76807b4423de63c1216a1ed7437268c4c1c20d7c
     secrets:
       RELEASE_APP_ID: ${{ secrets.RELEASE_APP_ID }}
       RELEASE_APP_PRIVATE_KEY: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
