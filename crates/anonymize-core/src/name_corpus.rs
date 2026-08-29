@@ -1231,6 +1231,22 @@ mod tests {
   }
 
   #[test]
+  fn full_mode_recovers_short_all_caps_name_line() {
+    let data = PreparedNameCorpusData::new(NameCorpusData {
+      first_names: vec![String::from("Elon")],
+      surnames: vec![String::from("Musk")],
+      ..NameCorpusData::default()
+    });
+
+    let entities = data
+      .detect("SIGNED BY:\nELON R. MUSK", NameCorpusMode::Full, &[])
+      .expect("all-caps name-corpus detection should succeed");
+
+    assert_eq!(entities.len(), 1);
+    assert_eq!(entities[0].text, "ELON R. MUSK");
+  }
+
+  #[test]
   fn non_western_chain_with_corpus_pair_is_not_vetoed_as_common_words() {
     // "Loan" is a Vietnamese given-name corpus match (hence non-western) and
     // "Green" is a surname corpus match; both also happen to be common

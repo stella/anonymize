@@ -785,14 +785,22 @@ struct SurnameEvidenceIndex {
 
 impl SurnameEvidenceIndex {
   fn build(hits: &[RawDenyListMatch]) -> Self {
-    Self {
-      spans: hits
-        .iter()
-        .filter(|hit| hit.has_surname_evidence)
-        .map(|hit| (hit.start, hit.end))
-        .collect(),
+    let mut spans = HashSet::new();
+    #[cfg(test)]
+    let mut build_visits = 0usize;
+    for hit in hits {
       #[cfg(test)]
-      build_visits: hits.len(),
+      {
+        build_visits = build_visits.saturating_add(1);
+      }
+      if hit.has_surname_evidence {
+        spans.insert((hit.start, hit.end));
+      }
+    }
+    Self {
+      spans,
+      #[cfg(test)]
+      build_visits,
       #[cfg(test)]
       probes: std::cell::Cell::new(0),
     }

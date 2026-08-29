@@ -21,7 +21,8 @@ use stella_anonymize_core::{
   RegexMatchMeta, RegexSearchOptions, SearchOptions, SearchPattern, SessionId,
   SessionLifecycle, SessionTimestamp, SignatureData, SourceDetail, TriggerData,
   TriggerRule, TriggerStrategy, TriggerValidation, WrittenAmountPatternData,
-  ZoneData, ZonePatternData, ZoneSigningClauseData,
+  ZoneData, ZonePatternData, ZoneSigningClauseData, redact_text,
+  redact_text_with_session,
 };
 use support::prepared_config;
 
@@ -4181,8 +4182,8 @@ fn prepared_engine_splits_embedded_legal_form_lists() {
   assert_eq!(texts, vec!["Acme LLC", "Beta Inc."]);
 }
 
-/// The bound lives on the engine, so a binding that calls a redaction entry
-/// point directly cannot reach a pass with oversized text.
+/// Shared core boundaries reject oversized text before any public primitive or
+/// prepared-engine redaction pass can process it.
 #[test]
 fn redaction_entry_points_share_the_engine_text_bound() {
   let prepared = PreparedEngine::new(prepared_config! {
@@ -4204,21 +4205,36 @@ fn redaction_entry_points_share_the_engine_text_bound() {
       .is_ok()
   );
   for result in [
-    prepared.redact_static_entities(&oversized, &operators),
-    prepared
-      .redact_static_entities_with_diagnostics(&oversized, &operators)
-      .map(|value| value.result),
-    prepared
-      .redact_static_entities_with_summary_diagnostics(&oversized, &operators)
-      .map(|value| value.result),
-    prepared.redact_static_entities_with_session(
-      &oversized,
-      PreparedSessionRedactionOptions {
-        operators: &operators,
+    redact_text(&oversized, &[], &operators).map(|_| ()),
+    redact_text_with_session(
+      stella_anonymize_core::RedactTextWithSessionParams {
+        full_text: &oversized,
+        entities: &[],
+        config: &operators,
         session: &mut session,
         observed_at: None,
       },
-    ),
+    )
+    .map(|_| ()),
+    prepared
+      .redact_static_entities(&oversized, &operators)
+      .map(|_| ()),
+    prepared
+      .redact_static_entities_with_diagnostics(&oversized, &operators)
+      .map(|_| ()),
+    prepared
+      .redact_static_entities_with_summary_diagnostics(&oversized, &operators)
+      .map(|_| ()),
+    prepared
+      .redact_static_entities_with_session(
+        &oversized,
+        PreparedSessionRedactionOptions {
+          operators: &operators,
+          session: &mut session,
+          observed_at: None,
+        },
+      )
+      .map(|_| ()),
   ] {
     assert!(matches!(
       result,

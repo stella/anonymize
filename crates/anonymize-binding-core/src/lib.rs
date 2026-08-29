@@ -429,6 +429,7 @@ pub fn redact_diagnostics_stream_json(
   operators: &OperatorConfig,
   mut on_batch: impl FnMut(String) -> std::result::Result<(), String>,
 ) -> Result<String> {
+  stella_anonymize_core::validate_redaction_text(full_text)?;
   if !prepare_diagnostics.events.is_empty() {
     on_batch(prepare_diagnostics_json(prepare_diagnostics)?).map_err(
       |error| BindingFacadeError::Core(diagnostics_observer_error(&error)),
@@ -1038,6 +1039,35 @@ mod tests {
       )
       .is_ok()
     );
+  }
+
+  #[test]
+  fn oversized_text_is_rejected_before_streaming_prepare_diagnostics() {
+    let prepared = PreparedEngine::new_with_diagnostics(Default::default())
+      .expect("empty engine should prepare");
+    assert!(!prepared.diagnostics.events.is_empty());
+    let oversized =
+      "a".repeat(stella_anonymize_core::REDACTION_TEXT_MAX_BYTES + 1);
+    let mut batch_count = 0usize;
+
+    let result = redact_diagnostics_stream_json(
+      &prepared.prepared,
+      &prepared.diagnostics,
+      &oversized,
+      &OperatorConfig::default(),
+      |_| {
+        batch_count = batch_count.saturating_add(1);
+        Ok(())
+      },
+    );
+
+    assert!(matches!(
+      result,
+      Err(BindingFacadeError::Core(
+        CoreError::TextLimitExceeded { .. }
+      ))
+    ));
+    assert_eq!(batch_count, 0);
   }
 
   #[test]
