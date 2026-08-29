@@ -526,7 +526,7 @@ jobs:
           echo "path=${tarballs[0]}" >> "$GITHUB_OUTPUT"
 
       - name: Publish data package
-        uses: stella/.github/.github/actions/npm-publish-hardened@48aacae31829ce15216a6b766b03a92fd2e84da3
+        uses: stella/.github/.github/actions/npm-publish-hardened@c75efcc5483920fb2984fe0f22e4489cd6d01f57
         with:
           tarball: ${{ steps.tarball.outputs.path }}
           tag: ${{ needs.pack-data.outputs.dist_tag }}
@@ -819,7 +819,7 @@ jobs:
     name: Publish and finalize runtime release
     needs: [verify, pack-native, pack-runtime, publish-pypi]
     if: needs.verify.outputs.publish_runtime == 'true' && needs.pack-native.result == 'success' && needs.pack-runtime.result == 'success' && needs.publish-pypi.result == 'success' && (github.event_name == 'push' || inputs.publish_to_npm == true)
-    uses: stella/.github/.github/workflows/npm-version-finalize.yml@1ce0079bbdbf93a4c1917d2857496b89aedcec14
+    uses: stella/.github/.github/workflows/npm-version-finalize.yml@c75efcc5483920fb2984fe0f22e4489cd6d01f57
     with:
       package-files: |
         packages/anonymize/package.json
