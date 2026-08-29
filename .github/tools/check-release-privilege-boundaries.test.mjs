@@ -55,7 +55,7 @@ const PRIVILEGED_JOB_HASHES = {
   "publish-data":
     "2df7509cbb72ebcc3803575cc282332363b2b68ea96d847175da34f437a80ffe",
   "publish-pypi":
-    "4cf0d881b5409ca8889ca7529b7d6ec90ad678d5ad4f85b19c61f2460457167f",
+    "32b512ef72ad75821c022c395e5f54e214707eb597d9a53f43adcf7652588664",
 };
 const byName = (left, right) => left.localeCompare(right);
 
@@ -378,7 +378,7 @@ const auditWorkflow = (source) => {
     {
       name: "Publish to PyPI",
       uses: PYPI_PUBLISH,
-      with: { "packages-dir": "dist" },
+      with: { "packages-dir": "dist", "skip-existing": "true" },
     },
   ]);
 
@@ -498,6 +498,15 @@ void test("privileged step mutations fail closed", () => {
             "          path: wheel-artifacts",
             "          path: wheel-artifacts\n          merge-multiple: true",
           ),
+        ),
+      ),
+    /inputs changed/,
+  );
+  assert.throws(
+    () =>
+      auditWorkflow(
+        mutateJob(workflow, "publish-pypi", (body) =>
+          body.replace("          skip-existing: true\n", ""),
         ),
       ),
     /inputs changed/,
