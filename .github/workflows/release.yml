@@ -30,8 +30,11 @@ concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
+permissions: {}
+
 jobs:
   verify:
+    name: Verify
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -43,6 +46,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Classify release scope
         id: release-scope
@@ -154,7 +158,7 @@ jobs:
 
       - name: Install uv
         run: |
-          python3 -m pip install --user "uv==${{ env.UV_VERSION }}"
+          python3 -m pip install --user "uv==${UV_VERSION}"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Python typecheck
@@ -197,6 +201,8 @@ jobs:
             runner: windows-2025
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
         with:
@@ -204,7 +210,9 @@ jobs:
           registry-url: https://registry.npmjs.org
 
       - name: Install npm for packing
-        run: npm install --global "npm@${{ env.NPM_VERSION }}"
+        # Packing uses this exact CLI with lifecycle scripts disabled and no OIDC.
+        # zizmor: ignore[adhoc-packages]
+        run: npm install --global --ignore-scripts "npm@${NPM_VERSION}"
 
       - name: Verify Bun workflow pin
         run: node .github/tools/check-bun-workflows.mjs
@@ -230,7 +238,9 @@ jobs:
         run: bun run --cwd packages/anonymize smoke:dist
 
       - name: Enforce native install footprint
-        run: node packages/anonymize/scripts/check-native-install-footprint.mjs "${{ matrix.package }}"
+        env:
+          NATIVE_PACKAGE: ${{ matrix.package }}
+        run: node packages/anonymize/scripts/check-native-install-footprint.mjs "$NATIVE_PACKAGE"
 
       - name: Read package metadata
         id: package
@@ -284,63 +294,13 @@ jobs:
           path: ${{ steps.pack.outputs.tarball }}
           if-no-files-found: error
 
-  publish-native:
-    needs: [verify, pack-native]
+  pack-runtime:
+    name: Pack ${{ matrix.package }}
+    needs: verify
     if: needs.verify.outputs.publish_runtime == 'true' && (github.event_name == 'push' || inputs.publish_to_npm == true)
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write
-      attestations: write
-    strategy:
-      fail-fast: false
-      matrix:
-        artifact:
-          - npm-tarball-stll-anonymize-linux-x64-gnu
-          - npm-tarball-stll-anonymize-linux-arm64-gnu
-          - npm-tarball-stll-anonymize-darwin-x64
-          - npm-tarball-stll-anonymize-darwin-arm64
-          - npm-tarball-stll-anonymize-win32-x64-msvc
-    steps:
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-        with:
-          name: ${{ matrix.artifact }}
-          path: native-tarball
-
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
-        with:
-          node-version: "22"
-          registry-url: https://registry.npmjs.org
-
-      - name: Install npm for trusted publishing
-        run: npm install --global "npm@${{ env.NPM_VERSION }}"
-
-      - name: Find package tarball
-        id: tarball
-        run: |
-          set -euo pipefail
-          shopt -s nullglob
-          tarballs=(native-tarball/*.tgz)
-          if [[ "${#tarballs[@]}" -ne 1 ]]; then
-            echo "::error::Expected one native tarball for ${{ matrix.artifact }}, found ${#tarballs[@]}"
-            exit 1
-          fi
-          echo "path=${tarballs[0]}" >> "$GITHUB_OUTPUT"
-
-      - name: Publish package
-        uses: stella/.github/.github/actions/npm-publish-hardened@48aacae31829ce15216a6b766b03a92fd2e84da3
-        with:
-          tarball: ${{ steps.tarball.outputs.path }}
-          tag: ${{ needs.verify.outputs.dist_tag }}
-
-  publish:
-    needs: [verify, publish-native]
-    if: needs.verify.outputs.publish_runtime == 'true' && (github.event_name == 'push' || inputs.publish_to_npm == true)
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-      attestations: write
     strategy:
       fail-fast: false
       matrix:
@@ -353,14 +313,18 @@ jobs:
           - packages/mcp
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
         with:
           node-version: "22"
           registry-url: https://registry.npmjs.org
 
-      - name: Install npm for trusted publishing
-        run: npm install --global "npm@${{ env.NPM_VERSION }}"
+      - name: Install npm for packing
+        # Packing uses this exact CLI with lifecycle scripts disabled and no OIDC.
+        # zizmor: ignore[adhoc-packages]
+        run: npm install --global --ignore-scripts "npm@${NPM_VERSION}"
 
       - name: Verify Bun workflow pin
         run: node .github/tools/check-bun-workflows.mjs
@@ -427,13 +391,8 @@ jobs:
           path: ${{ steps.pack.outputs.tarball }}
           if-no-files-found: error
 
-      - name: Publish package
-        uses: stella/.github/.github/actions/npm-publish-hardened@48aacae31829ce15216a6b766b03a92fd2e84da3
-        with:
-          tarball: ${{ steps.pack.outputs.tarball }}
-          tag: ${{ needs.verify.outputs.dist_tag }}
-
   pack-data:
+    name: Pack data package
     needs: verify
     if: needs.verify.outputs.publish_data == 'true' && (github.event_name == 'push' || inputs.publish_to_npm == true)
     runs-on: ubuntu-latest
@@ -451,7 +410,9 @@ jobs:
           node-version: "22"
 
       - name: Install npm for packing
-        run: npm install --global --ignore-scripts "npm@${{ env.NPM_VERSION }}"
+        # Packing uses this exact CLI with lifecycle scripts disabled and no OIDC.
+        # zizmor: ignore[adhoc-packages]
+        run: npm install --global --ignore-scripts "npm@${NPM_VERSION}"
 
       - name: Verify Bun workflow pin
         run: node .github/tools/check-bun-workflows.mjs
@@ -525,13 +486,13 @@ jobs:
           if-no-files-found: error
 
   publish-data:
+    name: Publish data package
     needs: [verify, pack-data]
     if: needs.verify.outputs.publish_data == 'true' && needs.pack-data.result == 'success' && (github.event_name == 'push' || inputs.publish_to_npm == true)
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write
-      attestations: write
+      id-token: write # Required only for npm trusted publishing.
     steps:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
@@ -544,7 +505,9 @@ jobs:
           registry-url: https://registry.npmjs.org
 
       - name: Install npm for trusted publishing
-        run: npm install --global --ignore-scripts "npm@${{ env.NPM_VERSION }}"
+        # Trusted publishing needs npm 11.5.1 or newer; lifecycle scripts stay disabled.
+        # zizmor: ignore[adhoc-packages]
+        run: npm install --global --ignore-scripts "npm@${NPM_VERSION}"
 
       - name: Find data package tarball
         id: tarball
@@ -597,6 +560,8 @@ jobs:
             runner: windows-2025
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
         with:
@@ -671,17 +636,19 @@ jobs:
       - name: Install uv
         if: matrix.check_wheel
         run: |
-          python3 -m pip install --user "uv==${{ env.UV_VERSION }}"
+          python3 -m pip install --user "uv==${UV_VERSION}"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Verify wheel packlist and smoke test
         if: matrix.check_wheel
+        env:
+          WHEEL_TARGET: ${{ matrix.target }}
         run: |
           set -euo pipefail
           shopt -s nullglob
           wheels=(dist/*.whl)
           if [[ "${#wheels[@]}" -ne 1 ]]; then
-            echo "::error::Expected one wheel for ${{ matrix.target }}, found ${#wheels[@]}"
+            echo "::error::Expected one wheel for ${WHEEL_TARGET}, found ${#wheels[@]}"
             exit 1
           fi
           ANONYMIZE_PYTHON_WHEEL_PATH="${wheels[0]}" bun run python:wheel
@@ -694,12 +661,13 @@ jobs:
           if-no-files-found: error
 
   publish-pypi:
+    name: Publish Python wheels
     needs: [verify, build-wheels]
     if: needs.verify.outputs.publish_runtime == 'true' && (github.event_name == 'push' || inputs.publish_to_npm == true)
     runs-on: ubuntu-latest
     permissions:
       # Trusted Publishing (OIDC): no PyPI API token is stored in the repo.
-      id-token: write
+      id-token: write # Required only for PyPI trusted publishing.
     steps:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
@@ -725,10 +693,10 @@ jobs:
           packages-dir: dist
 
   github-release:
-    name: Finalize release
-    needs: [verify, publish-native, publish, publish-pypi]
-    if: needs.verify.outputs.publish_runtime == 'true' && needs.publish-native.result == 'success' && needs.publish.result == 'success' && needs.publish-pypi.result == 'success' && (github.event_name == 'push' || inputs.publish_to_npm == true)
-    uses: stella/.github/.github/workflows/npm-version-finalize.yml@7198083e27bdd963cacc0b7d70ca54fe3ec83393
+    name: Publish and finalize runtime release
+    needs: [verify, pack-native, pack-runtime, publish-pypi]
+    if: needs.verify.outputs.publish_runtime == 'true' && needs.pack-native.result == 'success' && needs.pack-runtime.result == 'success' && needs.publish-pypi.result == 'success' && (github.event_name == 'push' || inputs.publish_to_npm == true)
+    uses: stella/.github/.github/workflows/npm-version-finalize.yml@1ce0079bbdbf93a4c1917d2857496b89aedcec14
     with:
       package-files: |
         packages/anonymize/package.json
@@ -746,7 +714,10 @@ jobs:
       publish-to-npm: true
       update-changelog: false
     permissions:
-      contents: write
-      id-token: write
-      pull-requests: write
-    secrets: inherit
+      contents: write # Required to create the runtime tag and GitHub release.
+      id-token: write # Required only for npm trusted publishing.
+    secrets:
+      CHANGELOG_APP_ID: ${{ secrets.CHANGELOG_APP_ID }}
+      CHANGELOG_APP_PRIVATE_KEY: ${{ secrets.CHANGELOG_APP_PRIVATE_KEY }}
+      RELEASE_APP_ID: ${{ secrets.RELEASE_APP_ID }}
+      RELEASE_APP_PRIVATE_KEY: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
