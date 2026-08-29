@@ -1042,9 +1042,11 @@ mod tests {
   }
 
   #[test]
-  fn oversized_text_is_rejected_before_streaming_prepare_diagnostics() {
-    let prepared = PreparedEngine::new_with_diagnostics(Default::default())
-      .expect("empty engine should prepare");
+  fn oversized_text_is_rejected_before_streaming_prepare_diagnostics()
+  -> Result<()> {
+    let prepared = PreparedEngine::new_with_diagnostics(
+      stella_anonymize_core::PreparedEngineConfig::default(),
+    )?;
     assert!(!prepared.diagnostics.events.is_empty());
     let oversized =
       "a".repeat(stella_anonymize_core::REDACTION_TEXT_MAX_BYTES + 1);
@@ -1068,6 +1070,7 @@ mod tests {
       ))
     ));
     assert_eq!(batch_count, 0);
+    Ok(())
   }
 
   #[test]
