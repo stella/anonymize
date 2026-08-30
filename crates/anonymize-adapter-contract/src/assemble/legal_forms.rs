@@ -934,8 +934,8 @@ mod tests {
     InstitutionalOrganizationData, LegalFormRuleWords, all_legal_suffixes,
     connector_prose_heads, institutional_language_words, language,
     leading_clause_trims, non_ascii_name_short_suffixes,
-    organization_detection_suffixes, parse_data_file, role_heads,
-    scoped_clause_noun_heads, scoped_connector_words,
+    organization_detection_suffixes, parse_data_file, party_label_role_heads,
+    role_heads, scoped_clause_noun_heads, scoped_connector_words,
     scoped_sentence_verb_indicators, validate_institutional_terms,
   };
 
