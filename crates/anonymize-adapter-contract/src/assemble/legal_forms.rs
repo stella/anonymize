@@ -672,9 +672,7 @@ fn party_label_role_heads(
         let has_scoped_role = language_roles.iter().any(|role| {
           phrase.strip_suffix(role).is_some_and(|prefix| {
             prefix.chars().next_back().is_some_and(|character| {
-              character.is_whitespace()
-                || character == '\''
-                || character == '’'
+              character.is_whitespace() || character == '\'' || character == '’'
             })
           })
         });
@@ -953,9 +951,9 @@ mod tests {
     InstitutionalOrganizationData, LegalFormRuleWords, all_legal_suffixes,
     connector_prose_heads, institutional_language_words, language,
     leading_clause_trims, legal_role_head_languages,
-    non_ascii_name_short_suffixes,
-    organization_detection_suffixes, parse_data_file, party_label_role_heads,
-    role_heads, scoped_clause_noun_heads, scoped_connector_words,
+    non_ascii_name_short_suffixes, organization_detection_suffixes,
+    parse_data_file, party_label_role_heads, role_heads,
+    scoped_clause_noun_heads, scoped_connector_words,
     scoped_sentence_verb_indicators, validate_institutional_terms,
   };
 
@@ -1039,19 +1037,11 @@ mod tests {
     ]))
     .unwrap();
 
-    for expected in [
-      "der verkäufer",
-      "the seller",
-      "el vendedor",
-    ] {
+    for expected in ["der verkäufer", "the seller", "el vendedor"] {
       assert!(roles.iter().any(|role| role == expected));
     }
-    for invented in [
-      "der seller",
-      "der vendeur",
-      "el seller",
-      "the verkäufer",
-    ] {
+    for invented in ["der seller", "der vendeur", "el seller", "the verkäufer"]
+    {
       assert!(!roles.iter().any(|role| role == invented));
     }
   }
@@ -1096,20 +1086,19 @@ mod tests {
           .get("partyLabelRolePhrases")
           .and_then(Value::as_array)
           .unwrap();
-        for role in
-          role_heads(Some(std::slice::from_ref(&language))).unwrap()
-        {
+        for role in role_heads(Some(std::slice::from_ref(&language))).unwrap() {
           assert!(
             phrases.iter().filter_map(Value::as_str).any(|phrase| {
-              phrase.to_lowercase().strip_suffix(&role).is_some_and(
-                |prefix| {
+              phrase
+                .to_lowercase()
+                .strip_suffix(&role)
+                .is_some_and(|prefix| {
                   prefix.chars().next_back().is_some_and(|character| {
                     character.is_whitespace()
                       || character == '\''
                       || character == '’'
                   })
-                },
-              )
+                })
             }),
             "{language} party-label phrases must cover role {role}"
           );
