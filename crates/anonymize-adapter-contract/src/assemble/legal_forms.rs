@@ -663,19 +663,43 @@ fn party_label_role_heads(
     {
       continue;
     }
-    let Some(articles) =
-      value.get("partyLabelArticles").and_then(Value::as_array)
-    else {
-      continue;
-    };
     let language_roles = role_heads(Some(std::slice::from_ref(language_key)))?;
-    for article in articles.iter().filter_map(Value::as_str) {
-      if article.is_empty() {
-        continue;
+    if let Some(phrases) =
+      value.get("partyLabelRolePhrases").and_then(Value::as_array)
+    {
+      for phrase in phrases.iter().filter_map(Value::as_str) {
+        let phrase = phrase.to_lowercase();
+        let has_scoped_role = language_roles.iter().any(|role| {
+          phrase.strip_suffix(role).is_some_and(|prefix| {
+            prefix.chars().next_back().is_some_and(|character| {
+              character.is_whitespace()
+                || character == '\''
+                || character == '’'
+            })
+          })
+        });
+        if phrase.is_empty() || !has_scoped_role {
+          return Err(AssembleError::DataParse {
+            name: String::from("legal-form-leading-clauses.json"),
+            message: format!(
+              "language {language_key}: partyLabelRolePhrases must end in a scoped role head"
+            ),
+          });
+        }
+        push_unique(phrase, &mut seen, &mut roles);
       }
-      let article = article.to_lowercase();
-      for role in &language_roles {
-        push_unique(format!("{article} {role}"), &mut seen, &mut roles);
+    }
+    if let Some(articles) =
+      value.get("partyLabelArticles").and_then(Value::as_array)
+    {
+      for article in articles.iter().filter_map(Value::as_str) {
+        if article.is_empty() {
+          continue;
+        }
+        let article = article.to_lowercase();
+        for role in &language_roles {
+          push_unique(format!("{article} {role}"), &mut seen, &mut roles);
+        }
       }
     }
   }
@@ -1050,15 +1074,48 @@ mod tests {
         .get("partyLabelArticles")
         .and_then(Value::as_array)
         .is_some_and(|articles| !articles.is_empty());
+      let has_exact_phrases = value
+        .get("partyLabelRolePhrases")
+        .and_then(Value::as_array)
+        .is_some_and(|phrases| !phrases.is_empty());
       let has_omission = value
         .get("partyLabelArticleOmission")
         .and_then(Value::as_str)
         .is_some_and(|reason| !reason.trim().is_empty());
       assert_ne!(
-        has_articles, has_omission,
-        "{language} must have reviewed party-label articles or one omission rationale"
+        has_articles || has_exact_phrases,
+        has_omission,
+        "{language} must have reviewed party-label phrases or one omission rationale"
       );
-      if has_articles || has_omission {
+      assert!(
+        !(has_articles && has_exact_phrases),
+        "{language} must choose generated articles or exact phrases"
+      );
+      if has_exact_phrases {
+        let phrases = value
+          .get("partyLabelRolePhrases")
+          .and_then(Value::as_array)
+          .unwrap();
+        for role in
+          role_heads(Some(std::slice::from_ref(&language))).unwrap()
+        {
+          assert!(
+            phrases.iter().filter_map(Value::as_str).any(|phrase| {
+              phrase.to_lowercase().strip_suffix(&role).is_some_and(
+                |prefix| {
+                  prefix.chars().next_back().is_some_and(|character| {
+                    character.is_whitespace()
+                      || character == '\''
+                      || character == '’'
+                  })
+                },
+              )
+            }),
+            "{language} party-label phrases must cover role {role}"
+          );
+        }
+      }
+      if has_articles || has_exact_phrases || has_omission {
         covered.insert(language);
       }
     }

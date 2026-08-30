@@ -1,5 +1,5 @@
 {
-  "_comment": "Per-language clause text that may precede an organization name before a legal-form suffix. `phrases` are trimmed unconditionally when found inside an over-captured legal-form span. `directPrefixes` are trimmed only when the text before the prefix already looks like prose, so company names such as `Stand By Me LLC` are preserved. `partyLabelArticles` are permitted only before a scoped party role in a labelled subject clause. Every legal-role language has reviewed articles or a `partyLabelArticleOmission` rationale.",
+  "_comment": "Per-language clause text that may precede an organization name before a legal-form suffix. `phrases` are trimmed unconditionally when found inside an over-captured legal-form span. `directPrefixes` are trimmed only when the text before the prefix already looks like prose, so company names such as `Stand By Me LLC` are preserved. `partyLabelArticles` generate article-role combinations only where every combination is safe; `partyLabelRolePhrases` lists reviewed exact phrases where grammatical agreement matters. Both are permitted only in a labelled subject clause. Every legal-role language has reviewed party-label phrases or a `partyLabelArticleOmission` rationale.",
   "cs": {
     "phrases": ["je s"],
     "directPrefixes": ["mezi", "s"],
@@ -16,7 +16,55 @@
     "partyLabelArticles": ["the"]
   },
   "es": {
-    "partyLabelArticles": ["el", "la", "los", "las"]
+    "partyLabelRolePhrases": [
+      "el vendedor",
+      "la vendedora",
+      "el comprador",
+      "la compradora",
+      "el arrendador",
+      "la arrendadora",
+      "el arrendatario",
+      "la arrendataria",
+      "el empleador",
+      "la empleadora",
+      "el empleado",
+      "la empleada",
+      "la empresa",
+      "el empresario",
+      "la empresaria",
+      "el cliente",
+      "la cliente",
+      "el proveedor",
+      "la proveedora",
+      "el contratante",
+      "la contratante",
+      "el contratista",
+      "la contratista",
+      "el prestador",
+      "la prestadora",
+      "el prestatario",
+      "la prestataria",
+      "el otorgante",
+      "la otorgante",
+      "el otorgado",
+      "la otorgada",
+      "el cedente",
+      "la cedente",
+      "el cesionario",
+      "la cesionaria",
+      "el acreedor",
+      "la acreedora",
+      "el deudor",
+      "la deudora",
+      "el fiador",
+      "la fiadora",
+      "la parte",
+      "las partes",
+      "el adjudicatario",
+      "la adjudicataria",
+      "el licitador",
+      "la licitadora"
+    ]
   },
   "fr": {
     "partyLabelArticleOmission": "French gender, number, and elision require reviewed exact role phrases; broad article-role products are disabled."
