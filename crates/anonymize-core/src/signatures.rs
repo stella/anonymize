@@ -1153,16 +1153,16 @@ fn is_suffix_of_non_person_field_label(
       return false;
     }
     let field_char_count = field_label.chars().count();
-    let Some(candidate_start) = field_char_count.checked_sub(1).and_then(
-      |last_character| {
+    let Some(candidate_start) =
+      field_char_count.checked_sub(1).and_then(|last_character| {
         line
           .get(..end)?
           .char_indices()
           .rev()
           .nth(last_character)
           .map(|(index, _)| index)
-      },
-    ) else {
+      })
+    else {
       return false;
     };
     candidate_start < start
