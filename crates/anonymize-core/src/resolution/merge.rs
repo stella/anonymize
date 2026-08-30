@@ -1033,5 +1033,4 @@ mod tests {
       legacy_merge_and_dedup(&entities)
     );
   }
-
 }

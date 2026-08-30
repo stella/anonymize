@@ -663,25 +663,19 @@ fn party_label_role_heads(
     {
       continue;
     }
-    let Some(articles) = value
-      .get("partyLabelArticles")
-      .and_then(Value::as_array)
+    let Some(articles) =
+      value.get("partyLabelArticles").and_then(Value::as_array)
     else {
       continue;
     };
-    let language_roles =
-      role_heads(Some(std::slice::from_ref(language_key)))?;
+    let language_roles = role_heads(Some(std::slice::from_ref(language_key)))?;
     for article in articles.iter().filter_map(Value::as_str) {
       if article.is_empty() {
         continue;
       }
       let article = article.to_lowercase();
       for role in &language_roles {
-        push_unique(
-          format!("{article} {role}"),
-          &mut seen,
-          &mut roles,
-        );
+        push_unique(format!("{article} {role}"), &mut seen, &mut roles);
       }
     }
   }
