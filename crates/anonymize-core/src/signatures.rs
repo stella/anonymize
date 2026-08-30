@@ -27,8 +27,10 @@ impl PartyRoleEvidence<'_> {
     else {
       return false;
     };
-    let evidence_candidate =
-      without_leading_initial_tokens(candidate).unwrap_or(candidate);
+    let leading_initials = without_leading_initial_tokens(candidate);
+    let evidence_candidate = leading_initials
+      .map(|initials| initials.remainder)
+      .unwrap_or(candidate);
     if let Some(corpus) = self.name_corpus {
       if corpus.is_organization(candidate) {
         return false;
@@ -44,7 +46,9 @@ impl PartyRoleEvidence<'_> {
     }) || starts_with_sorted_name_token(
       evidence_candidate,
       self.party_role_name_tokens,
-    )
+    ) || leading_initials.is_some_and(|initials| {
+      initials.count >= 2 && is_person_value_name_token(initials.remainder)
+    })
   }
 }
 
@@ -419,8 +423,14 @@ fn without_leading_title_tokens<'a>(
   }
 }
 
-fn without_leading_initial_tokens(mut text: &str) -> Option<&str> {
-  let mut removed = false;
+#[derive(Clone, Copy)]
+struct LeadingInitials<'a> {
+  remainder: &'a str,
+  count: usize,
+}
+
+fn without_leading_initial_tokens(mut text: &str) -> Option<LeadingInitials<'_>> {
+  let mut count = 0_usize;
   loop {
     let trimmed = text.trim_start();
     let token = trimmed.split_whitespace().next()?;
@@ -430,11 +440,14 @@ fn without_leading_initial_tokens(mut text: &str) -> Option<&str> {
         None => true,
         Some('.') => chars.next().is_none(),
         Some(_) => false,
-      };
+    };
     if !is_initial {
-      return removed.then_some(trimmed);
+      return (count > 0).then_some(LeadingInitials {
+        remainder: trimmed,
+        count,
+      });
     }
-    removed = true;
+    count = count.saturating_add(1);
     text = trimmed.strip_prefix(token)?;
   }
 }
@@ -1219,7 +1232,8 @@ fn label_end_at(
     return None;
   }
   let tail = line.get(start..)?;
-  let (relative_end, kind) = data.label_prefix_index.first_valid_prefix(tail)?;
+  let (relative_end, kind) =
+    data.label_prefix_index.first_valid_prefix(tail)?;
   let end = start.saturating_add(relative_end);
   if data
     .non_person_field_label_suffixes
@@ -1974,6 +1988,45 @@ mod tests {
   }
 
   #[test]
+  fn anchored_initials_prove_one_bounded_surname_without_a_corpus() {
+    let data = prepared_signature_data(
+      SignatureData::default(),
+      vec![String::from("seller")],
+    );
+
+    assert_eq!(
+      detect_signatures(&DetectSignaturesArgs {
+        full_text: "Seller: Q Z Mercer\nSeller: B. T. Okafor",
+        data: &data,
+        first_names: None,
+        name_corpus: None,
+        title_tokens: &BTreeSet::new(),
+      })
+      .into_iter()
+      .map(|entity| entity.text)
+      .collect::<Vec<_>>(),
+      ["Q Z Mercer", "B. T. Okafor"],
+    );
+    for text in [
+      "Seller: Q Mercer",
+      "Seller: Q Z Acme Trading",
+      "Seller: Q Z trading",
+    ] {
+      assert!(
+        detect_signatures(&DetectSignaturesArgs {
+          full_text: text,
+          data: &data,
+          first_names: None,
+          name_corpus: None,
+          title_tokens: &BTreeSet::new(),
+        })
+        .is_empty(),
+        "unexpected initialled party-role match for {text:?}",
+      );
+    }
+  }
+
+  #[test]
   fn party_role_name_evidence_round_trips_normalized_unicode() {
     let source = ["Élodie", "Arnoud-Jan", "İpek", "Élodie", ""]
       .into_iter()
@@ -2294,7 +2347,8 @@ mod tests {
     let mut form_field_labels = (0..512)
       .map(|index| format!("business {index} name"))
       .collect::<Vec<_>>();
-    form_field_labels.extend([String::from("name"), String::from("company name")]);
+    form_field_labels
+      .extend([String::from("name"), String::from("company name")]);
     let mut party_role_labels = (0..512)
       .map(|index| format!("role {index}"))
       .collect::<Vec<_>>();

@@ -833,11 +833,9 @@ fn has_non_possessive_quote_entity_before(text: &str, pos: usize) -> bool {
   let Some(before) = text.get(..pos) else {
     return false;
   };
-  [
-    "&quot;", "&#34;", "&#x22;", "&ldquo;", "&rdquo;", "&lsquo;",
-  ]
-  .iter()
-  .any(|marker| before.ends_with(marker))
+  ["&quot;", "&#34;", "&#x22;", "&ldquo;", "&rdquo;", "&lsquo;"]
+    .iter()
+    .any(|marker| before.ends_with(marker))
 }
 
 fn allows_soft_wrap_continuation(
