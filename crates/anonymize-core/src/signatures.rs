@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 use std::fmt::Write as _;
 
 use crate::resolution::{DetectionSource, PipelineEntity};
@@ -104,6 +104,7 @@ pub(crate) struct PreparedSignatureData {
   person_list_labels: Vec<String>,
   witness_phrases: Vec<String>,
   form_field_labels: Vec<String>,
+  non_person_field_labels_by_person_label: HashMap<String, Vec<String>>,
   contact_field_labels: Vec<String>,
   signature_stamp_phrases: Vec<String>,
   name_particles: Vec<String>,
@@ -131,6 +132,34 @@ impl PreparedSignatureData {
       .filter(|label| SIGNATURE_ONLY_PERSON_LABELS.contains(&label.as_str()))
       .cloned()
       .collect();
+    let person_value_labels = non_empty_lowercase(data.person_value_labels);
+    let party_role_labels = non_empty_lowercase(party_role_labels);
+    let person_list_labels = non_empty_lowercase(data.person_list_labels);
+    let person_labels = person_value_labels
+      .iter()
+      .chain(&signature_only_person_labels)
+      .chain(&party_role_labels)
+      .chain(&person_list_labels)
+      .cloned()
+      .collect::<BTreeSet<_>>();
+    let non_person_field_labels_by_person_label = person_labels
+      .iter()
+      .filter_map(|person_label| {
+        let field_labels = form_field_labels
+          .iter()
+          .filter(|field_label| {
+            !person_labels.contains(*field_label)
+              && field_label
+                .strip_suffix(person_label)
+                .and_then(|prefix| prefix.chars().next_back())
+                .is_some_and(|ch| !ch.is_alphanumeric())
+          })
+          .cloned()
+          .collect::<Vec<_>>();
+        (!field_labels.is_empty())
+          .then(|| (person_label.clone(), field_labels))
+      })
+      .collect();
     let party_role_name_tokens = decode_party_role_name_evidence(
       &data.party_role_name_evidence,
     )
@@ -140,13 +169,14 @@ impl PreparedSignatureData {
     })?;
     Ok(Self {
       labels,
-      person_value_labels: non_empty_lowercase(data.person_value_labels),
+      person_value_labels,
       signature_only_person_labels,
-      party_role_labels: non_empty_lowercase(party_role_labels),
+      party_role_labels,
       party_role_name_tokens,
-      person_list_labels: non_empty_lowercase(data.person_list_labels),
+      person_list_labels,
       witness_phrases: non_empty_lowercase(data.witness_phrases),
       form_field_labels,
+      non_person_field_labels_by_person_label,
       contact_field_labels,
       signature_stamp_phrases: non_empty_lowercase(
         data.signature_stamp_phrases,
@@ -307,8 +337,11 @@ fn without_leading_initial_tokens(mut text: &str) -> Option<&str> {
     let token = trimmed.split_whitespace().next()?;
     let mut chars = token.chars();
     let is_initial = chars.next().is_some_and(char::is_uppercase)
-      && chars.next() == Some('.')
-      && chars.next().is_none();
+      && match chars.next() {
+        None => true,
+        Some('.') => chars.next().is_none(),
+        Some(_) => false,
+      };
     if !is_initial {
       return removed.then_some(trimmed);
     }
@@ -1124,7 +1157,15 @@ fn label_end_at(
     {
       let end = start.saturating_add(relative_end);
       if label_tail_is_valid(line, end)
-        && !is_suffix_of_non_person_field_label(line, start, end, data)
+        && !is_suffix_of_non_person_field_label(
+          NonPersonFieldLabelSuffixArgs {
+            line,
+            start,
+            end,
+            person_label: label,
+            data,
+          },
+        )
       {
         return Some((end, kind));
       }
@@ -1133,43 +1174,49 @@ fn label_end_at(
   None
 }
 
-fn is_suffix_of_non_person_field_label(
-  line: &str,
+#[derive(Clone, Copy)]
+struct NonPersonFieldLabelSuffixArgs<'a> {
+  line: &'a str,
   start: usize,
   end: usize,
-  data: &PreparedSignatureData,
+  person_label: &'a str,
+  data: &'a PreparedSignatureData,
+}
+
+fn is_suffix_of_non_person_field_label(
+  args: NonPersonFieldLabelSuffixArgs<'_>,
 ) -> bool {
-  data.form_field_labels.iter().any(|field_label| {
-    let introduces_person = data
-      .person_value_labels
-      .iter()
-      .chain(&data.signature_only_person_labels)
-      .chain(&data.party_role_labels)
-      .chain(&data.person_list_labels)
-      .any(|person_label| person_label == field_label);
-    if introduces_person {
-      return false;
-    }
-    let field_char_count = field_label.chars().count();
-    let Some(candidate_start) =
-      field_char_count.checked_sub(1).and_then(|last_character| {
-        line
-          .get(..end)?
-          .char_indices()
-          .rev()
-          .nth(last_character)
-          .map(|(index, _)| index)
-      })
-    else {
-      return false;
-    };
-    candidate_start < start
-      && boundary_before(line, candidate_start)
-      && line.get(candidate_start..end).is_some_and(|candidate| {
-        unicode_case_insensitive_prefix_end(candidate, field_label)
-          == Some(candidate.len())
-      })
-  })
+  let NonPersonFieldLabelSuffixArgs {
+    line,
+    start,
+    end,
+    person_label,
+    data,
+  } = args;
+  data
+    .non_person_field_labels_by_person_label
+    .get(person_label)
+    .is_some_and(|field_labels| field_labels.iter().any(|field_label| {
+      let field_char_count = field_label.chars().count();
+      let Some(candidate_start) =
+        field_char_count.checked_sub(1).and_then(|last_character| {
+          line
+            .get(..end)?
+            .char_indices()
+            .rev()
+            .nth(last_character)
+            .map(|(index, _)| index)
+        })
+      else {
+        return false;
+      };
+      candidate_start < start
+        && boundary_before(line, candidate_start)
+        && line.get(candidate_start..end).is_some_and(|candidate| {
+          unicode_case_insensitive_prefix_end(candidate, field_label)
+            == Some(candidate.len())
+        })
+    }))
 }
 
 #[derive(Default)]
@@ -1897,7 +1944,12 @@ mod tests {
     );
     assert_eq!(
       detect_signatures(&DetectSignaturesArgs {
-        full_text: "Seller: Q. Z. Mercer\nSeller: B. T. Okafor",
+        full_text: concat!(
+          "Seller: Q. Z. Mercer\n",
+          "Seller: B. T. Okafor\n",
+          "Seller: Q Z Mercer\n",
+          "Seller: B T Okafor",
+        ),
         data: &data,
         first_names: None,
         name_corpus: Some(&names),
@@ -1906,7 +1958,7 @@ mod tests {
       .into_iter()
       .map(|entity| entity.text)
       .collect::<Vec<_>>(),
-      ["Q. Z. Mercer", "B. T. Okafor"],
+      ["Q. Z. Mercer", "B. T. Okafor", "Q Z Mercer", "B T Okafor"],
     );
   }
 

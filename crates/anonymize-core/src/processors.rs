@@ -2947,7 +2947,7 @@ const fn is_dash(ch: char) -> bool {
 }
 
 const fn is_compound_hyphen(ch: char) -> bool {
-  matches!(ch, '-' | '‑')
+  matches!(ch, '-' | '‑' | '–')
 }
 
 fn match_trailing_address_word<'a>(
@@ -3092,8 +3092,8 @@ fn custom_match_has_valid_edges(
   Ok(true)
 }
 
-/// A hyphen compound joins two word characters (`Dodd-Frank`, `Brno-Nový`).
-/// Typographic en/em dashes are separators even when closed up to both words:
+/// A hyphen compound joins two word characters (`Dodd-Frank`, `Dodd–Frank`,
+/// `Brno-Nový`). Em dashes are separators even when closed up to both words:
 /// in `said—John Smith` the em dash attributes a quote.
 /// Treating that as a compound discards `John` for lacking a name-bearing
 /// partner, which leaves `Smith` a single token that person detection then
@@ -4135,7 +4135,7 @@ mod tests {
       filters: Some(DenyListFilterData::default()),
     };
 
-    for dash in ['-', '‑'] {
+    for dash in ['-', '‑', '–'] {
       let text = format!("under the Dodd{dash}Frank Wall Street Reform Act.");
       let start = u32::try_from(text.find("Frank").unwrap()).unwrap();
       let matches = vec![SearchMatch::Literal {
@@ -4171,7 +4171,6 @@ mod tests {
     for text in [
       "—John Smith",
       "said—John Smith",
-      "said–John Smith",
       "\"Not our position.\" —John Smith",
       "Best regards,\n-John Smith",
     ] {
