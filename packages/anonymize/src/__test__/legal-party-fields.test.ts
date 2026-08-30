@@ -51,6 +51,13 @@ describe("structured English contract-party fields", () => {
     ]);
   });
 
+  test("delimits consecutive party fields on the same line", async () => {
+    expect(await people("Seller: Imani Nwosu; Buyer: Ayo Balogun")).toEqual([
+      "Imani Nwosu",
+      "Ayo Balogun",
+    ]);
+  });
+
   test("detects a party name on the following line", async () => {
     expect(await people("Borrower:\nZofia Wrona")).toContain("Zofia Wrona");
   });
@@ -65,5 +72,25 @@ describe("structured English contract-party fields", () => {
     ].join("\n");
 
     expect(await people(text)).toEqual([]);
+  });
+});
+
+describe("structured Spanish contract-party fields", () => {
+  test("keeps an article-led party label out of an all-caps organization", async () => {
+    const entities = await detectNative(
+      {
+        ...CONFIG,
+        dictionaries: await loadTestDictionaries(),
+        languages: ["es"],
+        nameCorpusLanguages: ["es"],
+      },
+      "EL VENDEDOR: ACME S.L. ES PARTE DE ESTE ACUERDO.",
+    );
+
+    expect(
+      entities
+        .filter(({ label }) => label === "organization")
+        .map(({ text }) => text),
+    ).toContain("ACME S.L.");
   });
 });

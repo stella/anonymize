@@ -197,8 +197,10 @@ impl PreparedSignatureData {
       non_empty_lowercase(data.contact_field_labels);
     contact_field_labels.sort_unstable();
     contact_field_labels.dedup();
+    let party_role_labels = non_empty_lowercase(party_role_labels);
     let mut form_field_labels = non_empty_lowercase(data.form_field_labels);
     form_field_labels.extend(contact_field_labels.iter().cloned());
+    form_field_labels.extend(party_role_labels.iter().cloned());
     form_field_labels.sort_unstable();
     form_field_labels.dedup();
     let labels = non_empty_lowercase(data.labels);
@@ -208,7 +210,6 @@ impl PreparedSignatureData {
       .cloned()
       .collect::<Vec<_>>();
     let person_value_labels = non_empty_lowercase(data.person_value_labels);
-    let party_role_labels = non_empty_lowercase(party_role_labels);
     let person_list_labels = non_empty_lowercase(data.person_list_labels);
     let person_labels = person_value_labels
       .iter()

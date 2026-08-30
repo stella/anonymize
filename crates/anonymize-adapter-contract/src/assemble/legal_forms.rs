@@ -674,8 +674,17 @@ fn party_label_role_heads(
         continue;
       }
       let article = article.to_lowercase();
+      let separator = if article.ends_with('\'') || article.ends_with('’') {
+        ""
+      } else {
+        " "
+      };
       for role in &language_roles {
-        push_unique(format!("{article} {role}"), &mut seen, &mut roles);
+        push_unique(
+          format!("{article}{separator}{role}"),
+          &mut seen,
+          &mut roles,
+        );
       }
     }
   }
@@ -928,7 +937,8 @@ mod tests {
   use super::{
     InstitutionalOrganizationData, LegalFormRuleWords, all_legal_suffixes,
     connector_prose_heads, institutional_language_words, language,
-    leading_clause_trims, non_ascii_name_short_suffixes,
+    leading_clause_trims, legal_role_head_languages,
+    non_ascii_name_short_suffixes,
     organization_detection_suffixes, parse_data_file, party_label_role_heads,
     role_heads, scoped_clause_noun_heads, scoped_connector_words,
     scoped_sentence_verb_indicators, validate_institutional_terms,
@@ -1009,16 +1019,68 @@ mod tests {
     let roles = party_label_role_heads(Some(&[
       String::from("de"),
       String::from("en"),
+      String::from("es"),
       String::from("fr"),
+      String::from("it"),
+      String::from("pt-br"),
     ]))
     .unwrap();
 
-    for expected in ["der verkäufer", "the seller"] {
+    for expected in [
+      "der verkäufer",
+      "the seller",
+      "el vendedor",
+      "le vendeur",
+      "l'acheteur",
+      "il venditore",
+      "l’acquirente",
+      "o vendedor",
+    ] {
       assert!(roles.iter().any(|role| role == expected));
     }
-    for invented in ["der seller", "der vendeur", "the verkäufer"] {
+    for invented in [
+      "der seller",
+      "der vendeur",
+      "el seller",
+      "le venditore",
+      "the verkäufer",
+    ] {
       assert!(!roles.iter().any(|role| role == invented));
     }
+  }
+
+  #[test]
+  fn party_label_article_coverage_matches_role_languages() {
+    let expected = legal_role_head_languages(None)
+      .unwrap()
+      .into_iter()
+      .collect::<HashSet<_>>();
+    let data: OrderedMap<Value> =
+      parse_ordered_data_file("legal-form-leading-clauses.json").unwrap();
+    let mut covered = HashSet::new();
+
+    for (language, value) in data {
+      if language.starts_with('_') {
+        continue;
+      }
+      let has_articles = value
+        .get("partyLabelArticles")
+        .and_then(Value::as_array)
+        .is_some_and(|articles| !articles.is_empty());
+      let has_omission = value
+        .get("partyLabelArticleOmission")
+        .and_then(Value::as_str)
+        .is_some_and(|reason| !reason.trim().is_empty());
+      assert_ne!(
+        has_articles, has_omission,
+        "{language} must have reviewed party-label articles or one omission rationale"
+      );
+      if has_articles || has_omission {
+        covered.insert(language);
+      }
+    }
+
+    assert_eq!(covered, expected);
   }
 
   #[test]

@@ -1,0 +1,43 @@
+name: Refresh assemble oracles
+
+on:
+  push:
+    branches: [fix/redaction-misses]
+
+permissions:
+  contents: read
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-rust-ci
+        with:
+          profile: quality
+          cache-scope: quality
+      - name: Refresh derived assemble snapshots
+        env:
+          ANONYMIZE_UPDATE_ASSEMBLE_SNAPSHOTS: "1"
+        run: |
+          cargo nextest run -p stella-anonymize-core --test assemble_parity ||
+            test -n "$(git status --short crates/anonymize-core/tests/fixtures/assemble)"
+      - name: Refresh assemble manifest
+        env:
+          ANONYMIZE_UPDATE_ASSEMBLE_MANIFEST: "1"
+        run: cargo nextest run -p stella-anonymize-core --test assemble_digest
+      - name: Format generated fixtures
+        run: |
+          bun install --frozen-lockfile
+          bun x oxfmt crates/anonymize-core/tests/fixtures/assemble
+      - name: Capture generated patch
+        run: git diff --binary > "$RUNNER_TEMP/assemble-oracles.patch"
+      - name: Upload generated patch
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v5
+        with:
+          name: assemble-oracles-${{ github.sha }}
+          path: ${{ runner.temp }}/assemble-oracles.patch
+          if-no-files-found: error
+          retention-days: 1
