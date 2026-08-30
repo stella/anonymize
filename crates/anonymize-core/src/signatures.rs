@@ -1010,7 +1010,11 @@ fn is_person_value_name_token(text: &str) -> bool {
   if text_len > MAX_NAME_LEN || text.chars().any(char::is_whitespace) {
     return false;
   }
-  ((2..=MAX_NAME_LEN).contains(&text_len) && is_cap_token(text))
+  let alphabetic_count = text
+    .chars()
+    .filter(|character| character.is_alphabetic())
+    .count();
+  (alphabetic_count >= 2 && is_cap_token(text))
     || is_single_uncased_alphabetic(text)
 }
 
@@ -2286,9 +2290,12 @@ mod tests {
       Vec::new(),
     );
 
-    for (text, expected) in
-      [("Name: Li", "Li"), ("Name: 李", "李"), ("Name: ع", "ع")]
-    {
+    for (text, expected) in [
+      ("Name: Li", "Li"),
+      ("Name: A\u{301}n", "A\u{301}n"),
+      ("Name: 李", "李"),
+      ("Name: ع", "ع"),
+    ] {
       let entities = detect_signatures(&DetectSignaturesArgs {
         full_text: text,
         data: &data,
@@ -2344,6 +2351,9 @@ mod tests {
       "By: Li",
       "Name: li",
       "Name: A",
+      "Name: Á",
+      "Name: A\u{301}",
+      "Name: 𐐀",
       "Name: 1",
       "李",
       "By: 李",
