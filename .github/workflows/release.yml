@@ -500,7 +500,7 @@ jobs:
         && needs.pack-data.result == 'success'
         && (github.event_name == 'push'
             || inputs.publish_to_npm == true))
-    uses: stella/.github/.github/workflows/npm-artifact-publish.yml@699affd63b2d956f71b9833fbed239245aff7e86
+    uses: stella/.github/.github/workflows/npm-artifact-publish.yml@89ceed9555f0895fd34a9d478edebe2331f01929
     with:
       artifact-name: data-package-stll-anonymize-data
       package-name: "@stll/anonymize-data"
@@ -655,7 +655,7 @@ jobs:
       id-token: write # Required only for PyPI trusted publishing.
     steps:
       - name: Validate and publish exact Python wheel set
-        uses: stella/.github/.github/actions/pypi-publish-hardened@699affd63b2d956f71b9833fbed239245aff7e86
+        uses: stella/.github/.github/actions/pypi-publish-hardened@89ceed9555f0895fd34a9d478edebe2331f01929
         with:
           expected-version: ${{ needs.verify.outputs.version }}
           project-name: stella-anonymize-core
@@ -674,7 +674,7 @@ jobs:
         && needs.publish-pypi.result == 'success'
         && (github.event_name == 'push'
             || inputs.publish_to_npm == true))
-    uses: stella/.github/.github/workflows/npm-version-finalize.yml@699affd63b2d956f71b9833fbed239245aff7e86
+    uses: stella/.github/.github/workflows/npm-version-finalize.yml@89ceed9555f0895fd34a9d478edebe2331f01929
     with:
       package-files: |
         packages/anonymize/package.json
@@ -690,12 +690,9 @@ jobs:
         packages/anonymize-win32-x64-msvc/package.json
       artifact-pattern: npm-tarball-*
       publish-to-npm: true
-      update-changelog: false
     permissions:
       contents: write # Required to create the runtime tag and GitHub release.
       id-token: write # Required only for npm trusted publishing.
     secrets:
-      CHANGELOG_APP_ID: ${{ secrets.CHANGELOG_APP_ID }}
-      CHANGELOG_APP_PRIVATE_KEY: ${{ secrets.CHANGELOG_APP_PRIVATE_KEY }}
       RELEASE_APP_ID: ${{ secrets.RELEASE_APP_ID }}
       RELEASE_APP_PRIVATE_KEY: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}

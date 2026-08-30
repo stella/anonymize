@@ -72,7 +72,10 @@ void test("caller binds finalization and data publishing to its exact artifacts"
     /^      artifact-pattern: npm-tarball-\*$/m,
   );
   assert.match(jobs["github-release"], /^      publish-to-npm: true$/m);
-  assert.match(jobs["github-release"], /^      update-changelog: false$/m);
+  assert.doesNotMatch(
+    jobs["github-release"],
+    /CHANGELOG_APP|update-changelog|pull-requests:/,
+  );
   assert.match(
     jobs["publish-data"],
     /^      artifact-name: data-package-stll-anonymize-data$/m,
