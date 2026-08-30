@@ -674,17 +674,8 @@ fn party_label_role_heads(
         continue;
       }
       let article = article.to_lowercase();
-      let separator = if article.ends_with('\'') || article.ends_with('’') {
-        ""
-      } else {
-        " "
-      };
       for role in &language_roles {
-        push_unique(
-          format!("{article}{separator}{role}"),
-          &mut seen,
-          &mut roles,
-        );
+        push_unique(format!("{article} {role}"), &mut seen, &mut roles);
       }
     }
   }
@@ -1021,8 +1012,6 @@ mod tests {
       String::from("en"),
       String::from("es"),
       String::from("fr"),
-      String::from("it"),
-      String::from("pt-br"),
     ]))
     .unwrap();
 
@@ -1030,11 +1019,6 @@ mod tests {
       "der verkäufer",
       "the seller",
       "el vendedor",
-      "le vendeur",
-      "l'acheteur",
-      "il venditore",
-      "l’acquirente",
-      "o vendedor",
     ] {
       assert!(roles.iter().any(|role| role == expected));
     }
@@ -1042,7 +1026,6 @@ mod tests {
       "der seller",
       "der vendeur",
       "el seller",
-      "le venditore",
       "the verkäufer",
     ] {
       assert!(!roles.iter().any(|role| role == invented));

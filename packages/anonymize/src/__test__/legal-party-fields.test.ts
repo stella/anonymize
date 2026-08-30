@@ -74,23 +74,3 @@ describe("structured English contract-party fields", () => {
     expect(await people(text)).toEqual([]);
   });
 });
-
-describe("structured Spanish contract-party fields", () => {
-  test("keeps an article-led party label out of an all-caps organization", async () => {
-    const entities = await detectNative(
-      {
-        ...CONFIG,
-        dictionaries: await loadTestDictionaries(),
-        languages: ["es"],
-        nameCorpusLanguages: ["es"],
-      },
-      "EL VENDEDOR: ACME S.L. ES PARTE DE ESTE ACUERDO.",
-    );
-
-    expect(
-      entities
-        .filter(({ label }) => label === "organization")
-        .map(({ text }) => text),
-    ).toContain("ACME S.L.");
-  });
-});

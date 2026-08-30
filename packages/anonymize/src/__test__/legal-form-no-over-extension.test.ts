@@ -106,6 +106,15 @@ describe("legal-form ORG span discipline — suffix word boundary", () => {
     expect(spurious).toBeUndefined();
   });
 
+  test("Spanish article-led party labels preserve the organization", async () => {
+    const entities = await detectForLanguage(
+      "es",
+      "EL VENDEDOR: ACME S.L. ES PARTE DE ESTE ACUERDO.",
+    );
+
+    expect(orgs(entities).map(({ text }) => text)).toContain("ACME S.L.");
+  });
+
   test("legitimate short all-caps suffix still matches", async () => {
     // The fix must not break real "Apple AG" / "Samsung SE" matches.
     const text = "Apple AG and Samsung SE filed jointly.";

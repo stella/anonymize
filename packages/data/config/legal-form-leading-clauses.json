@@ -1,5 +1,5 @@
 {
-  "_comment": "Per-language clause text that may precede an organization name before a legal-form suffix. `phrases` are trimmed unconditionally when found inside an over-captured legal-form span. `directPrefixes` are trimmed only when the text before the prefix already looks like prose, so company names such as `Stand By Me LLC` are preserved. `partyLabelArticles` are permitted only before a scoped party role in a labelled subject clause; apostrophe-ending articles join without a space. Every legal-role language has reviewed articles or a `partyLabelArticleOmission` rationale.",
+  "_comment": "Per-language clause text that may precede an organization name before a legal-form suffix. `phrases` are trimmed unconditionally when found inside an over-captured legal-form span. `directPrefixes` are trimmed only when the text before the prefix already looks like prose, so company names such as `Stand By Me LLC` are preserved. `partyLabelArticles` are permitted only before a scoped party role in a labelled subject clause. Every legal-role language has reviewed articles or a `partyLabelArticleOmission` rationale.",
   "cs": {
     "phrases": ["je s"],
     "directPrefixes": ["mezi", "s"],
@@ -19,16 +19,16 @@
     "partyLabelArticles": ["el", "la", "los", "las"]
   },
   "fr": {
-    "partyLabelArticles": ["le", "la", "les", "l'", "l’"]
+    "partyLabelArticleOmission": "French gender, number, and elision require reviewed exact role phrases; broad article-role products are disabled."
   },
   "it": {
-    "partyLabelArticles": ["il", "lo", "la", "i", "gli", "le", "l'", "l’"]
+    "partyLabelArticleOmission": "Italian gender, number, and elision require reviewed exact role phrases; broad article-role products are disabled."
   },
   "pl": {
     "partyLabelArticleOmission": "Polish has no grammatical articles."
   },
   "pt-br": {
-    "partyLabelArticles": ["o", "a", "os", "as"]
+    "partyLabelArticleOmission": "Brazilian Portuguese gender and number agreement require reviewed exact role phrases; broad article-role products are disabled."
   },
   "sk": {
     "partyLabelArticleOmission": "Slovak has no grammatical articles."
