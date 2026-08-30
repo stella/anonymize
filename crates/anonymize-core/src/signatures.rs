@@ -2396,7 +2396,7 @@ mod tests {
       "Name: 𐐀",
       "Name: ʰ",
       "Name: 1",
-      "Name: 李1",
+      "Name: 李小1",
       "李",
       "By: 李",
       "Company Name: Acme",
