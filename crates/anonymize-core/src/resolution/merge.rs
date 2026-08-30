@@ -978,9 +978,12 @@ mod tests {
 
     for entities in [
       vec![person.clone(), organization.clone()],
-      vec![organization.clone(), person.clone()],
+      vec![organization.clone(), person],
     ] {
-      assert_eq!(merge_and_dedup(&entities), [organization.clone()]);
+      assert_eq!(
+        merge_and_dedup(&entities),
+        std::slice::from_ref(&organization)
+      );
     }
   }
 
