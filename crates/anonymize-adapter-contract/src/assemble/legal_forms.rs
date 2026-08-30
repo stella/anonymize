@@ -1105,7 +1105,7 @@ mod tests {
         }
       }
       if has_articles || has_exact_phrases || has_omission {
-        covered.insert(language);
+        covered.insert(language.clone());
       }
     }
 
