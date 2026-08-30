@@ -5303,6 +5303,17 @@
     },
     {
       "type": "array",
+      "path": ["legal_form_data", "sentence_verb_indicators"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 25
+        }
+      ]
+    },
+    {
+      "type": "array",
       "path": ["legal_form_data", "suffixes"],
       "segments": [
         {

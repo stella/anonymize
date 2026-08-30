@@ -1103,6 +1103,22 @@
           "type": "copy",
           "start": 59,
           "end": 84
+        },
+        {
+          "type": "copy",
+          "start": 464,
+          "end": 489
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["legal_form_data", "sentence_verb_indicators"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 25,
+          "end": 55
         }
       ]
     },

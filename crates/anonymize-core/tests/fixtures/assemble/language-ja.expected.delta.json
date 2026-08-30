@@ -887,6 +887,11 @@
     },
     {
       "type": "array",
+      "path": ["legal_form_data", "sentence_verb_indicators"],
+      "segments": []
+    },
+    {
+      "type": "array",
       "path": ["legal_form_data", "suffixes"],
       "segments": [
         {

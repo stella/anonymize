@@ -1148,6 +1148,22 @@
     },
     {
       "type": "array",
+      "path": ["legal_form_data", "sentence_verb_indicators"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 25
+        },
+        {
+          "type": "copy",
+          "start": 96,
+          "end": 121
+        }
+      ]
+    },
+    {
+      "type": "array",
       "path": ["legal_form_data", "suffixes"],
       "segments": [
         {

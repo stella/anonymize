@@ -1502,6 +1502,47 @@
           "type": "copy",
           "start": 263,
           "end": 335
+        },
+        {
+          "type": "copy",
+          "start": 401,
+          "end": 464
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["legal_form_data", "sentence_verb_indicators"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 55,
+          "end": 96
+        },
+        {
+          "type": "copy",
+          "start": 168,
+          "end": 181
+        },
+        {
+          "type": "copy",
+          "start": 14,
+          "end": 15
+        },
+        {
+          "type": "copy",
+          "start": 181,
+          "end": 184
+        },
+        {
+          "type": "copy",
+          "start": 107,
+          "end": 108
+        },
+        {
+          "type": "copy",
+          "start": 184,
+          "end": 186
         }
       ]
     },
