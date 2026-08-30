@@ -1,6 +1,8 @@
 use std::collections::{BTreeSet, HashMap};
 use std::fmt::Write as _;
 
+use unicode_properties::{GeneralCategory, UnicodeGeneralCategory};
+
 use crate::resolution::{DetectionSource, PipelineEntity};
 
 use crate::labels::PERSON_LABEL;
@@ -1012,7 +1014,7 @@ fn is_person_value_name_token(text: &str) -> bool {
   }
   let alphabetic_count = text
     .chars()
-    .filter(|character| character.is_alphabetic())
+    .filter(|character| is_letter_category(character.general_category()))
     .count();
   (alphabetic_count >= 2 && is_cap_token(text))
     || is_single_uncased_alphabetic(text)
@@ -1024,9 +1026,21 @@ fn is_single_uncased_alphabetic(text: &str) -> bool {
     return false;
   };
   characters.next().is_none()
-    && character.is_alphabetic()
-    && !character.is_uppercase()
-    && !character.is_lowercase()
+    && matches!(
+      character.general_category(),
+      GeneralCategory::ModifierLetter | GeneralCategory::OtherLetter
+    )
+}
+
+const fn is_letter_category(category: GeneralCategory) -> bool {
+  matches!(
+    category,
+    GeneralCategory::UppercaseLetter
+      | GeneralCategory::LowercaseLetter
+      | GeneralCategory::TitlecaseLetter
+      | GeneralCategory::ModifierLetter
+      | GeneralCategory::OtherLetter
+  )
 }
 
 fn is_particle_led_name_shape(
@@ -2353,6 +2367,8 @@ mod tests {
       "Name: A",
       "Name: Á",
       "Name: A\u{301}",
+      "Name: ᾼ",
+      "Name: Α\u{345}",
       "Name: 𐐀",
       "Name: 1",
       "李",
