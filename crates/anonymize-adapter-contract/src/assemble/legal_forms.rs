@@ -1086,7 +1086,7 @@ mod tests {
           .get("partyLabelRolePhrases")
           .and_then(Value::as_array)
           .unwrap();
-        for role in role_heads(Some(std::slice::from_ref(&language))).unwrap() {
+        for role in role_heads(Some(std::slice::from_ref(language))).unwrap() {
           assert!(
             phrases.iter().filter_map(Value::as_str).any(|phrase| {
               phrase
