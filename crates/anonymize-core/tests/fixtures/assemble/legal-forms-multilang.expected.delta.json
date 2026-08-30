@@ -59,6 +59,16 @@
     },
     {
       "type": "array",
+      "path": ["address_seed_data", "directional_abbreviations"],
+      "segments": []
+    },
+    {
+      "type": "array",
+      "path": ["address_seed_data", "unit_abbreviations"],
+      "segments": []
+    },
+    {
+      "type": "array",
       "path": ["coreference_data", "definition_patterns"],
       "segments": [
         {
@@ -1311,6 +1321,28 @@
     },
     {
       "type": "array",
+      "path": ["legal_form_data", "leading_clause_direct_prefixes"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 2,
+          "end": 4
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["legal_form_data", "leading_clause_phrases"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 1,
+          "end": 2
+        }
+      ]
+    },
+    {
+      "type": "array",
       "path": ["legal_form_data", "non_ascii_name_short_suffixes"],
       "segments": [
         {
@@ -1470,6 +1502,47 @@
           "type": "copy",
           "start": 263,
           "end": 335
+        },
+        {
+          "type": "copy",
+          "start": 401,
+          "end": 464
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["legal_form_data", "sentence_verb_indicators"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 55,
+          "end": 96
+        },
+        {
+          "type": "copy",
+          "start": 168,
+          "end": 181
+        },
+        {
+          "type": "copy",
+          "start": 14,
+          "end": 15
+        },
+        {
+          "type": "copy",
+          "start": 181,
+          "end": 184
+        },
+        {
+          "type": "copy",
+          "start": 107,
+          "end": 108
+        },
+        {
+          "type": "copy",
+          "start": 184,
+          "end": 186
         }
       ]
     },
@@ -1929,6 +2002,27 @@
         {
           "type": "copy",
           "start": 8,
+          "end": 9
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["signature_data", "person_value_labels"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 2,
+          "end": 3
+        },
+        {
+          "type": "copy",
+          "start": 4,
+          "end": 5
+        },
+        {
+          "type": "copy",
+          "start": 7,
           "end": 9
         }
       ]

@@ -65,6 +65,62 @@ enum PreparedLowercaseBridge {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+struct PreparedRolePhraseIndex {
+  roots: HashMap<String, PreparedRolePhraseNode>,
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+struct PreparedRolePhraseNode {
+  terminal: bool,
+  children: HashMap<String, Self>,
+}
+
+impl PreparedRolePhraseIndex {
+  fn new(role_heads: &HashSet<String>) -> Self {
+    let mut roots = HashMap::<String, PreparedRolePhraseNode>::new();
+    for role_head in role_heads {
+      let mut phrase = role_head
+        .split(|ch: char| !ch.is_alphabetic())
+        .filter(|word| !word.is_empty())
+        .map(str::to_lowercase);
+      let Some(first) = phrase.next() else {
+        continue;
+      };
+      let mut node = roots.entry(first).or_default();
+      for word in phrase {
+        node = node.children.entry(word).or_default();
+      }
+      node.terminal = true;
+    }
+    Self { roots }
+  }
+
+  fn contains_sequence(&self, words: &[String]) -> bool {
+    words.iter().enumerate().any(|(start, _)| {
+      words
+        .get(start..)
+        .is_some_and(|tail| self.longest_prefix(tail).is_some())
+    })
+  }
+
+  fn longest_prefix(&self, words: &[String]) -> Option<usize> {
+    let first = words.first()?;
+    let mut node = self.roots.get(first)?;
+    let mut longest = node.terminal.then_some(1);
+    for (offset, word) in words.iter().enumerate().skip(1) {
+      let Some(next) = node.children.get(word) else {
+        break;
+      };
+      node = next;
+      if node.terminal {
+        longest = Some(offset.saturating_add(1));
+      }
+    }
+    longest
+  }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct PreparedLegalFormData {
   suffixes: Vec<String>,
   non_ascii_name_short_suffixes: HashSet<String>,
@@ -74,6 +130,7 @@ pub(crate) struct PreparedLegalFormData {
   normalized_in_name_words: HashSet<String>,
   normalized_suffix_words: HashSet<String>,
   role_heads: HashSet<String>,
+  role_phrase_index: PreparedRolePhraseIndex,
   soft_wrap_boundary_labels: HashSet<String>,
   sentence_verb_indicators: HashSet<String>,
   clause_noun_heads: HashSet<String>,
@@ -148,6 +205,8 @@ impl PreparedLegalFormData {
         !is_roman_legal_suffix(suffix)
       });
     let suffix_indices_by_last_char = suffix_indices_by_last_char(&suffixes);
+    let role_heads = lower_set(role_heads);
+    let role_phrase_index = PreparedRolePhraseIndex::new(&role_heads);
 
     Self {
       suffixes,
@@ -157,7 +216,8 @@ impl PreparedLegalFormData {
       normalized_boundary_suffixes: lower_set(normalized_boundary_suffixes),
       normalized_in_name_words: lower_set(normalized_in_name_words),
       normalized_suffix_words: lower_set(normalized_suffix_words),
-      role_heads: lower_set(role_heads),
+      role_heads,
+      role_phrase_index,
       soft_wrap_boundary_labels: lower_set(soft_wrap_boundary_labels),
       sentence_verb_indicators: lower_set(sentence_verb_indicators),
       clause_noun_heads: lower_set(clause_noun_heads),
@@ -184,6 +244,66 @@ impl PreparedLegalFormData {
       ),
       lowercase_bridge,
     }
+  }
+
+  pub(crate) fn has_leading_clause_phrase(&self, text: &str) -> bool {
+    let trimmed = text.trim_end_matches(char::is_whitespace);
+    let lower = lowercase_lookup(trimmed);
+    self.leading_clause_phrases.iter().any(|phrase| {
+      let Some(before_phrase) = lower.strip_suffix(phrase) else {
+        return false;
+      };
+      before_phrase
+        .chars()
+        .next_back()
+        .is_none_or(|ch| !ch.is_alphanumeric())
+    })
+  }
+
+  pub(crate) fn has_subject_clause_tail(&self, text: &str) -> bool {
+    let mut words = text
+      .split(|ch: char| !ch.is_alphabetic())
+      .filter(|word| !word.is_empty());
+    let Some(verb) = words.next() else {
+      return false;
+    };
+    if !contains_lowercase(&self.sentence_verb_indicators, verb) {
+      return false;
+    }
+    let tail = words.take(4).map(str::to_lowercase).collect::<Vec<_>>();
+    self.role_phrase_index.contains_sequence(&tail)
+  }
+
+  pub(crate) fn is_party_label_prefix(&self, text: &str) -> bool {
+    let trimmed = text.trim();
+    let Some(label) = trimmed
+      .strip_suffix(':')
+      .or_else(|| trimmed.strip_suffix('：'))
+      .map(str::trim_end)
+    else {
+      return false;
+    };
+    let words = label
+      .split(|ch: char| !ch.is_alphanumeric())
+      .filter(|word| !word.is_empty())
+      .collect::<Vec<_>>();
+    let normalized_words = words
+      .iter()
+      .map(|word| word.to_lowercase())
+      .collect::<Vec<_>>();
+    let Some(role_word_count) =
+      self.role_phrase_index.longest_prefix(&normalized_words)
+    else {
+      return false;
+    };
+    let Some(discriminator) = words.get(role_word_count) else {
+      return true;
+    };
+    words.len() == role_word_count.saturating_add(1)
+      && discriminator.chars().count() <= 2
+      && discriminator
+        .chars()
+        .all(|ch| ch.is_uppercase() || ch.is_numeric())
   }
 
   fn bridges_lowercase(&self, token: &str) -> bool {
@@ -353,7 +473,6 @@ pub(crate) fn process_legal_form_matches(
       .iter()
       .any(|&(start, end)| start == entity.start && end > entity.end)
   });
-
   Ok(entities)
 }
 
@@ -634,7 +753,13 @@ fn token_before<'a>(
   allow_suffix_adjacent_jurisdiction: bool,
   data: &PreparedLegalFormData,
 ) -> Option<Token<'a>> {
-  let mut end = pos;
+  let possessive_marker_start = possessive_marker_start_before(text, pos);
+  if possessive_marker_start.is_none()
+    && has_non_possessive_quote_entity_before(text, pos)
+  {
+    return None;
+  }
+  let mut end = possessive_marker_start.unwrap_or(pos);
   while let Some((prev_start, ch)) = previous_char(text, end) {
     if ch == '\n' {
       // Soft EDGAR wrap inside a firm name: comma lists
@@ -686,6 +811,30 @@ fn token_before<'a>(
     end,
     text: text.get(start..end).unwrap_or_default(),
   })
+}
+
+fn possessive_marker_start_before(text: &str, pos: usize) -> Option<usize> {
+  let after = text.get(pos..)?;
+  let mut after_chars = after.chars();
+  if !matches!(after_chars.next()?, 's' | 'S')
+    || !after_chars.next().is_some_and(is_inter_token_space)
+  {
+    return None;
+  }
+
+  let before = text.get(..pos)?;
+  ["&apos;", "&rsquo;", "&#39;", "&#8217;", "'", "’"]
+    .iter()
+    .find_map(|marker| before.strip_suffix(marker).map(str::len))
+}
+
+fn has_non_possessive_quote_entity_before(text: &str, pos: usize) -> bool {
+  let Some(before) = text.get(..pos) else {
+    return false;
+  };
+  ["&quot;", "&#34;", "&#x22;", "&ldquo;", "&rdquo;", "&lsquo;"]
+    .iter()
+    .any(|marker| before.ends_with(marker))
 }
 
 fn allows_soft_wrap_continuation(
@@ -1767,7 +1916,7 @@ fn named_institutional_span_start(
         institutional_fragment_has_specific_name(complement, data, true)
       })
       .is_some_and(|specific| specific)
-      .then_some(emit_start),
+      .then_some(head_start),
   }
 }
 
@@ -3031,8 +3180,8 @@ mod tests {
 
   use super::{
     Candidate, CandidateContainmentIndex, LegalFormData, PreparedLegalFormData,
-    crosses_sentence_end, drop_overlapping, ends_with_list_suffix,
-    extend_backward, is_roman_legal_suffix,
+    PreparedRolePhraseIndex, crosses_sentence_end, drop_overlapping,
+    ends_with_list_suffix, extend_backward, is_roman_legal_suffix,
     previous_nonempty_line_has_organization_cue, process_legal_form_matches,
     split_embedded_legal_form_list, trim_embedded_legal_form_list_prefix,
     trim_leading_clause, trim_role_head,
@@ -3040,6 +3189,30 @@ mod tests {
   use crate::processors::PatternSlice;
   use crate::types::SearchMatch;
   use proptest::prelude::*;
+
+  #[test]
+  fn role_phrase_index_returns_the_longest_bounded_prefix() {
+    let index = PreparedRolePhraseIndex::new(&HashSet::from([
+      String::from("party"),
+      String::from("party representative"),
+      String::from("donneur d'ordre"),
+    ]));
+
+    assert_eq!(
+      index.longest_prefix(&[
+        String::from("party"),
+        String::from("representative"),
+        String::from("a"),
+      ]),
+      Some(2),
+    );
+    assert!(index.contains_sequence(&[
+      String::from("est"),
+      String::from("donneur"),
+      String::from("d"),
+      String::from("ordre"),
+    ]));
+  }
 
   proptest! {
     #[test]
@@ -3751,6 +3924,9 @@ mod tests {
     let prefix_generic_words = english_vocabulary(include_str!(
       "../../../packages/data/config/institutional-organization-prefix-generic-name-words.json"
     ));
+    let sentence_verb_indicators = english_vocabulary(include_str!(
+      "../../../packages/data/config/sentence-verb-indicators.json"
+    ));
     let legal_form_rule_words =
       include_str!("../../../packages/data/config/legal-form-rule-words.json");
     let leading_clauses = include_str!(
@@ -3802,6 +3978,7 @@ mod tests {
       institutional_complement_connectors: complement_connectors,
       institutional_generic_words: generic_words,
       institutional_prefix_generic_words: prefix_generic_words,
+      sentence_verb_indicators,
       ..LegalFormData::default()
     });
     let found = suffixes
@@ -3864,6 +4041,24 @@ mod tests {
     ] {
       assert_eq!(institutional_head_entities(text, head), [text]);
     }
+  }
+
+  #[test]
+  fn generic_possessive_prefixes_do_not_widen_named_institutions() {
+    assert_eq!(
+      institutional_head_entities(
+        "Company&#8217;s Office of General Counsel",
+        "Office",
+      ),
+      ["Office of General Counsel"]
+    );
+    assert_eq!(
+      institutional_head_entities(
+        "Acme&#8217;s Office of General Counsel",
+        "Office",
+      ),
+      ["Acme&#8217;s Office of General Counsel"]
+    );
   }
 
   #[test]
@@ -4085,6 +4280,25 @@ mod tests {
       institutional_head_entities("Parent&rsquo;s Board of Directors", "Board",),
       ["Parent&rsquo;s Board of Directors"]
     );
+    for text in [
+      "Parent&apos;s Board of Directors",
+      "Parent&#39;s Board of Directors",
+      "Parent&#8217;s Board of Directors",
+      "Parent's Board of Directors",
+      "Parent’s Board of Directors",
+      "PARENT&apos;S Board of Directors",
+      "PARENT&rsquo;S Board of Directors",
+      "PARENT&#39;S Board of Directors",
+      "PARENT&#8217;S Board of Directors",
+      "PARENT'S Board of Directors",
+      "PARENT’S Board of Directors",
+    ] {
+      assert_eq!(
+        institutional_head_entities(text, "Board"),
+        [text],
+        "possessive marker should stay inside the named institution: {text}"
+      );
+    }
     assert_eq!(
       institutional_head_entities(
         "Chairman of the Board reporting to Parent&rsquo;s Board of Directors",
@@ -4768,6 +4982,38 @@ mod tests {
     assert_eq!(
       super::walk_backward(text, suffix_start, &data),
       Some(organization_start)
+    );
+  }
+
+  #[test]
+  fn backward_walk_crosses_only_recognized_possessive_markers() {
+    let data = PreparedLegalFormData::new(LegalFormData::default());
+    for text in [
+      "Parent&apos;s Board",
+      "Parent&rsquo;s Board",
+      "Parent&#39;s Board",
+      "Parent&#8217;s Board",
+      "Parent's Board",
+      "Parent’s Board",
+      "PARENT&apos;S Board",
+      "PARENT&rsquo;S Board",
+      "PARENT&#39;S Board",
+      "PARENT&#8217;S Board",
+      "PARENT'S Board",
+      "PARENT’S Board",
+    ] {
+      let suffix_start = text.find("Board").unwrap();
+      assert_eq!(
+        super::walk_backward(text, suffix_start, &data),
+        Some(0),
+        "possessive marker should stay inside the name: {text}"
+      );
+    }
+    let unsupported = "Parent&quot;s Board";
+    let suffix_start = unsupported.find("Board").unwrap();
+    assert_ne!(
+      super::walk_backward(unsupported, suffix_start, &data),
+      Some(0)
     );
   }
 

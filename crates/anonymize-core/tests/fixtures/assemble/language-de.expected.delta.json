@@ -24,6 +24,16 @@
     },
     {
       "type": "array",
+      "path": ["address_seed_data", "directional_abbreviations"],
+      "segments": []
+    },
+    {
+      "type": "array",
+      "path": ["address_seed_data", "unit_abbreviations"],
+      "segments": []
+    },
+    {
+      "type": "array",
       "path": ["coreference_data", "definition_patterns"],
       "segments": [
         {
@@ -945,6 +955,28 @@
     },
     {
       "type": "array",
+      "path": ["legal_form_data", "leading_clause_direct_prefixes"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 2,
+          "end": 4
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["legal_form_data", "leading_clause_phrases"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 1,
+          "end": 2
+        }
+      ]
+    },
+    {
+      "type": "array",
       "path": ["legal_form_data", "non_ascii_name_short_suffixes"],
       "segments": [
         {
@@ -1064,6 +1096,22 @@
           "type": "copy",
           "start": 38,
           "end": 59
+        },
+        {
+          "type": "copy",
+          "start": 401,
+          "end": 464
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["legal_form_data", "sentence_verb_indicators"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 55,
+          "end": 66
         }
       ]
     },
@@ -1428,6 +1476,17 @@
         {
           "type": "copy",
           "start": 1,
+          "end": 3
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["signature_data", "person_value_labels"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 2,
           "end": 3
         }
       ]

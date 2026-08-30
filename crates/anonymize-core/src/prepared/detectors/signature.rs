@@ -7,9 +7,16 @@ static_detector_rules! {
   SIGNATURE_RULE {
     id: DetectorId::Signature;
     stage: DiagnosticStage::EntitySignature;
-    inputs: &[DetectorInput::FullText];
+    inputs: &[
+      DetectorInput::FullText,
+      DetectorInput::FirstNames,
+      DetectorInput::TitleTokens,
+    ];
     scales: &[DetectorInput::FullText];
-    uses: &[SupportResource::Signature];
+    uses: &[
+      SupportResource::Signature,
+      SupportResource::NameCorpus,
+    ];
     active: signature_is_active;
     detect: detect_signature;
   }

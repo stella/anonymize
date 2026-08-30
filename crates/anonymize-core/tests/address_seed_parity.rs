@@ -261,6 +261,343 @@ fn keeps_date_like_street_name_in_address_seed_span() {
   assert!(!result.redaction.redacted_text.contains("May 15 Street"));
 }
 
+fn barrier_address_engine() -> PreparedEngine {
+  barrier_address_engine_with_threshold(0.0)
+}
+
+fn barrier_address_engine_with_threshold(threshold: f64) -> PreparedEngine {
+  barrier_address_engine_with_directionals(
+    threshold,
+    ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
+      .into_iter()
+      .map(String::from)
+      .collect(),
+  )
+}
+
+fn barrier_address_engine_with_directionals(
+  threshold: f64,
+  directional_abbreviations: Vec<String>,
+) -> PreparedEngine {
+  let literal = |pattern: &str| SearchPattern::LiteralWithOptions {
+    pattern: String::from(pattern),
+    case_insensitive: Some(true),
+    whole_words: Some(true),
+  };
+  let mut config = prepared_config! {
+    regex_patterns: vec![
+      SearchPattern::Regex(String::from(r"\d:\d{2}-cv-\d{5}")),
+      SearchPattern::Regex(String::from(r"[a-z]+@[a-z]+\.[a-z]+")),
+    ],
+    regex_meta: vec![
+      RegexMatchMeta::new("case number", 0.9),
+      RegexMatchMeta::new("email address", 0.9),
+    ],
+    literal_patterns: vec![literal("Paris"), literal("Street")],
+    literal_options: SearchOptions {
+      literal: LiteralSearchOptions {
+        case_insensitive: true,
+        whole_words: false,
+      },
+      ..SearchOptions::default()
+    },
+    slices: PreparedEngineSlices {
+      regex: PatternSlice { start: 0, end: 2 },
+      deny_list: PatternSlice { start: 0, end: 1 },
+      street_types: PatternSlice { start: 1, end: 2 },
+      ..PreparedEngineSlices::default()
+    },
+    deny_list_data: Some(DenyListMatchData {
+      labels: vec![vec![String::from("address")]].into(),
+      custom_labels: vec![vec![]].into(),
+      originals: vec![String::from("Paris")],
+      pattern_meta: stella_anonymize_core::DenyListPatternMetaSet::default(),
+      sources: vec![vec![String::from("city")]].into(),
+      filters: Some(DenyListFilterData {
+        number_abbrev_prefixes: [String::from("no.")].into(),
+        ..DenyListFilterData::default()
+      }),
+    }),
+    address_seed_data: Some(AddressSeedData {
+      directional_abbreviations,
+      ..AddressSeedData::default()
+    }),
+    ..empty_config(PreparedEngineSlices::default())
+  };
+  config.policy.threshold = threshold;
+  PreparedEngine::new(config).expect("address seed data should prepare")
+}
+
+/// A barrier entity between two halves of an address splits the seed cluster.
+/// Each half is then judged on its own, and a street with no city beside it
+/// carries only one kind of evidence, so it used to be dropped. Standalone
+/// street detection is off here, matching the shipped default, so the run
+/// evidence is what has to keep the street.
+#[test]
+fn keeps_both_halves_of_an_address_split_by_a_case_number() {
+  let prepared = barrier_address_engine_with_threshold(0.7);
+
+  let result = prepared
+    .redact_static_entities(
+      "Notices to 123 Main Street, Case No. 1:23-cv-04567, Paris 75002.",
+      &OperatorConfig::default(),
+    )
+    .expect("static redaction should succeed");
+
+  let addresses = address_texts(&result);
+  assert!(
+    addresses.contains(&"123 Main Street"),
+    "street half was dropped; addresses: {addresses:?}",
+  );
+  assert!(
+    addresses.contains(&"Paris 75002"),
+    "city half was dropped; addresses: {addresses:?}",
+  );
+  assert!(!result.redaction.redacted_text.contains("Main Street"));
+  // The barrier still keeps the case number out of the address span.
+  assert!(!result.redaction.redacted_text.contains("1:23-cv-04567"));
+}
+
+#[test]
+fn entity_barriers_do_not_hide_residual_prose_between_address_seeds() {
+  let prepared = barrier_address_engine();
+  let result = prepared
+    .redact_static_entities(
+      "123 Main Street, Case No. 1:23-cv-04567, was transferred to Paris 75002.",
+      &OperatorConfig::default(),
+    )
+    .expect("static redaction should succeed");
+
+  let addresses = address_texts(&result);
+  assert!(!addresses.contains(&"123 Main Street"));
+  assert!(
+    addresses.contains(&"Paris 75002"),
+    "resolved addresses: {addresses:?}",
+  );
+}
+
+#[test]
+fn uppercase_residual_prose_separates_address_evidence() {
+  let prepared = barrier_address_engine();
+  for prose in [
+    "was transferred to",
+    "Was Transferred To",
+    "WAS TRANSFERRED TO",
+  ] {
+    let text =
+      format!("123 Main Street, Case No. 1:23-cv-04567, {prose} Paris 75002.");
+    let result = prepared
+      .redact_static_entities(&text, &OperatorConfig::default())
+      .expect("static redaction should succeed");
+
+    let addresses = address_texts(&result);
+    assert!(!addresses.contains(&"123 Main Street"), "prose {prose:?}");
+    assert_eq!(addresses, ["Paris 75002"], "prose {prose:?}");
+  }
+}
+
+#[test]
+fn dotted_residual_prose_before_an_entity_separates_address_evidence() {
+  let prepared = barrier_address_engine();
+  let result = prepared
+    .redact_static_entities(
+      "123 Main Street, MOVED AWAY. reference@example.test, Paris 75002.",
+      &OperatorConfig::default(),
+    )
+    .expect("static redaction should succeed");
+
+  let addresses = address_texts(&result);
+  assert!(!addresses.contains(&"123 Main Street"));
+  assert!(addresses.contains(&"Paris 75002"));
+}
+
+#[test]
+fn dotted_residual_prose_before_a_bare_case_number_separates_evidence() {
+  let prepared = barrier_address_engine();
+  let result = prepared
+    .redact_static_entities(
+      "123 Main Street, MOVED AWAY. 1:23-cv-04567, Paris 75002.",
+      &OperatorConfig::default(),
+    )
+    .expect("static redaction should succeed");
+
+  let addresses = address_texts(&result);
+  assert!(!addresses.contains(&"123 Main Street"));
+  assert!(addresses.contains(&"Paris 75002"));
+}
+
+#[test]
+fn sentence_boundaries_outside_entities_separate_address_evidence() {
+  let prepared = barrier_address_engine();
+  for text in [
+    "123 Main Street. Case No. 1:23-cv-04567. Paris 75002.",
+    "123 Main Street. reference@example.test. Paris 75002.",
+  ] {
+    let result = prepared
+      .redact_static_entities(text, &OperatorConfig::default())
+      .expect("static redaction should succeed");
+
+    let addresses = address_texts(&result);
+    assert!(!addresses.contains(&"123 Main Street"));
+    assert!(addresses.contains(&"Paris 75002"));
+  }
+}
+
+#[test]
+fn street_period_before_directional_keeps_address_evidence_joined() {
+  let prepared = barrier_address_engine();
+  let result = prepared
+    .redact_static_entities(
+      "Notices to 123 Main Street. NE, Paris 75002.",
+      &OperatorConfig::default(),
+    )
+    .expect("static redaction should succeed");
+
+  let addresses = address_texts(&result);
+  assert!(
+    addresses
+      .iter()
+      .any(|address| address.contains("123 Main Street. NE, Paris 75002")),
+    "address entities: {addresses:?}; address seeds: {:?}",
+    result.detections.entities.address_seed(),
+  );
+}
+
+#[test]
+fn directional_without_immediate_address_material_stays_a_sentence_boundary() {
+  let prepared = barrier_address_engine();
+  let result = prepared
+    .redact_static_entities(
+      "123 Main Street. E, reference@example.test, Paris 75002.",
+      &OperatorConfig::default(),
+    )
+    .expect("static redaction should succeed");
+
+  let addresses = address_texts(&result);
+  assert!(!addresses.contains(&"123 Main Street"));
+  assert!(addresses.contains(&"Paris 75002"));
+}
+
+#[test]
+fn right_expansion_keeps_a_configured_directional_after_a_street_period() {
+  let prepared = barrier_address_engine();
+  let result = prepared
+    .redact_static_entities(
+      "75002 123 Main Street. NE, delivery desk",
+      &OperatorConfig::default(),
+    )
+    .expect("static redaction should succeed");
+
+  let addresses = address_texts(&result);
+  assert_eq!(addresses, ["75002 123 Main Street. NE"]);
+  assert!(result.redaction.redacted_text.contains("delivery desk"));
+}
+
+#[test]
+fn unconfigured_directional_does_not_join_address_evidence() {
+  let prepared = barrier_address_engine_with_directionals(0.0, Vec::new());
+  let result = prepared
+    .redact_static_entities(
+      "123 Main Street. E, Case No. 1:23-cv-04567, Paris 75002.",
+      &OperatorConfig::default(),
+    )
+    .expect("static redaction should succeed");
+
+  let addresses = address_texts(&result);
+  assert!(!addresses.contains(&"123 Main Street"));
+  assert!(addresses.contains(&"Paris 75002"));
+}
+
+#[test]
+fn unsegmented_residual_prose_separates_address_evidence() {
+  let prepared = barrier_address_engine();
+  let result = prepared
+    .redact_static_entities(
+      "123 Main Street, Case No. 1:23-cv-04567, これは無関係な文章です Paris 75002.",
+      &OperatorConfig::default(),
+    )
+    .expect("static redaction should succeed");
+
+  let addresses = address_texts(&result);
+  assert!(!addresses.contains(&"123 Main Street"));
+  assert!(addresses.contains(&"Paris 75002"));
+}
+
+#[test]
+fn lowercase_entity_contents_do_not_count_as_residual_prose() {
+  let prepared = barrier_address_engine();
+  let result = prepared
+    .redact_static_entities(
+      "Notices to 123 Main Street, reference@example.test, Paris 75002.",
+      &OperatorConfig::default(),
+    )
+    .expect("static redaction should succeed");
+
+  let addresses = address_texts(&result);
+  assert!(addresses.contains(&"123 Main Street"));
+  assert!(addresses.contains(&"Paris 75002"));
+}
+
+#[test]
+fn city_fragments_do_not_grow_over_capitalized_prose() {
+  let prepared = barrier_address_engine();
+  let result = prepared
+    .redact_static_entities(
+      "123 Main Street, Case No. 1:23-cv-04567, Paris Meridian Capital signed.",
+      &OperatorConfig::default(),
+    )
+    .expect("static redaction should succeed");
+
+  let addresses = address_texts(&result);
+  assert!(addresses.contains(&"123 Main Street"));
+  assert!(
+    !addresses.iter().any(|address| address.contains("Capital")),
+    "address entities: {addresses:?}; address seeds: {:?}",
+    result.detections.entities.address_seed(),
+  );
+}
+
+#[test]
+fn paragraph_barriers_keep_unrelated_address_evidence_separate() {
+  let prepared = barrier_address_engine();
+  let paragraph_result = prepared
+    .redact_static_entities(
+      "The filing mentions 123 Main Street.\n\nParis 75002.",
+      &OperatorConfig::default(),
+    )
+    .expect("static redaction should succeed");
+  let paragraph_addresses = address_texts(&paragraph_result);
+  assert!(
+    !paragraph_addresses.contains(&"123 Main Street"),
+    "unrelated street borrowed evidence across a paragraph: {paragraph_addresses:?}",
+  );
+  assert!(
+    paragraph_addresses.contains(&"Paris 75002"),
+    "self-contained city and postal code were dropped: {paragraph_addresses:?}",
+  );
+
+  for separator in [
+    "\n\n",
+    "\r\n\r\n",
+    "\u{000c}",
+    "\u{2028}\u{2028}",
+    "\u{2029}",
+  ] {
+    let text = format!(
+      "The filing mentions 123 Main Street.{separator}1:23-cv-04567{separator}Paris 75002."
+    );
+    let separator_result = prepared
+      .redact_static_entities(&text, &OperatorConfig::default())
+      .expect("static redaction should succeed");
+
+    let separator_addresses = address_texts(&separator_result);
+    assert!(
+      !separator_addresses.contains(&"123 Main Street"),
+      "unrelated street borrowed evidence across {separator:?}: {separator_addresses:?}",
+    );
+  }
+}
+
 #[test]
 fn clusters_address_seeds_across_multibyte_text_gap() {
   let prepared = PreparedEngine::new(prepared_config! {
@@ -365,23 +702,28 @@ fn preserves_unit_abbreviation_inside_address_seed_span() {
   })
   .expect("address seed data should prepare");
 
-  let suffix = "á".repeat(97);
-  let full_text = format!(
-    "Notices go to 10 Main Street, Springfield 12345 Apt. 5 {suffix}. Thank you."
-  );
-  let result = prepared
-    .redact_static_entities(&full_text, &OperatorConfig::default())
-    .expect("static redaction should succeed");
-  let expected = format!("10 Main Street, Springfield 12345 Apt. 5 {suffix}");
+  for designator in ["Apt.", "Apt"] {
+    for unit_value in ["5", "１２３４５", "١٢٣٤٥"] {
+      let suffix = "á".repeat(97);
+      let full_text = format!(
+        "Notices go to 10 Main Street, Springfield 12345 {designator} {unit_value} {suffix}. Thank you."
+      );
+      let result = prepared
+        .redact_static_entities(&full_text, &OperatorConfig::default())
+        .expect("static redaction should succeed");
+      let expected = format!(
+        "10 Main Street, Springfield 12345 {designator} {unit_value} {suffix}"
+      );
 
-  assert!(
-    address_texts(&result).contains(&expected.as_str()),
-    "resolved address entities: {:?}; address seed entities: {:?}",
-    result.resolved_entities,
-    result.detections.entities.address_seed(),
-  );
-  assert!(!result.redaction.redacted_text.contains("Apt. 5"));
-  assert!(!result.redaction.redacted_text.contains(&suffix));
+      assert!(
+        address_texts(&result).contains(&expected.as_str()),
+        "resolved address entities: {:?}; address seed entities: {:?}",
+        result.resolved_entities,
+        result.detections.entities.address_seed(),
+      );
+      assert!(!result.redaction.redacted_text.contains(&suffix));
+    }
+  }
 }
 
 /// Fixture for the city-anchored / standalone street cases: "Paris" as a
@@ -430,7 +772,7 @@ fn street_engine(standalone: Option<StandaloneStreetData>) -> PreparedEngine {
       filters: Some(DenyListFilterData::default()),
     }),
     address_seed_data: Some(AddressSeedData {
-      unit_abbreviations: vec![String::from("apt.")],
+      unit_abbreviations: vec![String::from("apt."), String::from("unit.")],
       standalone_street: standalone,
       ..AddressSeedData::default()
     }),
@@ -574,14 +916,73 @@ fn multi_line_notice_block_still_joins_street_and_destination_lines() {
 fn address_span_keeps_a_unit_component_that_follows_the_city() {
   let prepared = street_engine(None);
 
-  // "Apt. 5" is not an address seed, so the city is the cluster's rightmost
-  // seed; the unit abbreviation still belongs to the address.
+  for (unit, expected) in [
+    ("Apt. 5", "10 Main Street, Springfield Apt. 5"),
+    ("Apt A", "10 Main Street, Springfield Apt A"),
+    ("Apt. PH1", "10 Main Street, Springfield Apt. PH1"),
+    ("Apt A12", "10 Main Street, Springfield Apt A12"),
+    ("Apt Ä1", "10 Main Street, Springfield Apt Ä1"),
+    ("Apt. A-12", "10 Main Street, Springfield Apt. A-12"),
+    ("Apt. PH-1", "10 Main Street, Springfield Apt. PH-1"),
+    ("Apt. 12-B", "10 Main Street, Springfield Apt. 12-B"),
+    ("Apt. ５", "10 Main Street, Springfield Apt. ５"),
+    ("Apt. ٥", "10 Main Street, Springfield Apt. ٥"),
+    ("Apt. ५", "10 Main Street, Springfield Apt. ५"),
+    (
+      "Apt. A\u{0308}1",
+      "10 Main Street, Springfield Apt. A\u{0308}1",
+    ),
+    ("Apt.\u{2028}5", "10 Main Street, Springfield Apt.\u{2028}5"),
+  ] {
+    let text = format!("Notices go to 10 Main Street, Springfield {unit}.");
+    assert_eq!(
+      street_addresses(&prepared, &text),
+      vec![String::from(expected)]
+    );
+  }
+}
+
+#[test]
+fn address_span_requires_a_value_after_an_ambiguous_unit_alias() {
+  let prepared = street_engine(None);
+
   assert_eq!(
     street_addresses(
       &prepared,
-      "Notices go to 10 Main Street, Springfield Apt. 5."
+      "Notices go to 10 Main Street, Springfield unit tests failed."
     ),
-    vec![String::from("10 Main Street, Springfield Apt. 5")],
+    vec![String::from("10 Main Street, Springfield")],
+  );
+  assert_eq!(
+    street_addresses(
+      &prepared,
+      "Notices go to 10 Main Street, Springfield unit ph-1 tests failed."
+    ),
+    vec![String::from("10 Main Street, Springfield")],
+  );
+  for unsupported_numeral in ["½", "Ⅻ"] {
+    assert_eq!(
+      street_addresses(
+        &prepared,
+        &format!(
+          "Notices go to 10 Main Street, Springfield unit {unsupported_numeral} tests failed."
+        )
+      ),
+      vec![String::from("10 Main Street, Springfield")],
+    );
+  }
+}
+
+#[test]
+fn address_span_stops_after_an_ambiguous_unit_value() {
+  let prepared = street_engine(None);
+
+  assert_eq!(
+    street_addresses(
+      &prepared,
+      "Notices go to 10 Main Street, Springfield unit 5 tests failed."
+    ),
+    vec![String::from("10 Main Street, Springfield unit 5")],
   );
 }
 

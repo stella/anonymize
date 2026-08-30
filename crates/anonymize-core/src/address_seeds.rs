@@ -2,8 +2,11 @@ use std::collections::{BTreeMap, BTreeSet};
 use web_time::Instant;
 
 use regex::Regex;
+use unicode_properties::{GeneralCategory, UnicodeGeneralCategory};
 
-use crate::processors::PatternSlice;
+use crate::false_positives::ends_with_number_abbrev;
+use crate::labels::CASE_NUMBER_LABEL;
+use crate::processors::{DenyListFilterData, PatternSlice};
 use crate::resolution::{DetectionSource, PipelineEntity, SourceDetail};
 use crate::search::{SearchIndex, SearchOptions, SearchPattern};
 use crate::span_index::SpanIndex;
@@ -22,14 +25,18 @@ const COMPOUND_STREET_SUFFIX_MIN_CHARS: usize = 5;
 /// Cap on street-name words joined to the right of a standalone street seed.
 const STANDALONE_STREET_MAX_TAIL_WORDS: usize = 6;
 const ADDRESS_CLUSTER_MAX_GAP: usize = 150;
-/// Ordinary words tolerated between two address seeds before the gap reads as
-/// prose rather than as a separator.
+/// Ordinary words and UTF-16 text units tolerated between two address seeds
+/// before the gap reads as prose rather than as a separator. The unit bound
+/// covers scripts whose prose is not separated by spaces.
 const MAX_PROSE_WORDS_BETWEEN_SEEDS: usize = 1;
+const MAX_PROSE_UNITS_BETWEEN_SEEDS: usize = 8;
 const IN_NAME_CONNECTORS: &str = "of|the|and";
 const ADDRESS_RIGHT_EXPAND_LIMIT: usize = 200;
 const BR_CEP_CONTEXT_WINDOW: usize = 200;
 const PLAIN_POSTAL_CONTEXT_WINDOW: usize = 120;
 const US_ZIP_CONTEXT_WINDOW: usize = 120;
+const MAX_ALPHA_UNIT_VALUE_CHARS: usize = 3;
+const MAX_ALPHANUMERIC_UNIT_VALUE_CHARS: usize = 4;
 
 fn us_state_zip_prefix_len(
   text: &str,
@@ -224,6 +231,7 @@ pub struct AddressSeedData {
   pub br_cep_cue_words: Vec<String>,
   #[serde(default)]
   pub unit_abbreviations: Vec<String>,
+  pub directional_abbreviations: Vec<String>,
   #[serde(default)]
   pub standalone_street: Option<StandaloneStreetData>,
 }
@@ -244,6 +252,7 @@ pub(crate) struct PreparedAddressSeedData {
   boundary_phrase_search: Option<BoundaryPhraseSearch>,
   br_cep_cue_search: Option<SearchIndex>,
   unit_abbreviations: BTreeSet<String>,
+  directional_abbreviations: BTreeSet<String>,
   standalone_street: Option<PreparedStandaloneStreetData>,
   postal_code_re: Regex,
   br_cep_shape_re: Regex,
@@ -251,6 +260,22 @@ pub(crate) struct PreparedAddressSeedData {
   us_state_before_zip_re: Option<Regex>,
   house_number_before_street_re: Regex,
   house_number_after_street_re: Regex,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct AddressSeedProcessArgs<'a> {
+  pub(crate) matches: &'a [SearchMatch],
+  pub(crate) street_type_slice: PatternSlice,
+  pub(crate) full_text: &'a str,
+  pub(crate) existing_entities: &'a [PipelineEntity],
+  pub(crate) false_positive_filters: Option<&'a DenyListFilterData>,
+}
+
+#[derive(Clone, Copy)]
+struct ClusterScoreArgs<'a> {
+  cluster: &'a SeedCluster,
+  runs: &'a [AddressEvidence],
+  full_text: &'a str,
 }
 
 struct BoundaryPhraseSearch {
@@ -323,6 +348,10 @@ impl PreparedAddressSeedData {
       boundary_phrase_search,
       br_cep_cue_search: literal_search(data.br_cep_cue_words)?,
       unit_abbreviations: lowercased_set(data.unit_abbreviations),
+      directional_abbreviations: data
+        .directional_abbreviations
+        .into_iter()
+        .collect(),
       standalone_street,
       postal_code_re: compile_regex(
         r"(?u)(?:\d{5}[-‐‑‒–—―]\d{4}|\d{5}[-‐‑‒–—―]\d{3}|\d{3}\s\d{2}|\d{2}[-‐‑‒–—―]\d{3}|\d{5})",
@@ -350,15 +379,27 @@ impl PreparedAddressSeedData {
     })
   }
 
+  pub(crate) const fn directional_abbreviations(&self) -> &BTreeSet<String> {
+    &self.directional_abbreviations
+  }
+
   pub(crate) fn process_profiled(
     &self,
-    matches: &[SearchMatch],
-    street_type_slice: PatternSlice,
-    full_text: &str,
-    existing_entities: &[PipelineEntity],
+    args: AddressSeedProcessArgs<'_>,
   ) -> Result<AddressSeedDetection> {
+    let AddressSeedProcessArgs {
+      matches,
+      street_type_slice,
+      full_text,
+      existing_entities,
+      false_positive_filters,
+    } = args;
     let mut profile = AddressSeedDetectionProfile::default();
-    let entity_index = NonAddressEntityIndex::new(existing_entities);
+    let entity_index = NonAddressEntityIndex::new(NonAddressEntityIndexArgs {
+      existing_entities,
+      full_text,
+      false_positive_filters,
+    });
     let collect_start = Instant::now();
     let seeds = self.collect_seeds_profiled(
       matches,
@@ -372,7 +413,13 @@ impl PreparedAddressSeedData {
     profile.seed_count = seeds.len();
 
     let cluster_start = Instant::now();
-    let clusters = cluster_seeds(&seeds, full_text, &entity_index);
+    let clusters = cluster_seeds(
+      &seeds,
+      full_text,
+      &entity_index,
+      &self.directional_abbreviations,
+    );
+    let runs = run_evidence(&clusters);
     profile.cluster_elapsed_us = elapsed_us(cluster_start);
     profile.cluster_count = clusters.len();
 
@@ -386,15 +433,11 @@ impl PreparedAddressSeedData {
     let mut results = Vec::new();
 
     for cluster in clusters {
-      let (score, growth) = score_cluster(&cluster).map_or_else(
-        || {
-          (
-            self.standalone_street_score(&cluster, full_text),
-            SpanGrowth::StreetNameOnly,
-          )
-        },
-        |score| (score, self.cluster_growth(&cluster, full_text)),
-      );
+      let (score, growth) = self.cluster_score_and_growth(ClusterScoreArgs {
+        cluster: &cluster,
+        runs: &runs,
+        full_text,
+      });
       if score < 0.6 {
         continue;
       }
@@ -431,6 +474,45 @@ impl PreparedAddressSeedData {
       entities: results,
       profile,
     })
+  }
+
+  fn cluster_score_and_growth(
+    &self,
+    args: ClusterScoreArgs<'_>,
+  ) -> (f64, SpanGrowth) {
+    let ClusterScoreArgs {
+      cluster,
+      runs,
+      full_text,
+    } = args;
+    if let Some(score) = score_cluster(cluster) {
+      return (score, self.cluster_growth(cluster, full_text));
+    }
+
+    // A barrier split this cluster off an address that does carry enough
+    // evidence, so it is still address material. Keep the span tight: on its
+    // own it has no destination to bound its right edge.
+    if let Some(run_evidence) = runs
+      .get(cluster.run)
+      .copied()
+      .filter(|evidence| evidence.is_sufficient())
+    {
+      let growth = if cluster
+        .seeds
+        .iter()
+        .any(|seed| seed.kind == SeedType::StreetWord)
+      {
+        SpanGrowth::StreetNameOnly
+      } else {
+        SpanGrowth::None
+      };
+      return (run_evidence.score(), growth);
+    }
+
+    (
+      self.standalone_street_score(cluster, full_text),
+      SpanGrowth::StreetNameOnly,
+    )
   }
 
   fn collect_seeds_profiled(
@@ -786,10 +868,10 @@ impl PreparedAddressSeedData {
     if !cluster.has_expandable_address_context() {
       return SpanGrowth::None;
     }
-    if cluster.ends_at_city()
-      && !self.unit_component_follows(full_text, cluster.end)
-    {
-      return SpanGrowth::None;
+    if cluster.ends_at_city() {
+      return self
+        .unit_component_end(full_text, cluster.end)
+        .map_or(SpanGrowth::None, SpanGrowth::ToUnitValue);
     }
     SpanGrowth::ToAddressBoundary
   }
@@ -798,21 +880,27 @@ impl PreparedAddressSeedData {
   /// cluster's right edge. The abbreviation may straddle that edge, because a
   /// deny-list city span can already cover its word while the closing dot
   /// stays outside ("... Paris Apt" | ". 5").
-  fn unit_component_follows(&self, full_text: &str, end: usize) -> bool {
+  fn unit_component_end(&self, full_text: &str, end: usize) -> Option<usize> {
     [
       unit_token_start(full_text, end),
       skip_unit_separators(full_text, end),
     ]
     .into_iter()
-    .any(|start| self.unit_abbreviation_at(full_text, start))
+    .filter_map(|start| self.unit_abbreviation_end(full_text, start))
+    .max()
   }
 
-  fn unit_abbreviation_at(&self, full_text: &str, start: usize) -> bool {
+  fn unit_abbreviation_end(
+    &self,
+    full_text: &str,
+    start: usize,
+  ) -> Option<usize> {
     let end = unit_token_end(full_text, start);
-    full_text.get(start..end).is_some_and(|token| {
-      !token.is_empty()
-        && self.unit_abbreviations.contains(&token.to_lowercase())
-    })
+    let token = full_text.get(start..end)?;
+    if !matches_unit_abbreviation(token, &self.unit_abbreviations) {
+      return None;
+    }
+    plausible_unit_value_end(full_text, end)
   }
 
   fn expand_cluster(
@@ -829,19 +917,30 @@ impl PreparedAddressSeedData {
       entity_index,
       cluster_starts_with_street_type_word(cluster),
     );
-    let left_pos = match growth {
-      SpanGrowth::StreetNameOnly => {
+    let seed_bounded_left = cluster.left_growth
+      == ClusterLeftGrowth::SeedBounded
+      && !cluster
+        .seeds
+        .iter()
+        .any(|seed| seed.kind == SeedType::StreetWord);
+    let left_pos = match (seed_bounded_left, growth) {
+      (true, _) => cluster.start,
+      (_, SpanGrowth::StreetNameOnly) => {
         expand_standalone_street_left(full_text, cluster.start, left_bound)
       }
-      SpanGrowth::None | SpanGrowth::ToAddressBoundary => {
-        expand_left(full_text, cluster.start, left_bound)
-      }
+      (
+        _,
+        SpanGrowth::None
+        | SpanGrowth::ToAddressBoundary
+        | SpanGrowth::ToUnitValue(_),
+      ) => expand_left(full_text, cluster.start, left_bound),
     };
     let end = match growth {
       SpanGrowth::None => cluster.end,
       SpanGrowth::StreetNameOnly => {
         expand_standalone_street_right(full_text, cluster.end)
       }
+      SpanGrowth::ToUnitValue(value_end) => value_end.max(cluster.end),
       SpanGrowth::ToAddressBoundary => self
         .expand_right(full_text, cluster, entity_index, boundary_starts)
         .max(cluster.end),
@@ -875,9 +974,12 @@ impl PreparedAddressSeedData {
     if let Some(double_newline) = remaining.find("\n\n") {
       nearest_boundary = nearest_boundary.min(double_newline);
     }
-    if let Some(sentence_boundary) =
-      sentence_boundary(full_text, right_pos, &self.unit_abbreviations)
-    {
+    if let Some(sentence_boundary) = sentence_boundary(&SentenceBoundaryArgs {
+      full_text,
+      from: right_pos,
+      unit_abbreviations: &self.unit_abbreviations,
+      directional_abbreviations: &self.directional_abbreviations,
+    }) {
       nearest_boundary = nearest_boundary.min(sentence_boundary);
     }
 
@@ -1048,6 +1150,18 @@ struct SeedCluster {
   seeds: Vec<Seed>,
   start: usize,
   end: usize,
+  /// Clusters separated only by a barrier entity share a run: they were one
+  /// candidate address before a case number, date, or person split them. A
+  /// textual barrier or distance gap starts a new run, because those seeds are
+  /// unrelated.
+  run: usize,
+  left_growth: ClusterLeftGrowth,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ClusterLeftGrowth {
+  AddressContext,
+  SeedBounded,
 }
 
 impl SeedCluster {
@@ -1082,6 +1196,8 @@ enum SpanGrowth {
   /// Street-name material only: a standalone street has no destination to
   /// bound its right edge.
   StreetNameOnly,
+  /// A city followed by a unit component: stop at the validated unit value.
+  ToUnitValue(usize),
   /// Full address context: grow to the next address boundary.
   ToAddressBoundary,
 }
@@ -1958,6 +2074,30 @@ fn unit_token_start(full_text: &str, offset: usize) -> usize {
   start
 }
 
+/// The vocabulary carries abbreviated spellings ("apt.", "ste."), but the
+/// closing dot is optional in practice and usually omitted ("Apt 5"). Accept
+/// either form: an exact lookup on "apt" otherwise ends the address span at the
+/// preceding city, leaving the unit in the clear.
+fn matches_unit_abbreviation(
+  token: &str,
+  unit_abbreviations: &BTreeSet<String>,
+) -> bool {
+  if token.is_empty() {
+    return false;
+  }
+  let lowered = token.to_lowercase();
+  if unit_abbreviations.contains(&lowered) {
+    return true;
+  }
+  if lowered.ends_with('.') {
+    return false;
+  }
+  let mut dotted = String::with_capacity(lowered.len().saturating_add(1));
+  dotted.push_str(&lowered);
+  dotted.push('.');
+  unit_abbreviations.contains(&dotted)
+}
+
 fn unit_token_end(full_text: &str, offset: usize) -> usize {
   let mut end = offset;
   while let Some((index, ch)) = next_char(full_text, end) {
@@ -1980,9 +2120,100 @@ fn skip_unit_separators(full_text: &str, offset: usize) -> usize {
   cursor
 }
 
+fn plausible_unit_value_end(full_text: &str, offset: usize) -> Option<usize> {
+  let mut cursor = offset;
+  while let Some((index, ch)) = next_char(full_text, cursor) {
+    if !ch.is_whitespace() && ch != ',' {
+      break;
+    }
+    cursor = index.saturating_add(ch.len_utf8());
+  }
+  if full_text
+    .get(offset..cursor)
+    .is_none_or(has_paragraph_break)
+  {
+    return None;
+  }
+  if full_text
+    .get(cursor..)
+    .is_some_and(|tail| tail.starts_with('#'))
+  {
+    cursor = cursor.saturating_add(1);
+    while let Some((index, ch)) = next_char(full_text, cursor) {
+      if !matches!(ch, ' ' | '\t') {
+        break;
+      }
+      cursor = index.saturating_add(ch.len_utf8());
+    }
+  }
+
+  let value_end = full_text
+    .get(cursor..)
+    .map(|tail| {
+      tail
+        .chars()
+        .take_while(|ch| is_unit_value_char(*ch))
+        .map(char::len_utf8)
+        .sum::<usize>()
+    })
+    .map_or(cursor, |len| cursor.saturating_add(len));
+  let value = full_text.get(cursor..value_end)?;
+  is_plausible_unit_value(value).then_some(value_end)
+}
+
+fn is_plausible_unit_value(value: &str) -> bool {
+  if is_house_number_word(value) {
+    return true;
+  }
+  let mut alphanumeric_count = 0usize;
+  let mut uppercase_count = 0usize;
+  let mut digit_count = 0usize;
+  for segment in value.split(['-', '/']) {
+    if segment.is_empty() {
+      return false;
+    }
+    for ch in segment.chars() {
+      let category = ch.general_category();
+      if category == GeneralCategory::DecimalNumber {
+        digit_count = digit_count.saturating_add(1);
+      } else if is_mark_category(category) {
+        continue;
+      } else if ch.is_numeric() {
+        return false;
+      } else if ch.is_alphabetic() && ch.is_uppercase() {
+        uppercase_count = uppercase_count.saturating_add(1);
+      } else {
+        return false;
+      }
+      alphanumeric_count = alphanumeric_count.saturating_add(1);
+    }
+  }
+  if alphanumeric_count == 0
+    || alphanumeric_count > MAX_ALPHANUMERIC_UNIT_VALUE_CHARS
+  {
+    return false;
+  }
+  digit_count > 0 || uppercase_count <= MAX_ALPHA_UNIT_VALUE_CHARS
+}
+
+fn is_unit_value_char(ch: char) -> bool {
+  ch.is_alphanumeric()
+    || matches!(ch, '-' | '/')
+    || is_mark_category(ch.general_category())
+}
+
+const fn is_mark_category(category: GeneralCategory) -> bool {
+  matches!(
+    category,
+    GeneralCategory::NonspacingMark
+      | GeneralCategory::SpacingMark
+      | GeneralCategory::EnclosingMark
+  )
+}
+
 fn is_house_number_word(word: &str) -> bool {
   !word.is_empty()
-    && word.len() <= 13
+    && word.chars().count() <= 13
     && word.split(['-', '/']).all(is_house_number_part)
 }
 
@@ -1992,7 +2223,9 @@ fn is_house_number_word(word: &str) -> bool {
 fn is_house_number_part(part: &str) -> bool {
   let digits = part.trim_end_matches(char::is_alphabetic);
   !digits.is_empty()
-    && digits.chars().all(|ch| ch.is_ascii_digit())
+    && digits
+      .chars()
+      .all(|ch| ch.general_category() == GeneralCategory::DecimalNumber)
     && part.chars().count().saturating_sub(digits.chars().count()) <= 1
 }
 
@@ -2035,43 +2268,72 @@ fn cluster_seeds(
   seeds: &[Seed],
   full_text: &str,
   entity_index: &NonAddressEntityIndex,
+  directional_abbreviations: &BTreeSet<String>,
 ) -> Vec<SeedCluster> {
   let Some(first) = seeds.first() else {
     return Vec::new();
   };
 
   let mut clusters = Vec::new();
+  let mut run = 0usize;
   let mut current = SeedCluster {
     seeds: vec![first.clone()],
     start: first.start,
     end: first.end,
+    run,
+    left_growth: ClusterLeftGrowth::AddressContext,
   };
   for seed in seeds.iter().skip(1) {
-    let gap_ok = within_text_window(
+    let within_window = within_text_window(
       full_text,
       current.end,
       seed.start,
       ADDRESS_CLUSTER_MAX_GAP,
-    ) && !has_cluster_barrier(
-      full_text,
-      current.end,
-      seed.start,
-      ClusterJoin {
-        cluster: &current,
-        seed,
-      },
-      entity_index,
     );
-    if gap_ok {
-      current.seeds.push(seed.clone());
-      current.end = current.end.max(seed.end);
-      continue;
+    let separation = if within_window {
+      cluster_separation(
+        full_text,
+        current.end,
+        seed.start,
+        ClusterJoin {
+          cluster: &current,
+          seed,
+        },
+        entity_index,
+        directional_abbreviations,
+      )
+    } else {
+      ClusterSeparation::DistanceGap
+    };
+    match separation {
+      ClusterSeparation::None => {
+        current.seeds.push(seed.clone());
+        current.end = current.end.max(seed.end);
+        continue;
+      }
+      // A non-address entity deliberately splits the output span without
+      // making the address evidence on either side unrelated.
+      ClusterSeparation::EntityBarrier => {}
+      // Paragraphs, prose, and distance gaps separate unrelated candidates;
+      // they must not let weak address fragments vouch for each other.
+      ClusterSeparation::TextBarrier | ClusterSeparation::DistanceGap => {
+        run = run.saturating_add(1);
+      }
     }
     clusters.push(current);
     current = SeedCluster {
       seeds: vec![seed.clone()],
       start: seed.start,
       end: seed.end,
+      run,
+      left_growth: match separation {
+        ClusterSeparation::TextBarrier | ClusterSeparation::DistanceGap => {
+          ClusterLeftGrowth::SeedBounded
+        }
+        ClusterSeparation::None | ClusterSeparation::EntityBarrier => {
+          ClusterLeftGrowth::AddressContext
+        }
+      },
     };
   }
   clusters.push(current);
@@ -2080,17 +2342,52 @@ fn cluster_seeds(
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct NonAddressEntityIndex {
-  spans: SpanIndex<bool>,
+  spans: SpanIndex<NonAddressEntitySpan>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct NonAddressEntitySpan {
+  start: usize,
+  end: usize,
+  is_date: bool,
+  has_case_number_label: bool,
+}
+
+#[derive(Clone, Copy)]
+struct NonAddressEntityIndexArgs<'a> {
+  existing_entities: &'a [PipelineEntity],
+  full_text: &'a str,
+  false_positive_filters: Option<&'a DenyListFilterData>,
 }
 
 impl NonAddressEntityIndex {
-  fn new(existing_entities: &[PipelineEntity]) -> Self {
+  fn new(args: NonAddressEntityIndexArgs<'_>) -> Self {
+    let NonAddressEntityIndexArgs {
+      existing_entities,
+      full_text,
+      false_positive_filters,
+    } = args;
     Self {
       spans: SpanIndex::new(
         existing_entities
           .iter()
           .filter(|entity| non_address_label(&entity.label))
-          .map(|entity| (entity.start, entity.end, date_label(&entity.label))),
+          .filter_map(|entity| {
+            let start = usize::try_from(entity.start).ok()?;
+            let end = usize::try_from(entity.end).ok()?;
+            let span = NonAddressEntitySpan {
+              start,
+              end,
+              is_date: date_label(&entity.label),
+              has_case_number_label: entity.label == CASE_NUMBER_LABEL
+                && false_positive_filters.is_some_and(|filters| {
+                  full_text.get(..start).is_some_and(|before| {
+                    ends_with_number_abbrev(before, filters)
+                  })
+                }),
+            };
+            Some((entity.start, entity.end, span))
+          }),
       ),
     }
   }
@@ -2118,6 +2415,61 @@ impl NonAddressEntityIndex {
     self.spans.any_overlapping(entity.start, entity.end)
   }
 
+  fn residual_gap_has_prose(
+    &self,
+    full_text: &str,
+    gap_start: usize,
+    gap_end: usize,
+    directional_abbreviations: &BTreeSet<String>,
+  ) -> bool {
+    let Some((query_start, query_end)) = u32::try_from(gap_start)
+      .ok()
+      .zip(u32::try_from(gap_end).ok())
+    else {
+      return false;
+    };
+    let mut cursor = gap_start;
+    let mut prose = ProseMeasure::default();
+    let mut saw_entity = false;
+    let visit =
+      self
+        .spans
+        .try_for_each_intersecting(query_start, query_end, |span| {
+          saw_entity = true;
+          let residual_end = span.start.min(gap_end);
+          if cursor < residual_end {
+            let Some(residual) = full_text.get(cursor..residual_end) else {
+              return Ok::<_, ()>(());
+            };
+            let residual_measure = if span.has_case_number_label {
+              residual_before_case_number_prose_measure(
+                residual,
+                directional_abbreviations,
+              )
+            } else {
+              residual_prose_measure(residual, directional_abbreviations)
+            };
+            prose.add(residual_measure);
+            if prose.exceeds_gap_limit() {
+              return Err(());
+            }
+          }
+          cursor = cursor.max(span.end.min(gap_end));
+          Ok(())
+        });
+    if visit.is_err() {
+      return true;
+    }
+    if !saw_entity || cursor >= gap_end {
+      return false;
+    }
+    let Some(residual) = full_text.get(cursor..gap_end) else {
+      return false;
+    };
+    prose.add(residual_prose_measure(residual, directional_abbreviations));
+    prose.exceeds_gap_limit()
+  }
+
   fn nearest_left(
     &self,
     full_text: &str,
@@ -2136,8 +2488,8 @@ impl NonAddressEntityIndex {
     }
     self
       .spans
-      .find_ending_at_or_before(start_offset, |end, is_date| {
-        !*is_date
+      .find_ending_at_or_before(start_offset, |end, span| {
+        !span.is_date
           || !usize::try_from(end)
             .is_ok_and(|end| date_can_prefix_street_name(full_text, end, start))
       })
@@ -2222,6 +2574,14 @@ struct ClusterJoin<'a> {
   seed: &'a Seed,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ClusterSeparation {
+  None,
+  EntityBarrier,
+  TextBarrier,
+  DistanceGap,
+}
+
 impl ClusterJoin<'_> {
   /// Once a street word is in the cluster, everything up to the destination
   /// is street-name material: "10 rue de la paix et de la liberté, Paris"
@@ -2242,18 +2602,34 @@ impl ClusterJoin<'_> {
   }
 }
 
-fn has_cluster_barrier(
+fn cluster_separation(
   full_text: &str,
   gap_start: usize,
   gap_end: usize,
   join: ClusterJoin<'_>,
   entity_index: &NonAddressEntityIndex,
-) -> bool {
-  full_text.get(gap_start..gap_end).is_some_and(|gap| {
+  directional_abbreviations: &BTreeSet<String>,
+) -> ClusterSeparation {
+  let has_text_barrier = full_text.get(gap_start..gap_end).is_some_and(|gap| {
     has_paragraph_break(gap)
       || has_prose_wrap_after_weak_cluster(gap, join.cluster)
-      || (join.guards_against_prose() && has_prose_run(gap))
-  }) || entity_index.has_barrier(gap_start, gap_end)
+      || (join.guards_against_prose()
+        && has_prose_run(gap, directional_abbreviations))
+      || (!join.guards_against_prose()
+        && entity_index.residual_gap_has_prose(
+          full_text,
+          gap_start,
+          gap_end,
+          directional_abbreviations,
+        ))
+  });
+  if has_text_barrier {
+    return ClusterSeparation::TextBarrier;
+  }
+  if entity_index.has_barrier(gap_start, gap_end) {
+    return ClusterSeparation::EntityBarrier;
+  }
+  ClusterSeparation::None
 }
 
 /// Two ordinary words in the gap mean the seeds sit in a sentence rather than
@@ -2262,12 +2638,190 @@ fn has_cluster_barrier(
 /// tolerated so a connective still joins components ("10 Main Street in
 /// Springfield"). Only applied before a street word opens the address; see
 /// `ClusterJoin::guards_against_prose`.
-fn has_prose_run(gap: &str) -> bool {
-  gap
+fn has_prose_run(
+  gap: &str,
+  directional_abbreviations: &BTreeSet<String>,
+) -> bool {
+  prose_measure(gap, directional_abbreviations).exceeds_gap_limit()
+}
+
+#[derive(Clone, Copy, Default)]
+struct ProseMeasure {
+  sentence_boundary: bool,
+  text_units: usize,
+  words: usize,
+}
+
+impl ProseMeasure {
+  const fn add(&mut self, other: Self) {
+    self.sentence_boundary |= other.sentence_boundary;
+    self.text_units = self.text_units.saturating_add(other.text_units);
+    self.words = self.words.saturating_add(other.words);
+  }
+
+  const fn exceeds_gap_limit(self) -> bool {
+    self.sentence_boundary
+      || self.words > MAX_PROSE_WORDS_BETWEEN_SEEDS
+      || self.text_units > MAX_PROSE_UNITS_BETWEEN_SEEDS
+  }
+}
+
+fn prose_measure(
+  gap: &str,
+  directional_abbreviations: &BTreeSet<String>,
+) -> ProseMeasure {
+  let mut measure = ProseMeasure {
+    sentence_boundary: has_sentence_boundary(gap, directional_abbreviations),
+    ..ProseMeasure::default()
+  };
+  for word in gap
     .split(|ch: char| !ch.is_alphanumeric() && !matches!(ch, '-' | '\'' | '’'))
     .filter(|word| is_prose_word(word))
-    .nth(MAX_PROSE_WORDS_BETWEEN_SEEDS)
-    .is_some()
+  {
+    measure.words = measure.words.saturating_add(1);
+    measure.text_units = measure
+      .text_units
+      .saturating_add(word.chars().map(char::len_utf16).sum::<usize>());
+  }
+  measure
+}
+
+/// Entity contents have already been removed from these slices. Count the
+/// remaining bounded text independently of casing so headings and uppercase
+/// prose cannot vouch for address fragments on both sides of the entity.
+fn residual_prose_measure(
+  gap: &str,
+  directional_abbreviations: &BTreeSet<String>,
+) -> ProseMeasure {
+  let mut measure = ProseMeasure {
+    sentence_boundary: has_sentence_boundary(gap, directional_abbreviations),
+    ..ProseMeasure::default()
+  };
+  for word in gap
+    .split(|ch: char| !ch.is_alphanumeric() && !matches!(ch, '-' | '\'' | '’'))
+    .filter(|word| is_residual_prose_word(word, directional_abbreviations))
+  {
+    measure.words = measure.words.saturating_add(1);
+    measure.text_units = measure
+      .text_units
+      .saturating_add(word.chars().map(char::len_utf16).sum::<usize>());
+  }
+  measure
+}
+
+fn residual_before_case_number_prose_measure(
+  gap: &str,
+  directional_abbreviations: &BTreeSet<String>,
+) -> ProseMeasure {
+  let trimmed = gap.trim_end();
+  let label_start = trimmed
+    .rfind([',', ';', '\n', '\r'])
+    .map_or(0, |index| index.saturating_add(1));
+  let Some(label) = trimmed.get(label_start..).map(str::trim) else {
+    return residual_prose_measure(gap, directional_abbreviations);
+  };
+  let label_words = label
+    .split_whitespace()
+    .filter(|word| word.chars().any(char::is_alphabetic))
+    .count();
+  let label_units = label.chars().map(char::len_utf16).sum::<usize>();
+  if label.ends_with('.') && (1..=3).contains(&label_words) && label_units <= 16
+  {
+    let Some(prefix) = gap.get(..label_start) else {
+      return residual_prose_measure(gap, directional_abbreviations);
+    };
+    return residual_prose_measure(prefix, directional_abbreviations);
+  }
+  residual_prose_measure(gap, directional_abbreviations)
+}
+
+fn has_sentence_boundary(
+  text: &str,
+  directional_abbreviations: &BTreeSet<String>,
+) -> bool {
+  if text.trim() == "." {
+    return true;
+  }
+  for (index, ch) in text.char_indices() {
+    if matches!(ch, '!' | '?' | '。' | '！' | '？') {
+      return true;
+    }
+    if ch != '.' {
+      continue;
+    }
+    let Some(after_period) = text.get(index.saturating_add(ch.len_utf8())..)
+    else {
+      continue;
+    };
+    let after_space = after_period.trim_start();
+    if after_space.len() < after_period.len()
+      && after_space.chars().next().is_some_and(char::is_uppercase)
+      && !starts_with_address_directional_continuation(
+        after_space,
+        directional_abbreviations,
+      )
+    {
+      return true;
+    }
+  }
+  false
+}
+
+pub(crate) fn starts_with_address_directional_continuation(
+  text: &str,
+  directional_abbreviations: &BTreeSet<String>,
+) -> bool {
+  let Some(continuation_end) =
+    address_directional_continuation_end(text, directional_abbreviations)
+  else {
+    return false;
+  };
+  text
+    .get(continuation_end..)
+    .is_some_and(starts_with_bounded_address_material)
+}
+
+fn starts_with_bounded_address_material(text: &str) -> bool {
+  let Some(segment) = text.trim_start().split([',', ';', '\n', '\r']).next()
+  else {
+    return false;
+  };
+  let segment = segment.trim_end_matches(['.', '!', '?']).trim_end();
+  let mut count = 0usize;
+  for word in segment.split_whitespace() {
+    count = count.saturating_add(1);
+    if count > 5
+      || !(is_house_number_part(word)
+        || is_street_name_word(word)
+        || is_in_name_connector(word))
+    {
+      return false;
+    }
+  }
+  count > 0
+}
+
+fn address_directional_continuation_end(
+  text: &str,
+  directional_abbreviations: &BTreeSet<String>,
+) -> Option<usize> {
+  let token_end = text
+    .find(|ch: char| !ch.is_ascii_alphabetic())
+    .unwrap_or(text.len());
+  let token = text.get(..token_end)?;
+  if !directional_abbreviations.contains(token) {
+    return None;
+  }
+  let tail = text.get(token_end..)?;
+  let comma_tail = tail.trim_start();
+  if !comma_tail.starts_with(',') {
+    return None;
+  }
+  Some(
+    token_end
+      .saturating_add(tail.len().saturating_sub(comma_tail.len()))
+      .saturating_add(1),
+  )
 }
 
 /// House numbers, postal codes, capitalized name words, and the connectives
@@ -2278,6 +2832,19 @@ fn is_prose_word(word: &str) -> bool {
   };
   !first.is_uppercase()
     && !first.is_ascii_digit()
+    && !is_street_particle(word)
+    && !is_in_name_connector(word)
+}
+
+fn is_residual_prose_word(
+  word: &str,
+  directional_abbreviations: &BTreeSet<String>,
+) -> bool {
+  let Some(first) = word.chars().next() else {
+    return false;
+  };
+  !first.is_ascii_digit()
+    && !directional_abbreviations.contains(word)
     && !is_street_particle(word)
     && !is_in_name_connector(word)
 }
@@ -2317,73 +2884,114 @@ fn has_prose_wrap_after_weak_cluster(
 }
 
 fn has_paragraph_break(text: &str) -> bool {
-  let mut saw_newline = false;
+  let mut line_breaks = 0usize;
+  let mut previous_was_carriage_return = false;
   for ch in text.chars() {
-    if ch == '\n' {
-      if saw_newline {
+    if matches!(ch, '\u{000c}' | '\u{2029}') {
+      return true;
+    }
+    if ch == '\n' && previous_was_carriage_return {
+      previous_was_carriage_return = false;
+      continue;
+    }
+    if matches!(ch, '\r' | '\n' | '\u{2028}') {
+      line_breaks = line_breaks.saturating_add(1);
+      if line_breaks >= 2 {
         return true;
       }
-      saw_newline = true;
+      previous_was_carriage_return = ch == '\r';
       continue;
     }
     if !ch.is_whitespace() {
-      saw_newline = false;
+      line_breaks = 0;
     }
+    previous_was_carriage_return = false;
   }
   false
 }
 
-/// `None` when the cluster carries fewer than two kinds of address evidence,
-/// which is too little for an address on its own. Standalone street detection
-/// re-scores exactly that case; see `standalone_street_score`.
-fn score_cluster(cluster: &SeedCluster) -> Option<f64> {
-  let mut has_street_word = false;
-  let mut has_postal_code = false;
-  let mut has_city = false;
-  let mut has_state = false;
-  let mut has_address_trigger = false;
+/// Which kinds of address evidence a set of seeds carries, one bit per
+/// `SeedType`.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct AddressEvidence(u8);
 
-  for seed in &cluster.seeds {
-    match seed.kind {
-      SeedType::StreetWord => has_street_word = true,
-      SeedType::PostalCode => has_postal_code = true,
-      SeedType::City => has_city = true,
-      SeedType::State => has_state = true,
-      SeedType::AddressTrigger => has_address_trigger = true,
+impl AddressEvidence {
+  const fn bit(kind: SeedType) -> u8 {
+    match kind {
+      SeedType::StreetWord => 1,
+      SeedType::PostalCode => 1 << 1,
+      SeedType::City => 1 << 2,
+      SeedType::State => 1 << 3,
+      SeedType::AddressTrigger => 1 << 4,
     }
   }
 
-  let type_count = [
-    has_street_word,
-    has_postal_code,
-    has_city,
-    has_state,
-    has_address_trigger,
-  ]
-  .into_iter()
-  .filter(|seen| *seen)
-  .count();
-  if type_count < 2 {
-    return None;
+  fn collect<'seed>(seeds: impl IntoIterator<Item = &'seed Seed>) -> Self {
+    Self(
+      seeds
+        .into_iter()
+        .fold(0, |bits, seed| bits | Self::bit(seed.kind)),
+    )
   }
 
-  let mut score = ADDRESS_SCORE_BASE;
-  if has_postal_code {
-    score += 0.15;
+  const fn merge(self, other: Self) -> Self {
+    Self(self.0 | other.0)
   }
-  if has_city {
-    score += 0.15;
+
+  const fn contains(self, kind: SeedType) -> bool {
+    self.0 & Self::bit(kind) != 0
   }
-  if has_state {
-    score += 0.15;
+
+  /// Two kinds of evidence is the floor for an address on its own.
+  const fn is_sufficient(self) -> bool {
+    self.0.count_ones() >= 2
   }
-  if has_street_word {
-    score += 0.15;
+
+  fn score(self) -> f64 {
+    let mut score = ADDRESS_SCORE_BASE;
+    if self.contains(SeedType::PostalCode) {
+      score += 0.15;
+    }
+    if self.contains(SeedType::City) {
+      score += 0.15;
+    }
+    if self.contains(SeedType::State) {
+      score += 0.15;
+    }
+    if self.contains(SeedType::StreetWord) {
+      score += 0.15;
+    }
+    if self.contains(SeedType::AddressTrigger) {
+      score += 0.1;
+    }
+    score.min(ADDRESS_SCORE_MAX)
   }
-  if has_address_trigger {
-    score += 0.1;
+}
+
+/// `None` when the cluster carries fewer than two kinds of address evidence,
+/// which is too little for an address on its own. A cluster split off by a
+/// barrier is re-scored against its run; standalone street detection covers
+/// what remains. See `run_evidence` and `standalone_street_score`.
+fn score_cluster(cluster: &SeedCluster) -> Option<f64> {
+  let evidence = AddressEvidence::collect(&cluster.seeds);
+  evidence.is_sufficient().then(|| evidence.score())
+}
+
+/// Evidence per barrier run, indexed by `SeedCluster::run`. A case number,
+/// date, or person between two halves of an address splits the cluster but
+/// does not make either half unrelated, so the halves qualify together.
+fn run_evidence(clusters: &[SeedCluster]) -> Vec<AddressEvidence> {
+  let mut runs: Vec<AddressEvidence> = Vec::new();
+  for cluster in clusters {
+    if runs.len() <= cluster.run {
+      runs.resize(cluster.run.saturating_add(1), AddressEvidence::default());
+    }
+    let Some(existing) = runs.get_mut(cluster.run) else {
+      continue;
+    };
+    *existing = existing.merge(AddressEvidence::collect(&cluster.seeds));
   }
-  Some(score.min(ADDRESS_SCORE_MAX))
+  runs
 }
 
 fn nearest_left_non_address(
@@ -2532,12 +3140,15 @@ fn trim_address_tail(full_text: &str, start: usize, mut end: usize) -> usize {
 /// `from`. The abbreviation check reads the whole text, not the tail: a unit
 /// abbreviation can start before `from` when a deny-list city span already
 /// covers its word ("... Springfield Apt" | ". 5").
-fn sentence_boundary(
-  full_text: &str,
+struct SentenceBoundaryArgs<'a> {
+  full_text: &'a str,
   from: usize,
-  unit_abbreviations: &BTreeSet<String>,
-) -> Option<usize> {
-  let text = full_text.get(from..)?;
+  unit_abbreviations: &'a BTreeSet<String>,
+  directional_abbreviations: &'a BTreeSet<String>,
+}
+
+fn sentence_boundary(args: &SentenceBoundaryArgs<'_>) -> Option<usize> {
+  let text = args.full_text.get(args.from..)?;
   let mut iter = text.char_indices().peekable();
   while let Some((index, ch)) = iter.next() {
     if !matches!(ch, '.' | '!' | '?') {
@@ -2545,12 +3156,31 @@ fn sentence_boundary(
     }
     if ch == '.'
       && is_unit_abbreviation(
-        full_text,
-        from.saturating_add(index),
-        unit_abbreviations,
+        args.full_text,
+        args.from.saturating_add(index),
+        args.unit_abbreviations,
       )
     {
       continue;
+    }
+    if ch == '.' {
+      let after_period = text.get(index.saturating_add(ch.len_utf8())..)?;
+      let after_space = after_period.trim_start();
+      if after_space.len() < after_period.len()
+        && let Some(continuation_end) = address_directional_continuation_end(
+          after_space,
+          args.directional_abbreviations,
+        )
+      {
+        let whitespace_len =
+          after_period.len().saturating_sub(after_space.len());
+        return Some(
+          index
+            .saturating_add(ch.len_utf8())
+            .saturating_add(whitespace_len)
+            .saturating_add(continuation_end),
+        );
+      }
     }
     let mut saw_whitespace = false;
     while let Some((_, next)) = iter.peek().copied() {
@@ -2704,6 +3334,46 @@ mod tests {
   use proptest::prelude::*;
 
   use super::*;
+
+  #[test]
+  fn unit_abbreviations_match_with_and_without_the_dot() {
+    let abbreviations = ["apt.", "ste.", "unit."]
+      .into_iter()
+      .map(String::from)
+      .collect();
+
+    for token in ["Apt.", "apt.", "Apt", "apt", "STE", "Unit"] {
+      assert!(
+        matches_unit_abbreviation(token, &abbreviations),
+        "token {token:?}"
+      );
+    }
+
+    for token in ["", "apartment", "apt..", "flat"] {
+      assert!(
+        !matches_unit_abbreviation(token, &abbreviations),
+        "token {token:?}"
+      );
+    }
+  }
+
+  #[test]
+  fn unit_value_end_preserves_decomposed_combining_marks() {
+    let value = "A\u{0308}1";
+
+    assert_eq!(plausible_unit_value_end(value, 0), Some(value.len()));
+  }
+
+  #[test]
+  fn unit_value_end_accepts_bounded_unicode_decimal_numbers() {
+    for value in ["１２３４５", "١٢٣٤٥"] {
+      assert_eq!(plausible_unit_value_end(value, 0), Some(value.len()));
+    }
+    assert_eq!(
+      plausible_unit_value_end("１２３４５６７８９０１２３４", 0),
+      None
+    );
+  }
 
   #[test]
   fn us_state_zip_prefix_includes_optional_four_digit_extension() {
@@ -2886,13 +3556,18 @@ mod tests {
           && usize::try_from(entity.end).is_ok_and(|end| end > gap_start)
       });
 
+      let index_args = || NonAddressEntityIndexArgs {
+        existing_entities: &entities,
+        full_text: "",
+        false_positive_filters: None,
+      };
       prop_assert_eq!(
-        NonAddressEntityIndex::new(&entities)
+        NonAddressEntityIndex::new(index_args())
           .has_barrier(gap_start, gap_end),
         expected,
       );
 
-      let index = NonAddressEntityIndex::new(&entities);
+      let index = NonAddressEntityIndex::new(index_args());
       if gap_start < gap_end {
         let expected_overlap = entities.iter().any(|entity| {
           non_address_label(&entity.label)
@@ -3429,7 +4104,13 @@ mod tests {
     ];
 
     let result = data
-      .process_profiled(&[], PatternSlice::default(), full_text, &existing)?
+      .process_profiled(AddressSeedProcessArgs {
+        matches: &[],
+        street_type_slice: PatternSlice::default(),
+        full_text,
+        existing_entities: &existing,
+        false_positive_filters: None,
+      })?
       .entities;
 
     assert!(
@@ -3450,16 +4131,17 @@ mod tests {
         DetectionSource::DenyList,
       )?];
       let wrapped_result = data
-        .process_profiled(
-          &[SearchMatch::Literal {
+        .process_profiled(AddressSeedProcessArgs {
+          matches: &[SearchMatch::Literal {
             pattern: 0,
             start: 4,
             end: 10,
           }],
-          PatternSlice { start: 0, end: 1 },
-          &wrapped_text,
-          &wrapped_existing,
-        )?
+          street_type_slice: PatternSlice { start: 0, end: 1 },
+          full_text: &wrapped_text,
+          existing_entities: &wrapped_existing,
+          false_positive_filters: None,
+        })?
         .entities;
 
       assert!(

@@ -1,7 +1,8 @@
 use std::collections::BTreeSet;
 
-use crate::address_seeds::AddressSeedDetection;
-use crate::address_seeds::PreparedAddressSeedData;
+use crate::address_seeds::{
+  AddressSeedDetection, AddressSeedProcessArgs, PreparedAddressSeedData,
+};
 use crate::diagnostics::{DiagnosticStage, StaticRedactionDiagnostics};
 use crate::labels::{
   ADDRESS_LABEL, CREDIT_CARD_NUMBER_LABEL, IDENTITY_CARD_NUMBER_LABEL,
@@ -14,13 +15,18 @@ use crate::prepared_metadata::{
   PreparedCountryMatchData, PreparedGazetteerMatchData, PreparedRegexMatchData,
 };
 use crate::processors::{
-  DenyListMatchData, PatternSlice, process_deny_list_matches_with_field_labels,
+  DenyListFilterData, DenyListMatchData, PatternSlice,
+  process_deny_list_matches_with_field_labels,
   process_prepared_country_matches, process_prepared_gazetteer_matches,
   process_prepared_regex_matches,
 };
 use crate::resolution::{PipelineEntity, ResolutionDocument};
-use crate::signatures::{PreparedSignatureData, detect_signatures};
-use crate::triggers::{PreparedTriggerData, process_trigger_matches};
+use crate::signatures::{
+  DetectSignaturesArgs, PreparedSignatureData, detect_signatures,
+};
+use crate::triggers::{
+  PreparedTriggerData, ProcessTriggerMatchesArgs, process_trigger_matches,
+};
 use crate::types::{Error, Result, SearchMatch};
 
 use super::PreparedEngine;
@@ -60,7 +66,9 @@ pub(super) enum StaticDetectorInput {
   DateData,
   MonetaryData,
   TriggerData,
+  FirstNames,
   TitleTokens,
+  FalsePositiveFilters,
   SignatureData,
   LegalFormData,
   NameCorpusData,
@@ -290,14 +298,19 @@ impl<'a> StaticDetectorContext<'a> {
       return Ok(Vec::new());
     };
     let empty_title_tokens = BTreeSet::new();
-    process_trigger_matches(
-      self.regex_matches()?,
-      self.triggers_slice()?,
-      self.full_text()?,
+    let person_value_labels = self
+      .signature_data()?
+      .map(PreparedSignatureData::person_value_labels)
+      .unwrap_or_default();
+    process_trigger_matches(ProcessTriggerMatchesArgs {
+      matches: self.regex_matches()?,
+      slice: self.triggers_slice()?,
+      full_text: self.full_text()?,
       data,
-      self.title_tokens()?.unwrap_or(&empty_title_tokens),
+      person_value_labels,
+      title_tokens: self.title_tokens()?.unwrap_or(&empty_title_tokens),
       diagnostics,
-    )
+    })
   }
 
   pub(super) fn signature_is_active(&self) -> Result<bool> {
@@ -306,11 +319,19 @@ impl<'a> StaticDetectorContext<'a> {
 
   pub(super) fn detect_signature(&self) -> Result<Vec<PipelineEntity>> {
     let full_text = self.full_text()?;
-    Ok(
-      self
-        .signature_data()?
-        .map_or_else(Vec::new, |data| detect_signatures(full_text, data)),
-    )
+    let first_names = self.first_names()?;
+    let empty_title_tokens = BTreeSet::new();
+    let title_tokens = self.title_tokens()?.unwrap_or(&empty_title_tokens);
+    let name_corpus = self.name_corpus_data()?;
+    Ok(self.signature_data()?.map_or_else(Vec::new, |data| {
+      detect_signatures(&DetectSignaturesArgs {
+        full_text,
+        data,
+        first_names,
+        name_corpus,
+        title_tokens,
+      })
+    }))
   }
 
   pub(super) fn legal_form_is_active(&self) -> Result<bool> {
@@ -389,12 +410,13 @@ impl<'a> StaticDetectorContext<'a> {
     };
     let entities = dependencies.collect_context_entities()?;
     let count = entities.len();
-    let detection = data.process_profiled(
-      self.literal_matches()?,
-      self.street_types_slice()?,
-      self.full_text()?,
-      &entities,
-    )?;
+    let detection = data.process_profiled(AddressSeedProcessArgs {
+      matches: self.literal_matches()?,
+      street_type_slice: self.street_types_slice()?,
+      full_text: self.full_text()?,
+      existing_entities: &entities,
+      false_positive_filters: self.false_positive_filters()?,
+    })?;
     Ok((detection, count))
   }
 
@@ -490,10 +512,25 @@ impl<'a> StaticDetectorContext<'a> {
       self
         .engine
         .data
-        .false_positive_filters
-        .as_ref()
+        .effective_false_positive_filters()
         .map(|filters| &filters.title_tokens),
     )
+  }
+
+  fn first_names(&self) -> Result<Option<&'a BTreeSet<String>>> {
+    self.require(StaticDetectorInput::FirstNames)?;
+    Ok(
+      self
+        .engine
+        .data
+        .effective_false_positive_filters()
+        .map(|filters| &filters.first_names),
+    )
+  }
+
+  fn false_positive_filters(&self) -> Result<Option<&'a DenyListFilterData>> {
+    self.require(StaticDetectorInput::FalsePositiveFilters)?;
+    Ok(self.engine.data.effective_false_positive_filters())
   }
 
   fn signature_data(&self) -> Result<Option<&'a PreparedSignatureData>> {

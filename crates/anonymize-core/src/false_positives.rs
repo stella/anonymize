@@ -6,6 +6,7 @@ use regex::Regex;
 
 use crate::address_seeds::soft_wrapped_us_city_tail;
 use crate::byte_offsets::ByteOffsets;
+use crate::legal_forms::PreparedLegalFormData;
 use crate::processors::DenyListFilterData;
 use crate::resolution::{
   DetectionSource, PipelineEntity, ResolutionDocument, SourceDetail,
@@ -78,11 +79,24 @@ fn line_context<'a>(
   }))
 }
 
+pub(crate) struct FilterEntityFalsePositivesArgs<'a> {
+  pub(crate) entities: Vec<PipelineEntity>,
+  pub(crate) document: &'a ResolutionDocument<'a>,
+  pub(crate) filters: Option<&'a DenyListFilterData>,
+  pub(crate) directional_abbreviations: Option<&'a BTreeSet<String>>,
+  pub(crate) legal_form_data: Option<&'a PreparedLegalFormData>,
+}
+
 pub(crate) fn filter_entity_false_positives(
-  entities: Vec<PipelineEntity>,
-  document: &ResolutionDocument<'_>,
-  filters: Option<&DenyListFilterData>,
+  args: FilterEntityFalsePositivesArgs<'_>,
 ) -> Result<Vec<PipelineEntity>> {
+  let FilterEntityFalsePositivesArgs {
+    entities,
+    document,
+    filters,
+    directional_abbreviations,
+    legal_form_data,
+  } = args;
   let offsets = document.offsets();
   let mut filtered = Vec::with_capacity(entities.len());
   for entity in entities {
@@ -91,10 +105,18 @@ pub(crate) fn filter_entity_false_positives(
       continue;
     }
 
-    let Some(normalized) = normalize_entity(entity, &offsets, filters)? else {
+    let Some(normalized) =
+      normalize_entity(entity, &offsets, filters, directional_abbreviations)?
+    else {
       continue;
     };
-    if should_reject_entity(&normalized, document, &offsets, filters)? {
+    if should_reject_entity(ShouldRejectEntityArgs {
+      entity: &normalized,
+      document,
+      offsets: &offsets,
+      filters,
+      legal_form_data,
+    })? {
       continue;
     }
     filtered.push(normalized);
@@ -107,6 +129,7 @@ fn normalize_entity(
   mut entity: PipelineEntity,
   offsets: &ByteOffsets<'_>,
   filters: Option<&DenyListFilterData>,
+  directional_abbreviations: Option<&BTreeSet<String>>,
 ) -> Result<Option<PipelineEntity>> {
   let raw_text = offsets.slice_ref(entity.start, entity.end)?;
   let mut start_byte = 0usize;
@@ -126,9 +149,11 @@ fn normalize_entity(
     }
 
     let address_text = slice(raw_text, start_byte, end_byte)?;
-    if let Some(trimmed_end) =
-      trim_trailing_address_prose(address_text, filters)
-    {
+    if let Some(trimmed_end) = trim_trailing_address_prose(
+      address_text,
+      filters,
+      directional_abbreviations,
+    ) {
       end_byte = start_byte.saturating_add(trimmed_end);
     }
   }
@@ -233,12 +258,23 @@ pub(crate) fn soft_wrapped_city_person_candidate(
   }))
 }
 
-fn should_reject_entity(
-  entity: &PipelineEntity,
-  document: &ResolutionDocument<'_>,
-  offsets: &ByteOffsets<'_>,
-  filters: Option<&DenyListFilterData>,
-) -> Result<bool> {
+#[derive(Clone, Copy)]
+struct ShouldRejectEntityArgs<'a> {
+  entity: &'a PipelineEntity,
+  document: &'a ResolutionDocument<'a>,
+  offsets: &'a ByteOffsets<'a>,
+  filters: Option<&'a DenyListFilterData>,
+  legal_form_data: Option<&'a PreparedLegalFormData>,
+}
+
+fn should_reject_entity(args: ShouldRejectEntityArgs<'_>) -> Result<bool> {
+  let ShouldRejectEntityArgs {
+    entity,
+    document,
+    offsets,
+    filters,
+    legal_form_data,
+  } = args;
   let full_text = document.text();
   let text = entity.text.trim();
   if is_template_placeholder(text) {
@@ -313,7 +349,12 @@ fn should_reject_entity(
   }
   if entity.label == ORGANIZATION_LABEL
     && is_all_caps_candidate(text)
-    && is_all_caps_boilerplate_line(document, offsets, entity)?
+    && is_all_caps_boilerplate_line(IsAllCapsBoilerplateLineArgs {
+      document,
+      offsets,
+      entity,
+      legal_form_data,
+    })?
   {
     return Ok(true);
   }
@@ -497,7 +538,10 @@ fn has_number_abbrev_prefix(
   Ok(ends_with_number_abbrev(before, filters))
 }
 
-fn ends_with_number_abbrev(text: &str, filters: &DenyListFilterData) -> bool {
+pub(crate) fn ends_with_number_abbrev(
+  text: &str,
+  filters: &DenyListFilterData,
+) -> bool {
   let lower = text.trim_end().to_lowercase();
   filters.number_abbrev_prefixes.iter().any(|prefix| {
     let Some(before_prefix) = lower.strip_suffix(prefix) else {
@@ -681,11 +725,23 @@ fn is_all_caps_candidate(text: &str) -> bool {
   has_upper
 }
 
+#[derive(Clone, Copy)]
+struct IsAllCapsBoilerplateLineArgs<'a> {
+  document: &'a ResolutionDocument<'a>,
+  offsets: &'a ByteOffsets<'a>,
+  entity: &'a PipelineEntity,
+  legal_form_data: Option<&'a PreparedLegalFormData>,
+}
+
 fn is_all_caps_boilerplate_line(
-  document: &ResolutionDocument<'_>,
-  offsets: &ByteOffsets<'_>,
-  entity: &PipelineEntity,
+  args: IsAllCapsBoilerplateLineArgs<'_>,
 ) -> Result<bool> {
+  let IsAllCapsBoilerplateLineArgs {
+    document,
+    offsets,
+    entity,
+    legal_form_data,
+  } = args;
   let Some(context) = line_context(document, offsets, entity)? else {
     return Ok(false);
   };
@@ -715,12 +771,36 @@ fn is_all_caps_boilerplate_line(
   if starts_with_section_heading_prefix(context.line) {
     return Ok(true);
   }
-  if outside_entity_letters >= ALL_CAPS_LINE_PROSE_EXTRA_LETTERS {
+  // Contracts routinely set party clauses and captions in all caps. A
+  // legal-form suffix is positive organization evidence, so it outweighs the
+  // surrounding prose heuristic when the entity sits inside the clause or is
+  // followed by caption punctuation. At the start of an unpunctuated heading,
+  // however, a short ambiguous suffix can make the first heading words look
+  // like an organization.
+  let has_caption_delimiter = context
+    .after
+    .trim_start()
+    .chars()
+    .next()
+    .is_some_and(|ch| matches!(ch, ',' | ':' | ';' | '(' | '-' | '–' | '—'));
+  let has_structural_clause = legal_form_data.is_some_and(|data| {
+    data.has_leading_clause_phrase(context.before)
+      || data.has_subject_clause_tail(context.after)
+        && (context.before.trim().is_empty()
+          || data.is_party_label_prefix(context.before))
+  });
+  let legal_form_heading = entity.source == DetectionSource::LegalForm
+    && !has_caption_delimiter
+    && !has_structural_clause;
+  if outside_entity_letters >= ALL_CAPS_LINE_PROSE_EXTRA_LETTERS
+    && (entity.source != DetectionSource::LegalForm || legal_form_heading)
+  {
     return Ok(true);
   }
   Ok(
     word_count(&entity.text) > ALL_CAPS_LINE_HEADING_WORD_LIMIT
-      && !entity.text.contains(','),
+      && !entity.text.contains(',')
+      && (entity.source != DetectionSource::LegalForm || legal_form_heading),
   )
 }
 
@@ -832,6 +912,7 @@ fn looks_like_address_start(text: &str, filters: &DenyListFilterData) -> bool {
 fn trim_trailing_address_prose(
   text: &str,
   filters: &DenyListFilterData,
+  directional_abbreviations: Option<&BTreeSet<String>>,
 ) -> Option<usize> {
   for (index, ch) in text.char_indices() {
     if ch != '.' {
@@ -858,7 +939,11 @@ fn trim_trailing_address_prose(
       // dot when a unit/address continuation follows ("Suite 100"); otherwise
       // it is a real sentence boundary and trailing prose must be trimmed. Keep
       // the abbreviation dot in the retained span.
-      if is_unit_or_address_continuation(after, filters) {
+      if is_unit_or_address_continuation(
+        after,
+        filters,
+        directional_abbreviations,
+      ) {
         continue;
       }
       if after.chars().next().is_some_and(char::is_uppercase) {
@@ -871,7 +956,11 @@ fn trim_trailing_address_prose(
       // street name is never a sentence boundary here.
       continue;
     }
-    if is_unit_or_address_continuation(after, filters) {
+    if is_unit_or_address_continuation(
+      after,
+      filters,
+      directional_abbreviations,
+    ) {
       continue;
     }
     if after.chars().next().is_some_and(char::is_uppercase) {
@@ -887,9 +976,16 @@ fn trim_trailing_address_prose(
 fn is_unit_or_address_continuation(
   after: &str,
   filters: &DenyListFilterData,
+  directional_abbreviations: Option<&BTreeSet<String>>,
 ) -> bool {
   after.len() < 5
     || has_address_component(after, filters)
+    || directional_abbreviations.is_some_and(|abbreviations| {
+      crate::address_seeds::starts_with_address_directional_continuation(
+        after,
+        abbreviations,
+      )
+    })
     || starts_with_unit_number(after, filters)
 }
 
@@ -1424,11 +1520,90 @@ mod tests {
     full_text: &str,
     filters: Option<&DenyListFilterData>,
   ) -> Result<Vec<PipelineEntity>> {
-    super::filter_entity_false_positives(
+    let legal_form_data = prepared_clause_data(PreparedClauseDataArgs {
+      leading_phrases: &[
+        "by and among",
+        "by and between",
+        "is between",
+        "is with",
+      ],
+      role_heads: &["party", "seller"],
+      sentence_verbs: &["is"],
+    });
+    filter_with_legal_form_data(FilterWithLegalFormDataArgs {
       entities,
-      &ResolutionDocument::new(full_text),
+      full_text,
       filters,
+      legal_form_data: &legal_form_data,
+    })
+  }
+
+  #[derive(Clone, Copy)]
+  struct PreparedClauseDataArgs<'a> {
+    leading_phrases: &'a [&'a str],
+    role_heads: &'a [&'a str],
+    sentence_verbs: &'a [&'a str],
+  }
+
+  fn prepared_clause_data(
+    args: PreparedClauseDataArgs<'_>,
+  ) -> PreparedLegalFormData {
+    let PreparedClauseDataArgs {
+      leading_phrases,
+      role_heads,
+      sentence_verbs,
+    } = args;
+    PreparedLegalFormData::new_with_soft_wrap_boundary_labels(
+      crate::legal_forms::LegalFormData {
+        leading_clause_phrases: leading_phrases
+          .iter()
+          .map(|value| (*value).to_string())
+          .collect(),
+        role_heads: role_heads
+          .iter()
+          .map(|value| (*value).to_string())
+          .collect(),
+        sentence_verb_indicators: sentence_verbs
+          .iter()
+          .map(|value| (*value).to_string())
+          .collect(),
+        ..crate::legal_forms::LegalFormData::default()
+      },
+      Vec::new(),
     )
+  }
+
+  struct FilterWithLegalFormDataArgs<'a> {
+    entities: Vec<PipelineEntity>,
+    full_text: &'a str,
+    filters: Option<&'a DenyListFilterData>,
+    legal_form_data: &'a PreparedLegalFormData,
+  }
+
+  fn filter_with_legal_form_data(
+    args: FilterWithLegalFormDataArgs<'_>,
+  ) -> Result<Vec<PipelineEntity>> {
+    let FilterWithLegalFormDataArgs {
+      entities,
+      full_text,
+      filters,
+      legal_form_data,
+    } = args;
+    let document = ResolutionDocument::new(full_text);
+    super::filter_entity_false_positives(FilterEntityFalsePositivesArgs {
+      entities,
+      document: &document,
+      filters,
+      directional_abbreviations: None,
+      legal_form_data: Some(legal_form_data),
+    })
+  }
+
+  fn trim_trailing_address_prose(
+    text: &str,
+    filters: &DenyListFilterData,
+  ) -> Option<usize> {
+    super::trim_trailing_address_prose(text, filters, None)
   }
 
   #[test]
@@ -1461,6 +1636,7 @@ mod tests {
       entity,
       &ByteOffsets::new(full_text),
       Some(&DenyListFilterData::default()),
+      None,
     )?
     .ok_or(Error::InvalidSpan { start: 0, end: 0 })?;
 
@@ -2164,6 +2340,488 @@ mod tests {
     .unwrap();
 
     assert!(entities.is_empty());
+  }
+
+  #[test]
+  fn keeps_legal_form_organizations_on_all_caps_lines() {
+    // Contracts are routinely set in all caps. The boilerplate heuristic
+    // reads the surrounding line, so a party named in an all-caps clause
+    // looks like a heading; a legal-form suffix is positive evidence that it
+    // is a company, and must survive the line-shape veto.
+    for terminal in [".", "!", "?", "。", "！", "？"] {
+      let text =
+        format!("THIS AGREEMENT IS WITH ACME LIMITED IN PRAGUE{terminal}\n");
+      let start = text.find("ACME LIMITED").unwrap();
+      let end = start.saturating_add("ACME LIMITED".len());
+      let entities = filter_entity_false_positives(
+        vec![PipelineEntity::detected(
+          u32::try_from(start).unwrap(),
+          u32::try_from(end).unwrap(),
+          ORGANIZATION_LABEL,
+          "ACME LIMITED",
+          0.8,
+          DetectionSource::LegalForm,
+        )],
+        &text,
+        Some(&DenyListFilterData::default()),
+      )
+      .unwrap();
+
+      assert_eq!(entities.len(), 1, "terminal {terminal:?}");
+    }
+  }
+
+  #[test]
+  fn keeps_long_legal_form_party_clauses() {
+    let text = "THIS AGREEMENT IS WITH ACME LIMITED AS THE SELLER UNDER THIS AGREEMENT.\n";
+    let entities = filter_entity_false_positives(
+      vec![entity(
+        text,
+        "ACME LIMITED",
+        ORGANIZATION_LABEL,
+        DetectionSource::LegalForm,
+      )],
+      text,
+      Some(&DenyListFilterData::default()),
+    )
+    .unwrap();
+
+    assert_eq!(entities.len(), 1);
+  }
+
+  #[test]
+  fn legal_form_party_clauses_use_scoped_introducers() {
+    for (text, entity_text, leading_phrases, role_heads, sentence_verbs) in [
+      (
+        "DIESE VEREINBARUNG IST MIT ACME GMBH ALS VERKÄUFER GESCHLOSSEN.\n",
+        "ACME GMBH",
+        vec!["ist mit"],
+        vec!["verkäufer"],
+        vec!["ist"],
+      ),
+      (
+        "TATO SMLOUVA JE S ACME S.R.O. JAKO PRODÁVAJÍCÍ UZAVŘENA.\n",
+        "ACME S.R.O.",
+        vec!["je s"],
+        vec!["prodávající"],
+        vec!["je"],
+      ),
+    ] {
+      let legal_form_data = prepared_clause_data(PreparedClauseDataArgs {
+        leading_phrases: &leading_phrases,
+        role_heads: &role_heads,
+        sentence_verbs: &sentence_verbs,
+      });
+      let entities = filter_with_legal_form_data(FilterWithLegalFormDataArgs {
+        entities: vec![entity(
+          text,
+          entity_text,
+          ORGANIZATION_LABEL,
+          DetectionSource::LegalForm,
+        )],
+        full_text: text,
+        filters: Some(&DenyListFilterData::default()),
+        legal_form_data: &legal_form_data,
+      })
+      .unwrap();
+      assert_eq!(entities.len(), 1, "text {text:?}");
+    }
+
+    let german =
+      "DIESE VEREINBARUNG IST MIT ACME GMBH ALS VERKÄUFER GESCHLOSSEN.\n";
+    let english_data = prepared_clause_data(PreparedClauseDataArgs {
+      leading_phrases: &["is with"],
+      role_heads: &["party", "seller"],
+      sentence_verbs: &["is"],
+    });
+    let scope_mismatch_entities =
+      filter_with_legal_form_data(FilterWithLegalFormDataArgs {
+        entities: vec![entity(
+          german,
+          "ACME GMBH",
+          ORGANIZATION_LABEL,
+          DetectionSource::LegalForm,
+        )],
+        full_text: german,
+        filters: Some(&DenyListFilterData::default()),
+        legal_form_data: &english_data,
+      })
+      .unwrap();
+    assert!(scope_mismatch_entities.is_empty());
+  }
+
+  #[test]
+  fn keeps_subject_led_all_caps_party_clauses() {
+    for (text, entity_text, role_heads, sentence_verbs) in [
+      (
+        "ACME LIMITED IS A PARTY TO THIS AGREEMENT。\n",
+        "ACME LIMITED",
+        vec!["party"],
+        vec!["is"],
+      ),
+      (
+        "ACME GMBH IST EINE VERTRAGSPARTEI DIESES VERTRAGS.\n",
+        "ACME GMBH",
+        vec!["vertragspartei"],
+        vec!["ist"],
+      ),
+      (
+        "ACME S.R.O. JE SMLUVNÍ STRANOU TÉTO SMLOUVY.\n",
+        "ACME S.R.O.",
+        vec!["smluvní"],
+        vec!["je"],
+      ),
+    ] {
+      let legal_form_data = prepared_clause_data(PreparedClauseDataArgs {
+        leading_phrases: &[],
+        role_heads: &role_heads,
+        sentence_verbs: &sentence_verbs,
+      });
+      let entities = filter_with_legal_form_data(FilterWithLegalFormDataArgs {
+        entities: vec![entity(
+          text,
+          entity_text,
+          ORGANIZATION_LABEL,
+          DetectionSource::LegalForm,
+        )],
+        full_text: text,
+        filters: Some(&DenyListFilterData::default()),
+        legal_form_data: &legal_form_data,
+      })
+      .unwrap();
+
+      assert_eq!(entities.len(), 1, "text {text:?}");
+    }
+
+    let german = "ACME GMBH IST EINE VERTRAGSPARTEI DIESES VERTRAGS.\n";
+    let english_data = prepared_clause_data(PreparedClauseDataArgs {
+      leading_phrases: &[],
+      role_heads: &["party"],
+      sentence_verbs: &["is"],
+    });
+    let scope_isolation_entities =
+      filter_with_legal_form_data(FilterWithLegalFormDataArgs {
+        entities: vec![entity(
+          german,
+          "ACME GMBH",
+          ORGANIZATION_LABEL,
+          DetectionSource::LegalForm,
+        )],
+        full_text: german,
+        filters: Some(&DenyListFilterData::default()),
+        legal_form_data: &english_data,
+      })
+      .unwrap();
+
+    assert!(scope_isolation_entities.is_empty());
+
+    let labelled = "PARTY A: ACME LIMITED IS A PARTY TO THIS AGREEMENT.\n";
+    let labelled_entities = filter_entity_false_positives(
+      vec![entity(
+        labelled,
+        "ACME LIMITED",
+        ORGANIZATION_LABEL,
+        DetectionSource::LegalForm,
+      )],
+      labelled,
+      Some(&DenyListFilterData::default()),
+    )
+    .unwrap();
+    assert_eq!(labelled_entities.len(), 1);
+
+    let generic = "SECTION A: ACME LIMITED IS A PARTY TO THIS AGREEMENT.\n";
+    let generic_entities = filter_entity_false_positives(
+      vec![entity(
+        generic,
+        "ACME LIMITED",
+        ORGANIZATION_LABEL,
+        DetectionSource::LegalForm,
+      )],
+      generic,
+      Some(&DenyListFilterData::default()),
+    )
+    .unwrap();
+    assert!(generic_entities.is_empty());
+  }
+
+  #[test]
+  fn subject_clause_party_labels_accept_only_scoped_articles() {
+    let legal_form_data = prepared_clause_data(PreparedClauseDataArgs {
+      leading_phrases: &[],
+      role_heads: &["party", "seller", "the seller"],
+      sentence_verbs: &["is"],
+    });
+    let article_label_text =
+      "THE SELLER: ACME LIMITED IS A PARTY TO THIS AGREEMENT.\n";
+    let article_label_entities =
+      filter_with_legal_form_data(FilterWithLegalFormDataArgs {
+        entities: vec![entity(
+          article_label_text,
+          "ACME LIMITED",
+          ORGANIZATION_LABEL,
+          DetectionSource::LegalForm,
+        )],
+        full_text: article_label_text,
+        filters: Some(&DenyListFilterData::default()),
+        legal_form_data: &legal_form_data,
+      })
+      .unwrap();
+    assert_eq!(article_label_entities.len(), 1);
+
+    for prefix in ["DER SELLER", "THE SECTION"] {
+      let candidate_text =
+        format!("{prefix}: ACME LIMITED IS A PARTY TO THIS AGREEMENT.\n");
+      let candidate_entities =
+        filter_with_legal_form_data(FilterWithLegalFormDataArgs {
+          entities: vec![entity(
+            &candidate_text,
+            "ACME LIMITED",
+            ORGANIZATION_LABEL,
+            DetectionSource::LegalForm,
+          )],
+          full_text: &candidate_text,
+          filters: Some(&DenyListFilterData::default()),
+          legal_form_data: &legal_form_data,
+        })
+        .unwrap();
+      assert!(candidate_entities.is_empty(), "prefix {prefix:?}");
+    }
+  }
+
+  #[test]
+  fn keeps_long_and_multiword_role_subject_clauses() {
+    for (text, entity_text, role_heads, sentence_verbs) in [
+      (
+        "INTERNATIONAL ADVANCED TECHNOLOGY HOLDINGS GROUP LIMITED IS A PARTY TO THIS AGREEMENT.\n",
+        "INTERNATIONAL ADVANCED TECHNOLOGY HOLDINGS GROUP LIMITED",
+        vec!["party"],
+        vec!["is"],
+      ),
+      (
+        "ACME SARL EST DONNEUR D'ORDRE DANS CET ACCORD.\n",
+        "ACME SARL",
+        vec!["donneur d'ordre"],
+        vec!["est"],
+      ),
+      (
+        "DONNEUR D'ORDRE: ACME SARL EST DONNEUR D'ORDRE DANS CET ACCORD.\n",
+        "ACME SARL",
+        vec!["donneur d'ordre"],
+        vec!["est"],
+      ),
+    ] {
+      let legal_form_data = prepared_clause_data(PreparedClauseDataArgs {
+        leading_phrases: &[],
+        role_heads: &role_heads,
+        sentence_verbs: &sentence_verbs,
+      });
+      let entities = filter_with_legal_form_data(FilterWithLegalFormDataArgs {
+        entities: vec![entity(
+          text,
+          entity_text,
+          ORGANIZATION_LABEL,
+          DetectionSource::LegalForm,
+        )],
+        full_text: text,
+        filters: Some(&DenyListFilterData::default()),
+        legal_form_data: &legal_form_data,
+      })
+      .unwrap();
+
+      assert_eq!(entities.len(), 1, "text {text:?}");
+    }
+  }
+
+  #[test]
+  fn subject_clause_verbs_do_not_cross_language_scope() {
+    let text =
+      "LIMITED LIABILITY COMPANY IST PARTY REGISTRATION REQUIREMENTS.\n";
+    let legal_form_data = prepared_clause_data(PreparedClauseDataArgs {
+      leading_phrases: &[],
+      role_heads: &["party"],
+      sentence_verbs: &["is"],
+    });
+    let entities = filter_with_legal_form_data(FilterWithLegalFormDataArgs {
+      entities: vec![entity(
+        text,
+        "LIMITED LIABILITY COMPANY",
+        ORGANIZATION_LABEL,
+        DetectionSource::LegalForm,
+      )],
+      full_text: text,
+      filters: Some(&DenyListFilterData::default()),
+      legal_form_data: &legal_form_data,
+    })
+    .unwrap();
+
+    assert!(entities.is_empty());
+  }
+
+  #[test]
+  fn rejects_introducer_only_all_caps_headings() {
+    for terminal in ["", "."] {
+      let text = format!(
+        "REGISTRATION BY LIMITED LIABILITY COMPANY REQUIREMENTS AND PROCEDURES{terminal}\n"
+      );
+      let entities = filter_entity_false_positives(
+        vec![entity(
+          &text,
+          "LIMITED LIABILITY COMPANY",
+          ORGANIZATION_LABEL,
+          DetectionSource::LegalForm,
+        )],
+        &text,
+        Some(&DenyListFilterData::default()),
+      )
+      .unwrap();
+
+      assert!(entities.is_empty(), "terminal {terminal:?}");
+    }
+  }
+
+  #[test]
+  fn rejects_legal_form_organizations_in_numbered_all_caps_headings() {
+    let text = "17. FORMATION OF LIMITED LIABILITY COMPANY\n";
+    let entity_text = "LIMITED LIABILITY COMPANY";
+    let start = text.find(entity_text).unwrap();
+    let entities = filter_entity_false_positives(
+      vec![PipelineEntity::detected(
+        u32::try_from(start).unwrap(),
+        u32::try_from(start.saturating_add(entity_text.len())).unwrap(),
+        ORGANIZATION_LABEL,
+        entity_text,
+        0.8,
+        DetectionSource::LegalForm,
+      )],
+      text,
+      Some(&DenyListFilterData::default()),
+    )
+    .unwrap();
+
+    assert!(entities.is_empty());
+  }
+
+  #[test]
+  fn rejects_mid_line_legal_forms_in_unnumbered_all_caps_headings() {
+    for terminal in ["", ".", "。"] {
+      let text = format!(
+        "REGISTRATION OF LIMITED LIABILITY COMPANY REQUIREMENTS AND PROCEDURES{terminal}\n"
+      );
+      let entity_text = "LIMITED LIABILITY COMPANY";
+      let entities = filter_entity_false_positives(
+        vec![entity(
+          &text,
+          entity_text,
+          ORGANIZATION_LABEL,
+          DetectionSource::LegalForm,
+        )],
+        &text,
+        Some(&DenyListFilterData::default()),
+      )
+      .unwrap();
+
+      assert!(entities.is_empty(), "terminal {terminal:?}");
+    }
+  }
+
+  #[test]
+  fn rejects_short_tailed_punctuated_legal_form_headings() {
+    let text = "REGISTRATION OF LIMITED LIABILITY COMPANY PROCEDURES.\n";
+    let entities = filter_entity_false_positives(
+      vec![entity(
+        text,
+        "LIMITED LIABILITY COMPANY",
+        ORGANIZATION_LABEL,
+        DetectionSource::LegalForm,
+      )],
+      text,
+      Some(&DenyListFilterData::default()),
+    )
+    .unwrap();
+
+    assert!(entities.is_empty());
+  }
+
+  #[test]
+  fn rejects_legal_form_prefixes_in_unnumbered_all_caps_headings() {
+    let text = "RÁMCOVÁ DOHODA NA POSKYTOVÁNÍ PRÁVNÍCH SLUŽEB\n";
+    let entity_text = "RÁMCOVÁ DOHODA NA";
+    let entities = filter_entity_false_positives(
+      vec![entity(
+        text,
+        entity_text,
+        ORGANIZATION_LABEL,
+        DetectionSource::LegalForm,
+      )],
+      text,
+      Some(&DenyListFilterData::default()),
+    )
+    .unwrap();
+
+    assert!(entities.is_empty());
+  }
+
+  #[test]
+  fn keeps_leading_all_caps_legal_form_captions() {
+    let text =
+      "ACME LIMITED, A DELAWARE CORPORATION AND PARTY TO THIS AGREEMENT\n";
+    let entity_text = "ACME LIMITED";
+    let entities = filter_entity_false_positives(
+      vec![entity(
+        text,
+        entity_text,
+        ORGANIZATION_LABEL,
+        DetectionSource::LegalForm,
+      )],
+      text,
+      Some(&DenyListFilterData::default()),
+    )
+    .unwrap();
+
+    assert_eq!(entities.len(), 1);
+  }
+
+  #[test]
+  fn keeps_colon_delimited_all_caps_legal_form_captions() {
+    let text =
+      "ACME LIMITED: A DELAWARE CORPORATION AND PARTY TO THIS AGREEMENT\n";
+    let entity_text = "ACME LIMITED";
+    let entities = filter_entity_false_positives(
+      vec![entity(
+        text,
+        entity_text,
+        ORGANIZATION_LABEL,
+        DetectionSource::LegalForm,
+      )],
+      text,
+      Some(&DenyListFilterData::default()),
+    )
+    .unwrap();
+
+    assert_eq!(entities.len(), 1);
+  }
+
+  #[test]
+  fn keeps_dash_delimited_all_caps_legal_form_captions() {
+    for separator in ["-", "–", "—"] {
+      let text = format!(
+        "ACME LIMITED {separator} A DELAWARE CORPORATION AND PARTY TO THIS AGREEMENT\n"
+      );
+      let entity_text = "ACME LIMITED";
+      let entities = filter_entity_false_positives(
+        vec![entity(
+          &text,
+          entity_text,
+          ORGANIZATION_LABEL,
+          DetectionSource::LegalForm,
+        )],
+        &text,
+        Some(&DenyListFilterData::default()),
+      )
+      .unwrap();
+
+      assert_eq!(entities.len(), 1, "separator {separator:?}");
+    }
   }
 
   #[test]

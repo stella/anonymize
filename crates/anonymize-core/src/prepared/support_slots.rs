@@ -134,15 +134,18 @@ pub(super) fn prepare_timed_name_corpus_data(
 
 pub(super) fn prepare_timed_signature_data(
   data: Option<SignatureData>,
-) -> TimedSupportData<Option<PreparedSignatureData>> {
+  party_role_labels: Vec<String>,
+) -> Result<TimedSupportData<Option<PreparedSignatureData>>> {
   let len = signature_data_len(data.as_ref());
   let start = Instant::now();
-  let data = data.map(PreparedSignatureData::new);
-  TimedSupportData {
+  let data = data
+    .map(|data| PreparedSignatureData::new(data, party_role_labels))
+    .transpose()?;
+  Ok(TimedSupportData {
     data,
     len,
     elapsed_us: elapsed_us(start),
-  }
+  })
 }
 
 pub(super) fn join_support_data<T>(
@@ -201,6 +204,7 @@ fn address_seed_data_len(data: Option<&AddressSeedData>) -> usize {
       .len()
       .saturating_add(data.br_cep_cue_words.len())
       .saturating_add(data.unit_abbreviations.len())
+      .saturating_add(data.directional_abbreviations.len())
   })
 }
 
@@ -264,7 +268,9 @@ fn signature_data_len(data: Option<&SignatureData>) -> usize {
   data.map_or(0, |data| {
     [
       data.labels.len(),
+      data.person_value_labels.len(),
       data.person_list_labels.len(),
+      data.party_role_name_evidence.len(),
       data.witness_phrases.len(),
       data.name_particles.len(),
       data.post_nominal_suffixes.len(),

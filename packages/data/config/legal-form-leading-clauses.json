@@ -1,7 +1,84 @@
 {
-  "_comment": "Per-language clause text that may precede an organization name before a legal-form suffix. `phrases` are trimmed unconditionally when found inside an over-captured legal-form span. `directPrefixes` are trimmed only when the text before the prefix already looks like prose, so company names such as `Stand By Me LLC` are preserved.",
+  "_comment": "Per-language clause text that may precede an organization name before a legal-form suffix. `phrases` are trimmed unconditionally when found inside an over-captured legal-form span. `directPrefixes` are trimmed only when the text before the prefix already looks like prose, so company names such as `Stand By Me LLC` are preserved. `partyLabelArticles` generate article-role combinations only where every combination is safe; `partyLabelRolePhrases` lists reviewed exact phrases where grammatical agreement matters. Both are permitted only in a labelled subject clause. Every legal-role language has reviewed party-label phrases or a `partyLabelArticleOmission` rationale.",
+  "cs": {
+    "phrases": ["je s"],
+    "directPrefixes": ["mezi", "s"],
+    "partyLabelArticleOmission": "Czech has no grammatical articles."
+  },
+  "de": {
+    "phrases": ["ist mit"],
+    "directPrefixes": ["mit", "zwischen"],
+    "partyLabelArticles": ["der", "die", "das"]
+  },
   "en": {
-    "phrases": ["by and among", "by and between", "is between"],
-    "directPrefixes": ["by", "among", "amongst", "between"]
+    "phrases": ["by and among", "by and between", "is between", "is with"],
+    "directPrefixes": ["by", "among", "amongst", "between"],
+    "partyLabelArticles": ["the"]
+  },
+  "es": {
+    "partyLabelRolePhrases": [
+      "el vendedor",
+      "la vendedora",
+      "el comprador",
+      "la compradora",
+      "el arrendador",
+      "la arrendadora",
+      "el arrendatario",
+      "la arrendataria",
+      "el empleador",
+      "la empleadora",
+      "el empleado",
+      "la empleada",
+      "la empresa",
+      "el empresario",
+      "la empresaria",
+      "el cliente",
+      "la cliente",
+      "el proveedor",
+      "la proveedora",
+      "el contratante",
+      "la contratante",
+      "el contratista",
+      "la contratista",
+      "el prestador",
+      "la prestadora",
+      "el prestatario",
+      "la prestataria",
+      "el otorgante",
+      "la otorgante",
+      "el otorgado",
+      "la otorgada",
+      "el cedente",
+      "la cedente",
+      "el cesionario",
+      "la cesionaria",
+      "el acreedor",
+      "la acreedora",
+      "el deudor",
+      "la deudora",
+      "el fiador",
+      "la fiadora",
+      "la parte",
+      "las partes",
+      "el adjudicatario",
+      "la adjudicataria",
+      "el licitador",
+      "la licitadora"
+    ]
+  },
+  "fr": {
+    "partyLabelArticleOmission": "French gender, number, and elision require reviewed exact role phrases; broad article-role products are disabled."
+  },
+  "it": {
+    "partyLabelArticleOmission": "Italian gender, number, and elision require reviewed exact role phrases; broad article-role products are disabled."
+  },
+  "pl": {
+    "partyLabelArticleOmission": "Polish has no grammatical articles."
+  },
+  "pt-br": {
+    "partyLabelArticleOmission": "Brazilian Portuguese gender and number agreement require reviewed exact role phrases; broad article-role products are disabled."
+  },
+  "sk": {
+    "partyLabelArticleOmission": "Slovak has no grammatical articles."
   }
 }

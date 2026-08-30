@@ -51,6 +51,13 @@ describe("structured English contract-party fields", () => {
     ]);
   });
 
+  test("delimits consecutive party fields on the same line", async () => {
+    expect(await people("Seller: Imani Nwosu; Buyer: Ayo Balogun")).toEqual([
+      "Imani Nwosu",
+      "Ayo Balogun",
+    ]);
+  });
+
   test("detects a party name on the following line", async () => {
     expect(await people("Borrower:\nZofia Wrona")).toContain("Zofia Wrona");
   });
@@ -59,6 +66,7 @@ describe("structured English contract-party fields", () => {
     const text = [
       "Buyer: the party named above",
       "Seller: ____________________",
+      "Seller: Acme Trading",
       "Lender: General Lender",
       "Customer: Harbor Legal Inc.",
     ].join("\n");

@@ -2946,6 +2946,10 @@ const fn is_dash(ch: char) -> bool {
   matches!(ch, '-' | '‑' | '–' | '—')
 }
 
+const fn is_compound_hyphen(ch: char) -> bool {
+  matches!(ch, '-' | '‑' | '–')
+}
+
 fn match_trailing_address_word<'a>(
   after: &'a str,
   filters: &DenyListFilterData,
@@ -3088,6 +3092,12 @@ fn custom_match_has_valid_edges(
   Ok(true)
 }
 
+/// A hyphen compound joins two word characters (`Dodd-Frank`, `Dodd–Frank`,
+/// `Brno-Nový`). Em dashes are separators even when closed up to both words:
+/// in `said—John Smith` the em dash attributes a quote.
+/// Treating that as a compound discards `John` for lacking a name-bearing
+/// partner, which leaves `Smith` a single token that person detection then
+/// drops for lack of context, so the whole name survives in the clear.
 fn has_hyphen_compound_edge(
   full_text: &str,
   offsets: &ByteOffsets<'_>,
@@ -3096,16 +3106,23 @@ fn has_hyphen_compound_edge(
 ) -> Result<bool> {
   let start_byte = offsets.validate_offset(start)?;
   let end_byte = offsets.validate_offset(end)?;
-  let previous = full_text
+
+  let mut leading = full_text
     .get(..start_byte)
-    .and_then(|prefix| prefix.chars().next_back());
-  if previous.is_some_and(is_dash) {
+    .unwrap_or_default()
+    .chars()
+    .rev();
+  if leading.next().is_some_and(is_compound_hyphen)
+    && leading.next().is_some_and(char::is_alphanumeric)
+  {
     return Ok(true);
   }
-  let next = full_text
-    .get(end_byte..)
-    .and_then(|suffix| suffix.chars().next());
-  Ok(next.is_some_and(is_dash))
+
+  let mut trailing = full_text.get(end_byte..).unwrap_or_default().chars();
+  Ok(
+    trailing.next().is_some_and(is_compound_hyphen)
+      && trailing.next().is_some_and(char::is_alphanumeric),
+  )
 }
 
 fn has_supported_hyphenated_person_edge(
@@ -3125,7 +3142,7 @@ fn has_supported_hyphenated_person_edge(
   let previous_dash = full_text
     .get(..start_byte)
     .and_then(|prefix| prefix.chars().next_back())
-    .filter(|ch| is_dash(*ch));
+    .filter(|ch| is_compound_hyphen(*ch));
   if let Some(dash) = previous_dash {
     let partner = start_byte
       .checked_sub(dash.len_utf8())
@@ -3149,7 +3166,7 @@ fn has_supported_hyphenated_person_edge(
   let next_dash = full_text
     .get(end_byte..)
     .and_then(|suffix| suffix.chars().next())
-    .filter(|ch| is_dash(*ch));
+    .filter(|ch| is_compound_hyphen(*ch));
   if let Some(dash) = next_dash {
     let partner = end_byte
       .checked_add(dash.len_utf8())
@@ -4135,6 +4152,49 @@ mod tests {
       .unwrap();
 
       assert!(entities.is_empty(), "dash {dash:?}");
+    }
+  }
+
+  #[test]
+  fn deny_list_keeps_name_after_separator_dash() {
+    let data = DenyListMatchData {
+      labels: vec![vec![String::from("person")]].into(),
+      custom_labels: vec![vec![]].into(),
+      originals: vec![String::from("John")],
+      pattern_meta: DenyListPatternMetaSet::default(),
+      sources: vec![vec![String::from("first-name")]].into(),
+      filters: Some(DenyListFilterData::default()),
+    };
+
+    // Typographic dashes, bullets, and wrapped-line hyphens separate rather
+    // than compound here. The name after them keeps its person label.
+    for text in [
+      "—John Smith",
+      "said—John Smith",
+      "\"Not our position.\" —John Smith",
+      "Best regards,\n-John Smith",
+    ] {
+      let start = u32::try_from(text.find("John").unwrap()).unwrap();
+      let matches = vec![SearchMatch::Literal {
+        pattern: 0,
+        start,
+        end: start.saturating_add(4),
+      }];
+      let entities = process_deny_list_matches(
+        &matches,
+        PatternSlice { start: 0, end: 1 },
+        text,
+        &data,
+      )
+      .unwrap();
+
+      assert!(
+        entities
+          .iter()
+          .any(|entity| entity.label == PERSON_LABEL
+            && entity.text == "John Smith"),
+        "text {text:?}; entities: {entities:?}",
+      );
     }
   }
 

@@ -989,6 +989,28 @@
       ]
     },
     {
+      "type": "array",
+      "path": ["legal_form_data", "leading_clause_direct_prefixes"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 4,
+          "end": 8
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["legal_form_data", "leading_clause_phrases"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 2,
+          "end": 6
+        }
+      ]
+    },
+    {
       "type": "set",
       "path": ["legal_form_data", "lowercase_bridge", "policy"],
       "value": "closed"
@@ -1081,6 +1103,22 @@
           "type": "copy",
           "start": 59,
           "end": 84
+        },
+        {
+          "type": "copy",
+          "start": 464,
+          "end": 489
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["legal_form_data", "sentence_verb_indicators"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 25,
+          "end": 55
         }
       ]
     },
@@ -1355,6 +1393,17 @@
           "type": "copy",
           "start": 3,
           "end": 4
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["signature_data", "person_value_labels"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 2,
+          "end": 3
         }
       ]
     },

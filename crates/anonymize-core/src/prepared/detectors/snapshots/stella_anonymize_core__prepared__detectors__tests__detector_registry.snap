@@ -82,6 +82,7 @@ modules:
         inputs:
           - RegexMatches
           - FullText
+          - SignatureData
           - TitleTokens
         dependencies: []
         support_resources:
@@ -95,9 +96,12 @@ modules:
         stage: EntitySignature
         inputs:
           - FullText
+          - FirstNames
+          - TitleTokens
         dependencies: []
         support_resources:
           - Signature
+          - NameCorpus
         additive_scaling_domains:
           - FullText
   - name: legal_form
@@ -135,6 +139,7 @@ modules:
           - LiteralMatches
           - ContextEntities
           - FullText
+          - FalsePositiveFilters
         dependencies:
           - Regex
           - CustomRegex

@@ -219,6 +219,7 @@ export type NativeAddressSeedData = {
   boundary_words: string[];
   br_cep_cue_words: string[];
   unit_abbreviations: string[];
+  directional_abbreviations: string[];
   /** Present only when `standaloneStreetDetection` is enabled. */
   standalone_street?: NativeStandaloneStreetData;
 };
@@ -306,7 +307,9 @@ export type NativeHotwordRuleData = {
 
 export type NativeSignatureData = {
   labels: string[];
+  person_value_labels: string[];
   person_list_labels: string[];
+  party_role_name_evidence: string;
   witness_phrases: string[];
   name_particles: string[];
   post_nominal_suffixes: string[];

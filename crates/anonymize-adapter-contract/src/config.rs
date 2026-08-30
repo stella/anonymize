@@ -144,6 +144,7 @@ fn address_seed_data_from_binding(
     boundary_words: data.boundary_words,
     br_cep_cue_words: data.br_cep_cue_words,
     unit_abbreviations: data.unit_abbreviations,
+    directional_abbreviations: data.directional_abbreviations,
     standalone_street: data.standalone_street.map(|data| {
       StandaloneStreetData {
         street_type_words: data.street_type_words,
@@ -425,7 +426,9 @@ fn name_corpus_data_from_binding(
 fn signature_data_from_binding(data: BindingSignatureData) -> SignatureData {
   SignatureData {
     labels: data.labels,
+    person_value_labels: data.person_value_labels,
     person_list_labels: data.person_list_labels,
+    party_role_name_evidence: data.party_role_name_evidence,
     witness_phrases: data.witness_phrases,
     name_particles: data.name_particles,
     post_nominal_suffixes: data.post_nominal_suffixes,

@@ -1,4 +1,5 @@
-use std::{collections::HashSet, ops::Range};
+use std::collections::HashSet;
+use std::ops::Range;
 use web_time::Instant;
 
 use crate::resolution::{DetectionSource, PipelineEntity};
@@ -590,10 +591,33 @@ impl PreparedNameCorpusData {
       .is_some_and(|first| self.cjk_surname_starters.contains(&first))
   }
 
-  fn is_organization(&self, text: &str) -> bool {
+  pub(crate) fn is_organization(&self, text: &str) -> bool {
     segment_words(text)
       .iter()
       .any(|word| self.organization_terms.contains(&word.text.to_lowercase()))
+  }
+
+  pub(crate) fn has_leading_person_name_token(&self, text: &str) -> bool {
+    if self.is_organization(text) {
+      return false;
+    }
+    let Some(first_token) = text.split_whitespace().next() else {
+      return false;
+    };
+    self.is_person_name_token(first_token)
+      || segmented_word_texts(first_token)
+        .next()
+        .is_some_and(|word| self.is_person_name_token(word))
+  }
+
+  fn is_person_name_token(&self, token: &str) -> bool {
+    let title_case = title_case_simple(token);
+    self.is_first_name_token(token)
+      || self.is_surname_token(token)
+      || self.is_non_western_name_token(token)
+      || self.is_first_name_token(&title_case)
+      || self.is_surname_token(&title_case)
+      || self.is_non_western_name_token(&title_case)
   }
 
   fn is_hyphenated_prefix_name(&self, text: &str) -> bool {
@@ -816,6 +840,10 @@ fn segment_words(full_text: &str) -> Vec<WordSegment<'_>> {
     });
   }
   words
+}
+
+pub(crate) fn segmented_word_texts(text: &str) -> impl Iterator<Item = &str> {
+  segment_words(text).into_iter().map(|word| word.text)
 }
 
 fn supplemental_seed_windows(

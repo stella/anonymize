@@ -1,9 +1,11 @@
 use std::borrow::Cow;
 use std::collections::BTreeSet;
 
+use crate::address_seeds::PreparedAddressSeedData;
 use crate::diagnostics::{DiagnosticStage, StaticRedactionDiagnostics};
 use crate::false_positives::{
-  filter_entity_false_positives, soft_wrapped_city_person_candidate,
+  FilterEntityFalsePositivesArgs, filter_entity_false_positives,
+  soft_wrapped_city_person_candidate,
 };
 use crate::hotwords::apply_hotword_rules;
 use crate::labels::{ADDRESS_LABEL, PERSON_LABEL};
@@ -103,20 +105,15 @@ impl PreparedEngine {
     let sanitize_timer = PhaseTimer::start();
     let sanitized_entities =
       sanitize_entities_with_document(consistent, resolution_document)?;
-    let false_positive_filters =
-      self.data.false_positive_filters.as_ref().or_else(|| {
-        self
-          .data
-          .deny_list
-          .as_ref()
-          .and_then(|data| data.filters.as_ref())
-      });
+    let false_positive_filters = self.data.effective_false_positive_filters();
     let mut resolved_entities = filter_entities_for_config(
-      Self::filter_false_positives(
-        sanitized_entities,
-        resolution_document,
-        false_positive_filters,
-      )?,
+      filter_entity_false_positives(FilterEntityFalsePositivesArgs {
+        entities: sanitized_entities,
+        document: resolution_document,
+        filters: false_positive_filters,
+        directional_abbreviations: self.address_directional_abbreviations(),
+        legal_form_data: self.data.legal_forms.as_ref(),
+      })?,
       self.policy.threshold,
       &self.policy.allowed_labels,
     );
@@ -146,6 +143,14 @@ impl PreparedEngine {
       .as_ref()
       .map(PreparedSignatureData::person_span_terminators)
       .unwrap_or_default()
+  }
+
+  fn address_directional_abbreviations(&self) -> Option<&BTreeSet<String>> {
+    self
+      .data
+      .address_seed
+      .as_ref()
+      .map(PreparedAddressSeedData::directional_abbreviations)
   }
 
   fn resolution_labels(&self) -> Cow<'_, [String]> {
@@ -282,23 +287,18 @@ impl PreparedEngine {
       self.person_span_terminators(),
     )?;
     let sanitized = sanitize_entities_with_document(consistent, document)?;
-    let filtered = Self::filter_false_positives(
-      sanitized,
-      document,
-      false_positive_filters,
-    )?;
+    let filtered =
+      filter_entity_false_positives(FilterEntityFalsePositivesArgs {
+        entities: sanitized,
+        document,
+        filters: false_positive_filters,
+        directional_abbreviations: self.address_directional_abbreviations(),
+        legal_form_data: self.data.legal_forms.as_ref(),
+      })?;
     Ok(filter_entities_for_labels(
       filtered,
       &self.policy.allowed_labels,
     ))
-  }
-
-  fn filter_false_positives(
-    entities: Vec<PipelineEntity>,
-    document: &ResolutionDocument<'_>,
-    filters: Option<&DenyListFilterData>,
-  ) -> Result<Vec<PipelineEntity>> {
-    filter_entity_false_positives(entities, document, filters)
   }
 
   fn reclassify_soft_wrapped_city_people(

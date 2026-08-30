@@ -463,8 +463,7 @@ fn is_boundary_legal_suffix_form(
 /// Loads a per-language `{ "lang": [...] }`-shaped file that maps arbitrary
 /// keys (skipping `_`-prefixed metadata) to string arrays, unioning every
 /// value into an insertion-ordered dedup set seeded with `seed`. Mirrors the
-/// `loadSentenceVerbIndicators` / `loadClauseNounHeads` /
-/// `loadStructuralSingleCapPrefixes` shape.
+/// `loadClauseNounHeads` / `loadStructuralSingleCapPrefixes` shape.
 fn load_lowercase_union(
   file: &str,
   seed: &[&str],
@@ -493,6 +492,19 @@ fn load_lowercase_union(
     }
   }
   Ok(out)
+}
+
+fn scoped_sentence_verb_indicators(
+  selected: Option<&[String]>,
+) -> Result<Vec<String>, AssembleError> {
+  let configured: OrderedMap<Value> =
+    parse_ordered_data_file("sentence-verb-indicators.json")?;
+  Ok(
+    language::language_keyed_terms(&configured, selected)
+      .into_iter()
+      .map(|word| word.to_lowercase())
+      .collect(),
+  )
 }
 
 /// Mirrors `getLegalRoleHeadsSync` (post-warm).
@@ -592,7 +604,9 @@ struct LeadingClauseTrims {
   direct_prefixes: Vec<String>,
 }
 
-fn leading_clause_trims() -> Result<LeadingClauseTrims, AssembleError> {
+fn leading_clause_trims(
+  selected: Option<&[String]>,
+) -> Result<LeadingClauseTrims, AssembleError> {
   let data: OrderedMap<Value> =
     parse_ordered_data_file("legal-form-leading-clauses.json")?;
   let mut phrase_seen = HashSet::new();
@@ -601,6 +615,9 @@ fn leading_clause_trims() -> Result<LeadingClauseTrims, AssembleError> {
   let mut direct_prefixes = Vec::new();
   for (key, value) in &data {
     if key.starts_with('_') || !value.is_object() {
+      continue;
+    }
+    if !language::language_config_matches(key, selected) {
       continue;
     }
     if let Some(entries) = value.get("phrases").and_then(Value::as_array) {
@@ -631,6 +648,60 @@ fn leading_clause_trims() -> Result<LeadingClauseTrims, AssembleError> {
     phrases,
     direct_prefixes,
   })
+}
+
+fn party_label_role_heads(
+  selected: Option<&[String]>,
+) -> Result<Vec<String>, AssembleError> {
+  let mut roles = role_heads(selected)?;
+  let mut seen = roles.iter().cloned().collect::<HashSet<_>>();
+  let data: OrderedMap<Value> =
+    parse_ordered_data_file("legal-form-leading-clauses.json")?;
+  for (language_key, value) in &data {
+    if language_key.starts_with('_')
+      || !language::language_config_matches(language_key, selected)
+    {
+      continue;
+    }
+    let language_roles = role_heads(Some(std::slice::from_ref(language_key)))?;
+    if let Some(phrases) =
+      value.get("partyLabelRolePhrases").and_then(Value::as_array)
+    {
+      for phrase in phrases.iter().filter_map(Value::as_str) {
+        let phrase = phrase.to_lowercase();
+        let has_scoped_role = language_roles.iter().any(|role| {
+          phrase.strip_suffix(role).is_some_and(|prefix| {
+            prefix.chars().next_back().is_some_and(|character| {
+              character.is_whitespace() || character == '\'' || character == '’'
+            })
+          })
+        });
+        if phrase.is_empty() || !has_scoped_role {
+          return Err(AssembleError::DataParse {
+            name: String::from("legal-form-leading-clauses.json"),
+            message: format!(
+              "language {language_key}: partyLabelRolePhrases must end in a scoped role head"
+            ),
+          });
+        }
+        push_unique(phrase, &mut seen, &mut roles);
+      }
+    }
+    if let Some(articles) =
+      value.get("partyLabelArticles").and_then(Value::as_array)
+    {
+      for article in articles.iter().filter_map(Value::as_str) {
+        if article.is_empty() {
+          continue;
+        }
+        let article = article.to_lowercase();
+        for role in &language_roles {
+          push_unique(format!("{article} {role}"), &mut seen, &mut roles);
+        }
+      }
+    }
+  }
+  Ok(roles)
 }
 
 /// Shared and language-owned arrays from `legal-form-rule-words.json`.
@@ -809,7 +880,7 @@ pub(super) fn build_legal_form_data(
     .filter(|suffix| !suffix.is_empty())
     .collect();
 
-  let trims = leading_clause_trims()?;
+  let trims = leading_clause_trims(ctx.content_languages.as_deref())?;
   let (rule_words, connector_words, party_connector_words) =
     scoped_legal_form_rule_words(ctx.content_languages.as_deref())?;
   let institutional =
@@ -825,10 +896,9 @@ pub(super) fn build_legal_form_data(
     normalized_boundary_suffixes,
     normalized_in_name_words,
     normalized_suffix_words,
-    role_heads: role_heads(ctx.content_languages.as_deref())?,
-    sentence_verb_indicators: load_lowercase_union(
-      "sentence-verb-indicators.json",
-      &[],
+    role_heads: party_label_role_heads(ctx.content_languages.as_deref())?,
+    sentence_verb_indicators: scoped_sentence_verb_indicators(
+      ctx.content_languages.as_deref(),
     )?,
     clause_noun_heads: scoped_clause_noun_heads(
       ctx.content_languages.as_deref(),
@@ -880,9 +950,11 @@ mod tests {
   use super::{
     InstitutionalOrganizationData, LegalFormRuleWords, all_legal_suffixes,
     connector_prose_heads, institutional_language_words, language,
+    leading_clause_trims, legal_role_head_languages,
     non_ascii_name_short_suffixes, organization_detection_suffixes,
-    parse_data_file, role_heads, scoped_clause_noun_heads,
-    scoped_connector_words, validate_institutional_terms,
+    parse_data_file, party_label_role_heads, role_heads,
+    scoped_clause_noun_heads, scoped_connector_words,
+    scoped_sentence_verb_indicators, validate_institutional_terms,
   };
 
   #[test]
@@ -912,6 +984,21 @@ mod tests {
   }
 
   #[test]
+  fn sentence_verbs_follow_content_language_scope() {
+    let english =
+      scoped_sentence_verb_indicators(Some(&[String::from("en")])).unwrap();
+    let german =
+      scoped_sentence_verb_indicators(Some(&[String::from("de")])).unwrap();
+
+    assert!(english.iter().any(|word| word == "is"));
+    assert!(english.iter().any(|word| word == "reporting"));
+    assert!(!english.iter().any(|word| word == "ist"));
+    assert!(german.iter().any(|word| word == "ist"));
+    assert!(!german.iter().any(|word| word == "is"));
+    assert!(!german.iter().any(|word| word == "reporting"));
+  }
+
+  #[test]
   fn clause_noun_heads_follow_content_language_scope() {
     let czech = scoped_clause_noun_heads(Some(&[String::from("cs")])).unwrap();
     let english =
@@ -921,6 +1008,108 @@ mod tests {
     assert!(!english.iter().any(|word| word == "dohoda"));
     assert!(english.iter().any(|word| word == "agreement"));
     assert!(!czech.iter().any(|word| word == "agreement"));
+  }
+
+  #[test]
+  fn leading_clause_prefixes_follow_content_language_scope() {
+    let german = leading_clause_trims(Some(&[String::from("de")])).unwrap();
+    assert!(german.direct_prefixes.contains(&String::from("mit")));
+    assert!(german.phrases.contains(&String::from("ist mit")));
+    assert!(!german.direct_prefixes.contains(&String::from("with")));
+    assert!(!german.phrases.contains(&String::from("is with")));
+    let czech = leading_clause_trims(Some(&[String::from("cs")])).unwrap();
+    assert!(czech.direct_prefixes.contains(&String::from("s")));
+    assert!(czech.phrases.contains(&String::from("je s")));
+    assert!(!czech.direct_prefixes.contains(&String::from("mit")));
+    assert!(!czech.phrases.contains(&String::from("ist mit")));
+    let roles = party_label_role_heads(Some(&[String::from("en")])).unwrap();
+    assert!(roles.iter().any(|role| role == "the seller"));
+    assert!(!roles.iter().any(|role| role == "der seller"));
+  }
+
+  #[test]
+  fn party_label_articles_only_pair_with_same_language_roles() {
+    let roles = party_label_role_heads(Some(&[
+      String::from("de"),
+      String::from("en"),
+      String::from("es"),
+      String::from("fr"),
+    ]))
+    .unwrap();
+
+    for expected in ["der verkäufer", "the seller", "el vendedor"] {
+      assert!(roles.iter().any(|role| role == expected));
+    }
+    for invented in ["der seller", "der vendeur", "el seller", "the verkäufer"]
+    {
+      assert!(!roles.iter().any(|role| role == invented));
+    }
+  }
+
+  #[test]
+  fn party_label_article_coverage_matches_role_languages() {
+    let expected = legal_role_head_languages(None)
+      .unwrap()
+      .into_iter()
+      .collect::<HashSet<_>>();
+    let data: OrderedMap<Value> =
+      parse_ordered_data_file("legal-form-leading-clauses.json").unwrap();
+    let mut covered = HashSet::new();
+
+    for (language, value) in &data {
+      if language.starts_with('_') {
+        continue;
+      }
+      let has_articles = value
+        .get("partyLabelArticles")
+        .and_then(Value::as_array)
+        .is_some_and(|articles| !articles.is_empty());
+      let has_exact_phrases = value
+        .get("partyLabelRolePhrases")
+        .and_then(Value::as_array)
+        .is_some_and(|phrases| !phrases.is_empty());
+      let has_omission = value
+        .get("partyLabelArticleOmission")
+        .and_then(Value::as_str)
+        .is_some_and(|reason| !reason.trim().is_empty());
+      assert_ne!(
+        has_articles || has_exact_phrases,
+        has_omission,
+        "{language} must have reviewed party-label phrases or one omission rationale"
+      );
+      assert!(
+        !(has_articles && has_exact_phrases),
+        "{language} must choose generated articles or exact phrases"
+      );
+      if has_exact_phrases {
+        let phrases = value
+          .get("partyLabelRolePhrases")
+          .and_then(Value::as_array)
+          .unwrap();
+        for role in role_heads(Some(std::slice::from_ref(language))).unwrap() {
+          assert!(
+            phrases.iter().filter_map(Value::as_str).any(|phrase| {
+              phrase
+                .to_lowercase()
+                .strip_suffix(&role)
+                .is_some_and(|prefix| {
+                  prefix.chars().next_back().is_some_and(|character| {
+                    character.is_whitespace()
+                      || character == '\''
+                      || character == '’'
+                  })
+                })
+            }),
+            "{language} party-label phrases must cover role {role}"
+          );
+        }
+      }
+      if has_articles || has_exact_phrases || has_omission {
+        covered.insert(language.clone());
+      }
+    }
+
+    assert_eq!(covered, expected);
   }
 
   #[test]

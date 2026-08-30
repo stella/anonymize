@@ -159,8 +159,10 @@ pub struct BindingTriggerData {
 pub struct BindingSignatureData {
   #[serde(default)]
   pub labels: Vec<String>,
+  pub person_value_labels: Vec<String>,
   #[serde(default)]
   pub person_list_labels: Vec<String>,
+  pub party_role_name_evidence: String,
   #[serde(default)]
   pub witness_phrases: Vec<String>,
   #[serde(default)]
@@ -399,6 +401,7 @@ pub struct BindingAddressSeedData {
   pub br_cep_cue_words: Vec<String>,
   #[serde(default)]
   pub unit_abbreviations: Vec<String>,
+  pub directional_abbreviations: Vec<String>,
   /// Present only when the caller opts into standalone street detection.
   #[serde(default)]
   pub standalone_street: Option<BindingStandaloneStreetData>,
@@ -673,4 +676,88 @@ pub struct BindingTaggedOperator {
   #[serde(alias = "charactersToMask")]
   pub characters_to_mask: u32,
   pub direction: String,
+}
+
+#[cfg(test)]
+mod tests {
+  use serde_json::json;
+
+  use super::BindingPreparedSearchConfig;
+
+  #[test]
+  fn direct_prepared_config_requires_signature_proof_fields() {
+    let missing_person_labels = json!({
+      "signature_data": {
+        "form_field_labels": [],
+        "image_stub_prefixes": [],
+        "party_role_name_evidence": "",
+        "signature_stamp_phrases": []
+      }
+    });
+    assert!(
+      serde_json::from_value::<BindingPreparedSearchConfig>(
+        missing_person_labels
+      )
+      .is_err()
+    );
+
+    let missing_party_tokens = json!({
+      "signature_data": {
+        "form_field_labels": [],
+        "image_stub_prefixes": [],
+        "person_value_labels": [],
+        "signature_stamp_phrases": []
+      }
+    });
+    assert!(
+      serde_json::from_value::<BindingPreparedSearchConfig>(
+        missing_party_tokens
+      )
+      .is_err()
+    );
+
+    let explicitly_empty = json!({
+      "signature_data": {
+        "form_field_labels": [],
+        "image_stub_prefixes": [],
+        "party_role_name_evidence": "",
+        "person_value_labels": [],
+        "signature_stamp_phrases": []
+      }
+    });
+    assert!(
+      serde_json::from_value::<BindingPreparedSearchConfig>(explicitly_empty)
+        .is_ok()
+    );
+  }
+
+  #[test]
+  fn direct_prepared_config_requires_directional_scope_decision() {
+    let missing_directionals = json!({
+      "address_seed_data": {
+        "boundary_words": [],
+        "br_cep_cue_words": [],
+        "unit_abbreviations": []
+      }
+    });
+    assert!(
+      serde_json::from_value::<BindingPreparedSearchConfig>(
+        missing_directionals
+      )
+      .is_err()
+    );
+
+    let explicitly_empty = json!({
+      "address_seed_data": {
+        "boundary_words": [],
+        "br_cep_cue_words": [],
+        "directional_abbreviations": [],
+        "unit_abbreviations": []
+      }
+    });
+    assert!(
+      serde_json::from_value::<BindingPreparedSearchConfig>(explicitly_empty)
+        .is_ok()
+    );
+  }
 }
