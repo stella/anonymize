@@ -1538,6 +1538,7 @@ mod tests {
     })
   }
 
+  #[derive(Clone, Copy)]
   struct PreparedClauseDataArgs<'a> {
     leading_phrases: &'a [&'a str],
     role_heads: &'a [&'a str],
@@ -2433,19 +2434,20 @@ mod tests {
       role_heads: &["party", "seller"],
       sentence_verbs: &["is"],
     });
-    let entities = filter_with_legal_form_data(FilterWithLegalFormDataArgs {
-      entities: vec![entity(
-        german,
-        "ACME GMBH",
-        ORGANIZATION_LABEL,
-        DetectionSource::LegalForm,
-      )],
-      full_text: german,
-      filters: Some(&DenyListFilterData::default()),
-      legal_form_data: &english_data,
-    })
-    .unwrap();
-    assert!(entities.is_empty());
+    let scope_mismatch_entities =
+      filter_with_legal_form_data(FilterWithLegalFormDataArgs {
+        entities: vec![entity(
+          german,
+          "ACME GMBH",
+          ORGANIZATION_LABEL,
+          DetectionSource::LegalForm,
+        )],
+        full_text: german,
+        filters: Some(&DenyListFilterData::default()),
+        legal_form_data: &english_data,
+      })
+      .unwrap();
+    assert!(scope_mismatch_entities.is_empty());
   }
 
   #[test]
@@ -2497,23 +2499,24 @@ mod tests {
       role_heads: &["party"],
       sentence_verbs: &["is"],
     });
-    let entities = filter_with_legal_form_data(FilterWithLegalFormDataArgs {
-      entities: vec![entity(
-        german,
-        "ACME GMBH",
-        ORGANIZATION_LABEL,
-        DetectionSource::LegalForm,
-      )],
-      full_text: german,
-      filters: Some(&DenyListFilterData::default()),
-      legal_form_data: &english_data,
-    })
-    .unwrap();
+    let scope_isolation_entities =
+      filter_with_legal_form_data(FilterWithLegalFormDataArgs {
+        entities: vec![entity(
+          german,
+          "ACME GMBH",
+          ORGANIZATION_LABEL,
+          DetectionSource::LegalForm,
+        )],
+        full_text: german,
+        filters: Some(&DenyListFilterData::default()),
+        legal_form_data: &english_data,
+      })
+      .unwrap();
 
-    assert!(entities.is_empty());
+    assert!(scope_isolation_entities.is_empty());
 
     let labelled = "PARTY A: ACME LIMITED IS A PARTY TO THIS AGREEMENT.\n";
-    let entities = filter_entity_false_positives(
+    let labelled_entities = filter_entity_false_positives(
       vec![entity(
         labelled,
         "ACME LIMITED",
@@ -2524,10 +2527,10 @@ mod tests {
       Some(&DenyListFilterData::default()),
     )
     .unwrap();
-    assert_eq!(entities.len(), 1);
+    assert_eq!(labelled_entities.len(), 1);
 
     let generic = "SECTION A: ACME LIMITED IS A PARTY TO THIS AGREEMENT.\n";
-    let entities = filter_entity_false_positives(
+    let generic_entities = filter_entity_false_positives(
       vec![entity(
         generic,
         "ACME LIMITED",
@@ -2538,7 +2541,7 @@ mod tests {
       Some(&DenyListFilterData::default()),
     )
     .unwrap();
-    assert!(entities.is_empty());
+    assert!(generic_entities.is_empty());
   }
 
   #[test]
@@ -2548,37 +2551,40 @@ mod tests {
       role_heads: &["seller", "the seller"],
       sentence_verbs: &["is"],
     });
-    let text = "THE SELLER: ACME LIMITED IS A PARTY TO THIS AGREEMENT.\n";
-    let entities = filter_with_legal_form_data(FilterWithLegalFormDataArgs {
-      entities: vec![entity(
-        text,
-        "ACME LIMITED",
-        ORGANIZATION_LABEL,
-        DetectionSource::LegalForm,
-      )],
-      full_text: text,
-      filters: Some(&DenyListFilterData::default()),
-      legal_form_data: &legal_form_data,
-    })
-    .unwrap();
-    assert_eq!(entities.len(), 1);
-
-    for prefix in ["DER SELLER", "THE SECTION"] {
-      let text =
-        format!("{prefix}: ACME LIMITED IS A PARTY TO THIS AGREEMENT.\n");
-      let entities = filter_with_legal_form_data(FilterWithLegalFormDataArgs {
+    let article_label_text =
+      "THE SELLER: ACME LIMITED IS A PARTY TO THIS AGREEMENT.\n";
+    let article_label_entities =
+      filter_with_legal_form_data(FilterWithLegalFormDataArgs {
         entities: vec![entity(
-          &text,
+          article_label_text,
           "ACME LIMITED",
           ORGANIZATION_LABEL,
           DetectionSource::LegalForm,
         )],
-        full_text: &text,
+        full_text: article_label_text,
         filters: Some(&DenyListFilterData::default()),
         legal_form_data: &legal_form_data,
       })
       .unwrap();
-      assert!(entities.is_empty(), "prefix {prefix:?}");
+    assert_eq!(article_label_entities.len(), 1);
+
+    for prefix in ["DER SELLER", "THE SECTION"] {
+      let candidate_text =
+        format!("{prefix}: ACME LIMITED IS A PARTY TO THIS AGREEMENT.\n");
+      let candidate_entities =
+        filter_with_legal_form_data(FilterWithLegalFormDataArgs {
+          entities: vec![entity(
+            &candidate_text,
+            "ACME LIMITED",
+            ORGANIZATION_LABEL,
+            DetectionSource::LegalForm,
+          )],
+          full_text: &candidate_text,
+          filters: Some(&DenyListFilterData::default()),
+          legal_form_data: &legal_form_data,
+        })
+        .unwrap();
+      assert!(candidate_entities.is_empty(), "prefix {prefix:?}");
     }
   }
 

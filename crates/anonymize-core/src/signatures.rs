@@ -2041,7 +2041,7 @@ mod tests {
       },
       Vec::new(),
     );
-    let entities = detect_signatures(&DetectSignaturesArgs {
+    let standalone_entities = detect_signatures(&DetectSignaturesArgs {
       full_text: "Jméno: Jan Příjmení: de Vries Jméno: d'Angelo Jméno: d’Angelo",
       data: &data,
       first_names: None,
@@ -2050,7 +2050,7 @@ mod tests {
     });
 
     assert_eq!(
-      entities
+      standalone_entities
         .iter()
         .map(|entity| entity.text.as_str())
         .collect::<Vec<_>>(),
@@ -2104,7 +2104,7 @@ mod tests {
     );
 
     for text in ["(Name: Li", "Heading\nName: Li"] {
-      let entities = detect_signatures(&DetectSignaturesArgs {
+      let boundary_entities = detect_signatures(&DetectSignaturesArgs {
         full_text: text,
         data: &data,
         first_names: None,
@@ -2112,7 +2112,7 @@ mod tests {
         title_tokens: &BTreeSet::new(),
       });
       assert_eq!(
-        entities
+        boundary_entities
           .iter()
           .map(|entity| entity.text.as_str())
           .collect::<Vec<_>>(),
