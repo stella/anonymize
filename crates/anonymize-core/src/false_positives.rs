@@ -2548,8 +2548,7 @@ mod tests {
       role_heads: &["seller", "the seller"],
       sentence_verbs: &["is"],
     });
-    let text =
-      "THE SELLER: ACME LIMITED IS A PARTY TO THIS AGREEMENT.\n";
+    let text = "THE SELLER: ACME LIMITED IS A PARTY TO THIS AGREEMENT.\n";
     let entities = filter_with_legal_form_data(FilterWithLegalFormDataArgs {
       entities: vec![entity(
         text,
@@ -2565,9 +2564,8 @@ mod tests {
     assert_eq!(entities.len(), 1);
 
     for prefix in ["DER SELLER", "THE SECTION"] {
-      let text = format!(
-        "{prefix}: ACME LIMITED IS A PARTY TO THIS AGREEMENT.\n"
-      );
+      let text =
+        format!("{prefix}: ACME LIMITED IS A PARTY TO THIS AGREEMENT.\n");
       let entities = filter_with_legal_form_data(FilterWithLegalFormDataArgs {
         entities: vec![entity(
           &text,

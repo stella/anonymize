@@ -2786,9 +2786,7 @@ fn starts_with_bounded_address_material(text: &str) -> bool {
   else {
     return false;
   };
-  let segment = segment
-    .trim_end_matches(['.', '!', '?'])
-    .trim_end();
+  let segment = segment.trim_end_matches(['.', '!', '?']).trim_end();
   let mut count = 0usize;
   for word in segment.split_whitespace() {
     count = count.saturating_add(1);

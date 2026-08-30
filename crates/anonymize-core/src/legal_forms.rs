@@ -96,14 +96,11 @@ impl PreparedRolePhraseIndex {
   }
 
   fn contains_sequence(&self, words: &[String]) -> bool {
-    words
-      .iter()
-      .enumerate()
-      .any(|(start, _)| {
-        words
-          .get(start..)
-          .is_some_and(|tail| self.longest_prefix(tail).is_some())
-      })
+    words.iter().enumerate().any(|(start, _)| {
+      words
+        .get(start..)
+        .is_some_and(|tail| self.longest_prefix(tail).is_some())
+    })
   }
 
   fn longest_prefix(&self, words: &[String]) -> Option<usize> {

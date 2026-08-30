@@ -646,9 +646,8 @@ fn leading_clause_trims(
         }
       }
     }
-    if let Some(entries) = value
-      .get("partyLabelArticles")
-      .and_then(Value::as_array)
+    if let Some(entries) =
+      value.get("partyLabelArticles").and_then(Value::as_array)
     {
       for article in entries {
         if let Some(article) = article.as_str()
@@ -679,11 +678,7 @@ fn party_label_role_heads(
   let mut seen = roles.iter().cloned().collect::<HashSet<_>>();
   for article in articles {
     for role in &base_roles {
-      push_unique(
-        format!("{article} {role}"),
-        &mut seen,
-        &mut roles,
-      );
+      push_unique(format!("{article} {role}"), &mut seen, &mut roles);
     }
   }
   Ok(roles)
