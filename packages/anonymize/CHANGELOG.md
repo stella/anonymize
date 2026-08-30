@@ -1,5 +1,44 @@
 # Changelog
 
+## 2.9.1
+
+### Patch Changes
+
+- [#481](https://github.com/stella/anonymize/pull/481) [`76819ab`](https://github.com/stella/anonymize/commit/76819abeeee1a124370334930b909bbd7c86df89) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Classify all-caps lines once per line, index deny-list surname evidence per
+  document, and bound redaction and restoration text at shared core boundaries.
+
+- [#494](https://github.com/stella/anonymize/pull/494) [`090640c`](https://github.com/stella/anonymize/commit/090640ce37b3ced858f62c5a4b3a5b20dbe61da2) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Detect multi-scalar names from uncased scripts in reviewed person-value fields.
+
+- [#480](https://github.com/stella/anonymize/pull/480) [`4508a68`](https://github.com/stella/anonymize/commit/4508a685c2c98aa0ff8b5a4d80c9d440d895ec46) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Close seven detection gaps that let a value survive redaction.
+
+  - Treat a dash as a compound edge only when a word character sits on its far
+    side. A closed-up attribution ("—John Smith") was read as a hyphen compound,
+    which discarded the given name for lacking a name-bearing partner and left the
+    surname as an unsupported single token.
+  - Accept language-scoped unit designators without the abbreviating dot. The
+    vocabulary carries only "apt.", "ste." and friends, and the lookup was exact,
+    so "Apt 5" did not register as a unit component and the address span ended at
+    the preceding city.
+  - Keep legal-form organizations on all-caps lines. The boilerplate veto reads
+    line shape, so a party named in an all-caps clause was dropped once 20 letters
+    sat outside it; a legal-form suffix now outweighs that prose heuristic while
+    numbered and long headings remain rejected.
+  - Strip a leading person-value label before the person name. A configured label
+    at offset 0 ("Name: Jane Roe") left no prefix to check, so the whole trigger
+    match was discarded; non-person fields remain barriers.
+  - Scope US state abbreviations to the resolved country set. An empty or
+    region-only deny-list scope loaded the matching cities while yielding no state
+    list, which removed the STATE ZIP address-tail evidence.
+  - Keep both halves of an address that a barrier entity splits. A case number,
+    date, or person between the street and the city divides the seed cluster,
+    which is what keeps that entity out of the address span; each half was then
+    judged alone, and a street with no city beside it fell below the two-kind
+    evidence floor and was dropped. Paragraph, prose, and distance barriers still
+    separate unrelated evidence.
+  - Redact URL-shaped tokens that fail to parse. `new URL()` throws on shapes such
+    as `https://internal.corp:port/path`; the replacer returned those verbatim and
+    reported no redaction.
+
 ## 2.9.0
 
 ### Minor Changes
