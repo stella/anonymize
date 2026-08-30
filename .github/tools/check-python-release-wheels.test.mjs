@@ -25,13 +25,17 @@ const expectedContract = {
 const assertCallerContract = (source) => {
   assert.match(
     source,
-    /^          expected-version: \$\{\{ needs\.verify\.outputs\.version \}\}$/m,
+    /^    uses: stella\/\.github\/\.github\/workflows\/pypi-publish\.yml@[0-9a-f]{40}$/m,
   );
-  assert.match(source, /^          project-name: stella-anonymize-core$/m);
-  assert.match(source, /^          distribution-name: stella_anonymize_core$/m);
+  assert.match(
+    source,
+    /^      expected-version: \$\{\{ needs\.verify\.outputs\.version \}\}$/m,
+  );
+  assert.match(source, /^      project-name: stella-anonymize-core$/m);
+  assert.match(source, /^      distribution-name: stella_anonymize_core$/m);
 
   const contract = source.match(
-    /^          wheel-contract: >-\n            (\{.+\})$/m,
+    /^      wheel-contract: >-\n        (\{.+\})$/m,
   );
   assert.ok(contract, "release workflow has no static wheel contract");
   assert.deepEqual(JSON.parse(contract[1]), expectedContract);

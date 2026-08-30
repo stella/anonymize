@@ -7,6 +7,8 @@ const workflow = readFileSync(
   "utf8",
 );
 const byName = (left, right) => left.localeCompare(right);
+const forbiddenFinalizerConfiguration =
+  /CHANGELOG_APP|update-changelog|(?:pull-requests|"pull-requests"|'pull-requests')\s*:/;
 
 const parseJobs = (source) => {
   const marker = source.match(/^jobs:\n/m);
@@ -72,10 +74,7 @@ void test("caller binds finalization and data publishing to its exact artifacts"
     /^      artifact-pattern: npm-tarball-\*$/m,
   );
   assert.match(jobs["github-release"], /^      publish-to-npm: true$/m);
-  assert.doesNotMatch(
-    jobs["github-release"],
-    /CHANGELOG_APP|update-changelog|pull-requests:/,
-  );
+  assert.doesNotMatch(jobs["github-release"], forbiddenFinalizerConfiguration);
   assert.match(
     jobs["publish-data"],
     /^      artifact-name: data-package-stll-anonymize-data$/m,
@@ -91,6 +90,13 @@ void test("caller binds finalization and data publishing to its exact artifacts"
   assert.match(
     jobs["publish-data"],
     /^      dist-tag: \$\{\{ needs\.pack-data\.outputs\.dist_tag \}\}$/m,
+  );
+});
+
+void test("finalizer privilege guard recognizes quoted YAML keys", () => {
+  assert.match(
+    '      "pull-requests" : write',
+    forbiddenFinalizerConfiguration,
   );
 });
 
