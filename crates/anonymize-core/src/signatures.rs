@@ -1030,6 +1030,8 @@ fn is_single_uncased_alphabetic(text: &str) -> bool {
       character.general_category(),
       GeneralCategory::ModifierLetter | GeneralCategory::OtherLetter
     )
+    && !character.is_uppercase()
+    && !character.is_lowercase()
 }
 
 const fn is_letter_category(category: GeneralCategory) -> bool {
@@ -2370,6 +2372,7 @@ mod tests {
       "Name: ᾼ",
       "Name: Α\u{345}",
       "Name: 𐐀",
+      "Name: ʰ",
       "Name: 1",
       "李",
       "By: 李",
