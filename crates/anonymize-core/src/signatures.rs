@@ -156,8 +156,7 @@ impl PreparedSignatureData {
           })
           .cloned()
           .collect::<Vec<_>>();
-        (!field_labels.is_empty())
-          .then(|| (person_label.clone(), field_labels))
+        (!field_labels.is_empty()).then(|| (person_label.clone(), field_labels))
       })
       .collect();
     let party_role_name_tokens = decode_party_role_name_evidence(
@@ -1157,15 +1156,13 @@ fn label_end_at(
     {
       let end = start.saturating_add(relative_end);
       if label_tail_is_valid(line, end)
-        && !is_suffix_of_non_person_field_label(
-          NonPersonFieldLabelSuffixArgs {
-            line,
-            start,
-            end,
-            person_label: label,
-            data,
-          },
-        )
+        && !is_suffix_of_non_person_field_label(NonPersonFieldLabelSuffixArgs {
+          line,
+          start,
+          end,
+          person_label: label,
+          data,
+        })
       {
         return Some((end, kind));
       }
@@ -1196,27 +1193,29 @@ fn is_suffix_of_non_person_field_label(
   data
     .non_person_field_labels_by_person_label
     .get(person_label)
-    .is_some_and(|field_labels| field_labels.iter().any(|field_label| {
-      let field_char_count = field_label.chars().count();
-      let Some(candidate_start) =
-        field_char_count.checked_sub(1).and_then(|last_character| {
-          line
-            .get(..end)?
-            .char_indices()
-            .rev()
-            .nth(last_character)
-            .map(|(index, _)| index)
-        })
-      else {
-        return false;
-      };
-      candidate_start < start
-        && boundary_before(line, candidate_start)
-        && line.get(candidate_start..end).is_some_and(|candidate| {
-          unicode_case_insensitive_prefix_end(candidate, field_label)
-            == Some(candidate.len())
-        })
-    }))
+    .is_some_and(|field_labels| {
+      field_labels.iter().any(|field_label| {
+        let field_char_count = field_label.chars().count();
+        let Some(candidate_start) =
+          field_char_count.checked_sub(1).and_then(|last_character| {
+            line
+              .get(..end)?
+              .char_indices()
+              .rev()
+              .nth(last_character)
+              .map(|(index, _)| index)
+          })
+        else {
+          return false;
+        };
+        candidate_start < start
+          && boundary_before(line, candidate_start)
+          && line.get(candidate_start..end).is_some_and(|candidate| {
+            unicode_case_insensitive_prefix_end(candidate, field_label)
+              == Some(candidate.len())
+          })
+      })
+    })
 }
 
 #[derive(Default)]
