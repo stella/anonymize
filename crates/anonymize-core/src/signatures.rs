@@ -1017,8 +1017,28 @@ fn is_person_value_name_token(text: &str) -> bool {
     .chars()
     .filter(|character| is_letter_category(character.general_category()))
     .count();
-  (alphabetic_count >= 2 && is_cap_token(text))
+  (alphabetic_count >= 2
+    && (is_cap_token(text) || is_multi_scalar_uncased_alphabetic(text)))
     || is_single_uncased_alphabetic(text)
+}
+
+fn is_multi_scalar_uncased_alphabetic(text: &str) -> bool {
+  let mut characters = text.chars();
+  let Some(first) = characters.next() else {
+    return false;
+  };
+  let Some(second) = characters.next() else {
+    return false;
+  };
+  is_uncased_script_letter(first)
+    && is_uncased_script_letter(second)
+    && characters.all(is_uncased_script_letter)
+}
+
+fn is_uncased_script_letter(character: char) -> bool {
+  character.general_category() == GeneralCategory::OtherLetter
+    && !character.is_uppercase()
+    && !character.is_lowercase()
 }
 
 fn is_single_uncased_alphabetic(text: &str) -> bool {
@@ -2311,6 +2331,7 @@ mod tests {
       ("Name: Li", "Li"),
       ("Name: A\u{301}n", "A\u{301}n"),
       ("Name: 李", "李"),
+      ("Name: 李小龍", "李小龍"),
       ("Name: ع", "ع"),
     ] {
       let entities = detect_signatures(&DetectSignaturesArgs {
@@ -2375,6 +2396,7 @@ mod tests {
       "Name: 𐐀",
       "Name: ʰ",
       "Name: 1",
+      "Name: 李小1",
       "李",
       "By: 李",
       "Company Name: Acme",
