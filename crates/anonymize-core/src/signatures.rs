@@ -1069,7 +1069,7 @@ fn label_end_at(
   start: usize,
   data: &PreparedSignatureData,
 ) -> Option<(usize, LabelKind)> {
-  if !boundary_before(line, start) {
+  if !field_label_has_left_boundary(line, start) {
     return None;
   }
   let tail = line.get(start..)?;
@@ -1105,6 +1105,20 @@ fn label_end_at(
     }
   }
   None
+}
+
+fn field_label_has_left_boundary(line: &str, start: usize) -> bool {
+  if !boundary_before(line, start) {
+    return false;
+  }
+  let Some(before) = line.get(..start) else {
+    return false;
+  };
+  before
+    .trim_end_matches([' ', '\t'])
+    .chars()
+    .next_back()
+    .is_none_or(|ch| !ch.is_alphanumeric())
 }
 
 #[derive(Default)]
@@ -2089,7 +2103,32 @@ mod tests {
       vec!["Li"]
     );
 
-    for text in ["Li", "By: Li", "Name: li", "Name: A"] {
+    for text in ["(Name: Li", "Heading\nName: Li"] {
+      let entities = detect_signatures(&DetectSignaturesArgs {
+        full_text: text,
+        data: &data,
+        first_names: None,
+        name_corpus: None,
+        title_tokens: &BTreeSet::new(),
+      });
+      assert_eq!(
+        entities
+          .iter()
+          .map(|entity| entity.text.as_str())
+          .collect::<Vec<_>>(),
+        vec!["Li"],
+        "text {text:?}",
+      );
+    }
+
+    for text in [
+      "Li",
+      "By: Li",
+      "Name: li",
+      "Name: A",
+      "Company Name: Acme",
+      "Company Name: Li",
+    ] {
       assert!(
         detect_signatures(&DetectSignaturesArgs {
           full_text: text,
