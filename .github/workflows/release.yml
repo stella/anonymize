@@ -500,7 +500,7 @@ jobs:
         && needs.pack-data.result == 'success'
         && (github.event_name == 'push'
             || inputs.publish_to_npm == true))
-    uses: stella/.github/.github/workflows/npm-artifact-publish.yml@89ceed9555f0895fd34a9d478edebe2331f01929
+    uses: stella/.github/.github/workflows/npm-artifact-publish.yml@5f2b01d9ed2deb6d6c12361d6732833ce5968ef9
     with:
       artifact-name: data-package-stll-anonymize-data
       package-name: "@stll/anonymize-data"
@@ -649,19 +649,17 @@ jobs:
         needs.verify.outputs.publish_runtime == 'true'
         && (github.event_name == 'push'
             || inputs.publish_to_npm == true))
-    runs-on: ubuntu-latest
+    uses: stella/.github/.github/workflows/pypi-publish.yml@5f2b01d9ed2deb6d6c12361d6732833ce5968ef9
+    with:
+      expected-version: ${{ needs.verify.outputs.version }}
+      project-name: stella-anonymize-core
+      distribution-name: stella_anonymize_core
+      wheel-contract: >-
+        {"python-wheel-x86_64-unknown-linux-gnu":["manylinux_2_17_x86_64","manylinux2014_x86_64"],"python-wheel-aarch64-unknown-linux-gnu":["manylinux_2_17_aarch64","manylinux2014_aarch64"],"python-wheel-x86_64-apple-darwin":["macosx_10_12_x86_64"],"python-wheel-aarch64-apple-darwin":["macosx_11_0_arm64"],"python-wheel-x86_64-pc-windows-msvc":["win_amd64"]}
     permissions:
+      contents: read
       # Trusted Publishing (OIDC): no PyPI API token is stored in the repo.
       id-token: write # Required only for PyPI trusted publishing.
-    steps:
-      - name: Validate and publish exact Python wheel set
-        uses: stella/.github/.github/actions/pypi-publish-hardened@89ceed9555f0895fd34a9d478edebe2331f01929
-        with:
-          expected-version: ${{ needs.verify.outputs.version }}
-          project-name: stella-anonymize-core
-          distribution-name: stella_anonymize_core
-          wheel-contract: >-
-            {"python-wheel-x86_64-unknown-linux-gnu":["manylinux_2_17_x86_64","manylinux2014_x86_64"],"python-wheel-aarch64-unknown-linux-gnu":["manylinux_2_17_aarch64","manylinux2014_aarch64"],"python-wheel-x86_64-apple-darwin":["macosx_10_12_x86_64"],"python-wheel-aarch64-apple-darwin":["macosx_11_0_arm64"],"python-wheel-x86_64-pc-windows-msvc":["win_amd64"]}
 
   github-release:
     name: Publish and finalize runtime release
@@ -674,7 +672,7 @@ jobs:
         && needs.publish-pypi.result == 'success'
         && (github.event_name == 'push'
             || inputs.publish_to_npm == true))
-    uses: stella/.github/.github/workflows/npm-version-finalize.yml@89ceed9555f0895fd34a9d478edebe2331f01929
+    uses: stella/.github/.github/workflows/npm-version-finalize.yml@5f2b01d9ed2deb6d6c12361d6732833ce5968ef9
     with:
       package-files: |
         packages/anonymize/package.json
