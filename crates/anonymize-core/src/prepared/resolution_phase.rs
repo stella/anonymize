@@ -77,11 +77,9 @@ impl PreparedEngine {
       address_context_timer,
     )?;
     raw_entities.extend(address_context_entities);
-    trace_pr480_resolution("raw", full_text, &raw_entities);
     let merge_timer = PhaseTimer::start();
     let merged = merge_and_dedup(&raw_entities);
     let merged = self.extend_monetary_entities(full_text, merged);
-    trace_pr480_resolution("merge", full_text, &merged);
     record_resolver_entities(
       diagnostics,
       event_stream,
@@ -96,7 +94,6 @@ impl PreparedEngine {
       resolution_document,
       self.person_span_terminators(),
     )?;
-    trace_pr480_resolution("boundary", full_text, &consistent);
     record_resolver_entities(
       diagnostics,
       event_stream,
@@ -108,23 +105,15 @@ impl PreparedEngine {
     let sanitize_timer = PhaseTimer::start();
     let sanitized_entities =
       sanitize_entities_with_document(consistent, resolution_document)?;
-    trace_pr480_resolution("sanitize", full_text, &sanitized_entities);
     let false_positive_filters = self.data.effective_false_positive_filters();
-    let false_positive_entities =
+    let mut resolved_entities = filter_entities_for_config(
       filter_entity_false_positives(FilterEntityFalsePositivesArgs {
         entities: sanitized_entities,
         document: resolution_document,
         filters: false_positive_filters,
         directional_abbreviations: self.address_directional_abbreviations(),
         legal_form_data: self.data.legal_forms.as_ref(),
-      })?;
-    trace_pr480_resolution(
-      "false-positive",
-      full_text,
-      &false_positive_entities,
-    );
-    let mut resolved_entities = filter_entities_for_config(
-      false_positive_entities,
+      })?,
       self.policy.threshold,
       &self.policy.allowed_labels,
     );
@@ -135,7 +124,6 @@ impl PreparedEngine {
       false_positive_filters,
       diagnostics.as_deref_mut(),
     )?;
-    trace_pr480_resolution("coreference", full_text, &resolved_entities);
     clear_internal_source_details(&mut resolved_entities);
     record_resolver_entities(
       diagnostics,
@@ -387,32 +375,5 @@ impl PreparedEngine {
       .data
       .anchored
       .extend_monetary_entities(full_text, entities)
-  }
-}
-
-#[allow(clippy::print_stderr, reason = "temporary remote CI diagnosis")]
-fn trace_pr480_resolution(
-  stage: &str,
-  full_text: &str,
-  entities: &[PipelineEntity],
-) {
-  for marker in [
-    "Parent&rsquo;s Board of Directors",
-    "Company&#8217;s Office of General Counsel",
-  ] {
-    for (start, _) in full_text.match_indices(marker) {
-      let end = start.saturating_add(marker.len());
-      let Ok(start) = u32::try_from(start) else {
-        continue;
-      };
-      let Ok(end) = u32::try_from(end) else {
-        continue;
-      };
-      for entity in entities {
-        if entity.start < end && entity.end > start {
-          eprintln!("PR480_TRACE {stage} {marker:?}: {entity:?}");
-        }
-      }
-    }
   }
 }

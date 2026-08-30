@@ -360,6 +360,7 @@ pub(crate) fn process_legal_form_matches(
   }
 
   let offsets = ByteOffsets::new(full_text);
+  trace_pr480_legal_matches(full_text, matches);
   let mut candidates = Vec::new();
   for found in matches {
     if slice.local_index(found.pattern()).is_none() {
@@ -457,7 +458,9 @@ pub(crate) fn process_legal_form_matches(
     });
   }
 
+  trace_pr480_legal_candidates("before-drop", full_text, &candidates);
   let candidates = drop_overlapping(candidates, full_text, data);
+  trace_pr480_legal_candidates("after-drop", full_text, &candidates);
   let mut entities = Vec::new();
   for candidate in candidates {
     process_candidate(&mut entities, full_text, &candidate, data);
@@ -473,8 +476,101 @@ pub(crate) fn process_legal_form_matches(
       .iter()
       .any(|&(start, end)| start == entity.start && end > entity.end)
   });
+  trace_pr480_legal_entities(full_text, &entities);
 
   Ok(entities)
+}
+
+fn pr480_trace_ranges(full_text: &str) -> Vec<std::ops::Range<usize>> {
+  [
+    "Parent&rsquo;s Board of Directors",
+    "Company&#8217;s Office of General Counsel",
+  ]
+  .into_iter()
+  .flat_map(|marker| full_text.match_indices(marker))
+  .map(|(start, marker)| {
+    start.saturating_sub(100)
+      ..start
+        .saturating_add(marker.len())
+        .saturating_add(100)
+        .min(full_text.len())
+  })
+  .collect()
+}
+
+#[allow(
+  clippy::disallowed_macros,
+  clippy::print_stderr,
+  reason = "temporary remote CI diagnosis"
+)]
+fn trace_pr480_legal_matches(full_text: &str, matches: &[SearchMatch]) {
+  let ranges = pr480_trace_ranges(full_text);
+  for found in matches {
+    let Ok(start) = usize::try_from(found.start()) else {
+      continue;
+    };
+    let Ok(end) = usize::try_from(found.end()) else {
+      continue;
+    };
+    if ranges
+      .iter()
+      .any(|range| start < range.end && end > range.start)
+    {
+      eprintln!(
+        "PR480_LEGAL match pattern={} start={} end={} text={:?}",
+        found.pattern(),
+        found.start(),
+        found.end(),
+        full_text.get(start..end),
+      );
+    }
+  }
+}
+
+#[allow(
+  clippy::disallowed_macros,
+  clippy::print_stderr,
+  reason = "temporary remote CI diagnosis"
+)]
+fn trace_pr480_legal_candidates(
+  stage: &str,
+  full_text: &str,
+  candidates: &[Candidate],
+) {
+  let ranges = pr480_trace_ranges(full_text);
+  for candidate in candidates {
+    if ranges.iter().any(|range| {
+      candidate.start < range.end && candidate.end > range.start
+    }) {
+      eprintln!("PR480_LEGAL {stage}: {candidate:?}");
+    }
+  }
+}
+
+#[allow(
+  clippy::disallowed_macros,
+  clippy::print_stderr,
+  reason = "temporary remote CI diagnosis"
+)]
+fn trace_pr480_legal_entities(
+  full_text: &str,
+  entities: &[PipelineEntity],
+) {
+  let ranges = pr480_trace_ranges(full_text);
+  for entity in entities {
+    let Ok(start) = usize::try_from(entity.start) else {
+      continue;
+    };
+    let Ok(end) = usize::try_from(entity.end) else {
+      continue;
+    };
+    if ranges
+      .iter()
+      .any(|range| start < range.end && end > range.start)
+    {
+      eprintln!("PR480_LEGAL entity: {entity:?}");
+    }
+  }
 }
 
 const MAX_INSTITUTIONAL_COMPLEMENT_TOKENS: usize = 12;
