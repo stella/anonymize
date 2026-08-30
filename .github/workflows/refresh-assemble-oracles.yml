@@ -28,6 +28,10 @@ jobs:
         env:
           ANONYMIZE_UPDATE_ASSEMBLE_MANIFEST: "1"
         run: cargo nextest run -p stella-anonymize-core --test assemble_digest
+      - name: Format generated fixtures
+        run: |
+          bun install --frozen-lockfile
+          bun x oxfmt crates/anonymize-core/tests/fixtures/assemble
       - name: Capture generated patch
         run: git diff --binary > "$RUNNER_TEMP/assemble-oracles.patch"
       - name: Upload generated patch
