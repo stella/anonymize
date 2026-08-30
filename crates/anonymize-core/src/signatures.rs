@@ -429,7 +429,9 @@ struct LeadingInitials<'a> {
   count: usize,
 }
 
-fn without_leading_initial_tokens(mut text: &str) -> Option<LeadingInitials<'_>> {
+fn without_leading_initial_tokens(
+  mut text: &str,
+) -> Option<LeadingInitials<'_>> {
   let mut count = 0_usize;
   loop {
     let trimmed = text.trim_start();
@@ -440,7 +442,7 @@ fn without_leading_initial_tokens(mut text: &str) -> Option<LeadingInitials<'_>>
         None => true,
         Some('.') => chars.next().is_none(),
         Some(_) => false,
-    };
+      };
     if !is_initial {
       return (count > 0).then_some(LeadingInitials {
         remainder: trimmed,

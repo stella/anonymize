@@ -330,6 +330,10 @@ fn should_replace(
     return false;
   }
 
+  if legal_form_organization_completes_person_fragment(candidate, existing) {
+    return true;
+  }
+
   if same_start_longest_wins(candidate, existing)
     && candidate_len != existing_len
   {
@@ -534,12 +538,29 @@ fn address_contains_bare_postal(
 }
 
 fn legal_form_contains(outer: &PipelineEntity, inner: &PipelineEntity) -> bool {
-  outer.source == DetectionSource::LegalForm
-    && outer.label == crate::labels::ORGANIZATION_LABEL
-    && (inner.label == crate::labels::ORGANIZATION_LABEL
-      || inner.label == crate::labels::PERSON_LABEL)
+  outer.label == inner.label
+    && outer.source == DetectionSource::LegalForm
     && outer.start <= inner.start
     && outer.end >= inner.end
+}
+
+/// A name detector can begin in role prose before a named institutional
+/// organization and stop inside it. The later-starting legal-form candidate
+/// must close that partial overlap or the person fragment wins by source
+/// priority and is subsequently filtered, leaking the organization. Exact
+/// starts are excluded so a possessive person field cannot widen to a legal
+/// organization merely because both detectors begin on the same token.
+fn legal_form_organization_completes_person_fragment(
+  candidate: &PipelineEntity,
+  existing: &PipelineEntity,
+) -> bool {
+  candidate.source == DetectionSource::LegalForm
+    && candidate.label == crate::labels::ORGANIZATION_LABEL
+    && existing.label == crate::labels::PERSON_LABEL
+    && !is_caller_owned(existing)
+    && existing.start < candidate.start
+    && candidate.start < existing.end
+    && existing.end < candidate.end
 }
 
 fn same_start_longest_wins(
@@ -957,37 +978,6 @@ mod tests {
   }
 
   #[test]
-  fn legal_form_organization_outranks_contained_person_fragment() {
-    let organization_text = "Parent&rsquo;s Board of Directors";
-    let organization = PipelineEntity::detected(
-      0,
-      u32::try_from(organization_text.len()).unwrap(),
-      "organization",
-      organization_text,
-      0.95,
-      DetectionSource::LegalForm,
-    );
-    let person = PipelineEntity::detected(
-      0,
-      6,
-      "person",
-      "Parent",
-      1.0,
-      DetectionSource::Trigger,
-    );
-
-    for entities in [
-      vec![person.clone(), organization.clone()],
-      vec![organization.clone(), person],
-    ] {
-      assert_eq!(
-        merge_and_dedup(&entities),
-        std::slice::from_ref(&organization)
-      );
-    }
-  }
-
-  #[test]
   #[ignore = "release-mode scaling regression check"]
   fn disjoint_resolution_merge_scales_with_candidate_count() {
     const SMALL_COUNT: usize = 4_096;
@@ -1064,6 +1054,68 @@ mod tests {
     assert_eq!(
       merge_and_dedup(&entities),
       legacy_merge_and_dedup(&entities)
+    );
+  }
+
+  #[test]
+  fn legal_form_organization_closes_a_partial_person_overlap() {
+    let person = PipelineEntity::detected(
+      0,
+      28,
+      "person",
+      "Chairman reporting to Parent",
+      1.0,
+      DetectionSource::Regex,
+    );
+    let organization = PipelineEntity::detected(
+      22,
+      55,
+      "organization",
+      "Parent&rsquo;s Board of Directors",
+      0.95,
+      DetectionSource::LegalForm,
+    );
+
+    assert_eq!(
+      merge_and_dedup(&[person, organization.clone()]),
+      [organization]
+    );
+  }
+
+  #[test]
+  fn legal_form_organization_does_not_widen_same_start_or_other_labels() {
+    let organization = PipelineEntity::detected(
+      0,
+      33,
+      "organization",
+      "Company&#8217;s Office of Counsel",
+      0.95,
+      DetectionSource::LegalForm,
+    );
+    let same_start_person = PipelineEntity::detected(
+      0,
+      7,
+      "person",
+      "Company",
+      1.0,
+      DetectionSource::Regex,
+    );
+    assert_eq!(
+      merge_and_dedup(&[same_start_person.clone(), organization.clone()]),
+      [same_start_person]
+    );
+
+    let overlapping_address = PipelineEntity::detected(
+      0,
+      12,
+      "address",
+      "Office plaza",
+      1.0,
+      DetectionSource::Regex,
+    );
+    assert_eq!(
+      merge_and_dedup(&[overlapping_address.clone(), organization]),
+      [overlapping_address]
     );
   }
 }
