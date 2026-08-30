@@ -201,7 +201,7 @@ impl PreparedSignatureData {
       .iter()
       .filter(|label| SIGNATURE_ONLY_PERSON_LABELS.contains(&label.as_str()))
       .cloned()
-      .collect();
+      .collect::<Vec<_>>();
     let person_value_labels = non_empty_lowercase(data.person_value_labels);
     let party_role_labels = non_empty_lowercase(party_role_labels);
     let person_list_labels = non_empty_lowercase(data.person_list_labels);
