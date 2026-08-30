@@ -29,8 +29,7 @@ impl PartyRoleEvidence<'_> {
     };
     let leading_initials = without_leading_initial_tokens(candidate);
     let evidence_candidate = leading_initials
-      .map(|initials| initials.remainder)
-      .unwrap_or(candidate);
+      .map_or(candidate, |initials| initials.remainder);
     if let Some(corpus) = self.name_corpus {
       if corpus.is_organization(candidate) {
         return false;

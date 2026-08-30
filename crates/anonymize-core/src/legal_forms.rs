@@ -826,7 +826,7 @@ fn possessive_marker_start_before(text: &str, pos: usize) -> Option<usize> {
   let before = text.get(..pos)?;
   ["&apos;", "&rsquo;", "&#39;", "&#8217;", "'", "’"]
     .iter()
-    .find_map(|marker| before.strip_suffix(marker).map(|prefix| prefix.len()))
+    .find_map(|marker| before.strip_suffix(marker).map(str::len))
 }
 
 fn has_non_possessive_quote_entity_before(text: &str, pos: usize) -> bool {

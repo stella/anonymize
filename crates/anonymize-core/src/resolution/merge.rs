@@ -554,12 +554,14 @@ fn legal_form_organization_completes_person_fragment(
   candidate: &PipelineEntity,
   existing: &PipelineEntity,
 ) -> bool {
+  let candidate_starts_inside_existing =
+    existing.start < candidate.start && candidate.start < existing.end;
+
   candidate.source == DetectionSource::LegalForm
     && candidate.label == crate::labels::ORGANIZATION_LABEL
     && existing.label == crate::labels::PERSON_LABEL
     && !is_caller_owned(existing)
-    && existing.start < candidate.start
-    && candidate.start < existing.end
+    && candidate_starts_inside_existing
     && existing.end < candidate.end
 }
 
