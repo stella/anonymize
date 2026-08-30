@@ -1007,9 +1007,21 @@ fn is_name_shape(text: &str, data: &PreparedSignatureData) -> bool {
 
 fn is_person_value_name_token(text: &str) -> bool {
   let text_len = text.chars().map(char::len_utf16).sum::<usize>();
-  (2..=MAX_NAME_LEN).contains(&text_len)
-    && !text.chars().any(char::is_whitespace)
-    && is_cap_token(text)
+  if text_len > MAX_NAME_LEN || text.chars().any(char::is_whitespace) {
+    return false;
+  }
+  is_cap_token(text) || is_single_uncased_alphabetic(text)
+}
+
+fn is_single_uncased_alphabetic(text: &str) -> bool {
+  let mut characters = text.chars();
+  let Some(character) = characters.next() else {
+    return false;
+  };
+  characters.next().is_none()
+    && character.is_alphabetic()
+    && !character.is_uppercase()
+    && !character.is_lowercase()
 }
 
 fn is_particle_led_name_shape(
@@ -2273,20 +2285,25 @@ mod tests {
       Vec::new(),
     );
 
-    let entities = detect_signatures(&DetectSignaturesArgs {
-      full_text: "Name: Li",
-      data: &data,
-      first_names: None,
-      name_corpus: None,
-      title_tokens: &BTreeSet::new(),
-    });
-    assert_eq!(
-      entities
-        .iter()
-        .map(|entity| entity.text.as_str())
-        .collect::<Vec<_>>(),
-      vec!["Li"]
-    );
+    for (text, expected) in
+      [("Name: Li", "Li"), ("Name: 李", "李"), ("Name: ع", "ع")]
+    {
+      let entities = detect_signatures(&DetectSignaturesArgs {
+        full_text: text,
+        data: &data,
+        first_names: None,
+        name_corpus: None,
+        title_tokens: &BTreeSet::new(),
+      });
+      assert_eq!(
+        entities
+          .iter()
+          .map(|entity| entity.text.as_str())
+          .collect::<Vec<_>>(),
+        [expected],
+        "text {text:?}",
+      );
+    }
 
     let embedded_label_entities = detect_signatures(&DetectSignaturesArgs {
       full_text: "represented by Name: Jane Roe",
@@ -2326,8 +2343,12 @@ mod tests {
       "By: Li",
       "Name: li",
       "Name: A",
+      "Name: 1",
+      "李",
+      "By: 李",
       "Company Name: Acme",
       "Company Name: Li",
+      "Company Name: 李",
     ] {
       assert!(
         detect_signatures(&DetectSignaturesArgs {
