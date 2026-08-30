@@ -304,9 +304,7 @@ fn without_leading_initial_tokens(mut text: &str) -> Option<&str> {
   let mut removed = false;
   loop {
     let trimmed = text.trim_start();
-    let Some(token) = trimmed.split_whitespace().next() else {
-      return None;
-    };
+    let token = trimmed.split_whitespace().next()?;
     let mut chars = token.chars();
     let is_initial = chars.next().is_some_and(char::is_uppercase)
       && chars.next() == Some('.')
