@@ -754,7 +754,7 @@ fn token_before<'a>(
   allow_suffix_adjacent_jurisdiction: bool,
   data: &PreparedLegalFormData,
 ) -> Option<Token<'a>> {
-  let mut end = pos;
+  let mut end = possessive_marker_start_before(text, pos).unwrap_or(pos);
   while let Some((prev_start, ch)) = previous_char(text, end) {
     if ch == '\n' {
       // Soft EDGAR wrap inside a firm name: comma lists
@@ -806,6 +806,25 @@ fn token_before<'a>(
     end,
     text: text.get(start..end).unwrap_or_default(),
   })
+}
+
+fn possessive_marker_start_before(text: &str, pos: usize) -> Option<usize> {
+  let after = text.get(pos..)?;
+  let mut after_chars = after.chars();
+  if after_chars.next()? != 's'
+    || !after_chars.next().is_some_and(is_inter_token_space)
+  {
+    return None;
+  }
+
+  let before = text.get(..pos)?;
+  ["&apos;", "&rsquo;", "&#39;", "&#8217;", "'", "’"]
+    .iter()
+    .find_map(|marker| {
+      before
+        .strip_suffix(marker)
+        .map(|prefix| prefix.len())
+    })
 }
 
 fn allows_soft_wrap_continuation(
@@ -4229,6 +4248,19 @@ mod tests {
       institutional_head_entities("Parent&rsquo;s Board of Directors", "Board",),
       ["Parent&rsquo;s Board of Directors"]
     );
+    for text in [
+      "Parent&apos;s Board of Directors",
+      "Parent&#39;s Board of Directors",
+      "Parent&#8217;s Board of Directors",
+      "Parent's Board of Directors",
+      "Parent’s Board of Directors",
+    ] {
+      assert_eq!(
+        institutional_head_entities(text, "Board"),
+        [text],
+        "possessive marker should stay inside the named institution: {text}"
+      );
+    }
     assert_eq!(
       institutional_head_entities(
         "Chairman of the Board reporting to Parent&rsquo;s Board of Directors",
@@ -4912,6 +4944,32 @@ mod tests {
     assert_eq!(
       super::walk_backward(text, suffix_start, &data),
       Some(organization_start)
+    );
+  }
+
+  #[test]
+  fn backward_walk_crosses_only_recognized_possessive_markers() {
+    let data = PreparedLegalFormData::new(LegalFormData::default());
+    for text in [
+      "Parent&apos;s Board",
+      "Parent&rsquo;s Board",
+      "Parent&#39;s Board",
+      "Parent&#8217;s Board",
+      "Parent's Board",
+      "Parent’s Board",
+    ] {
+      let suffix_start = text.find("Board").unwrap();
+      assert_eq!(
+        super::walk_backward(text, suffix_start, &data),
+        Some(0),
+        "possessive marker should stay inside the name: {text}"
+      );
+    }
+    let unsupported = "Parent&quot;s Board";
+    let suffix_start = unsupported.find("Board").unwrap();
+    assert_ne!(
+      super::walk_backward(unsupported, suffix_start, &data),
+      Some(0)
     );
   }
 

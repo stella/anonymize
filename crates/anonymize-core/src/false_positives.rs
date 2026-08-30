@@ -2548,7 +2548,7 @@ mod tests {
   fn subject_clause_party_labels_accept_only_scoped_articles() {
     let legal_form_data = prepared_clause_data(PreparedClauseDataArgs {
       leading_phrases: &[],
-      role_heads: &["seller", "the seller"],
+      role_heads: &["party", "seller", "the seller"],
       sentence_verbs: &["is"],
     });
     let article_label_text =

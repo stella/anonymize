@@ -534,10 +534,8 @@ fn address_contains_bare_postal(
 }
 
 fn legal_form_contains(outer: &PipelineEntity, inner: &PipelineEntity) -> bool {
-  outer.source == DetectionSource::LegalForm
-    && outer.label == crate::labels::ORGANIZATION_LABEL
-    && (inner.label == crate::labels::ORGANIZATION_LABEL
-      || inner.label == crate::labels::PERSON_LABEL)
+  outer.label == inner.label
+    && outer.source == DetectionSource::LegalForm
     && outer.start <= inner.start
     && outer.end >= inner.end
 }
@@ -954,37 +952,6 @@ mod tests {
       write!(&mut encoded, "{byte:02x}").expect("write to string");
     }
     encoded
-  }
-
-  #[test]
-  fn legal_form_organization_outranks_contained_person_fragment() {
-    let organization_text = "Parent&rsquo;s Board of Directors";
-    let organization = PipelineEntity::detected(
-      0,
-      u32::try_from(organization_text.len()).unwrap(),
-      "organization",
-      organization_text,
-      0.95,
-      DetectionSource::LegalForm,
-    );
-    let person = PipelineEntity::detected(
-      0,
-      6,
-      "person",
-      "Parent",
-      1.0,
-      DetectionSource::Trigger,
-    );
-
-    for entities in [
-      vec![person.clone(), organization.clone()],
-      vec![organization.clone(), person],
-    ] {
-      assert_eq!(
-        merge_and_dedup(&entities),
-        std::slice::from_ref(&organization)
-      );
-    }
   }
 
   #[test]
