@@ -1010,7 +1010,8 @@ fn is_person_value_name_token(text: &str) -> bool {
   if text_len > MAX_NAME_LEN || text.chars().any(char::is_whitespace) {
     return false;
   }
-  is_cap_token(text) || is_single_uncased_alphabetic(text)
+  ((2..=MAX_NAME_LEN).contains(&text_len) && is_cap_token(text))
+    || is_single_uncased_alphabetic(text)
 }
 
 fn is_single_uncased_alphabetic(text: &str) -> bool {
