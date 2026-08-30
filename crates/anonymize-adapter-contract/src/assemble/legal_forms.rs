@@ -1056,7 +1056,7 @@ mod tests {
       parse_ordered_data_file("legal-form-leading-clauses.json").unwrap();
     let mut covered = HashSet::new();
 
-    for (language, value) in data {
+    for (language, value) in &data {
       if language.starts_with('_') {
         continue;
       }
