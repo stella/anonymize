@@ -860,6 +860,9 @@ fn is_particle_led_name_shape(
   if !(3..=MAX_NAME_LEN).contains(&text_len) {
     return false;
   }
+  if is_attached_particle_name_shape(text, data) {
+    return true;
+  }
   let mut tokens = text.split([' ', '\t']).filter(|token| !token.is_empty());
   let Some(first) = tokens.next() else {
     return false;
@@ -870,6 +873,22 @@ fn is_particle_led_name_shape(
     && remaining
       .iter()
       .all(|token| is_name_particle(token, data) || is_cap_token(token))
+}
+
+fn is_attached_particle_name_shape(
+  text: &str,
+  data: &PreparedSignatureData,
+) -> bool {
+  data.name_particles.iter().any(|particle| {
+    particle
+      .chars()
+      .next_back()
+      .is_some_and(|ch| matches!(ch, '\'' | '’'))
+      && text
+        .get(..particle.len())
+        .is_some_and(|prefix| prefix.eq_ignore_ascii_case(particle))
+      && text.get(particle.len()..).is_some_and(is_cap_token)
+  })
 }
 
 fn is_cap_token(token: &str) -> bool {
@@ -1999,13 +2018,17 @@ mod tests {
           String::from("jméno"),
           String::from("příjmení"),
         ],
-        name_particles: vec![String::from("de")],
+        name_particles: vec![
+          String::from("de"),
+          String::from("d'"),
+          String::from("d’"),
+        ],
         ..SignatureData::default()
       },
       Vec::new(),
     );
     let entities = detect_signatures(&DetectSignaturesArgs {
-      full_text: "Jméno: Jan Příjmení: de Vries",
+      full_text: "Jméno: Jan Příjmení: de Vries Jméno: d'Angelo Jméno: d’Angelo",
       data: &data,
       first_names: None,
       name_corpus: None,
@@ -2017,9 +2040,14 @@ mod tests {
         .iter()
         .map(|entity| entity.text.as_str())
         .collect::<Vec<_>>(),
-      vec!["Jan", "de Vries"]
+      vec!["Jan", "de Vries", "d'Angelo", "d’Angelo"]
     );
-    for text in ["Příjmení: de der", "Příjmení: van der Meer"] {
+    for text in [
+      "Příjmení: de der",
+      "Příjmení: van der Meer",
+      "Jméno: d'angelo",
+      "d'Angelo",
+    ] {
       assert!(
         detect_signatures(&DetectSignaturesArgs {
           full_text: text,

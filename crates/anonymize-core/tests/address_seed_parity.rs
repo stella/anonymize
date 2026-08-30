@@ -464,6 +464,21 @@ fn street_period_before_directional_keeps_address_evidence_joined() {
 }
 
 #[test]
+fn directional_without_immediate_address_material_stays_a_sentence_boundary() {
+  let prepared = barrier_address_engine();
+  let result = prepared
+    .redact_static_entities(
+      "123 Main Street. E, reference@example.test, Paris 75002.",
+      &OperatorConfig::default(),
+    )
+    .expect("static redaction should succeed");
+
+  let addresses = address_texts(&result);
+  assert!(!addresses.contains(&"123 Main Street"));
+  assert!(addresses.contains(&"Paris 75002"));
+}
+
+#[test]
 fn right_expansion_keeps_a_configured_directional_after_a_street_period() {
   let prepared = barrier_address_engine();
   let result = prepared

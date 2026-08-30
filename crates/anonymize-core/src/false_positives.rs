@@ -2542,6 +2542,49 @@ mod tests {
   }
 
   #[test]
+  fn subject_clause_party_labels_accept_only_scoped_articles() {
+    let legal_form_data = prepared_clause_data(PreparedClauseDataArgs {
+      leading_phrases: &[],
+      role_heads: &["seller", "the seller"],
+      sentence_verbs: &["is"],
+    });
+    let text =
+      "THE SELLER: ACME LIMITED IS A PARTY TO THIS AGREEMENT.\n";
+    let entities = filter_with_legal_form_data(FilterWithLegalFormDataArgs {
+      entities: vec![entity(
+        text,
+        "ACME LIMITED",
+        ORGANIZATION_LABEL,
+        DetectionSource::LegalForm,
+      )],
+      full_text: text,
+      filters: Some(&DenyListFilterData::default()),
+      legal_form_data: &legal_form_data,
+    })
+    .unwrap();
+    assert_eq!(entities.len(), 1);
+
+    for prefix in ["DER SELLER", "THE SECTION"] {
+      let text = format!(
+        "{prefix}: ACME LIMITED IS A PARTY TO THIS AGREEMENT.\n"
+      );
+      let entities = filter_with_legal_form_data(FilterWithLegalFormDataArgs {
+        entities: vec![entity(
+          &text,
+          "ACME LIMITED",
+          ORGANIZATION_LABEL,
+          DetectionSource::LegalForm,
+        )],
+        full_text: &text,
+        filters: Some(&DenyListFilterData::default()),
+        legal_form_data: &legal_form_data,
+      })
+      .unwrap();
+      assert!(entities.is_empty(), "prefix {prefix:?}");
+    }
+  }
+
+  #[test]
   fn keeps_long_and_multiword_role_subject_clauses() {
     for (text, entity_text, role_heads, sentence_verbs) in [
       (

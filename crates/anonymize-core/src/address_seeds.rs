@@ -2771,8 +2771,36 @@ pub(crate) fn starts_with_address_directional_continuation(
   text: &str,
   directional_abbreviations: &BTreeSet<String>,
 ) -> bool {
-  address_directional_continuation_end(text, directional_abbreviations)
-    .is_some()
+  let Some(continuation_end) =
+    address_directional_continuation_end(text, directional_abbreviations)
+  else {
+    return false;
+  };
+  text
+    .get(continuation_end..)
+    .is_some_and(starts_with_bounded_address_material)
+}
+
+fn starts_with_bounded_address_material(text: &str) -> bool {
+  let Some(segment) = text.trim_start().split([',', ';', '\n', '\r']).next()
+  else {
+    return false;
+  };
+  let segment = segment
+    .trim_end_matches(['.', '!', '?'])
+    .trim_end();
+  let mut count = 0usize;
+  for word in segment.split_whitespace() {
+    count = count.saturating_add(1);
+    if count > 5
+      || !(is_house_number_part(word)
+        || is_street_name_word(word)
+        || is_in_name_connector(word))
+    {
+      return false;
+    }
+  }
+  count > 0
 }
 
 fn address_directional_continuation_end(

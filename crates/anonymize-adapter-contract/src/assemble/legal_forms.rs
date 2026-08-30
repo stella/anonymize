@@ -602,6 +602,7 @@ fn connector_prose_heads(
 struct LeadingClauseTrims {
   phrases: Vec<String>,
   direct_prefixes: Vec<String>,
+  party_label_articles: Vec<String>,
 }
 
 fn leading_clause_trims(
@@ -613,6 +614,8 @@ fn leading_clause_trims(
   let mut phrases = Vec::new();
   let mut prefix_seen = HashSet::new();
   let mut direct_prefixes = Vec::new();
+  let mut article_seen = HashSet::new();
+  let mut party_label_articles = Vec::new();
   for (key, value) in &data {
     if key.starts_with('_') || !value.is_object() {
       continue;
@@ -643,11 +646,47 @@ fn leading_clause_trims(
         }
       }
     }
+    if let Some(entries) = value
+      .get("partyLabelArticles")
+      .and_then(Value::as_array)
+    {
+      for article in entries {
+        if let Some(article) = article.as_str()
+          && !article.is_empty()
+        {
+          push_unique(
+            article.to_lowercase(),
+            &mut article_seen,
+            &mut party_label_articles,
+          );
+        }
+      }
+    }
   }
   Ok(LeadingClauseTrims {
     phrases,
     direct_prefixes,
+    party_label_articles,
   })
+}
+
+fn party_label_role_heads(
+  selected: Option<&[String]>,
+  articles: &[String],
+) -> Result<Vec<String>, AssembleError> {
+  let mut roles = role_heads(selected)?;
+  let base_roles = roles.clone();
+  let mut seen = roles.iter().cloned().collect::<HashSet<_>>();
+  for article in articles {
+    for role in &base_roles {
+      push_unique(
+        format!("{article} {role}"),
+        &mut seen,
+        &mut roles,
+      );
+    }
+  }
+  Ok(roles)
 }
 
 /// Shared and language-owned arrays from `legal-form-rule-words.json`.
@@ -842,7 +881,10 @@ pub(super) fn build_legal_form_data(
     normalized_boundary_suffixes,
     normalized_in_name_words,
     normalized_suffix_words,
-    role_heads: role_heads(ctx.content_languages.as_deref())?,
+    role_heads: party_label_role_heads(
+      ctx.content_languages.as_deref(),
+      &trims.party_label_articles,
+    )?,
     sentence_verb_indicators: scoped_sentence_verb_indicators(
       ctx.content_languages.as_deref(),
     )?,
@@ -960,12 +1002,24 @@ mod tests {
     assert!(german.phrases.contains(&String::from("ist mit")));
     assert!(!german.direct_prefixes.contains(&String::from("with")));
     assert!(!german.phrases.contains(&String::from("is with")));
+    assert!(german.party_label_articles.contains(&String::from("der")));
+    assert!(!german.party_label_articles.contains(&String::from("the")));
 
     let czech = leading_clause_trims(Some(&[String::from("cs")])).unwrap();
     assert!(czech.direct_prefixes.contains(&String::from("s")));
     assert!(czech.phrases.contains(&String::from("je s")));
     assert!(!czech.direct_prefixes.contains(&String::from("mit")));
     assert!(!czech.phrases.contains(&String::from("ist mit")));
+    assert!(czech.party_label_articles.is_empty());
+
+    let english = leading_clause_trims(Some(&[String::from("en")])).unwrap();
+    let roles = party_label_role_heads(
+      Some(&[String::from("en")]),
+      &english.party_label_articles,
+    )
+    .unwrap();
+    assert!(roles.iter().any(|role| role == "the seller"));
+    assert!(!roles.iter().any(|role| role == "der seller"));
   }
 
   #[test]

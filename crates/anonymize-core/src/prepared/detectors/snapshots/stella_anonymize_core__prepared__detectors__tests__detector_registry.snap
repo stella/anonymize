@@ -97,6 +97,7 @@ modules:
         inputs:
           - FullText
           - FirstNames
+          - TitleTokens
         dependencies: []
         support_resources:
           - Signature
@@ -138,6 +139,7 @@ modules:
           - LiteralMatches
           - ContextEntities
           - FullText
+          - FalsePositiveFilters
         dependencies:
           - Regex
           - CustomRegex
