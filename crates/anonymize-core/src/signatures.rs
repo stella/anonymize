@@ -27,17 +27,24 @@ impl PartyRoleEvidence<'_> {
     else {
       return false;
     };
+    let evidence_candidate =
+      without_leading_initial_tokens(candidate).unwrap_or(candidate);
     if let Some(corpus) = self.name_corpus {
-      return corpus.has_leading_person_name_token(candidate)
-        || (!corpus.is_organization(candidate)
-          && starts_with_sorted_name_token(
-            candidate,
-            self.party_role_name_tokens,
-          ));
+      if corpus.is_organization(candidate) {
+        return false;
+      }
+      return corpus.has_leading_person_name_token(evidence_candidate)
+        || starts_with_sorted_name_token(
+          evidence_candidate,
+          self.party_role_name_tokens,
+        );
     }
     self.first_names.is_some_and(|first_names| {
-      starts_with_first_name_token(candidate, first_names)
-    }) || starts_with_sorted_name_token(candidate, self.party_role_name_tokens)
+      starts_with_first_name_token(evidence_candidate, first_names)
+    }) || starts_with_sorted_name_token(
+      evidence_candidate,
+      self.party_role_name_tokens,
+    )
   }
 }
 
@@ -289,6 +296,25 @@ fn without_leading_title_tokens<'a>(
     if !title_tokens.contains(&bare) {
       return Some(trimmed);
     }
+    text = trimmed.strip_prefix(token)?;
+  }
+}
+
+fn without_leading_initial_tokens(mut text: &str) -> Option<&str> {
+  let mut removed = false;
+  loop {
+    let trimmed = text.trim_start();
+    let Some(token) = trimmed.split_whitespace().next() else {
+      return None;
+    };
+    let mut chars = token.chars();
+    let is_initial = chars.next().is_some_and(char::is_uppercase)
+      && chars.next() == Some('.')
+      && chars.next().is_none();
+    if !is_initial {
+      return removed.then_some(trimmed);
+    }
+    removed = true;
     text = trimmed.strip_prefix(token)?;
   }
 }
@@ -1069,7 +1095,7 @@ fn label_end_at(
   start: usize,
   data: &PreparedSignatureData,
 ) -> Option<(usize, LabelKind)> {
-  if !field_label_has_left_boundary(line, start) {
+  if !boundary_before(line, start) {
     return None;
   }
   let tail = line.get(start..)?;
@@ -1099,7 +1125,9 @@ fn label_end_at(
     if let Some(relative_end) = unicode_case_insensitive_prefix_end(tail, label)
     {
       let end = start.saturating_add(relative_end);
-      if label_tail_is_valid(line, end) {
+      if label_tail_is_valid(line, end)
+        && !is_suffix_of_non_person_field_label(line, start, end, data)
+      {
         return Some((end, kind));
       }
     }
@@ -1107,18 +1135,43 @@ fn label_end_at(
   None
 }
 
-fn field_label_has_left_boundary(line: &str, start: usize) -> bool {
-  if !boundary_before(line, start) {
-    return false;
-  }
-  let Some(before) = line.get(..start) else {
-    return false;
-  };
-  before
-    .trim_end_matches([' ', '\t'])
-    .chars()
-    .next_back()
-    .is_none_or(|ch| !ch.is_alphanumeric())
+fn is_suffix_of_non_person_field_label(
+  line: &str,
+  start: usize,
+  end: usize,
+  data: &PreparedSignatureData,
+) -> bool {
+  data.form_field_labels.iter().any(|field_label| {
+    let introduces_person = data
+      .person_value_labels
+      .iter()
+      .chain(&data.signature_only_person_labels)
+      .chain(&data.party_role_labels)
+      .chain(&data.person_list_labels)
+      .any(|person_label| person_label == field_label);
+    if introduces_person {
+      return false;
+    }
+    let field_char_count = field_label.chars().count();
+    let Some(candidate_start) = field_char_count.checked_sub(1).and_then(
+      |last_character| {
+        line
+          .get(..end)?
+          .char_indices()
+          .rev()
+          .nth(last_character)
+          .map(|(index, _)| index)
+      },
+    ) else {
+      return false;
+    };
+    candidate_start < start
+      && boundary_before(line, candidate_start)
+      && line.get(candidate_start..end).is_some_and(|candidate| {
+        unicode_case_insensitive_prefix_end(candidate, field_label)
+          == Some(candidate.len())
+      })
+  })
 }
 
 #[derive(Default)]
@@ -1811,6 +1864,7 @@ mod tests {
     );
     let names = PreparedNameCorpusData::new(NameCorpusData {
       first_names: vec![String::from("Abdul-Malik"), String::from("Imani")],
+      surnames: vec![String::from("Mercer"), String::from("Okafor")],
       ..NameCorpusData::default()
     });
 
@@ -1842,6 +1896,19 @@ mod tests {
         title_tokens: &BTreeSet::new(),
       })
       .is_empty(),
+    );
+    assert_eq!(
+      detect_signatures(&DetectSignaturesArgs {
+        full_text: "Seller: Q. Z. Mercer\nSeller: B. T. Okafor",
+        data: &data,
+        first_names: None,
+        name_corpus: Some(&names),
+        title_tokens: &BTreeSet::new(),
+      })
+      .into_iter()
+      .map(|entity| entity.text)
+      .collect::<Vec<_>>(),
+      ["Q. Z. Mercer", "B. T. Okafor"],
     );
   }
 
@@ -2081,7 +2148,10 @@ mod tests {
     let data = prepared_signature_data(
       SignatureData {
         person_value_labels: vec![String::from("name")],
-        form_field_labels: vec![String::from("name")],
+        form_field_labels: vec![
+          String::from("name"),
+          String::from("company name"),
+        ],
         labels: vec![String::from("by")],
         ..SignatureData::default()
       },
@@ -2101,6 +2171,21 @@ mod tests {
         .map(|entity| entity.text.as_str())
         .collect::<Vec<_>>(),
       vec!["Li"]
+    );
+
+    let embedded_label_entities = detect_signatures(&DetectSignaturesArgs {
+      full_text: "represented by Name: Jane Roe",
+      data: &data,
+      first_names: None,
+      name_corpus: None,
+      title_tokens: &BTreeSet::new(),
+    });
+    assert_eq!(
+      embedded_label_entities
+        .iter()
+        .map(|entity| entity.text.as_str())
+        .collect::<Vec<_>>(),
+      vec!["Jane Roe"]
     );
 
     for text in ["(Name: Li", "Heading\nName: Li"] {
