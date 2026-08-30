@@ -360,7 +360,6 @@ pub(crate) fn process_legal_form_matches(
   }
 
   let offsets = ByteOffsets::new(full_text);
-  trace_pr480_legal_matches(full_text, matches);
   let mut candidates = Vec::new();
   for found in matches {
     if slice.local_index(found.pattern()).is_none() {
@@ -458,9 +457,7 @@ pub(crate) fn process_legal_form_matches(
     });
   }
 
-  trace_pr480_legal_candidates("before-drop", full_text, &candidates);
   let candidates = drop_overlapping(candidates, full_text, data);
-  trace_pr480_legal_candidates("after-drop", full_text, &candidates);
   let mut entities = Vec::new();
   for candidate in candidates {
     process_candidate(&mut entities, full_text, &candidate, data);
@@ -476,101 +473,7 @@ pub(crate) fn process_legal_form_matches(
       .iter()
       .any(|&(start, end)| start == entity.start && end > entity.end)
   });
-  trace_pr480_legal_entities(full_text, &entities);
-
   Ok(entities)
-}
-
-fn pr480_trace_ranges(full_text: &str) -> Vec<std::ops::Range<usize>> {
-  [
-    "Parent&rsquo;s Board of Directors",
-    "Company&#8217;s Office of General Counsel",
-  ]
-  .into_iter()
-  .flat_map(|marker| full_text.match_indices(marker))
-  .map(|(start, marker)| {
-    start.saturating_sub(100)
-      ..start
-        .saturating_add(marker.len())
-        .saturating_add(100)
-        .min(full_text.len())
-  })
-  .collect()
-}
-
-#[allow(
-  clippy::disallowed_macros,
-  clippy::print_stderr,
-  reason = "temporary remote CI diagnosis"
-)]
-fn trace_pr480_legal_matches(full_text: &str, matches: &[SearchMatch]) {
-  let ranges = pr480_trace_ranges(full_text);
-  for found in matches {
-    let Ok(start) = usize::try_from(found.start()) else {
-      continue;
-    };
-    let Ok(end) = usize::try_from(found.end()) else {
-      continue;
-    };
-    if ranges
-      .iter()
-      .any(|range| start < range.end && end > range.start)
-    {
-      eprintln!(
-        "PR480_LEGAL match pattern={} start={} end={} text={:?}",
-        found.pattern(),
-        found.start(),
-        found.end(),
-        full_text.get(start..end),
-      );
-    }
-  }
-}
-
-#[allow(
-  clippy::disallowed_macros,
-  clippy::print_stderr,
-  reason = "temporary remote CI diagnosis"
-)]
-fn trace_pr480_legal_candidates(
-  stage: &str,
-  full_text: &str,
-  candidates: &[Candidate],
-) {
-  let ranges = pr480_trace_ranges(full_text);
-  for candidate in candidates {
-    if ranges.iter().any(|range| {
-      candidate.start < range.end && candidate.end > range.start
-    }) {
-      eprintln!("PR480_LEGAL {stage}: {candidate:?}");
-    }
-  }
-}
-
-#[allow(
-  clippy::disallowed_macros,
-  clippy::print_stderr,
-  reason = "temporary remote CI diagnosis"
-)]
-fn trace_pr480_legal_entities(
-  full_text: &str,
-  entities: &[PipelineEntity],
-) {
-  let ranges = pr480_trace_ranges(full_text);
-  for entity in entities {
-    let Ok(start) = usize::try_from(entity.start) else {
-      continue;
-    };
-    let Ok(end) = usize::try_from(entity.end) else {
-      continue;
-    };
-    if ranges
-      .iter()
-      .any(|range| start < range.end && end > range.start)
-    {
-      eprintln!("PR480_LEGAL entity: {entity:?}");
-    }
-  }
 }
 
 const MAX_INSTITUTIONAL_COMPLEMENT_TOKENS: usize = 12;
@@ -2013,7 +1916,7 @@ fn named_institutional_span_start(
         institutional_fragment_has_specific_name(complement, data, true)
       })
       .is_some_and(|specific| specific)
-      .then_some(emit_start),
+      .then_some(head_start),
   }
 }
 
@@ -4021,6 +3924,9 @@ mod tests {
     let prefix_generic_words = english_vocabulary(include_str!(
       "../../../packages/data/config/institutional-organization-prefix-generic-name-words.json"
     ));
+    let sentence_verb_indicators = english_vocabulary(include_str!(
+      "../../../packages/data/config/sentence-verb-indicators.json"
+    ));
     let legal_form_rule_words =
       include_str!("../../../packages/data/config/legal-form-rule-words.json");
     let leading_clauses = include_str!(
@@ -4072,6 +3978,7 @@ mod tests {
       institutional_complement_connectors: complement_connectors,
       institutional_generic_words: generic_words,
       institutional_prefix_generic_words: prefix_generic_words,
+      sentence_verb_indicators,
       ..LegalFormData::default()
     });
     let found = suffixes
@@ -4134,6 +4041,24 @@ mod tests {
     ] {
       assert_eq!(institutional_head_entities(text, head), [text]);
     }
+  }
+
+  #[test]
+  fn generic_possessive_prefixes_do_not_widen_named_institutions() {
+    assert_eq!(
+      institutional_head_entities(
+        "Company&#8217;s Office of General Counsel",
+        "Office",
+      ),
+      ["Office of General Counsel"]
+    );
+    assert_eq!(
+      institutional_head_entities(
+        "Acme&#8217;s Office of General Counsel",
+        "Office",
+      ),
+      ["Acme&#8217;s Office of General Counsel"]
+    );
   }
 
   #[test]

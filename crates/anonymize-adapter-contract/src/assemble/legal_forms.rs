@@ -973,9 +973,11 @@ mod tests {
       scoped_sentence_verb_indicators(Some(&[String::from("de")])).unwrap();
 
     assert!(english.iter().any(|word| word == "is"));
+    assert!(english.iter().any(|word| word == "reporting"));
     assert!(!english.iter().any(|word| word == "ist"));
     assert!(german.iter().any(|word| word == "ist"));
     assert!(!german.iter().any(|word| word == "is"));
+    assert!(!german.iter().any(|word| word == "reporting"));
   }
 
   #[test]
