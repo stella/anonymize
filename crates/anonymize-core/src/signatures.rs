@@ -56,6 +56,78 @@ enum CandidateContext<'a> {
   PartyRoleField(PartyRoleEvidence<'a>),
 }
 
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+struct PreparedLabelPrefixNode {
+  terminal: Option<(usize, LabelKind)>,
+  children: HashMap<char, Self>,
+}
+
+impl PreparedLabelPrefixNode {
+  fn insert(&mut self, label: &str, terminal: (usize, LabelKind)) {
+    let mut node = self;
+    for character in label.chars() {
+      node = node.children.entry(character).or_default();
+    }
+    node.terminal.get_or_insert(terminal);
+  }
+
+  fn first_valid_prefix(&self, text: &str) -> Option<(usize, LabelKind)> {
+    let mut node = self;
+    let mut first = None::<(usize, usize, LabelKind)>;
+    'characters: for (start, character) in text.char_indices() {
+      for folded in character.to_lowercase() {
+        let Some(next) = node.children.get(&folded) else {
+          break 'characters;
+        };
+        node = next;
+      }
+      let end = start.saturating_add(character.len_utf8());
+      if let Some((order, kind)) = node.terminal
+        && label_tail_is_valid(text, end)
+        && first.is_none_or(|(_, first_order, _)| order < first_order)
+      {
+        first = Some((end, order, kind));
+      }
+    }
+    first.map(|(end, _, kind)| (end, kind))
+  }
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+struct PreparedReverseFieldLabelNode {
+  terminal: bool,
+  children: HashMap<char, Self>,
+}
+
+impl PreparedReverseFieldLabelNode {
+  fn insert(&mut self, label: &str) {
+    let mut node = self;
+    for character in label.chars().rev() {
+      node = node.children.entry(character).or_default();
+    }
+    node.terminal = true;
+  }
+
+  fn matches_ending_at(&self, text: &str, end: usize) -> bool {
+    let Some(prefix) = text.get(..end) else {
+      return false;
+    };
+    let mut node = self;
+    for (start, character) in prefix.char_indices().rev() {
+      for folded in character.to_lowercase().rev() {
+        let Some(next) = node.children.get(&folded) else {
+          return false;
+        };
+        node = next;
+      }
+      if node.terminal && boundary_before(text, start) {
+        return true;
+      }
+    }
+    false
+  }
+}
+
 #[derive(
   Clone, Debug, Default, Eq, PartialEq, serde::Deserialize, serde::Serialize,
 )]
@@ -98,13 +170,11 @@ pub struct SignatureData {
 pub(crate) struct PreparedSignatureData {
   labels: Vec<String>,
   person_value_labels: Vec<String>,
-  signature_only_person_labels: Vec<String>,
-  party_role_labels: Vec<String>,
   party_role_name_tokens: Vec<String>,
-  person_list_labels: Vec<String>,
+  label_prefix_index: PreparedLabelPrefixNode,
   witness_phrases: Vec<String>,
   form_field_labels: Vec<String>,
-  non_person_field_labels_by_person_label: HashMap<String, Vec<String>>,
+  non_person_field_label_suffixes: PreparedReverseFieldLabelNode,
   contact_field_labels: Vec<String>,
   signature_stamp_phrases: Vec<String>,
   name_particles: Vec<String>,
@@ -142,23 +212,45 @@ impl PreparedSignatureData {
       .chain(&person_list_labels)
       .cloned()
       .collect::<BTreeSet<_>>();
-    let non_person_field_labels_by_person_label = person_labels
+    let mut label_prefix_index = PreparedLabelPrefixNode::default();
+    for (order, (label, kind)) in person_value_labels
       .iter()
-      .filter_map(|person_label| {
-        let field_labels = form_field_labels
+      .map(|label| (label, LabelKind::PersonValue))
+      .chain(
+        signature_only_person_labels
           .iter()
-          .filter(|field_label| {
-            !person_labels.contains(*field_label)
-              && field_label
-                .strip_suffix(person_label)
-                .and_then(|prefix| prefix.chars().next_back())
-                .is_some_and(|ch| !ch.is_alphanumeric())
-          })
-          .cloned()
-          .collect::<Vec<_>>();
-        (!field_labels.is_empty()).then(|| (person_label.clone(), field_labels))
-      })
-      .collect();
+          .map(|label| (label, LabelKind::SignatureOnly)),
+      )
+      .chain(
+        party_role_labels
+          .iter()
+          .map(|label| (label, LabelKind::PartyRole)),
+      )
+      .chain(
+        person_list_labels
+          .iter()
+          .map(|label| (label, LabelKind::PersonList)),
+      )
+      .enumerate()
+    {
+      label_prefix_index.insert(label, (order, kind));
+    }
+    let mut non_person_field_label_suffixes =
+      PreparedReverseFieldLabelNode::default();
+    for field_label in &form_field_labels {
+      if person_labels.contains(field_label) {
+        continue;
+      }
+      let suffixes_person_label = person_labels.iter().any(|person_label| {
+        field_label
+          .strip_suffix(person_label)
+          .and_then(|prefix| prefix.chars().next_back())
+          .is_some_and(|character| !character.is_alphanumeric())
+      });
+      if suffixes_person_label {
+        non_person_field_label_suffixes.insert(field_label);
+      }
+    }
     let party_role_name_tokens = decode_party_role_name_evidence(
       &data.party_role_name_evidence,
     )
@@ -169,13 +261,11 @@ impl PreparedSignatureData {
     Ok(Self {
       labels,
       person_value_labels,
-      signature_only_person_labels,
-      party_role_labels,
       party_role_name_tokens,
-      person_list_labels,
+      label_prefix_index,
       witness_phrases: non_empty_lowercase(data.witness_phrases),
       form_field_labels,
-      non_person_field_labels_by_person_label,
+      non_person_field_label_suffixes,
       contact_field_labels,
       signature_stamp_phrases: non_empty_lowercase(
         data.signature_stamp_phrases,
@@ -1065,7 +1155,7 @@ struct LabelMatch {
   kind: LabelKind,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum LabelKind {
   PersonValue,
   SignatureOnly,
@@ -1129,93 +1219,15 @@ fn label_end_at(
     return None;
   }
   let tail = line.get(start..)?;
-  for (label, kind) in data
-    .person_value_labels
-    .iter()
-    .map(|label| (label, LabelKind::PersonValue))
-    .chain(
-      data
-        .signature_only_person_labels
-        .iter()
-        .map(|label| (label, LabelKind::SignatureOnly)),
-    )
-    .chain(
-      data
-        .party_role_labels
-        .iter()
-        .map(|label| (label, LabelKind::PartyRole)),
-    )
-    .chain(
-      data
-        .person_list_labels
-        .iter()
-        .map(|label| (label, LabelKind::PersonList)),
-    )
+  let (relative_end, kind) = data.label_prefix_index.first_valid_prefix(tail)?;
+  let end = start.saturating_add(relative_end);
+  if data
+    .non_person_field_label_suffixes
+    .matches_ending_at(line, end)
   {
-    if let Some(relative_end) = unicode_case_insensitive_prefix_end(tail, label)
-    {
-      let end = start.saturating_add(relative_end);
-      if label_tail_is_valid(line, end)
-        && !is_suffix_of_non_person_field_label(NonPersonFieldLabelSuffixArgs {
-          line,
-          start,
-          end,
-          person_label: label,
-          data,
-        })
-      {
-        return Some((end, kind));
-      }
-    }
+    return None;
   }
-  None
-}
-
-#[derive(Clone, Copy)]
-struct NonPersonFieldLabelSuffixArgs<'a> {
-  line: &'a str,
-  start: usize,
-  end: usize,
-  person_label: &'a str,
-  data: &'a PreparedSignatureData,
-}
-
-fn is_suffix_of_non_person_field_label(
-  args: NonPersonFieldLabelSuffixArgs<'_>,
-) -> bool {
-  let NonPersonFieldLabelSuffixArgs {
-    line,
-    start,
-    end,
-    person_label,
-    data,
-  } = args;
-  data
-    .non_person_field_labels_by_person_label
-    .get(person_label)
-    .is_some_and(|field_labels| {
-      field_labels.iter().any(|field_label| {
-        let field_char_count = field_label.chars().count();
-        let Some(candidate_start) =
-          field_char_count.checked_sub(1).and_then(|last_character| {
-            line
-              .get(..end)?
-              .char_indices()
-              .rev()
-              .nth(last_character)
-              .map(|(index, _)| index)
-          })
-        else {
-          return false;
-        };
-        candidate_start < start
-          && boundary_before(line, candidate_start)
-          && line.get(candidate_start..end).is_some_and(|candidate| {
-            unicode_case_insensitive_prefix_end(candidate, field_label)
-              == Some(candidate.len())
-          })
-      })
-    })
+  Some((end, kind))
 }
 
 #[derive(Default)]
@@ -2275,6 +2287,49 @@ mod tests {
         "unexpected short-name match for {text:?}",
       );
     }
+  }
+
+  #[test]
+  fn prepared_label_indexes_bound_large_role_and_field_vocabularies() {
+    let mut form_field_labels = (0..512)
+      .map(|index| format!("business {index} name"))
+      .collect::<Vec<_>>();
+    form_field_labels.extend([String::from("name"), String::from("company name")]);
+    let mut party_role_labels = (0..512)
+      .map(|index| format!("role {index}"))
+      .collect::<Vec<_>>();
+    party_role_labels.push(String::from("seller"));
+    let data = prepared_signature_data(
+      SignatureData {
+        person_value_labels: vec![String::from("name")],
+        form_field_labels,
+        party_role_name_evidence: encoded_name_evidence([String::from(
+          "Mercer",
+        )]),
+        ..SignatureData::default()
+      },
+      party_role_labels,
+    );
+
+    let entities = detect_signatures(&DetectSignaturesArgs {
+      full_text: concat!(
+        "Company Name: Acme Trading\n",
+        "Seller: Q Z Mercer\n",
+        "Name: Jane Roe",
+      ),
+      data: &data,
+      first_names: None,
+      name_corpus: None,
+      title_tokens: &BTreeSet::new(),
+    });
+
+    assert_eq!(
+      entities
+        .iter()
+        .map(|entity| entity.text.as_str())
+        .collect::<Vec<_>>(),
+      ["Q Z Mercer", "Jane Roe"],
+    );
   }
 
   #[test]
