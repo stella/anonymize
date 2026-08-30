@@ -754,7 +754,13 @@ fn token_before<'a>(
   allow_suffix_adjacent_jurisdiction: bool,
   data: &PreparedLegalFormData,
 ) -> Option<Token<'a>> {
-  let mut end = possessive_marker_start_before(text, pos).unwrap_or(pos);
+  let possessive_marker_start = possessive_marker_start_before(text, pos);
+  if possessive_marker_start.is_none()
+    && has_non_possessive_quote_entity_before(text, pos)
+  {
+    return None;
+  }
+  let mut end = possessive_marker_start.unwrap_or(pos);
   while let Some((prev_start, ch)) = previous_char(text, end) {
     if ch == '\n' {
       // Soft EDGAR wrap inside a firm name: comma lists
@@ -811,7 +817,7 @@ fn token_before<'a>(
 fn possessive_marker_start_before(text: &str, pos: usize) -> Option<usize> {
   let after = text.get(pos..)?;
   let mut after_chars = after.chars();
-  if after_chars.next()? != 's'
+  if !matches!(after_chars.next()?, 's' | 'S')
     || !after_chars.next().is_some_and(is_inter_token_space)
   {
     return None;
@@ -821,6 +827,17 @@ fn possessive_marker_start_before(text: &str, pos: usize) -> Option<usize> {
   ["&apos;", "&rsquo;", "&#39;", "&#8217;", "'", "’"]
     .iter()
     .find_map(|marker| before.strip_suffix(marker).map(|prefix| prefix.len()))
+}
+
+fn has_non_possessive_quote_entity_before(text: &str, pos: usize) -> bool {
+  let Some(before) = text.get(..pos) else {
+    return false;
+  };
+  [
+    "&quot;", "&#34;", "&#x22;", "&ldquo;", "&rdquo;", "&lsquo;",
+  ]
+  .iter()
+  .any(|marker| before.ends_with(marker))
 }
 
 fn allows_soft_wrap_continuation(
@@ -4250,6 +4267,12 @@ mod tests {
       "Parent&#8217;s Board of Directors",
       "Parent's Board of Directors",
       "Parent’s Board of Directors",
+      "PARENT&apos;S Board of Directors",
+      "PARENT&rsquo;S Board of Directors",
+      "PARENT&#39;S Board of Directors",
+      "PARENT&#8217;S Board of Directors",
+      "PARENT'S Board of Directors",
+      "PARENT’S Board of Directors",
     ] {
       assert_eq!(
         institutional_head_entities(text, "Board"),
@@ -4953,6 +4976,12 @@ mod tests {
       "Parent&#8217;s Board",
       "Parent's Board",
       "Parent’s Board",
+      "PARENT&apos;S Board",
+      "PARENT&rsquo;S Board",
+      "PARENT&#39;S Board",
+      "PARENT&#8217;S Board",
+      "PARENT'S Board",
+      "PARENT’S Board",
     ] {
       let suffix_start = text.find("Board").unwrap();
       assert_eq!(
