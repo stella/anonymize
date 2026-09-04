@@ -117,6 +117,7 @@ type PythonParityOutput = {
   version: string;
   module_version: string;
   pdf_constants: {
+    raster_certificate_contract_version: number;
     loaded_payload_max_bytes: number;
     max_manual_regions: number;
     max_observed_text_utf8_bytes: number;
@@ -1021,6 +1022,7 @@ print(
             "version": anonymize.native_package_version(),
             "module_version": anonymize.__version__,
             "pdf_constants": {
+                "raster_certificate_contract_version": anonymize.PDF_RASTER_CERTIFICATE_CONTRACT_VERSION,
                 "loaded_payload_max_bytes": anonymize.PDF_LOADED_PAYLOAD_MAX_BYTES,
                 "max_manual_regions": anonymize.PDF_RASTER_MAX_MANUAL_REGIONS,
                 "max_observed_text_utf8_bytes": anonymize.PDF_MAX_OBSERVED_TEXT_UTF8_BYTES,
@@ -1376,6 +1378,7 @@ describe("python binding parity", () => {
       message: nodeMessage,
     });
     expect(python.pdf_constants).toEqual({
+      raster_certificate_contract_version: 2,
       loaded_payload_max_bytes: 128 * 1024 * 1024,
       max_manual_regions: 1_000_000,
       max_observed_text_utf8_bytes: 64 * 1024 * 1024,
@@ -1445,6 +1448,10 @@ describe("python binding parity", () => {
       const rewrite =
         loadNativeAnonymizeBinding().rewritePdfRasterFromDetectionsJson;
       const node = rewrite(source, JSON.stringify(request), [pixels]);
+      expect(JSON.parse(node.certificateJson)).toMatchObject({
+        contractVersion:
+          python.pdf_constants.raster_certificate_contract_version,
+      });
       expect(python.pdf_raster).toEqual({
         document_base64: Buffer.from(node.document).toString("base64"),
         certificate: JSON.parse(node.certificateJson),

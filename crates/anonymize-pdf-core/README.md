@@ -48,6 +48,10 @@ Encrypted PDFs are rejected. Detector assembly stays in the Node/Python SDKs;
 this core rewrite function must not be presented as detection or as a PII-clean
 guarantee.
 
+Raster rewrite certificates use `PDF_RASTER_CERTIFICATE_CONTRACT_VERSION` (2)
+because they require separate manual-region counts. Raster requests still use
+`PDF_RASTER_CONTRACT_VERSION` (1), and inspection contracts remain at version 1.
+
 Complete OCR coverage means the provider submitted every rendered page to its
 OCR engine. It cannot prove OCR or detector recall. The provider boundary and
 the deliberate loss of searchable, accessible, and interactive PDF structure

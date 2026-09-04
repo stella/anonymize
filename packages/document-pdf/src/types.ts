@@ -111,8 +111,10 @@ export type PdfRasterRewrite = {
   pages: readonly PdfRasterPage[];
 };
 
+export const PDF_RASTER_CERTIFICATE_CONTRACT_VERSION = 2 as const;
+
 export type PdfRasterRewriteCertificate = {
-  contractVersion: 1;
+  contractVersion: typeof PDF_RASTER_CERTIFICATE_CONTRACT_VERSION;
   pageCount: number;
   sourceSha256: string;
   outputSha256: string;

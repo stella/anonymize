@@ -13,6 +13,7 @@ use crate::{
 };
 
 pub const PDF_RASTER_CONTRACT_VERSION: u8 = 1;
+pub const PDF_RASTER_CERTIFICATE_CONTRACT_VERSION: u8 = 2;
 pub const PDF_RASTER_MAX_PAGE_BYTES: usize = 128 * 1024 * 1024;
 pub const PDF_RASTER_MAX_TOTAL_BYTES: usize = 512 * 1024 * 1024;
 pub const PDF_RASTER_MAX_OUTPUT_BYTES: usize = 512 * 1024 * 1024;
@@ -1215,7 +1216,7 @@ pub fn rewrite_pdf_raster_from_detections<T: AsRef<[u8]>>(
       )
     })?;
   let certificate = PdfRasterRewriteCertificate {
-    contract_version: PDF_RASTER_CONTRACT_VERSION,
+    contract_version: PDF_RASTER_CERTIFICATE_CONTRACT_VERSION,
     page_count,
     source_sha256: request.source_sha256.clone(),
     output_sha256: digest_hex(&output),
@@ -1294,6 +1295,7 @@ mod tests {
       return;
     };
     assert!(certificate.structure_pixel_rewrite_verified);
+    assert_eq!(certificate.contract_version, 2);
     assert!(!certificate.pii_clean_guaranteed);
     assert_eq!(certificate.page_count, 1);
     assert_eq!(certificate.detection_count, 1);

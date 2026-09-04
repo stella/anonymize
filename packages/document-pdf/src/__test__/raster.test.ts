@@ -8,6 +8,7 @@ import {
   inspectPdf,
   PDF_MAX_PAGE_TEXT_UTF8_BYTES,
   PDF_MAX_OBSERVED_TEXT_UTF8_BYTES,
+  PDF_RASTER_CERTIFICATE_CONTRACT_VERSION,
   PdfRasterError,
 } from "../index";
 import type { PdfPageObservation } from "../types";
@@ -81,7 +82,7 @@ describe("PDF destructive raster anonymization", () => {
       pages: [{ observation, widthPixels: 17, heightPixels: 22, pixels }],
     });
     expect(result.certificate).toMatchObject({
-      contractVersion: 1,
+      contractVersion: PDF_RASTER_CERTIFICATE_CONTRACT_VERSION,
       pageCount: 1,
       detectionCount: 1,
       manualRegionCount: 0,

@@ -310,6 +310,7 @@ export const anonymizePdfRaster = ({
 
 export { PDF_INSPECTION_ERROR_CODES } from "./types";
 export { PDF_RASTER_ERROR_CODES } from "./types";
+export { PDF_RASTER_CERTIFICATE_CONTRACT_VERSION } from "./types";
 export {
   PDF_LOCAL_PROVIDER_ERROR_CODES,
   PdfLocalProviderError,

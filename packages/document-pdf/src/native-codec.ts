@@ -1,3 +1,4 @@
+import { PDF_RASTER_CERTIFICATE_CONTRACT_VERSION } from "./types";
 import type {
   PdfGlyphObservation,
   PdfInspection,
@@ -227,7 +228,7 @@ const isSha256 = (value: unknown): value is string =>
 const isCertificate = (value: unknown): value is PdfRasterRewriteCertificate =>
   isRecord(value) &&
   hasExactFields(value, CERTIFICATE_FIELDS) &&
-  value["contractVersion"] === 1 &&
+  value["contractVersion"] === PDF_RASTER_CERTIFICATE_CONTRACT_VERSION &&
   isNonNegativeInteger(value["pageCount"]) &&
   isSha256(value["sourceSha256"]) &&
   isSha256(value["outputSha256"]) &&
@@ -255,7 +256,7 @@ export const decodePdfRasterRewriteCertificate = (
   const value: unknown = JSON.parse(json);
   if (!isCertificate(value)) {
     throw new Error(
-      "Native PDF raster certificate does not match contract version 1",
+      `Native PDF raster certificate does not match contract version ${PDF_RASTER_CERTIFICATE_CONTRACT_VERSION}`,
     );
   }
   return value;

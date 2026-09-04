@@ -107,6 +107,11 @@ document-profile capability; PDF inspection remains available through the
 byte-oriented core runtimes. The Poppler/Tesseract adapter is separately named
 as the Node-only `document.pdf.observe-raster-local` capability.
 
+Raster certificates use `PDF_RASTER_CERTIFICATE_CONTRACT_VERSION` (2), including
+the required `manualRegionCount` field. The decoder rejects version 1 certificates;
+consumers storing certificates must dispatch by their version. Raster requests
+(`PDF_RASTER_CONTRACT_VERSION`) and inspections remain at version 1.
+
 `rewritePdfRasterFromDetections` is the advanced rewrite-only seam for trusted
 adapters that already ran detection. Detection spans must be strictly ordered
 and non-overlapping. Its name and certificate deliberately do not imply
