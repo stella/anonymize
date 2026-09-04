@@ -270,6 +270,7 @@ PDF_MAX_OBSERVED_TEXT_UTF8_BYTES: int
 PDF_OBSERVATIONS_JSON_MAX_BYTES: int
 PDF_PAGE_DIMENSION_TOLERANCE_POINTS: float
 PDF_RASTER_CONTRACT_VERSION: int
+PDF_RASTER_MAX_MANUAL_REGIONS: int
 PDF_RASTER_MAX_PAGE_BYTES: int
 PDF_RASTER_MAX_TOTAL_BYTES: int
 PDF_RASTER_MAX_OUTPUT_BYTES: int
@@ -289,6 +290,7 @@ class PdfRasterObservedPage(TypedDict):
     heightPixels: int
     pixels: BytesLike
     externalDetectionBatch: NotRequired[ExternalDetectionBatch | str]
+    manualRegions: NotRequired[Sequence[PdfRect]]
 
 def inspect_pdf(
     document: BytesLike,

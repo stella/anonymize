@@ -29,6 +29,7 @@ PDF_PAGE_DIMENSION_TOLERANCE_POINTS = 0.25
 PDF_RASTER_CONTRACT_VERSION = 1
 PDF_RASTER_MAX_PAGE_BYTES = 128 * 1024 * 1024
 PDF_RASTER_MAX_TOTAL_BYTES = 512 * 1024 * 1024
+PDF_RASTER_MAX_MANUAL_REGIONS = 1_000_000
 PDF_RASTER_MAX_OUTPUT_BYTES = 512 * 1024 * 1024
 PDF_RASTER_REQUEST_JSON_MAX_BYTES = 64 * 1024 * 1024
 
@@ -72,12 +73,16 @@ def inspect_pdf(
 
 
 def _raster_error(error: ValueError, fallback: str) -> PdfRasterError:
+    """Translate a native coded failure without exposing an unstable exception type."""
+
     message = str(error)
     prefix, separator, _ = message.partition(":")
     return PdfRasterError(prefix if separator else fallback, message)
 
 
 def _utf16_offsets(text: str) -> list[int]:
+    """Map Python character boundaries to the UTF-16 units used by the native API."""
+
     offsets = [0]
     offset = 0
     for character in text:
@@ -87,6 +92,8 @@ def _utf16_offsets(text: str) -> list[int]:
 
 
 def _entity_utf16_range(entity: Any, offsets: Sequence[int]) -> dict[str, int]:
+    """Validate a detected range and convert it to native UTF-16 offsets."""
+
     start = entity.start
     end = entity.end
     if (
@@ -100,6 +107,30 @@ def _entity_utf16_range(entity: Any, offsets: Sequence[int]) -> dict[str, int]:
     ):
         raise ValueError("detector returned an invalid character range")
     return {"start": offsets[start], "end": offsets[end]}
+
+
+def _manual_regions(page: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Normalize optional manual regions into the native request shape."""
+
+    regions = page.get("manualRegions")
+    if regions is None:
+        return []
+    if isinstance(regions, (str, bytes, bytearray, memoryview)) or not isinstance(
+        regions, Sequence
+    ):
+        raise PdfRasterError(
+            "invalid-contract",
+            "invalid-contract: PDF manual regions must be a sequence of rectangles",
+        )
+    normalized: list[dict[str, Any]] = []
+    for region in regions:
+        if not isinstance(region, Mapping):
+            raise PdfRasterError(
+                "invalid-contract",
+                "invalid-contract: PDF manual regions must be a sequence of rectangles",
+            )
+        normalized.append(dict(region))
+    return normalized
 
 
 def rewrite_pdf_raster_from_detections(
@@ -200,10 +231,12 @@ def anonymize_pdf_raster(
             bytes | bytearray | memoryview,
             int,
             int,
+            list[dict[str, Any]],
         ]
     ] = []
     total_pixel_bytes = 0
     total_observed_text_bytes = 0
+    total_manual_regions = 0
     if len(pages) > PDF_MAX_PAGES:
         raise PdfRasterError(
             "limit-exceeded",
@@ -263,8 +296,17 @@ def anonymize_pdf_raster(
                 "limit-exceeded",
                 "limit-exceeded: PDF raster pixels exceed their aggregate limit",
             )
-        validated_pages.append((page, observation, text, pixels, width, height))
-    for page, observation, text, pixels, width, height in validated_pages:
+        manual_regions = _manual_regions(page)
+        total_manual_regions += len(manual_regions)
+        if total_manual_regions > PDF_RASTER_MAX_MANUAL_REGIONS:
+            raise PdfRasterError(
+                "limit-exceeded",
+                "limit-exceeded: PDF raster manual regions exceed their aggregate limit",
+            )
+        validated_pages.append(
+            (page, observation, text, pixels, width, height, manual_regions)
+        )
+    for page, observation, text, pixels, width, height, manual_regions in validated_pages:
         try:
             external_batch = page.get("externalDetectionBatch")
             if external_batch is None:
@@ -301,7 +343,7 @@ def anonymize_pdf_raster(
                 "heightPixels": height,
                 "pixelSha256": sha256(opaque_pixels).hexdigest(),
                 "detections": detections,
-                "manualRegions": list(page.get("manualRegions", [])),
+                "manualRegions": manual_regions,
             }
         )
         page_pixels.append(opaque_pixels)

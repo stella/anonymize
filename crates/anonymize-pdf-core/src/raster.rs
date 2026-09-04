@@ -21,6 +21,7 @@ pub const PDF_RASTER_MAX_DETECTIONS: usize = 1_000_000;
 pub const PDF_RASTER_MAX_MANUAL_REGIONS: usize = 1_000_000;
 pub const PDF_RASTER_MAX_GLYPHS: usize = 5_000_000;
 const PDF_RASTER_MAX_PROVIDER_FIELD_BYTES: usize = 256;
+const PDF_RASTER_MAX_FILL_OVERDRAW_FACTOR: usize = 4;
 
 #[derive(Debug, Error, Clone, Eq, PartialEq)]
 #[error("{message}")]
@@ -282,6 +283,50 @@ fn fill_pixels(
   rects: &[PixelRect],
   fill: [u8; 3],
 ) -> Result<(), PdfRasterError> {
+  let pixel_count = pixels.len().checked_div(3).ok_or_else(|| {
+    error(
+      PdfRasterErrorCode::LimitExceeded,
+      "PDF raster fill budget overflowed",
+    )
+  })?;
+  let fill_budget = pixel_count
+    .checked_mul(PDF_RASTER_MAX_FILL_OVERDRAW_FACTOR)
+    .ok_or_else(|| {
+      error(
+        PdfRasterErrorCode::LimitExceeded,
+        "PDF raster fill budget overflowed",
+      )
+    })?;
+  let mut fill_area = 0usize;
+  for rect in rects {
+    let area = rect
+      .right
+      .checked_sub(rect.left)
+      .and_then(|rect_width| {
+        rect
+          .bottom
+          .checked_sub(rect.top)
+          .and_then(|rect_height| rect_width.checked_mul(rect_height))
+      })
+      .ok_or_else(|| {
+        error(
+          PdfRasterErrorCode::LimitExceeded,
+          "PDF raster fill area overflowed",
+        )
+      })?;
+    fill_area = fill_area.checked_add(area).ok_or_else(|| {
+      error(
+        PdfRasterErrorCode::LimitExceeded,
+        "PDF raster fill area overflowed",
+      )
+    })?;
+    if fill_area > fill_budget {
+      return Err(error(
+        PdfRasterErrorCode::LimitExceeded,
+        "PDF raster redaction regions exceed the fill work budget",
+      ));
+    }
+  }
   for rect in rects {
     for y in rect.top..rect.bottom {
       for x in rect.left..rect.right {
@@ -1549,6 +1594,41 @@ mod tests {
       .count();
     assert_eq!(black_pixels, 36);
     assert_eq!(white_pixels, 338);
+  }
+
+  #[test]
+  #[ignore = "release-mode overlapping manual region scaling regression check"]
+  fn overlapping_manual_region_fill_work_is_bounded() {
+    const SIDE: usize = 2_000;
+    const RECTANGLE_COUNT: usize = 100_000;
+    let mut pixels = vec![255; SIDE * SIDE * 3];
+    let rects = (0..10)
+      .flat_map(|right_offset| {
+        (0..100).flat_map(move |top| {
+          (0..100).map(move |left| PixelRect {
+            left,
+            top,
+            right: SIDE - right_offset,
+            bottom: SIDE,
+          })
+        })
+      })
+      .collect::<BTreeSet<_>>()
+      .into_iter()
+      .collect::<Vec<_>>();
+    assert_eq!(rects.len(), RECTANGLE_COUNT);
+
+    let started = std::time::Instant::now();
+    let result = fill_pixels(&mut pixels, SIDE, &rects, [0, 0, 0]);
+
+    assert_eq!(
+      result.err().map(|failure| failure.code()),
+      Some(PdfRasterErrorCode::LimitExceeded),
+    );
+    assert!(
+      started.elapsed() < std::time::Duration::from_secs(1),
+      "overlapping manual region budget check exceeded one second"
+    );
   }
 
   #[test]

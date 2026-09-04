@@ -60,6 +60,7 @@ from .docx import (
 )
 from .pdf import (
     PDF_RASTER_CONTRACT_VERSION,
+    PDF_RASTER_MAX_MANUAL_REGIONS,
     PDF_RASTER_MAX_OUTPUT_BYTES,
     PDF_RASTER_MAX_PAGE_BYTES,
     PDF_RASTER_REQUEST_JSON_MAX_BYTES,
@@ -193,6 +194,7 @@ __all__ = [
     "anonymize_pdf_raster",
     "rewrite_pdf_raster_from_detections",
     "PDF_RASTER_CONTRACT_VERSION",
+    "PDF_RASTER_MAX_MANUAL_REGIONS",
     "PDF_RASTER_MAX_OUTPUT_BYTES",
     "PDF_RASTER_MAX_PAGE_BYTES",
     "PDF_RASTER_REQUEST_JSON_MAX_BYTES",
