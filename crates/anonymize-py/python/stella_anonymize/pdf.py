@@ -301,6 +301,7 @@ def anonymize_pdf_raster(
                 "heightPixels": height,
                 "pixelSha256": sha256(opaque_pixels).hexdigest(),
                 "detections": detections,
+                "manualRegions": list(page.get("manualRegions", [])),
             }
         )
         page_pixels.append(opaque_pixels)

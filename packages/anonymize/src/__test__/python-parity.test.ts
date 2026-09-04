@@ -1379,6 +1379,7 @@ describe("python binding parity", () => {
             heightPixels: 22,
             pixelSha256: sha256(pixels),
             detections: [{ start: 0, end: 14 }],
+            manualRegions: [{ left: 120, bottom: 650, right: 180, top: 690 }],
           },
         ],
       };

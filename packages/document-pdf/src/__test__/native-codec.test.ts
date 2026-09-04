@@ -56,6 +56,7 @@ const certificate = {
     ocrLanguage: "eng",
   },
   detectionCount: 1,
+  manualRegionCount: 0,
   mappedRegionCount: 1,
   structurePixelRewriteVerified: true,
   providerAssertedCoverage: "complete-rendering-and-ocr-observation",

@@ -84,6 +84,7 @@ describe("PDF destructive raster anonymization", () => {
       contractVersion: 1,
       pageCount: 1,
       detectionCount: 1,
+      manualRegionCount: 0,
       mappedRegionCount: 1,
       structurePixelRewriteVerified: true,
       piiCleanGuaranteed: false,
@@ -96,6 +97,42 @@ describe("PDF destructive raster anonymization", () => {
       metadataStreamCount: 0,
       signatureCount: 0,
     });
+  });
+
+  test("destructively fills reviewed manual regions without detector matches", () => {
+    const emptyPipeline = {
+      redactText: () => detectorResult(),
+      redactTextWithCallerDetections: () => detectorResult(),
+    };
+    const plain = anonymizePdfRaster({
+      document: source,
+      pipeline: emptyPipeline,
+      provider,
+      pages: [{ observation, widthPixels: 17, heightPixels: 22, pixels }],
+    });
+    const redacted = anonymizePdfRaster({
+      document: source,
+      pipeline: emptyPipeline,
+      provider,
+      pages: [
+        {
+          observation,
+          widthPixels: 17,
+          heightPixels: 22,
+          pixels,
+          manualRegions: [{ left: 72, bottom: 396, right: 216, top: 540 }],
+        },
+      ],
+    });
+
+    expect(redacted.certificate).toMatchObject({
+      detectionCount: 0,
+      manualRegionCount: 1,
+      mappedRegionCount: 1,
+    });
+    expect(redacted.certificate.outputSha256).not.toBe(
+      plain.certificate.outputSha256,
+    );
   });
 
   test("fails closed when a selected span lacks complete glyph geometry", () => {
@@ -122,6 +159,7 @@ describe("PDF destructive raster anonymization", () => {
     });
     expect(result.certificate).toMatchObject({
       detectionCount: 0,
+      manualRegionCount: 0,
       mappedRegionCount: 0,
       structurePixelRewriteVerified: true,
       piiCleanGuaranteed: false,

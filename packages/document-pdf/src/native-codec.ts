@@ -92,6 +92,7 @@ const CERTIFICATE_FIELDS = {
   outputSha256: true,
   provider: true,
   detectionCount: true,
+  manualRegionCount: true,
   mappedRegionCount: true,
   structurePixelRewriteVerified: true,
   providerAssertedCoverage: true,
@@ -232,6 +233,7 @@ const isCertificate = (value: unknown): value is PdfRasterRewriteCertificate =>
   isSha256(value["outputSha256"]) &&
   isProvider(value["provider"]) &&
   isNonNegativeInteger(value["detectionCount"]) &&
+  isNonNegativeInteger(value["manualRegionCount"]) &&
   isNonNegativeInteger(value["mappedRegionCount"]) &&
   value["structurePixelRewriteVerified"] === true &&
   value["providerAssertedCoverage"] ===
