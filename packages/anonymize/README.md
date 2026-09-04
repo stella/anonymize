@@ -22,7 +22,7 @@ bun add @stll/anonymize
 ```
 
 The Node.js and Bun package is Rust-native and requires Node.js 20 or newer or
-Bun 1.4 or newer. Prebuilt binaries ship for macOS (`arm64`, `x64`),
+Bun 1.4.1 or newer. Prebuilt binaries ship for macOS (`arm64`, `x64`),
 glibc-based Linux (`arm64`, `x64`), and Windows (`x64`). Alpine Linux and other
 musl-based systems are not supported. Browser/WASM support is maintained
 through `@stll/anonymize-wasm`, which wraps the same native core.

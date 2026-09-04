@@ -29,7 +29,7 @@
       },
       "devDependencies": {
         "@napi-rs/cli": "^3.8.6",
-        "bun-types": "1.4.0",
+        "bun-types": "1.4.1",
         "fast-check": "^4.9.0",
         "fflate": "^0.8.3",
         "puppeteer-core": "25.8.0",
@@ -90,7 +90,7 @@
       },
       "devDependencies": {
         "@types/node": "^26.2.0",
-        "bun-types": "1.4.0",
+        "bun-types": "1.4.1",
         "typescript": "7.0.2",
       },
     },
@@ -108,7 +108,7 @@
       },
       "devDependencies": {
         "@types/node": "^26.2.0",
-        "bun-types": "1.4.0",
+        "bun-types": "1.4.1",
         "fflate": "^0.8.3",
         "tsdown": "0.22.14",
         "typescript": "7.0.2",
@@ -123,7 +123,7 @@
       },
       "devDependencies": {
         "@types/node": "^26.2.0",
-        "bun-types": "1.4.0",
+        "bun-types": "1.4.1",
         "typescript": "7.0.2",
       },
     },
@@ -145,7 +145,7 @@
       },
       "devDependencies": {
         "@types/node": "^26.2.0",
-        "bun-types": "1.4.0",
+        "bun-types": "1.4.1",
         "fflate": "^0.8.3",
         "tsdown": "0.22.14",
         "typescript": "7.0.2",
@@ -159,7 +159,7 @@
       },
       "devDependencies": {
         "@types/node": "^26.2.0",
-        "bun-types": "1.4.0",
+        "bun-types": "1.4.1",
         "tsdown": "0.22.14",
         "typescript": "7.0.2",
       },
@@ -180,7 +180,7 @@
       },
       "devDependencies": {
         "@types/node": "^26.2.0",
-        "bun-types": "1.4.0",
+        "bun-types": "1.4.1",
         "expect": "^30.2.0",
         "fflate": "^0.8.3",
         "tsdown": "0.22.14",
@@ -194,6 +194,8 @@
     "@emnapi/runtime": "1.11.1",
     "@hono/node-server": "2.0.10",
     "emnapi": "1.11.1",
+    "fast-uri": "3.1.6",
+    "qs": "6.16.0",
     "yuku-codegen": "0.6.5",
     "yuku-parser": "0.6.5",
   },
@@ -784,7 +786,7 @@
 
     "body-parser": ["body-parser@2.3.0", "", { "dependencies": { "bytes": "^3.1.2", "content-type": "^2.0.0", "debug": "^4.4.3", "http-errors": "^2.0.1", "iconv-lite": "^0.7.2", "on-finished": "^2.4.1", "qs": "^6.15.2", "raw-body": "^3.0.2", "type-is": "^2.1.0" } }, "sha512-2cGmJupaNgg+QUwVLAucDuWuoMZ6EX9iHDRswZ5lsNYEmwPaRknMPCLZz07yTzVq/83p4o/wzbDZbBrTvGGTIw=="],
 
-    "bun-types": ["bun-types@1.4.0", "", { "dependencies": { "@types/node": "*" } }, "sha512-iIKw23BspnQQYd3prITOBxeUsxBHnwzX6YJfGMuNOZzeNcMmVqzIIVGRm1l69ogaPQmb4wB6BN8mA5bE9YuC5Q=="],
+    "bun-types": ["bun-types@1.4.1", "", { "dependencies": { "@types/node": "*" } }, "sha512-loKuVrAFZKfEv+JvWkHRS9GW5IqLuLRjVXN9p+vZvBN86O5hf/pBZQ5hSoyipsrMmWObZBDvWnlmKvjKTM0PdA=="],
 
     "bytes": ["bytes@3.1.2", "", {}, "sha512-/Nf7TyzTx6S3yRJObOAV7956r8cr2+Oj8AC5dt8wSP3BQAoeX58NoHyCU8P8zGkNXStjTSi6fzO6F0pBdcYbEg=="],
 
@@ -886,7 +888,7 @@
 
     "fast-string-width": ["fast-string-width@3.0.2", "", { "dependencies": { "fast-string-truncated-width": "^3.0.2" } }, "sha512-gX8LrtNEI5hq8DVUfRQMbr5lpaS4nMIWV+7XEbXk2b8kiQIizgnlr12B4dA3ZEx3308ze0O4Q1R+cHts8kyUJg=="],
 
-    "fast-uri": ["fast-uri@3.1.5", "", {}, "sha512-gHwA1O9LDIcKunMKhObS/HimwtehO1nPUECKAu5TpKgaO19fcWEl4bliWe1jWxVFvIXztJjjQ4L8XQ1EU9f7Jw=="],
+    "fast-uri": ["fast-uri@3.1.6", "", {}, "sha512-7Ical1vFEMr0onbVzEDIreM22I4khW+fzyQPwvAFWBp1iwdshSZRsL4jjRvPG9JP1uiqMHRto+YU6R2/CzDz5Q=="],
 
     "fast-wrap-ansi": ["fast-wrap-ansi@0.2.2", "", { "dependencies": { "fast-string-width": "^3.0.2" } }, "sha512-7F2Fl+TjRSenLqlU3UjSH0iyqopqoZIu7eZVpEirP2g1GtWa2G/ecEmBdgz31+Mxr+ELclgg6sokpSFIQiZ02Q=="],
 
@@ -1090,7 +1092,7 @@
 
     "pure-rand": ["pure-rand@8.4.2", "", {}, "sha512-vvuOGgcuPJAirlHvuQw1TrOiw7ptaIXXmIbNuiNOY6lNGJJH49PQ1Kj4nd783nPdQhQdicgOjVI2yI/9BD6/Ng=="],
 
-    "qs": ["qs@6.15.3", "", { "dependencies": { "es-define-property": "^1.0.1", "side-channel": "^1.1.1" } }, "sha512-O9gl3zCl5h5blw1KGUzQKhA5oUXSl8rwUIM5o0S3nCXMliSvy5Dzx7/DJcI+SwgICv+IneSZwhBh1oSyEHA71A=="],
+    "qs": ["qs@6.16.0", "", { "dependencies": { "es-define-property": "^1.0.1", "side-channel": "^1.1.1" } }, "sha512-h6fhOIaRrID2CbEY2fqs+7t+UXZo+MLAnU5gRIq85uFtdiUPCdsApMlHhXogKVM4HM2DVbIjGNTTYH2OcmP1vA=="],
 
     "quansync": ["quansync@1.0.0", "", {}, "sha512-5xZacEEufv3HSTPQuchrvV6soaiACMFnq1H8wkVioctoH3TRha9Sz66lOxRwPK/qZj7HPiSveih9yAyh98gvqA=="],
 

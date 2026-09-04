@@ -1,9 +1,10 @@
 const MINIMUM_BUN_MAJOR = 1;
 const MINIMUM_BUN_MINOR = 4;
+const MINIMUM_BUN_PATCH = 1;
 const BUN_VERSION_PATTERN =
   /^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)(?:-(?<prerelease>[0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/u;
 
-export const MINIMUM_SUPPORTED_BUN_VERSION = "1.4.0";
+export const MINIMUM_SUPPORTED_BUN_VERSION = "1.4.1";
 
 export const assertSupportedBunVersion = (bunVersion?: string): void => {
   if (bunVersion === undefined) {
@@ -31,11 +32,12 @@ export const assertSupportedBunVersion = (bunVersion?: string): void => {
     majorNumber > MINIMUM_BUN_MAJOR ||
     (majorNumber === MINIMUM_BUN_MAJOR &&
       (minorNumber > MINIMUM_BUN_MINOR ||
-        (minorNumber === MINIMUM_BUN_MINOR && patchNumber > 0)));
+        (minorNumber === MINIMUM_BUN_MINOR &&
+          patchNumber > MINIMUM_BUN_PATCH)));
   const minimumReleaseIsSupported =
     majorNumber === MINIMUM_BUN_MAJOR &&
     minorNumber === MINIMUM_BUN_MINOR &&
-    patchNumber === 0 &&
+    patchNumber === MINIMUM_BUN_PATCH &&
     prerelease === undefined;
   if (!coreVersionIsNewer && !minimumReleaseIsSupported) {
     throw unsupportedBunVersionError(bunVersion);

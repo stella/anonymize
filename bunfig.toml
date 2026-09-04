@@ -6,6 +6,7 @@ minimumReleaseAge = 432_000
 # First-party stella packages ship in coordinated release
 # waves, so allow fresh internal versions immediately.
 minimumReleaseAgeExcludes = [
+  "bun-types", # quarantine-expires: 2026-09-09T08:36:48.390Z
   "@stll/typescript-config", # quarantine-excluded-since: 2026-05-31T22:16:56.000Z
   "@stll/oxlint-config", # quarantine-excluded-since: 2026-05-31T22:16:56.000Z
   "@stll/aho-corasick", # quarantine-excluded-since: 2026-04-17T19:08:20.000Z
