@@ -1,5 +1,18 @@
 # @stll/anonymize-pdf
 
+## 3.0.0
+
+### Major Changes
+
+- [#500](https://github.com/stella/anonymize/pull/500) [`3eb4141`](https://github.com/stella/anonymize/commit/3eb41412876cc137ae8c4dfee3e553efe66d56d6) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add digest-bound manual PDF redaction regions to the verified destructive raster rewrite. Certificates report manual and detector-selected regions separately.
+
+  Raster certificates now use contract version 2 because `manualRegionCount` is required. Consumers must handle the new certificate shape explicitly; version 1 certificates are not decoded as version 2. Raster requests and PDF inspections remain at contract version 1.
+
+### Patch Changes
+
+- Updated dependencies [[`ae4f209`](https://github.com/stella/anonymize/commit/ae4f20977da5952ede8fae272330845ba8b149c2)]:
+  - @stll/anonymize@3.0.0
+
 ## 2.9.1
 
 ### Patch Changes
