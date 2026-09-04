@@ -290,7 +290,7 @@ class PdfRasterObservedPage(TypedDict):
     heightPixels: int
     pixels: BytesLike
     externalDetectionBatch: NotRequired[ExternalDetectionBatch | str]
-    manualRegions: NotRequired[Sequence[PdfRect]]
+    manualRegions: NotRequired[Sequence[PdfRect] | None]
 
 def inspect_pdf(
     document: BytesLike,

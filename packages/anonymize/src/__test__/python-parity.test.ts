@@ -570,6 +570,22 @@ pdf_manual_regions_contract = {
     "none_count": pdf_none_manual_certificate["manualRegionCount"],
     "invalid_code": pdf_invalid_manual_regions_code,
 }
+from collections.abc import Sequence
+from stella_anonymize.pdf import _manual_regions
+
+class UnreadManualRegions(Sequence):
+    def __len__(self):
+        return anonymize.PDF_RASTER_MAX_MANUAL_REGIONS + 1
+
+    def __getitem__(self, _index):
+        raise AssertionError("over-budget manual regions were copied")
+
+for remaining in [0, 1, anonymize.PDF_RASTER_MAX_MANUAL_REGIONS]:
+    try:
+        _manual_regions({"manualRegions": UnreadManualRegions()}, remaining)
+        raise AssertionError("over-budget manual regions were accepted")
+    except anonymize.PdfRasterError as error:
+        assert error.code == "limit-exceeded"
 class AstralPdfDetector:
     def redact_text(self, _text):
         entity = type("Entity", (), {"start": 1, "end": 6})()

@@ -109,7 +109,7 @@ def _entity_utf16_range(entity: Any, offsets: Sequence[int]) -> dict[str, int]:
     return {"start": offsets[start], "end": offsets[end]}
 
 
-def _manual_regions(page: Mapping[str, Any]) -> list[dict[str, Any]]:
+def _manual_regions(page: Mapping[str, Any], remaining: int) -> list[dict[str, Any]]:
     """Normalize optional manual regions into the native request shape."""
 
     regions = page.get("manualRegions")
@@ -121,6 +121,11 @@ def _manual_regions(page: Mapping[str, Any]) -> list[dict[str, Any]]:
         raise PdfRasterError(
             "invalid-contract",
             "invalid-contract: PDF manual regions must be a sequence of rectangles",
+        )
+    if len(regions) > remaining:
+        raise PdfRasterError(
+            "limit-exceeded",
+            "limit-exceeded: PDF raster manual regions exceed their aggregate limit",
         )
     normalized: list[dict[str, Any]] = []
     for region in regions:
@@ -296,13 +301,10 @@ def anonymize_pdf_raster(
                 "limit-exceeded",
                 "limit-exceeded: PDF raster pixels exceed their aggregate limit",
             )
-        manual_regions = _manual_regions(page)
+        manual_regions = _manual_regions(
+            page, PDF_RASTER_MAX_MANUAL_REGIONS - total_manual_regions
+        )
         total_manual_regions += len(manual_regions)
-        if total_manual_regions > PDF_RASTER_MAX_MANUAL_REGIONS:
-            raise PdfRasterError(
-                "limit-exceeded",
-                "limit-exceeded: PDF raster manual regions exceed their aggregate limit",
-            )
         validated_pages.append(
             (page, observation, text, pixels, width, height, manual_regions)
         )

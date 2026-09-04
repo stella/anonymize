@@ -249,6 +249,7 @@ def anonymize_pdf_manual_region(
         ],
     }
     assert anonymize.PDF_RASTER_MAX_MANUAL_REGIONS > 0
+    page["manualRegions"] = None
     return anonymize.anonymize_pdf_raster(
         document,
         anonymize.get_default_native_pipeline(language="en"),
