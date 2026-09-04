@@ -10,20 +10,20 @@ import {
   preloadNativeBinding,
 } from "../native-runtime";
 
-test("Bun runtime support starts at 1.4.0", () => {
-  expect(MINIMUM_SUPPORTED_BUN_VERSION).toBe("1.4.0");
+test("Bun runtime support starts at 1.4.1", () => {
+  expect(MINIMUM_SUPPORTED_BUN_VERSION).toBe("1.4.1");
   expect(() => assertSupportedBunVersion(undefined)).not.toThrow();
-  expect(() => assertSupportedBunVersion("1.4.0")).not.toThrow();
-  expect(() => assertSupportedBunVersion("1.4.1-rc.1")).not.toThrow();
+  expect(() => assertSupportedBunVersion("1.4.1")).not.toThrow();
+  expect(() => assertSupportedBunVersion("1.4.2-rc.1")).not.toThrow();
   expect(() => assertSupportedBunVersion("2.0.0")).not.toThrow();
-  expect(() => assertSupportedBunVersion("1.3.9")).toThrow(
-    "requires Bun >=1.4.0",
+  expect(() => assertSupportedBunVersion("1.4.0")).toThrow(
+    "requires Bun >=1.4.1",
   );
-  expect(() => assertSupportedBunVersion("1.4.0-rc.1")).toThrow(
-    "requires Bun >=1.4.0",
+  expect(() => assertSupportedBunVersion("1.4.1-rc.1")).toThrow(
+    "requires Bun >=1.4.1",
   );
   expect(() => assertSupportedBunVersion("development")).toThrow(
-    "requires Bun >=1.4.0",
+    "requires Bun >=1.4.1",
   );
 });
 

@@ -44,7 +44,7 @@ Contributing to the project is welcome.
 npm install @stll/anonymize
 ```
 
-Requires Node.js 20 or newer or Bun 1.4 or newer. Prebuilt native binaries ship
+Requires Node.js 20 or newer or Bun 1.4.1 or newer. Prebuilt native binaries ship
 for macOS (`arm64`, `x64`), glibc-based Linux (`arm64`, `x64`), and Windows
 (`x64`). Alpine Linux and other musl-based systems are not supported.
 
@@ -217,7 +217,7 @@ rendering, OCR, resource-limit, and verification contracts.
 
 Platform-specific Node.js binary packages are installed automatically as
 optional dependencies of `@stll/anonymize`. Node.js and Bun use the same native
-binding; Bun 1.4 or newer is required. A clean macOS arm64 npm install from the
+binding; Bun 1.4.1 or newer is required. A clean macOS arm64 npm install from the
 packed artifacts uses about 80 MiB on disk; CI caps the packed SDK, data
 package, and every native sidecar combination at 85 MiB. Install
 `@stll/anonymize-wasm` separately only when you need the browser runtime.

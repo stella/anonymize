@@ -78,7 +78,7 @@
   "homepage": "https://github.com/stella/anonymize",
   "license": "Apache-2.0",
   "engines": {
-    "bun": ">=1.4.0",
+    "bun": ">=1.4.1",
     "node": ">=20"
   },
   "scripts": {
@@ -116,7 +116,7 @@
   },
   "devDependencies": {
     "@napi-rs/cli": "^3.8.6",
-    "bun-types": "1.4.0",
+    "bun-types": "1.4.1",
     "fast-check": "^4.9.0",
     "fflate": "^0.8.3",
     "puppeteer-core": "25.8.0",

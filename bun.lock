@@ -29,7 +29,7 @@
       },
       "devDependencies": {
         "@napi-rs/cli": "^3.8.6",
-        "bun-types": "1.4.0",
+        "bun-types": "1.4.1",
         "fast-check": "^4.9.0",
         "fflate": "^0.8.3",
         "puppeteer-core": "25.8.0",
@@ -90,7 +90,7 @@
       },
       "devDependencies": {
         "@types/node": "^26.2.0",
-        "bun-types": "1.4.0",
+        "bun-types": "1.4.1",
         "typescript": "7.0.2",
       },
     },
@@ -108,7 +108,7 @@
       },
       "devDependencies": {
         "@types/node": "^26.2.0",
-        "bun-types": "1.4.0",
+        "bun-types": "1.4.1",
         "fflate": "^0.8.3",
         "tsdown": "0.22.14",
         "typescript": "7.0.2",
@@ -123,7 +123,7 @@
       },
       "devDependencies": {
         "@types/node": "^26.2.0",
-        "bun-types": "1.4.0",
+        "bun-types": "1.4.1",
         "typescript": "7.0.2",
       },
     },
@@ -145,7 +145,7 @@
       },
       "devDependencies": {
         "@types/node": "^26.2.0",
-        "bun-types": "1.4.0",
+        "bun-types": "1.4.1",
         "fflate": "^0.8.3",
         "tsdown": "0.22.14",
         "typescript": "7.0.2",
@@ -159,7 +159,7 @@
       },
       "devDependencies": {
         "@types/node": "^26.2.0",
-        "bun-types": "1.4.0",
+        "bun-types": "1.4.1",
         "tsdown": "0.22.14",
         "typescript": "7.0.2",
       },
@@ -180,7 +180,7 @@
       },
       "devDependencies": {
         "@types/node": "^26.2.0",
-        "bun-types": "1.4.0",
+        "bun-types": "1.4.1",
         "expect": "^30.2.0",
         "fflate": "^0.8.3",
         "tsdown": "0.22.14",
@@ -784,7 +784,7 @@
 
     "body-parser": ["body-parser@2.3.0", "", { "dependencies": { "bytes": "^3.1.2", "content-type": "^2.0.0", "debug": "^4.4.3", "http-errors": "^2.0.1", "iconv-lite": "^0.7.2", "on-finished": "^2.4.1", "qs": "^6.15.2", "raw-body": "^3.0.2", "type-is": "^2.1.0" } }, "sha512-2cGmJupaNgg+QUwVLAucDuWuoMZ6EX9iHDRswZ5lsNYEmwPaRknMPCLZz07yTzVq/83p4o/wzbDZbBrTvGGTIw=="],
 
-    "bun-types": ["bun-types@1.4.0", "", { "dependencies": { "@types/node": "*" } }, "sha512-iIKw23BspnQQYd3prITOBxeUsxBHnwzX6YJfGMuNOZzeNcMmVqzIIVGRm1l69ogaPQmb4wB6BN8mA5bE9YuC5Q=="],
+    "bun-types": ["bun-types@1.4.1", "", { "dependencies": { "@types/node": "*" } }, "sha512-loKuVrAFZKfEv+JvWkHRS9GW5IqLuLRjVXN9p+vZvBN86O5hf/pBZQ5hSoyipsrMmWObZBDvWnlmKvjKTM0PdA=="],
 
     "bytes": ["bytes@3.1.2", "", {}, "sha512-/Nf7TyzTx6S3yRJObOAV7956r8cr2+Oj8AC5dt8wSP3BQAoeX58NoHyCU8P8zGkNXStjTSi6fzO6F0pBdcYbEg=="],
 
