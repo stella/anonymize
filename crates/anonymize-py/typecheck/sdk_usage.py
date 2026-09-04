@@ -216,3 +216,43 @@ def deanonymise_mapping(redacted_text: str, redaction_map: Mapping[str, str]) ->
 
 def deanonymise_pairs(redacted_text: str, pairs: list[tuple[str, str]]) -> str:
     return anonymize.deanonymise(redacted_text, pairs)
+
+
+def anonymize_pdf_manual_region(
+    document: bytes, pixels: bytes
+) -> tuple[bytes, dict[str, object]]:
+    provider: anonymize.PdfRasterProvider = {
+        "providerId": "typecheck-provider",
+        "rendererName": "typecheck-renderer",
+        "rendererVersion": "1.0.0",
+        "ocrName": "typecheck-ocr",
+        "ocrVersion": "1.0.0",
+        "ocrLanguage": "en",
+    }
+    page: anonymize.PdfRasterObservedPage = {
+        "observation": {
+            "pageIndex": 0,
+            "widthPoints": 612.0,
+            "heightPoints": 792.0,
+            "text": "",
+            "glyphs": [],
+            "rendered": True,
+            "textLayer": "absent",
+            "ocr": "complete",
+            "imageCount": 1,
+        },
+        "widthPixels": 612,
+        "heightPixels": 792,
+        "pixels": pixels,
+        "manualRegions": [
+            {"left": 10.0, "bottom": 10.0, "right": 20.0, "top": 20.0}
+        ],
+    }
+    assert anonymize.PDF_RASTER_MAX_MANUAL_REGIONS > 0
+    page["manualRegions"] = None
+    return anonymize.anonymize_pdf_raster(
+        document,
+        anonymize.get_default_native_pipeline(language="en"),
+        provider,
+        [page],
+    )

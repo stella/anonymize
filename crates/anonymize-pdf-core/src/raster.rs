@@ -13,13 +13,16 @@ use crate::{
 };
 
 pub const PDF_RASTER_CONTRACT_VERSION: u8 = 1;
+pub const PDF_RASTER_CERTIFICATE_CONTRACT_VERSION: u8 = 2;
 pub const PDF_RASTER_MAX_PAGE_BYTES: usize = 128 * 1024 * 1024;
 pub const PDF_RASTER_MAX_TOTAL_BYTES: usize = 512 * 1024 * 1024;
 pub const PDF_RASTER_MAX_OUTPUT_BYTES: usize = 512 * 1024 * 1024;
 pub const PDF_RASTER_REQUEST_JSON_MAX_BYTES: usize = 64 * 1024 * 1024;
 pub const PDF_RASTER_MAX_DETECTIONS: usize = 1_000_000;
+pub const PDF_RASTER_MAX_MANUAL_REGIONS: usize = 1_000_000;
 pub const PDF_RASTER_MAX_GLYPHS: usize = 5_000_000;
 const PDF_RASTER_MAX_PROVIDER_FIELD_BYTES: usize = 256;
+const PDF_RASTER_MAX_FILL_OVERDRAW_FACTOR: usize = 4;
 
 #[derive(Debug, Error, Clone, Eq, PartialEq)]
 #[error("{message}")]
@@ -62,6 +65,8 @@ pub struct PdfRasterPage {
   pub height_pixels: u32,
   pub pixel_sha256: String,
   pub detections: Vec<PdfRasterDetection>,
+  #[serde(default)]
+  pub manual_regions: Vec<PdfRect>,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Deserialize, Serialize)]
@@ -90,6 +95,7 @@ pub struct PdfRasterRewriteCertificate {
   pub output_sha256: String,
   pub provider: PdfRasterProvider,
   pub detection_count: u32,
+  pub manual_region_count: u32,
   pub mapped_region_count: u32,
   pub structure_pixel_rewrite_verified: bool,
   pub provider_asserted_coverage: String,
@@ -278,6 +284,50 @@ fn fill_pixels(
   rects: &[PixelRect],
   fill: [u8; 3],
 ) -> Result<(), PdfRasterError> {
+  let pixel_count = pixels.len().checked_div(3).ok_or_else(|| {
+    error(
+      PdfRasterErrorCode::LimitExceeded,
+      "PDF raster fill budget overflowed",
+    )
+  })?;
+  let fill_budget = pixel_count
+    .checked_mul(PDF_RASTER_MAX_FILL_OVERDRAW_FACTOR)
+    .ok_or_else(|| {
+      error(
+        PdfRasterErrorCode::LimitExceeded,
+        "PDF raster fill budget overflowed",
+      )
+    })?;
+  let mut fill_area = 0usize;
+  for rect in rects {
+    let area = rect
+      .right
+      .checked_sub(rect.left)
+      .and_then(|rect_width| {
+        rect
+          .bottom
+          .checked_sub(rect.top)
+          .and_then(|rect_height| rect_width.checked_mul(rect_height))
+      })
+      .ok_or_else(|| {
+        error(
+          PdfRasterErrorCode::LimitExceeded,
+          "PDF raster fill area overflowed",
+        )
+      })?;
+    fill_area = fill_area.checked_add(area).ok_or_else(|| {
+      error(
+        PdfRasterErrorCode::LimitExceeded,
+        "PDF raster fill area overflowed",
+      )
+    })?;
+    if fill_area > fill_budget {
+      return Err(error(
+        PdfRasterErrorCode::LimitExceeded,
+        "PDF raster redaction regions exceed the fill work budget",
+      ));
+    }
+  }
   for rect in rects {
     for y in rect.top..rect.bottom {
       for x in rect.left..rect.right {
@@ -535,12 +585,16 @@ fn validate_source_and_pages(
       ));
     }
     if page.detections.len() > PDF_RASTER_MAX_DETECTIONS
+      || page.manual_regions.len() > PDF_RASTER_MAX_MANUAL_REGIONS
       || page.observation.glyphs.len() > PDF_RASTER_MAX_GLYPHS
     {
       return Err(error(
         PdfRasterErrorCode::LimitExceeded,
-        "PDF raster page contains too many detections or glyphs",
+        "PDF raster page contains too many detections, manual regions, or glyphs",
       ));
+    }
+    for region in &page.manual_regions {
+      pixel_rect(page, region)?;
     }
     observations.push(page.observation.clone());
   }
@@ -977,7 +1031,13 @@ fn add_raster_page(
       "PDF raster page digest does not match",
     ));
   }
-  let rects = detection_pixel_rects(page)?;
+  let mut rects = detection_pixel_rects(page)?
+    .into_iter()
+    .collect::<BTreeSet<_>>();
+  for region in &page.manual_regions {
+    rects.insert(pixel_rect(page, region)?);
+  }
+  let rects = rects.into_iter().collect::<Vec<_>>();
   let mut pixels = supplied_pixels.to_vec();
   let width = usize::try_from(page.width_pixels).map_err(|_| {
     error(
@@ -1039,6 +1099,7 @@ pub fn rewrite_pdf_raster_from_detections<T: AsRef<[u8]>>(
   }
   let mut total_bytes = 0usize;
   let mut detection_count = 0usize;
+  let mut manual_region_count = 0usize;
   for (page, supplied_pixels) in request.pages.iter().zip(page_pixels) {
     let expected = checked_pixel_length(page)?;
     if expected > PDF_RASTER_MAX_PAGE_BYTES
@@ -1063,13 +1124,22 @@ pub fn rewrite_pdf_raster_from_detections<T: AsRef<[u8]>>(
           "PDF raster detection count overflowed",
         )
       })?;
+    manual_region_count = manual_region_count
+      .checked_add(page.manual_regions.len())
+      .ok_or_else(|| {
+        error(
+          PdfRasterErrorCode::LimitExceeded,
+          "PDF raster manual region count overflowed",
+        )
+      })?;
   }
   if total_bytes > PDF_RASTER_MAX_TOTAL_BYTES
     || detection_count > PDF_RASTER_MAX_DETECTIONS
+    || manual_region_count > PDF_RASTER_MAX_MANUAL_REGIONS
   {
     return Err(error(
       PdfRasterErrorCode::LimitExceeded,
-      "PDF raster pixels or detections exceed their aggregate limit",
+      "PDF raster pixels, detections, or manual regions exceed their aggregate limit",
     ));
   }
   let mut mapped_region_count = 0usize;
@@ -1131,6 +1201,13 @@ pub fn rewrite_pdf_raster_from_detections<T: AsRef<[u8]>>(
       "PDF raster detection count overflowed",
     )
   })?;
+  let manual_region_count =
+    u32::try_from(manual_region_count).map_err(|_| {
+      error(
+        PdfRasterErrorCode::LimitExceeded,
+        "PDF raster manual region count overflowed",
+      )
+    })?;
   let mapped_region_count =
     u32::try_from(mapped_region_count).map_err(|_| {
       error(
@@ -1139,12 +1216,13 @@ pub fn rewrite_pdf_raster_from_detections<T: AsRef<[u8]>>(
       )
     })?;
   let certificate = PdfRasterRewriteCertificate {
-    contract_version: PDF_RASTER_CONTRACT_VERSION,
+    contract_version: PDF_RASTER_CERTIFICATE_CONTRACT_VERSION,
     page_count,
     source_sha256: request.source_sha256.clone(),
     output_sha256: digest_hex(&output),
     provider: request.provider.clone(),
     detection_count,
+    manual_region_count,
     mapped_region_count,
     structure_pixel_rewrite_verified: true,
     provider_asserted_coverage:
@@ -1202,6 +1280,7 @@ mod tests {
         height_pixels: 22,
         pixel_sha256: digest_hex(pixels),
         detections: vec![PdfRasterDetection { start: 0, end: 5 }],
+        manual_regions: Vec::new(),
       }],
     }
   }
@@ -1216,9 +1295,11 @@ mod tests {
       return;
     };
     assert!(certificate.structure_pixel_rewrite_verified);
+    assert_eq!(certificate.contract_version, 2);
     assert!(!certificate.pii_clean_guaranteed);
     assert_eq!(certificate.page_count, 1);
     assert_eq!(certificate.detection_count, 1);
+    assert_eq!(certificate.manual_region_count, 0);
     assert_eq!(certificate.mapped_region_count, 1);
     assert!(
       !output
@@ -1234,6 +1315,58 @@ mod tests {
     assert_eq!(inspection.risks.metadata_stream_count, 0);
     assert_eq!(inspection.risks.embedded_file_count, 0);
     assert_eq!(inspection.risks.annotation_count, 0);
+  }
+
+  #[test]
+  fn destructively_fills_digest_bound_manual_regions() {
+    let pixels = vec![255; 17 * 22 * 3];
+    let mut contract = request(&pixels);
+    let Some(page) = contract.pages.first_mut() else {
+      return;
+    };
+    page.detections.clear();
+    page.manual_regions.push(PdfRect {
+      left: 72.0,
+      bottom: 396.0,
+      right: 216.0,
+      top: 540.0,
+    });
+
+    let result = rewrite_pdf_raster_from_detections(
+      SOURCE,
+      &contract,
+      std::slice::from_ref(&pixels),
+    );
+
+    assert!(result.is_ok(), "{result:?}");
+    let Ok((_output, certificate)) = result else {
+      return;
+    };
+    assert_eq!(certificate.detection_count, 0);
+    assert_eq!(certificate.manual_region_count, 1);
+    assert_eq!(certificate.mapped_region_count, 1);
+  }
+
+  #[test]
+  fn rejects_manual_regions_outside_the_observed_page() {
+    let pixels = vec![255; 17 * 22 * 3];
+    let mut contract = request(&pixels);
+    let Some(page) = contract.pages.first_mut() else {
+      return;
+    };
+    page.manual_regions.push(PdfRect {
+      left: 72.0,
+      bottom: 396.0,
+      right: 700.0,
+      top: 540.0,
+    });
+
+    assert_eq!(
+      rewrite_pdf_raster_from_detections(SOURCE, &contract, &[pixels])
+        .err()
+        .map(|failure| failure.code()),
+      Some(PdfRasterErrorCode::InvalidContract),
+    );
   }
 
   #[test]
@@ -1463,6 +1596,41 @@ mod tests {
       .count();
     assert_eq!(black_pixels, 36);
     assert_eq!(white_pixels, 338);
+  }
+
+  #[test]
+  #[ignore = "release-mode overlapping manual region scaling regression check"]
+  fn overlapping_manual_region_fill_work_is_bounded() {
+    const SIDE: usize = 2_000;
+    const RECTANGLE_COUNT: usize = 100_000;
+    let mut pixels = vec![255; SIDE * SIDE * 3];
+    let rects = (0..10)
+      .flat_map(|right_offset| {
+        (0..100).flat_map(move |top| {
+          (0..100).map(move |left| PixelRect {
+            left,
+            top,
+            right: SIDE - right_offset,
+            bottom: SIDE,
+          })
+        })
+      })
+      .collect::<BTreeSet<_>>()
+      .into_iter()
+      .collect::<Vec<_>>();
+    assert_eq!(rects.len(), RECTANGLE_COUNT);
+
+    let started = std::time::Instant::now();
+    let result = fill_pixels(&mut pixels, SIDE, &rects, [0, 0, 0]);
+
+    assert_eq!(
+      result.err().map(|failure| failure.code()),
+      Some(PdfRasterErrorCode::LimitExceeded),
+    );
+    assert!(
+      started.elapsed() < std::time::Duration::from_secs(1),
+      "overlapping manual region budget check exceeded one second"
+    );
   }
 
   #[test]

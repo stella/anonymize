@@ -117,7 +117,9 @@ type PythonParityOutput = {
   version: string;
   module_version: string;
   pdf_constants: {
+    raster_certificate_contract_version: number;
     loaded_payload_max_bytes: number;
+    max_manual_regions: number;
     max_observed_text_utf8_bytes: number;
     observations_json_max_bytes: number;
     page_dimension_tolerance_points: number;
@@ -130,6 +132,10 @@ type PythonParityOutput = {
   pdf_raster_detected: { document_base64: string; certificate: unknown };
   pdf_raster_astral: { document_base64: string; certificate: unknown };
   pdf_detection_error: { code: string; message: string };
+  pdf_manual_regions_contract: {
+    none_count: number;
+    invalid_code: string;
+  };
   pdf_observation_limit_errors: readonly { code: string; calls: number }[];
   pdf_invalid_error: { code: string; message: string };
   caller_result: {
@@ -305,6 +311,7 @@ pdf_raster_request = {
         "heightPixels": 22,
         "pixelSha256": __import__("hashlib").sha256(pdf_pixels).hexdigest(),
         "detections": [{"start": 0, "end": 14}],
+        "manualRegions": [{"left": 120.0, "bottom": 650.0, "right": 180.0, "top": 690.0}],
     }],
 }
 pdf_raster_document, pdf_raster_certificate = anonymize.rewrite_pdf_raster_from_detections(
@@ -524,12 +531,62 @@ pdf_detected_document, pdf_detected_certificate = anonymize.anonymize_pdf_raster
         "heightPixels": 22,
         "pixels": pdf_pixels,
         "externalDetectionBatch": pdf_external_batch,
+        "manualRegions": [{"left": 120.0, "bottom": 650.0, "right": 180.0, "top": 690.0}],
     }],
 )
 pdf_raster_detected = {
     "document_base64": base64.b64encode(pdf_detected_document).decode("ascii"),
     "certificate": pdf_detected_certificate,
 }
+_pdf_none_manual_document, pdf_none_manual_certificate = anonymize.anonymize_pdf_raster(
+    pdf_source,
+    prepared,
+    pdf_raster_request["provider"],
+    [{
+        "observation": pdf_observation[0],
+        "widthPixels": 17,
+        "heightPixels": 22,
+        "pixels": pdf_pixels,
+        "externalDetectionBatch": pdf_external_batch,
+        "manualRegions": None,
+    }],
+)
+try:
+    anonymize.anonymize_pdf_raster(
+        pdf_source,
+        prepared,
+        pdf_raster_request["provider"],
+        [{
+            "observation": pdf_observation[0],
+            "widthPixels": 17,
+            "heightPixels": 22,
+            "pixels": pdf_pixels,
+            "manualRegions": 7,
+        }],
+    )
+    raise AssertionError("non-iterable PDF manual regions were accepted")
+except anonymize.PdfRasterError as error:
+    pdf_invalid_manual_regions_code = error.code
+pdf_manual_regions_contract = {
+    "none_count": pdf_none_manual_certificate["manualRegionCount"],
+    "invalid_code": pdf_invalid_manual_regions_code,
+}
+from collections.abc import Sequence
+from stella_anonymize.pdf import _manual_regions
+
+class UnreadManualRegions(Sequence):
+    def __len__(self):
+        return anonymize.PDF_RASTER_MAX_MANUAL_REGIONS + 1
+
+    def __getitem__(self, _index):
+        raise AssertionError("over-budget manual regions were copied")
+
+for remaining in [0, 1, anonymize.PDF_RASTER_MAX_MANUAL_REGIONS]:
+    try:
+        _manual_regions({"manualRegions": UnreadManualRegions()}, remaining)
+        raise AssertionError("over-budget manual regions were accepted")
+    except anonymize.PdfRasterError as error:
+        assert error.code == "limit-exceeded"
 class AstralPdfDetector:
     def redact_text(self, _text):
         entity = type("Entity", (), {"start": 1, "end": 6})()
@@ -965,7 +1022,9 @@ print(
             "version": anonymize.native_package_version(),
             "module_version": anonymize.__version__,
             "pdf_constants": {
+                "raster_certificate_contract_version": anonymize.PDF_RASTER_CERTIFICATE_CONTRACT_VERSION,
                 "loaded_payload_max_bytes": anonymize.PDF_LOADED_PAYLOAD_MAX_BYTES,
+                "max_manual_regions": anonymize.PDF_RASTER_MAX_MANUAL_REGIONS,
                 "max_observed_text_utf8_bytes": anonymize.PDF_MAX_OBSERVED_TEXT_UTF8_BYTES,
                 "observations_json_max_bytes": anonymize.PDF_OBSERVATIONS_JSON_MAX_BYTES,
                 "page_dimension_tolerance_points": anonymize.PDF_PAGE_DIMENSION_TOLERANCE_POINTS,
@@ -978,6 +1037,7 @@ print(
             "pdf_raster_detected": pdf_raster_detected,
             "pdf_raster_astral": pdf_raster_astral,
             "pdf_detection_error": pdf_detection_error,
+            "pdf_manual_regions_contract": pdf_manual_regions_contract,
             "pdf_observation_limit_errors": pdf_observation_limit_errors,
             "pdf_invalid_error": pdf_invalid_error,
             "caller_result": {
@@ -1318,7 +1378,9 @@ describe("python binding parity", () => {
       message: nodeMessage,
     });
     expect(python.pdf_constants).toEqual({
+      raster_certificate_contract_version: 2,
       loaded_payload_max_bytes: 128 * 1024 * 1024,
+      max_manual_regions: 1_000_000,
       max_observed_text_utf8_bytes: 64 * 1024 * 1024,
       observations_json_max_bytes: 64 * 1024 * 1024,
       page_dimension_tolerance_points: 0.25,
@@ -1379,12 +1441,17 @@ describe("python binding parity", () => {
             heightPixels: 22,
             pixelSha256: sha256(pixels),
             detections: [{ start: 0, end: 14 }],
+            manualRegions: [{ left: 120, bottom: 650, right: 180, top: 690 }],
           },
         ],
       };
       const rewrite =
         loadNativeAnonymizeBinding().rewritePdfRasterFromDetectionsJson;
       const node = rewrite(source, JSON.stringify(request), [pixels]);
+      expect(JSON.parse(node.certificateJson)).toMatchObject({
+        contractVersion:
+          python.pdf_constants.raster_certificate_contract_version,
+      });
       expect(python.pdf_raster).toEqual({
         document_base64: Buffer.from(node.document).toString("base64"),
         certificate: JSON.parse(node.certificateJson),
@@ -1437,6 +1504,10 @@ describe("python binding parity", () => {
       expect(python.pdf_detection_error).toEqual({
         code: "detection-failed",
         message: "detection-failed: PDF raster detection failed",
+      });
+      expect(python.pdf_manual_regions_contract).toEqual({
+        none_count: 0,
+        invalid_code: "invalid-contract",
       });
       expect(python.pdf_observation_limit_errors).toEqual([
         { code: "limit-exceeded", calls: 0 },

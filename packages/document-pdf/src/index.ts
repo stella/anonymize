@@ -13,6 +13,7 @@ import {
   type PdfInspection,
   type PdfInspectionErrorCode,
   type PdfPageObservation,
+  type PdfRect,
   type PdfRasterProvider,
   type PdfRasterErrorCode,
   type PdfRasterRewrite,
@@ -27,6 +28,7 @@ export const PDF_INSPECTION_CONTRACT_VERSION = 1 as const;
 export const PDF_RASTER_CONTRACT_VERSION = 1 as const;
 export const PDF_RASTER_MAX_PAGE_BYTES = 128 * 1024 * 1024;
 export const PDF_RASTER_MAX_TOTAL_BYTES = 512 * 1024 * 1024;
+export const PDF_RASTER_MAX_MANUAL_REGIONS = 1_000_000;
 export const PDF_RASTER_MAX_OUTPUT_BYTES = 512 * 1024 * 1024;
 export const PDF_RASTER_REQUEST_JSON_MAX_BYTES = 64 * 1024 * 1024;
 export const PDF_DOCUMENT_MAX_BYTES = 64 * 1024 * 1024;
@@ -151,6 +153,8 @@ export type PdfRasterObservedPageInput = {
   pixels: Uint8Array;
   /** Optional digest-bound provider batch merged through stella caller semantics. */
   externalDetectionBatch?: ExternalDetectionBatch | string | undefined;
+  /** User-reviewed regions in normalized displayed-page PDF points. */
+  manualRegions?: readonly PdfRect[] | undefined;
 };
 
 export type AnonymizePdfRasterOptions = {
@@ -189,6 +193,7 @@ export const anonymizePdfRaster = ({
   }
   let totalPixelBytes = 0;
   let totalObservedTextBytes = 0;
+  let totalManualRegions = 0;
   const textEncoder = new TextEncoder();
   for (const page of pages) {
     if (typeof page.observation?.text !== "string") {
@@ -246,6 +251,13 @@ export const anonymizePdfRaster = ({
         "limit-exceeded: PDF raster pixels exceed their aggregate limit",
       );
     }
+    totalManualRegions += page.manualRegions?.length ?? 0;
+    if (totalManualRegions > PDF_RASTER_MAX_MANUAL_REGIONS) {
+      throw new PdfRasterError(
+        PDF_RASTER_ERROR_CODES.limitExceeded,
+        "limit-exceeded: PDF raster manual regions exceed their aggregate limit",
+      );
+    }
   }
   const binding = loadNativeAnonymizeBinding();
   let requestPages: PdfRasterRewrite["pages"];
@@ -274,6 +286,7 @@ export const anonymizePdfRaster = ({
           start,
           end,
         })),
+        manualRegions: page.manualRegions ?? [],
       };
     });
   } catch {
@@ -297,6 +310,7 @@ export const anonymizePdfRaster = ({
 
 export { PDF_INSPECTION_ERROR_CODES } from "./types";
 export { PDF_RASTER_ERROR_CODES } from "./types";
+export { PDF_RASTER_CERTIFICATE_CONTRACT_VERSION } from "./types";
 export {
   PDF_LOCAL_PROVIDER_ERROR_CODES,
   PdfLocalProviderError,

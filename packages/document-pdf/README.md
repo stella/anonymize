@@ -51,7 +51,8 @@ appropriate for untrusted files.
 `anonymizePdfRaster` accepts pages produced by an explicit renderer/OCR
 provider and creates a brand-new image-only PDF. It requires a prepared stella
 pipeline, runs native detection over each page's observed text, merges an
-optional digest-bound `ExternalDetectionBatch`, and fails if any selected
+optional digest-bound `ExternalDetectionBatch`, applies optional user-reviewed
+`manualRegions` expressed in displayed-page PDF points, and fails if any selected
 non-whitespace UTF-16 span is not completely mapped to observed glyph geometry.
 Provider metadata must identify one explicit OCR language pack; mixed or
 implicit language selection is not part of the contract.
@@ -60,6 +61,8 @@ binds the source and each page, requires complete rendering and OCR assertions,
 destructively fills the mapped pixels, and verifies both the newly written PDF
 graph and its decompressed image pixels. Encrypted inputs are rejected.
 
+Manual regions are validated against the observed page and mapped outward to
+pixels before filling, so partially covered edge pixels cannot retain content.
 The output never reuses source PDF objects, streams, text layers, metadata,
 forms, annotations, attachments, actions, signatures, optional content, or
 incremental revisions. A solid rectangle in this output is destructive: the
@@ -103,6 +106,11 @@ part of this surface. Raster anonymization is a Node and Python
 document-profile capability; PDF inspection remains available through the
 byte-oriented core runtimes. The Poppler/Tesseract adapter is separately named
 as the Node-only `document.pdf.observe-raster-local` capability.
+
+Raster certificates use `PDF_RASTER_CERTIFICATE_CONTRACT_VERSION` (2), including
+the required `manualRegionCount` field. The decoder rejects version 1 certificates;
+consumers storing certificates must dispatch by their version. Raster requests
+(`PDF_RASTER_CONTRACT_VERSION`) and inspections remain at version 1.
 
 `rewritePdfRasterFromDetections` is the advanced rewrite-only seam for trusted
 adapters that already ran detection. Detection spans must be strictly ordered

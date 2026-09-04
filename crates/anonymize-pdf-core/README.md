@@ -33,11 +33,12 @@ pixel requirement applies even when the PDF has no image objects because
 visible text can be encoded as vector outlines.
 
 The low-level raster rewrite accepts SHA-256-bound, provider-asserted opaque
-RGB8 pages, complete observations, and detection spans. It validates every
+RGB8 pages, complete observations, detection spans, and user-reviewed manual
+regions in displayed-page PDF points. It validates every
 source page and its displayed geometry, requires every selected non-whitespace
 UTF-16 unit to map to observed glyph geometry, and requires detection spans to
 be ordered and non-overlapping, so binding is a bounded glyph sweep. It
-destructively overwrites those pixels and constructs a fresh PDF whose only page
+destructively overwrites those detected or manually selected pixels and constructs a fresh PDF whose only page
 content is the sanitized image. Provider metadata identifies one explicit OCR
 language pack. It reparses
 the output, checks an exact object/resource/operator
@@ -46,6 +47,10 @@ metadata, text layer, attachment, signature, or incremental revision is copied.
 Encrypted PDFs are rejected. Detector assembly stays in the Node/Python SDKs;
 this core rewrite function must not be presented as detection or as a PII-clean
 guarantee.
+
+Raster rewrite certificates use `PDF_RASTER_CERTIFICATE_CONTRACT_VERSION` (2)
+because they require separate manual-region counts. Raster requests still use
+`PDF_RASTER_CONTRACT_VERSION` (1), and inspection contracts remain at version 1.
 
 Complete OCR coverage means the provider submitted every rendered page to its
 OCR engine. It cannot prove OCR or detector recall. The provider boundary and

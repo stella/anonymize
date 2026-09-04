@@ -43,7 +43,7 @@ const inspection = {
 } as const satisfies PdfInspection;
 
 const certificate = {
-  contractVersion: 1,
+  contractVersion: 2,
   pageCount: 1,
   sourceSha256: "a".repeat(64),
   outputSha256: "b".repeat(64),
@@ -56,6 +56,7 @@ const certificate = {
     ocrLanguage: "eng",
   },
   detectionCount: 1,
+  manualRegionCount: 0,
   mappedRegionCount: 1,
   structurePixelRewriteVerified: true,
   providerAssertedCoverage: "complete-rendering-and-ocr-observation",
@@ -91,6 +92,21 @@ describe("native PDF codecs", () => {
       decodePdfRasterRewriteCertificate(
         JSON.stringify({ ...certificate, outputSha256: "not-a-digest" }),
       ),
-    ).toThrow("does not match contract version 1");
+    ).toThrow("does not match contract version 2");
+  });
+
+  test("rejects previous and unknown certificate versions instead of reinterpreting their shape", () => {
+    const { manualRegionCount: _manualRegionCount, ...previousShape } =
+      certificate;
+    for (const value of [
+      { ...previousShape, contractVersion: 1 },
+      { ...certificate, contractVersion: 1 },
+      { ...certificate, contractVersion: 3 },
+      { ...previousShape, contractVersion: 2 },
+    ]) {
+      expect(() =>
+        decodePdfRasterRewriteCertificate(JSON.stringify(value)),
+      ).toThrow("does not match contract version 2");
+    }
   });
 });

@@ -96,6 +96,8 @@ export type PdfRasterPage = {
   pixelSha256: string;
   /** Strictly ordered, non-overlapping UTF-16 spans. */
   detections: readonly PdfRasterDetection[];
+  /** User-reviewed regions in normalized displayed-page PDF points. */
+  manualRegions?: readonly PdfRect[];
 };
 
 export type PdfRasterDetection = { start: number; end: number };
@@ -109,13 +111,16 @@ export type PdfRasterRewrite = {
   pages: readonly PdfRasterPage[];
 };
 
+export const PDF_RASTER_CERTIFICATE_CONTRACT_VERSION = 2 as const;
+
 export type PdfRasterRewriteCertificate = {
-  contractVersion: 1;
+  contractVersion: typeof PDF_RASTER_CERTIFICATE_CONTRACT_VERSION;
   pageCount: number;
   sourceSha256: string;
   outputSha256: string;
   provider: PdfRasterProvider;
   detectionCount: number;
+  manualRegionCount: number;
   mappedRegionCount: number;
   structurePixelRewriteVerified: true;
   providerAssertedCoverage: "complete-rendering-and-ocr-observation";
