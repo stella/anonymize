@@ -44,16 +44,16 @@
     "@stll/anonymize": "3.0.0",
     "@stll/anonymize-docx": "^3.0.0",
     "@stll/anonymize-pdf": "3.0.0",
-    "fs-native-extensions": "^1.5.0",
-    "zod": "^4.4.3"
+    "fs-native-extensions": "^1.5.1",
+    "zod": "^4.5.4"
   },
   "devDependencies": {
-    "@types/node": "^26.2.0",
+    "@types/node": "^26.4.0",
     "bun-types": "1.4.1",
-    "expect": "^30.2.0",
+    "expect": "^30.5.0",
     "fflate": "^0.8.3",
     "tsdown": "0.22.14",
-    "tsx": "^4.23.12",
+    "tsx": "^4.23.13",
     "typescript": "7.0.2"
   }
 }
