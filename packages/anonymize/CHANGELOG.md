@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.0.0
+
+### Patch Changes
+
+- [#498](https://github.com/stella/anonymize/pull/498) [`ae4f209`](https://github.com/stella/anonymize/commit/ae4f20977da5952ede8fae272330845ba8b149c2) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Require Bun 1.4.1 or newer for the native runtime.
+
 ## 2.9.1
 
 ### Patch Changes

@@ -1,5 +1,7 @@
 # @stll/anonymize-darwin-arm64
 
+## 3.0.0
+
 ## 2.9.1
 
 ## 2.9.0
