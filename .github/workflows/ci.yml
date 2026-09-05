@@ -30,7 +30,7 @@ jobs:
           persist-credentials: false
 
       - name: Enforce release intent
-        uses: stella/.github/.github/actions/changeset-policy@89ceed9555f0895fd34a9d478edebe2331f01929 # v1.7.0
+        uses: stella/.github/.github/actions/changeset-policy@7c43baa7e76584907c5b6e2876e1e9962a48518e # v1.7.0
         with:
           release-paths: |
             Cargo.lock
