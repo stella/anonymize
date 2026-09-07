@@ -13,7 +13,7 @@ jobs:
     if: github.repository == 'stella/anonymize'
     permissions:
       contents: read
-    uses: stella/.github/.github/workflows/quarantine-prune.yml@7c43baa7e76584907c5b6e2876e1e9962a48518e
+    uses: stella/.github/.github/workflows/quarantine-prune.yml@9e1915536efc226c5ec9d3ca0f2192be5aa6ec7e
     secrets:
-      RELEASE_APP_ID: ${{ secrets.RELEASE_APP_ID }}
-      RELEASE_APP_PRIVATE_KEY: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+      CHANGELOG_APP_ID: ${{ secrets.CHANGELOG_APP_ID }}
+      CHANGELOG_APP_PRIVATE_KEY: ${{ secrets.CHANGELOG_APP_PRIVATE_KEY }}
