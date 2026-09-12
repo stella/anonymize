@@ -15,8 +15,8 @@
     "@stll/anonymize-data": "^0.0.10"
   },
   "devDependencies": {
-    "@types/node": "^26.2.0",
-    "bun-types": "1.4.1",
+    "@types/node": "^26.4.1",
+    "bun-types": "1.4.2",
     "typescript": "7.0.2"
   }
 }
