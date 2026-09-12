@@ -115,12 +115,12 @@
     "@stll/anonymize-win32-x64-msvc": "3.0.0"
   },
   "devDependencies": {
-    "@napi-rs/cli": "^3.8.6",
-    "bun-types": "1.4.1",
+    "@napi-rs/cli": "^3.9.0",
+    "bun-types": "1.4.2",
     "fast-check": "^4.9.0",
     "fflate": "^0.8.3",
-    "puppeteer-core": "25.8.0",
-    "tsdown": "0.22.14",
+    "puppeteer-core": "25.10.0",
+    "tsdown": "0.23.0",
     "typescript": "7.0.2",
     "vite": "^8.2.2"
   }
