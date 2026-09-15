@@ -1,7 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use super::common::{entity_len, is_caller_owned};
-use super::sanitize::sanitize_entities;
 use super::{DetectionSource, PipelineEntity, SourceDetail};
 
 #[must_use]
@@ -11,7 +10,9 @@ pub fn merge_and_dedup(entities: &[PipelineEntity]) -> Vec<PipelineEntity> {
   };
 
   let merged = merged.into_entities();
-  resolve_same_span_label_conflicts(&sanitize_entities(&merged))
+  // Retain source offsets verbatim. Display text may already have collapsed
+  // whitespace, so only the document-aware sanitization pass can adjust spans.
+  resolve_same_span_label_conflicts(&merged)
 }
 
 fn merge_frontier(entities: &[PipelineEntity]) -> Option<MergeFrontier> {
@@ -831,7 +832,7 @@ mod tests {
       merged.insert(insert_at, entity);
     }
 
-    resolve_same_span_label_conflicts(&sanitize_entities(&merged))
+    resolve_same_span_label_conflicts(&merged)
   }
 
   fn source_strategy() -> impl Strategy<Value = DetectionSource> {
