@@ -15,4 +15,4 @@ permissions:
 
 jobs:
   dependabot-bun-dedupe:
-    uses: stella/.github/.github/workflows/dependabot-bun-dedupe.yml@7c43baa7e76584907c5b6e2876e1e9962a48518e
+    uses: stella/.github/.github/workflows/dependabot-bun-dedupe.yml@fb1e83fbc3fae39902da763ca7b2613090571717
