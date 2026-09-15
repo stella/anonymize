@@ -1,17 +1,37 @@
 use std::collections::{BTreeMap, BTreeSet};
 
+use crate::types::Result;
+
 use super::common::{entity_len, is_caller_owned};
-use super::sanitize::sanitize_entities;
+use super::document::ResolutionDocument;
+use super::sanitize::{
+  retain_sanitizable_entities, sanitize_entities_with_document,
+};
 use super::{DetectionSource, PipelineEntity, SourceDetail};
 
 #[must_use]
 pub fn merge_and_dedup(entities: &[PipelineEntity]) -> Vec<PipelineEntity> {
+  let merged = merge_sanitizable_entities(entities);
+  resolve_same_span_label_conflicts(&merged)
+}
+
+pub(crate) fn merge_and_dedup_with_document(
+  entities: &[PipelineEntity],
+  document: &ResolutionDocument<'_>,
+) -> Result<Vec<PipelineEntity>> {
+  let merged = merge_sanitizable_entities(entities);
+  let sanitized = sanitize_entities_with_document(merged, document)?;
+  Ok(resolve_same_span_label_conflicts(&sanitized))
+}
+
+fn merge_sanitizable_entities(
+  entities: &[PipelineEntity],
+) -> Vec<PipelineEntity> {
   let Some(merged) = merge_frontier(entities) else {
     return Vec::new();
   };
 
-  let merged = merged.into_entities();
-  resolve_same_span_label_conflicts(&sanitize_entities(&merged))
+  retain_sanitizable_entities(merged.into_entities())
 }
 
 fn merge_frontier(entities: &[PipelineEntity]) -> Option<MergeFrontier> {
@@ -760,6 +780,52 @@ mod tests {
 
   use super::*;
 
+  #[test]
+  fn document_merge_filters_punctuation_only_detector_text() -> Result<()> {
+    let source_text = "..........\tExample suffix";
+    let entity = PipelineEntity::detected(
+      0,
+      u32::try_from(source_text.len()).unwrap_or(u32::MAX),
+      "address",
+      "..........",
+      0.9,
+      DetectionSource::Regex,
+    );
+    let document = ResolutionDocument::new(source_text);
+
+    let merged = merge_and_dedup_with_document(&[entity], &document)?;
+
+    assert!(merged.is_empty());
+    Ok(())
+  }
+
+  #[test]
+  fn document_merge_uses_utf8_source_span_after_display_collapse() -> Result<()>
+  {
+    let source_text = "0 \t \t č. p";
+    let source_end = u32::try_from(source_text.len()).unwrap_or(u32::MAX);
+    let entity = PipelineEntity::detected(
+      0,
+      source_end,
+      "address",
+      "0 č. p",
+      0.9,
+      DetectionSource::Trigger,
+    );
+    let document = ResolutionDocument::new(source_text);
+
+    let merged = merge_and_dedup_with_document(&[entity], &document)?;
+
+    assert_eq!(merged.len(), 1);
+    assert_eq!(merged.first().map(|item| item.start), Some(0));
+    assert_eq!(merged.first().map(|item| item.end), Some(source_end));
+    assert_eq!(
+      merged.first().map(|item| item.text.as_str()),
+      Some("0 č. p")
+    );
+    Ok(())
+  }
+
   fn legacy_merge_and_dedup(
     entities: &[PipelineEntity],
   ) -> Vec<PipelineEntity> {
@@ -831,7 +897,8 @@ mod tests {
       merged.insert(insert_at, entity);
     }
 
-    resolve_same_span_label_conflicts(&sanitize_entities(&merged))
+    let merged = retain_sanitizable_entities(merged);
+    resolve_same_span_label_conflicts(&merged)
   }
 
   fn source_strategy() -> impl Strategy<Value = DetectionSource> {

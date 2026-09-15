@@ -13,10 +13,7 @@ const ADDRESS_FINAL_ABBREVS: &str =
 pub fn sanitize_entities(entities: &[PipelineEntity]) -> Vec<PipelineEntity> {
   let mut sanitized = Vec::with_capacity(entities.len());
   for entity in entities {
-    if is_caller_owned(entity)
-      || has_curated_literal_boundary(entity)
-      || has_structured_record_boundary(entity)
-    {
+    if preserves_literal_boundaries(entity) {
       sanitized.push(entity.clone());
       continue;
     }
@@ -27,6 +24,18 @@ pub fn sanitize_entities(entities: &[PipelineEntity]) -> Vec<PipelineEntity> {
   sanitized
 }
 
+pub(super) fn retain_sanitizable_entities(
+  entities: Vec<PipelineEntity>,
+) -> Vec<PipelineEntity> {
+  entities
+    .into_iter()
+    .filter(|entity| {
+      preserves_literal_boundaries(entity)
+        || sanitized_text_range(entity, &entity.text).is_some()
+    })
+    .collect()
+}
+
 pub(crate) fn sanitize_entities_with_document(
   entities: Vec<PipelineEntity>,
   document: &ResolutionDocument<'_>,
@@ -34,10 +43,7 @@ pub(crate) fn sanitize_entities_with_document(
   let mut sanitized = Vec::with_capacity(entities.len());
 
   for entity in entities {
-    if is_caller_owned(&entity)
-      || has_curated_literal_boundary(&entity)
-      || has_structured_record_boundary(&entity)
-    {
+    if preserves_literal_boundaries(&entity) {
       sanitized.push(entity);
       continue;
     }
@@ -56,6 +62,27 @@ fn clean_entity_text(
   mut entity: PipelineEntity,
   raw_text: &str,
 ) -> Option<PipelineEntity> {
+  let (start_byte, end_byte) = sanitized_text_range(&entity, raw_text)?;
+  let cleaned_raw = raw_text.get(start_byte..end_byte)?;
+  let start = entity
+    .start
+    .saturating_add(byte_len(raw_text.get(..start_byte).unwrap_or_default()));
+  let end = start.saturating_add(byte_len(cleaned_raw));
+
+  entity.start = start;
+  entity.end = end;
+  if entity.text != cleaned_raw
+    || display_whitespace_needs_collapse(cleaned_raw)
+  {
+    entity.text = collapse_display_whitespace(cleaned_raw);
+  }
+  Some(entity)
+}
+
+fn sanitized_text_range(
+  entity: &PipelineEntity,
+  raw_text: &str,
+) -> Option<(usize, usize)> {
   let mut start_byte = 0;
   let mut end_byte = raw_text.len();
 
@@ -67,7 +94,7 @@ fn clean_entity_text(
     break;
   }
 
-  trim_leading_date_artifacts(&entity, raw_text, &mut start_byte, end_byte);
+  trim_leading_date_artifacts(entity, raw_text, &mut start_byte, end_byte);
 
   while let Some((ch, len)) = first_char(raw_text.get(start_byte..end_byte)?) {
     if ch.is_whitespace() {
@@ -85,7 +112,7 @@ fn clean_entity_text(
     break;
   }
 
-  if should_strip_period(&entity, raw_text, start_byte, end_byte) {
+  if should_strip_period(entity, raw_text, start_byte, end_byte) {
     end_byte = end_byte.saturating_sub('.'.len_utf8());
   }
 
@@ -106,19 +133,13 @@ fn clean_entity_text(
     return None;
   }
 
-  let start = entity
-    .start
-    .saturating_add(byte_len(raw_text.get(..start_byte).unwrap_or_default()));
-  let end = start.saturating_add(byte_len(cleaned_raw));
+  Some((start_byte, end_byte))
+}
 
-  entity.start = start;
-  entity.end = end;
-  if entity.text != cleaned_raw
-    || display_whitespace_needs_collapse(cleaned_raw)
-  {
-    entity.text = collapse_display_whitespace(cleaned_raw);
-  }
-  Some(entity)
+fn preserves_literal_boundaries(entity: &PipelineEntity) -> bool {
+  is_caller_owned(entity)
+    || has_curated_literal_boundary(entity)
+    || has_structured_record_boundary(entity)
 }
 
 fn has_curated_literal_boundary(entity: &PipelineEntity) -> bool {

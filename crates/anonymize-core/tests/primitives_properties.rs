@@ -636,6 +636,11 @@ proptest! {
     let second_pass = merge_and_dedup(&result);
     prop_assert_eq!(&second_pass, &result);
 
+    // Merging chooses among detections. Text cleanup needs the source document
+    // to preserve UTF-8 byte offsets, so it belongs to the later sanitization
+    // pass and must never rewrite a retained entity here.
+    prop_assert!(result.iter().all(|entity| entities.contains(entity)));
+
     for entity in &result {
       prop_assert!(entity.start < entity.end);
     }

@@ -13,7 +13,7 @@ use crate::normalize::normalize_for_search;
 use crate::processors::DenyListFilterData;
 use crate::resolution::{
   PipelineEntity, ResolutionDocument,
-  enforce_boundary_consistency_with_document, merge_and_dedup,
+  enforce_boundary_consistency_with_document, merge_and_dedup_with_document,
   sanitize_entities_with_document,
 };
 use crate::signatures::{PersonSpanTerminators, PreparedSignatureData};
@@ -78,7 +78,8 @@ impl PreparedEngine {
     )?;
     raw_entities.extend(address_context_entities);
     let merge_timer = PhaseTimer::start();
-    let merged = merge_and_dedup(&raw_entities);
+    let merged =
+      merge_and_dedup_with_document(&raw_entities, resolution_document)?;
     let merged = self.extend_monetary_entities(full_text, merged);
     record_resolver_entities(
       diagnostics,
@@ -280,7 +281,7 @@ impl PreparedEngine {
 
     let mut all_entities = existing_entities;
     all_entities.extend(coreference_entities);
-    let merged = merge_and_dedup(&all_entities);
+    let merged = merge_and_dedup_with_document(&all_entities, document)?;
     let consistent = enforce_boundary_consistency_with_document(
       merged,
       document,

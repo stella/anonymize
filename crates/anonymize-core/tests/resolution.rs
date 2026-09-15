@@ -64,6 +64,36 @@ fn non_overlapping_entities_pass_through_sorted() {
 }
 
 #[test]
+fn merge_preserves_offsets_after_display_whitespace_collapse() {
+  let source_text = "0 \t \t č. p";
+  let display_text = "0 č. p";
+  let source_end = byte_len(source_text);
+  let display_end = byte_len(display_text);
+  let input = PipelineEntity::detected(
+    0,
+    source_end,
+    "address",
+    display_text,
+    0.9,
+    DetectionSource::Trigger,
+  );
+
+  let result = merge_and_dedup(std::slice::from_ref(&input));
+
+  assert_eq!(result, vec![input]);
+  assert!(
+    source_text
+      .get(0..usize::try_from(source_end).unwrap())
+      .is_some()
+  );
+  assert!(
+    source_text
+      .get(0..usize::try_from(display_end).unwrap())
+      .is_none()
+  );
+}
+
+#[test]
 fn source_priority_beats_score_for_same_span() {
   let result = merge_and_dedup(&[
     entity(DetectionSource::Ner, 0.99, 0, 10, "person"),
