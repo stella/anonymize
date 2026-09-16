@@ -908,6 +908,8 @@ def normalized_docx_export_error(document, planner):
     try:
         anonymize.rewrite_docx_for_anonymized_export(document, planner)
     except anonymize.DocxAnonymizedExportError as error:
+        if error.__cause__ is not None or not error.__suppress_context__:
+            raise AssertionError("normalized export error retained its cause")
         return {"code": error.code, "message": str(error)}
     raise AssertionError("invalid anonymized DOCX export was accepted")
 

@@ -257,9 +257,7 @@ def rewrite_docx_text(
 
 def rewrite_docx_for_anonymized_export(
     document: bytes | bytearray | memoryview,
-    plan_rewrites: Callable[
-        [dict[str, Any]], Sequence[Mapping[str, Any]]
-    ],
+    plan_rewrites: Callable[[dict[str, Any]], Sequence[Mapping[str, Any]]],
 ) -> dict[str, Any]:
     """Sanitize, rewrite, and validate a DOCX for anonymized export."""
 
@@ -269,7 +267,7 @@ def rewrite_docx_for_anonymized_export(
         )
         extraction = json.loads(extraction_json)
         report = json.loads(report_json)
-    except ValueError as error:
+    except Exception as error:
         native_code = str(error).partition(": ")[0]
         if native_code == "unsupported-replacement":
             code = "unsupported-document"
@@ -287,25 +285,25 @@ def rewrite_docx_for_anonymized_export(
         else:
             code = "validation-failed"
             message = "The anonymized DOCX export could not be prepared"
-        raise DocxAnonymizedExportError(code, message) from error
+        raise DocxAnonymizedExportError(code, message) from None
 
     rewrites = plan_rewrites(extraction)
     try:
         rewritten = rewrite_docx_text(bytes(prepared_document), rewrites)
-    except Exception as error:
+    except Exception:
         raise DocxAnonymizedExportError(
             "invalid-rewrite-plan",
             "The DOCX anonymization rewrite plan is invalid",
-        ) from error
+        ) from None
     try:
         finalized_document = _finalize_docx_anonymized_export_native(
             rewritten["document"]
         )
-    except ValueError as error:
+    except Exception:
         raise DocxAnonymizedExportError(
             "validation-failed",
             "The anonymized DOCX did not pass export validation",
-        ) from error
+        ) from None
     return {
         "document": bytes(finalized_document),
         "rewrittenBlockCount": rewritten["rewrittenBlockCount"],

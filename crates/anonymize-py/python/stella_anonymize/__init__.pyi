@@ -319,9 +319,7 @@ def rewrite_docx_text(
 ) -> dict[str, Any]: ...
 def rewrite_docx_for_anonymized_export(
     document: BytesLike,
-    plan_rewrites: Callable[
-        [dict[str, Any]], Sequence[Mapping[str, Any]]
-    ],
+    plan_rewrites: Callable[[dict[str, Any]], Sequence[Mapping[str, Any]]],
 ) -> dict[str, Any]: ...
 def anonymize_docx(
     document: BytesLike,
