@@ -15,19 +15,23 @@ use super::{
   PACKAGE_RELATIONSHIP_NAMESPACES, RELATIONSHIP_NAMESPACES,
   RELATIONSHIPS_CONTENT_TYPE, ROOT_RELATIONSHIPS_PATH,
   WORDPROCESSING_CONTENT_TYPE_PREFIX, WORDPROCESSING_NAMESPACES, classify_part,
-  extract_docx_text, parse_content_types, read_archive,
+  extract_docx_text, parse_content_types, parse_xml, read_archive,
   resolve_relationship_target, rewrite_error,
 };
 
 const DRAWINGML_NAMESPACE: &str =
   "http://schemas.openxmlformats.org/drawingml/2006/main";
 const XML_NAMESPACE: &str = "http://www.w3.org/XML/1998/namespace";
+const WORD_2010_NAMESPACE: &str =
+  "http://schemas.microsoft.com/office/word/2010/wordml";
 const MARKUP_COMPATIBILITY_NAMESPACES: [&str; 2] = [
   "http://purl.oclc.org/ooxml/markup-compatibility/main",
   "http://schemas.openxmlformats.org/markup-compatibility/2006",
 ];
 const THEME_CONTENT_TYPE: &str =
   "application/vnd.openxmlformats-officedocument.theme+xml";
+const OFFICE_WEB_EXTENSION_CONTENT_TYPE_PREFIX: &str =
+  "application/vnd.ms-office.webextension";
 
 const REMOVED_WORD_PART_SUFFIXES: [&str; 4] = [
   "comments+xml",
@@ -43,7 +47,7 @@ const REMOVED_FORMATTING_WORD_PART_SUFFIXES: [&str; 4] = [
 ];
 const FORMATTING_WORD_PART_SUFFIXES: [&str; 2] =
   ["numbering+xml", "styles+xml"];
-const REMOVED_RELATIONSHIP_SUFFIXES: [&str; 12] = [
+const REMOVED_RELATIONSHIP_SUFFIXES: [&str; 15] = [
   "/comments",
   "/commentsExtended",
   "/commentsIds",
@@ -56,6 +60,9 @@ const REMOVED_RELATIONSHIP_SUFFIXES: [&str; 12] = [
   "/settings",
   "/stylesWithEffects",
   "/webSettings",
+  "/taskpanes",
+  "/webextension",
+  "/webextensiontaskpanes",
 ];
 const ALLOWED_RELATIONSHIP_SUFFIXES: [&str; 8] = [
   "/endnotes",
@@ -67,17 +74,14 @@ const ALLOWED_RELATIONSHIP_SUFFIXES: [&str; 8] = [
   "/styles",
   "/theme",
 ];
-const PROHIBITED_WORD_ELEMENTS: [&str; 25] = [
+const PROHIBITED_WORD_ELEMENTS: [&str; 22] = [
   "altChunk",
   "cellDel",
   "cellIns",
   "cellMerge",
   "del",
   "delInstrText",
-  "fldChar",
-  "fldSimple",
   "ins",
-  "instrText",
   "moveFrom",
   "moveFromRangeEnd",
   "moveFromRangeStart",
@@ -165,6 +169,8 @@ const SAFE_CONTENT_WORD_ELEMENTS: &[&str] = &[
   "ilvl",
   "imprint",
   "ind",
+  "insideH",
+  "insideV",
   "jc",
   "keepLines",
   "keepNext",
@@ -178,6 +184,7 @@ const SAFE_CONTENT_WORD_ELEMENTS: &[&str] = &[
   "noProof",
   "noWrap",
   "numId",
+  "numFmt",
   "numPr",
   "numRestart",
   "numStart",
@@ -296,10 +303,12 @@ const SAFE_NUMBERING_WORD_ELEMENTS: &[&str] = &[
   "numbering",
   "numFmt",
   "numIdMacAtCleanup",
+  "numStyleLink",
   "pStyle",
   "start",
   "startOverride",
   "suff",
+  "styleLink",
   "tmpl",
 ];
 const WORD_NAMESPACE: &str =
@@ -353,6 +362,7 @@ fn word_suffix(content_type: &str) -> Option<&str> {
 
 fn removed_content_type(content_type: &str) -> bool {
   metadata_content_type(content_type)
+    || content_type.starts_with(OFFICE_WEB_EXTENSION_CONTENT_TYPE_PREFIX)
     || word_suffix(content_type).is_some_and(|suffix| {
       REMOVED_WORD_PART_SUFFIXES.contains(&suffix)
         || REMOVED_FORMATTING_WORD_PART_SUFFIXES.contains(&suffix)
@@ -432,17 +442,9 @@ fn parse_export_xml<'a>(
   xml: &'a str,
   kind: &str,
 ) -> Result<Document<'a>, DocxRewriteError> {
-  if xml
-    .as_bytes()
-    .windows(b"<!DOCTYPE".len())
-    .any(|window| window.eq_ignore_ascii_case(b"<!DOCTYPE"))
-  {
-    return Err(unsupported(
-      "DOCX export XML must not contain a document type declaration",
-    ));
-  }
-  let document = Document::parse(xml)
-    .map_err(|_| unsupported(format!("DOCX {kind} is not valid XML")))?;
+  let document = parse_xml(xml.as_bytes(), kind).map_err(|error| {
+    rewrite_error(DocxRewriteErrorCode::InvalidPackage, error.to_string())
+  })?;
   if document
     .descendants()
     .any(|node| node.is_comment() || node.is_pi())
@@ -1242,6 +1244,10 @@ fn serialize_content_node(
   is_root: bool,
 ) -> Result<(), DocxRewriteError> {
   let namespace = node.tag_name().namespace().unwrap_or_default();
+  if namespace == WORD_2010_NAMESPACE && node.tag_name().name() == "textOutline"
+  {
+    return serialize_text_outline(node, output);
+  }
   if !WORDPROCESSING_NAMESPACES.contains(&namespace) {
     return Err(unsupported(
       "DOCX content contains an unsupported XML namespace",
@@ -1259,7 +1265,21 @@ fn serialize_content_node(
   if content_node_is_removed(local) {
     return Ok(());
   }
-  if matches!(local, "hyperlink" | "customXml" | "sdt" | "sdtContent") {
+  if matches!(local, "fldChar" | "instrText") {
+    return Ok(());
+  }
+  if matches!(
+    local,
+    "fldSimple" | "hyperlink" | "customXml" | "sdt" | "sdtContent"
+  ) {
+    if node.children().any(|child| {
+      child.is_text()
+        && child.text().is_some_and(|text| !text.trim().is_empty())
+    }) {
+      return Err(unsupported(
+        "DOCX wrapper contains unclassified direct text",
+      ));
+    }
     for child in node.children().filter(Node::is_element) {
       serialize_content_node(child, styles, output, false)?;
     }
@@ -1419,6 +1439,11 @@ fn serialize_formatting_node(
   output: &mut String,
   is_root: bool,
 ) -> Result<(), DocxRewriteError> {
+  if node.tag_name().namespace() == Some(WORD_2010_NAMESPACE)
+    && node.tag_name().name() == "textOutline"
+  {
+    return serialize_text_outline(node, output);
+  }
   if word_local(node).is_none() {
     return Err(unsupported(
       "DOCX formatting contains an unsupported XML namespace",
@@ -1493,9 +1518,12 @@ const SAFE_THEME_ELEMENTS: &[&str] = &[
   "alphaMod",
   "alphaOff",
   "bevel",
+  "bevelT",
   "bgClr",
   "bgFillStyleLst",
   "blur",
+  "camera",
+  "clrScheme",
   "cs",
   "dk1",
   "dk2",
@@ -1527,6 +1555,7 @@ const SAFE_THEME_ELEMENTS: &[&str] = &[
   "lnStyleLst",
   "lt1",
   "lt2",
+  "lightRig",
   "lumMod",
   "lumOff",
   "majorFont",
@@ -1540,10 +1569,12 @@ const SAFE_THEME_ELEMENTS: &[&str] = &[
   "prstClr",
   "prstDash",
   "reflection",
+  "rot",
   "round",
   "satMod",
   "schemeClr",
   "scrgbClr",
+  "scene3d",
   "shade",
   "softEdge",
   "solidFill",
@@ -1769,6 +1800,52 @@ fn canonical_theme_attributes(
       {
         value.to_owned()
       }
+      "prst"
+        if local == "camera"
+          && matches!(
+            value,
+            "legacyObliqueFront"
+              | "legacyPerspectiveFront"
+              | "orthographicFront"
+              | "perspectiveFront"
+              | "perspectiveRelaxed"
+          ) =>
+      {
+        value.to_owned()
+      }
+      "prst"
+        if local == "bevelT"
+          && matches!(
+            value,
+            "angle" | "circle" | "convex" | "relaxedInset"
+          ) =>
+      {
+        value.to_owned()
+      }
+      "rig"
+        if local == "lightRig"
+          && matches!(
+            value,
+            "balanced"
+              | "brightRoom"
+              | "contrasting"
+              | "flat"
+              | "soft"
+              | "threePt"
+              | "twoPt"
+          ) =>
+      {
+        value.to_owned()
+      }
+      "dir"
+        if local == "lightRig"
+          && matches!(
+            value,
+            "b" | "bl" | "br" | "l" | "r" | "t" | "tl" | "tr"
+          ) =>
+      {
+        value.to_owned()
+      }
       "rotWithShape" if matches!(value, "0" | "1" | "true" | "false") => {
         value.to_owned()
       }
@@ -1779,6 +1856,14 @@ fn canonical_theme_attributes(
       }
       "w"
         if local == "ln"
+          && value
+            .parse::<i32>()
+            .is_ok_and(|number| (0..=20_116_800).contains(&number)) =>
+      {
+        value.to_owned()
+      }
+      "w"
+        if local == "bevelT"
           && value
             .parse::<i32>()
             .is_ok_and(|number| (0..=20_116_800).contains(&number)) =>
@@ -1841,9 +1926,18 @@ fn canonical_theme_attributes(
         value.to_owned()
       }
       "h" | "blurRad" | "dist" | "dir" | "kx" | "ky" | "sx" | "sy" | "rad"
-        if value
-          .parse::<i32>()
-          .is_ok_and(|number| number.unsigned_abs() <= 21_600_000) =>
+        if local != "lightRig"
+          && value
+            .parse::<i32>()
+            .is_ok_and(|number| number.unsigned_abs() <= 21_600_000) =>
+      {
+        value.to_owned()
+      }
+      "lat" | "lon" | "rev"
+        if local == "rot"
+          && value
+            .parse::<i32>()
+            .is_ok_and(|number| number.unsigned_abs() <= 21_600_000) =>
       {
         value.to_owned()
       }
@@ -1930,6 +2024,152 @@ fn serialize_theme_node(
     output.push_str("</a:");
     output.push_str(local);
     output.push('>');
+  }
+  Ok(())
+}
+
+const SAFE_TEXT_OUTLINE_DRAWING_ELEMENTS: &[&str] = &[
+  "alpha",
+  "alphaMod",
+  "alphaOff",
+  "bevel",
+  "bgClr",
+  "fgClr",
+  "fillToRect",
+  "gradFill",
+  "gs",
+  "gsLst",
+  "headEnd",
+  "hslClr",
+  "lin",
+  "lumMod",
+  "lumOff",
+  "miter",
+  "noFill",
+  "pattFill",
+  "path",
+  "prstClr",
+  "prstDash",
+  "round",
+  "satMod",
+  "schemeClr",
+  "scrgbClr",
+  "shade",
+  "solidFill",
+  "srgbClr",
+  "sysClr",
+  "tailEnd",
+  "tint",
+];
+
+fn serialize_text_outline_drawing_node(
+  node: Node<'_, '_>,
+  output: &mut String,
+) -> Result<(), DocxRewriteError> {
+  if node.tag_name().namespace() != Some(DRAWINGML_NAMESPACE)
+    || !SAFE_TEXT_OUTLINE_DRAWING_ELEMENTS.contains(&node.tag_name().name())
+  {
+    return Err(unsupported(
+      "DOCX text outline contains an unsupported DrawingML element",
+    ));
+  }
+  let local = node.tag_name().name();
+  output.push_str("<a:");
+  output.push_str(local);
+  write_attributes(output, &canonical_theme_attributes(node)?);
+  let mut children = String::new();
+  for child in node.children() {
+    if child.is_element() {
+      serialize_text_outline_drawing_node(child, &mut children)?;
+    } else if child.is_text()
+      && child.text().is_some_and(|text| !text.trim().is_empty())
+    {
+      return Err(unsupported("DOCX text outline contains unclassified text"));
+    }
+  }
+  if children.is_empty() {
+    output.push_str("/>");
+  } else {
+    output.push('>');
+    output.push_str(&children);
+    output.push_str("</a:");
+    output.push_str(local);
+    output.push('>');
+  }
+  Ok(())
+}
+
+fn serialize_text_outline(
+  node: Node<'_, '_>,
+  output: &mut String,
+) -> Result<(), DocxRewriteError> {
+  if node.tag_name().namespace() != Some(WORD_2010_NAMESPACE)
+    || node.tag_name().name() != "textOutline"
+    || node.parent_element().and_then(word_local) != Some("rPr")
+  {
+    return Err(unsupported("DOCX contains an unsupported Word extension"));
+  }
+  let mut attributes = Vec::new();
+  for attribute in node.attributes() {
+    if attribute.namespace() != Some(WORD_2010_NAMESPACE) {
+      return Err(unsupported(
+        "DOCX text outline has an unsupported attribute",
+      ));
+    }
+    let value = match attribute.name() {
+      "w"
+        if attribute
+          .value()
+          .parse::<i32>()
+          .is_ok_and(|number| (0..=20_116_800).contains(&number)) =>
+      {
+        attribute.value()
+      }
+      "cap" if matches!(attribute.value(), "flat" | "rnd" | "sq") => {
+        attribute.value()
+      }
+      "cmpd"
+        if matches!(
+          attribute.value(),
+          "dbl" | "sng" | "thickThin" | "thinThick" | "tri"
+        ) =>
+      {
+        attribute.value()
+      }
+      "algn" if matches!(attribute.value(), "ctr" | "in" | "out") => {
+        attribute.value()
+      }
+      _ => {
+        return Err(unsupported(
+          "DOCX text outline has an unsupported attribute value",
+        ));
+      }
+    };
+    attributes.push((format!("w14:{}", attribute.name()), value.to_owned()));
+  }
+  attributes.sort_unstable();
+  output.push_str("<w14:textOutline xmlns:w14=\"");
+  output.push_str(WORD_2010_NAMESPACE);
+  output.push_str("\" xmlns:a=\"");
+  output.push_str(DRAWINGML_NAMESPACE);
+  output.push('"');
+  write_attributes(output, &attributes);
+  let mut children = String::new();
+  for child in node.children() {
+    if child.is_element() {
+      serialize_text_outline_drawing_node(child, &mut children)?;
+    } else if child.is_text()
+      && child.text().is_some_and(|text| !text.trim().is_empty())
+    {
+      return Err(unsupported("DOCX text outline contains unclassified text"));
+    }
+  }
+  if children.is_empty() {
+    output.push_str("/>");
+  } else {
+    output.push('>');
+    output.push_str(&children);
+    output.push_str("</w14:textOutline>");
   }
   Ok(())
 }
@@ -2450,6 +2690,8 @@ pub fn prepare_docx_anonymized_export(
     .filter(|entry| {
       entry.path.starts_with("docProps/")
         || entry.path.starts_with("customXml/")
+        || entry.path.starts_with("word/webextensions/")
+        || entry.path.starts_with("webextensions/")
         || entry.path.starts_with("word/comments")
         || entry.path == "word/people.xml"
         || by_path
@@ -2461,8 +2703,9 @@ pub fn prepare_docx_anonymized_export(
   let removed_relationship_paths = entries
     .iter()
     .filter(|entry| {
-      relationship_source_path(&entry.path)
-        .is_some_and(|source| removed_paths.contains(&source))
+      !removed_paths.contains(&entry.path)
+        && relationship_source_path(&entry.path)
+          .is_some_and(|source| removed_paths.contains(&source))
     })
     .map(|entry| entry.path.clone())
     .collect::<HashSet<_>>();
@@ -2572,8 +2815,9 @@ mod tests {
   use crate::{DocxBlockRewrite, DocxTextReplacement, rewrite_docx_text};
 
   use super::{
-    finalize_docx_anonymized_export, prepare_docx_anonymized_export,
-    valid_numbering_label, validate_docx_anonymized_export,
+    DRAWINGML_NAMESPACE, WORD_2010_NAMESPACE, finalize_docx_anonymized_export,
+    prepare_docx_anonymized_export, valid_numbering_label,
+    validate_docx_anonymized_export,
   };
 
   const CONTENT_TYPES: &str =
@@ -2624,6 +2868,15 @@ mod tests {
     Ok(output)
   }
 
+  fn has_entry(
+    document: &[u8],
+    path: &str,
+  ) -> Result<bool, Box<dyn std::error::Error>> {
+    let mut archive = ZipArchive::new(Cursor::new(document))?;
+    let found = archive.by_name(path).is_ok();
+    Ok(found)
+  }
+
   fn ordinary_document(
     body: &str,
   ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
@@ -2655,7 +2908,7 @@ mod tests {
       (
         "word/styles.xml",
         &format!(
-          "<w:styles xmlns:w=\"{WORD}\"><w:style w:type=\"paragraph\" w:styleId=\"PrivateStyleName\"><w:name w:val=\"Private Style Name\"/><w:rPr><w:b/></w:rPr></w:style></w:styles>"
+          "<w:styles xmlns:w=\"{WORD}\" xmlns:w14=\"{WORD_2010_NAMESPACE}\" xmlns:a=\"{DRAWINGML_NAMESPACE}\"><w:style w:type=\"paragraph\" w:styleId=\"PrivateStyleName\"><w:name w:val=\"Private Style Name\"/><w:rPr><w:b/><w14:textOutline w14:w=\"12700\" w14:cap=\"rnd\" w14:cmpd=\"sng\" w14:algn=\"ctr\"><a:solidFill><a:srgbClr val=\"112233\"/></a:solidFill><a:prstDash val=\"solid\"/><a:round/></w14:textOutline></w:rPr></w:style></w:styles>"
         ),
       ),
       (
@@ -2704,6 +2957,58 @@ mod tests {
     ])
   }
 
+  fn field_and_addin_document() -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    const WEB_EXTENSION: &str =
+      "http://schemas.microsoft.com/office/2011/relationships/webextension";
+    const WEB_EXTENSION_TASKPANES: &str = "http://schemas.microsoft.com/office/2011/relationships/webextensiontaskpanes";
+    archive(&[
+      (
+        "[Content_Types].xml",
+        &format!(
+          "<Types xmlns=\"{CONTENT_TYPES}\"><Override PartName=\"/word/document.xml\" ContentType=\"{WORD_CONTENT}document.main+xml\"/><Override PartName=\"/word/footnotes.xml\" ContentType=\"{WORD_CONTENT}footnotes+xml\"/><Override PartName=\"/word/webextensions/taskpanes.xml\" ContentType=\"application/vnd.ms-office.webextensiontaskpanes+xml\"/><Override PartName=\"/word/webextensions/webextension1.xml\" ContentType=\"application/vnd.ms-office.webextension+xml\"/></Types>"
+        ),
+      ),
+      (
+        "_rels/.rels",
+        &format!(
+          "<Relationships xmlns=\"{PACKAGE_RELS}\"><Relationship Id=\"rId1\" Type=\"{OFFICE_RELS}/officeDocument\" Target=\"word/document.xml\"/><Relationship Id=\"rId2\" Type=\"{WEB_EXTENSION_TASKPANES}\" Target=\"word/webextensions/taskpanes.xml\"/></Relationships>"
+        ),
+      ),
+      (
+        "word/document.xml",
+        &format!(
+          "<w:document xmlns:w=\"{WORD}\"><w:body><w:p><w:r><w:fldChar w:fldCharType=\"begin\"/></w:r><w:r><w:instrText>HIDDEN OUTER INSTRUCTION</w:instrText></w:r><w:r><w:fldChar w:fldCharType=\"separate\"/></w:r><w:fldSimple w:instr=\"HIDDEN SIMPLE INSTRUCTION\"><w:r><w:t>Cached Client </w:t></w:r><w:r><w:fldChar w:fldCharType=\"begin\"/></w:r><w:r><w:instrText>HIDDEN NESTED INSTRUCTION</w:instrText></w:r><w:r><w:fldChar w:fldCharType=\"separate\"/></w:r><w:r><w:t>Name</w:t></w:r><w:r><w:fldChar w:fldCharType=\"end\"/></w:r></w:fldSimple><w:r><w:fldChar w:fldCharType=\"end\"/></w:r></w:p></w:body></w:document>"
+        ),
+      ),
+      (
+        "word/_rels/document.xml.rels",
+        &format!(
+          "<Relationships xmlns=\"{PACKAGE_RELS}\"><Relationship Id=\"rId1\" Type=\"{OFFICE_RELS}/footnotes\" Target=\"footnotes.xml\"/></Relationships>"
+        ),
+      ),
+      (
+        "word/footnotes.xml",
+        &format!(
+          "<w:footnotes xmlns:w=\"{WORD}\"><w:footnote w:id=\"-1\" w:type=\"separator\"><w:p><w:r><w:separator/></w:r></w:p></w:footnote><w:footnote w:id=\"0\" w:type=\"continuationSeparator\"><w:p><w:r><w:continuationSeparator/></w:r></w:p></w:footnote></w:footnotes>"
+        ),
+      ),
+      (
+        "word/webextensions/taskpanes.xml",
+        "<wetp:taskpanes xmlns:wetp=\"http://schemas.microsoft.com/office/webextensions/taskpanes/2010/11\"><wetp:taskpane dockstate=\"HIDDEN ADDIN STATE\"/></wetp:taskpanes>",
+      ),
+      (
+        "word/webextensions/_rels/taskpanes.xml.rels",
+        &format!(
+          "<Relationships xmlns=\"{PACKAGE_RELS}\"><Relationship Id=\"rId1\" Type=\"{WEB_EXTENSION}\" Target=\"webextension1.xml\"/></Relationships>"
+        ),
+      ),
+      (
+        "word/webextensions/webextension1.xml",
+        "<we:webextension xmlns:we=\"http://schemas.microsoft.com/office/webextensions/webextension/2010/11\"><we:property name=\"HIDDEN ADDIN OWNER\" value=\"HIDDEN ADDIN VALUE\"/></we:webextension>",
+      ),
+    ])
+  }
+
   #[test]
   fn sanitizes_hidden_metadata_and_preserves_visible_formatting()
   -> Result<(), Box<dyn std::error::Error>> {
@@ -2725,6 +3030,8 @@ mod tests {
     assert!(document_xml.contains("<w:b/>"));
     assert!(document_xml.contains("stellaStyle1"));
     assert!(styles_xml.contains("stellaStyle1"));
+    assert!(styles_xml.contains("<w14:textOutline"));
+    assert!(styles_xml.contains("<a:srgbClr val=\"112233\"/>"));
     assert!(!styles_xml.contains("Private"));
     let all_xml = archive_text(&prepared.document)?;
     for hidden in [
@@ -2775,12 +3082,53 @@ mod tests {
   }
 
   #[test]
+  fn flattens_cached_fields_and_removes_addin_metadata()
+  -> Result<(), Box<dyn std::error::Error>> {
+    let prepared =
+      prepare_docx_anonymized_export(&field_and_addin_document()?)?;
+    let block = prepared.extraction.blocks.first().ok_or("missing block")?;
+    assert_eq!(block.text, "Cached Client Name");
+    let rewritten = rewrite_docx_text(
+      &prepared.document,
+      &[DocxBlockRewrite {
+        location: block.location.clone(),
+        expected_text: block.text.clone(),
+        replacements: vec![DocxTextReplacement {
+          start: 0,
+          end: block.text.encode_utf16().count(),
+          replacement: "████".to_owned(),
+        }],
+      }],
+    )?;
+    let finalized = finalize_docx_anonymized_export(&rewritten.document)?;
+    assert!(!has_entry(&finalized, "word/webextensions/taskpanes.xml")?);
+    assert!(!has_entry(
+      &finalized,
+      "word/webextensions/webextension1.xml"
+    )?);
+    let all_xml = archive_text(&finalized)?;
+    assert!(all_xml.contains("████"));
+    assert!(all_xml.contains("<w:separator/>"));
+    assert!(all_xml.contains("<w:continuationSeparator/>"));
+    for hidden in [
+      "HIDDEN OUTER INSTRUCTION",
+      "HIDDEN SIMPLE INSTRUCTION",
+      "HIDDEN NESTED INSTRUCTION",
+      "HIDDEN ADDIN STATE",
+      "HIDDEN ADDIN OWNER",
+      "HIDDEN ADDIN VALUE",
+    ] {
+      assert!(!all_xml.contains(hidden));
+    }
+    Ok(())
+  }
+
+  #[test]
   fn rejects_revisions_fields_and_visual_payloads()
   -> Result<(), Box<dyn std::error::Error>> {
     for body in [
       "<w:p w:val=\"1234567890\"><w:r><w:t>Alice</w:t></w:r></w:p>",
       "<w:p><w:pPr><w:pPrChange w:id=\"1\" w:author=\"Author\"/></w:pPr><w:r><w:t>Alice</w:t></w:r></w:p>",
-      "<w:p><w:r><w:fldChar w:fldCharType=\"begin\"/><w:instrText>AUTHOR Private</w:instrText><w:t>Alice</w:t></w:r></w:p>",
       "<w:p><w:r><w:drawing><w:inline/></w:drawing><w:t>Alice</w:t></w:r></w:p>",
     ] {
       let source = ordinary_document(body)?;
@@ -2817,6 +3165,17 @@ mod tests {
       "<w:p><w:r><w:t>Alice</w:t></w:r></w:p><w:sectPr><w:headerReference w:type=\"default\" r:id=\"rId9\"/></w:sectPr>",
     )?;
     assert!(prepare_docx_anonymized_export(&unresolved).is_err());
+    Ok(())
+  }
+
+  #[test]
+  fn rejects_xml_over_the_shared_depth_limit()
+  -> Result<(), Box<dyn std::error::Error>> {
+    let mut body = "<w:sdt>".repeat(300);
+    body.push_str("<w:p><w:r><w:t>Alice</w:t></w:r></w:p>");
+    body.push_str(&"</w:sdt>".repeat(300));
+    let source = ordinary_document(&body)?;
+    assert!(prepare_docx_anonymized_export(&source).is_err());
     Ok(())
   }
 }

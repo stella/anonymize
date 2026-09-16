@@ -120,10 +120,11 @@ replacements are rejected explicitly.
 
 Use `rewriteDocxForAnonymizedExport` when returning a rewritten DOCX to an
 untrusted recipient. It removes document properties, comments, collaboration
-metadata, bookmarks, and content-control metadata before exposing text to the
-planner. It rejects revisions, fields, images, embedded content, external
-relationships, and unclassified package parts. The final package is validated
-again before it is returned.
+metadata, bookmarks, content-control metadata, Office add-in parts, and field
+instructions before exposing text to the planner. Static cached field display
+text is retained and scanned as ordinary text. It rejects revisions, images,
+embedded content, external relationships, and unclassified package parts. The
+final package is validated again before it is returned.
 
 ```ts
 import { rewriteDocxForAnonymizedExport } from "@stll/anonymize-docx";
