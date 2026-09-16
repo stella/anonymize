@@ -1168,8 +1168,10 @@ fn common_font(value: &str) -> bool {
       | "Sylfaen"
       | "Tunga"
       | "ＭＳ Ｐゴシック"
+      | "游ゴシック Light"
       | "맑은 고딕"
       | "宋体"
+      | "等线 Light"
       | "新細明體"
   )
 }
@@ -1966,26 +1968,30 @@ const SAFE_TEXT_OUTLINE_DRAWING_ELEMENTS: &[&str] = &[
   "tint",
 ];
 
-const SAFE_TEXT_OUTLINE_WORD_2010_ELEMENTS: &[&str] =
-  &["bevel", "noFill", "prstDash"];
-
 fn canonical_text_outline_word_2010_attributes(
   node: Node<'_, '_>,
 ) -> Result<Vec<(String, String)>, DocxRewriteError> {
   let local = node.tag_name().name();
   let mut output = Vec::new();
   for attribute in node.attributes() {
-    if attribute.namespace() != Some(WORD_2010_NAMESPACE)
-      || local != "prstDash"
-      || attribute.name() != "val"
-      || !valid_preset_dash(attribute.value())
-    {
+    if attribute.namespace() != Some(WORD_2010_NAMESPACE) {
       return Err(unsupported(
         "DOCX text outline contains an unsupported Word extension attribute",
       ));
     }
-    output.push(("w14:val".to_owned(), attribute.value().to_owned()));
+    let canonical = canonical_theme_attribute(
+      local,
+      attribute.name(),
+      attribute.value(),
+    )
+    .ok_or_else(|| {
+      unsupported(
+        "DOCX text outline contains an unsupported Word extension attribute",
+      )
+    })?;
+    output.push((format!("w14:{}", attribute.name()), canonical));
   }
+  output.sort_unstable();
   Ok(output)
 }
 
@@ -1998,7 +2004,7 @@ fn serialize_text_outline_drawing_node(
   let is_drawing = DRAWINGML_NAMESPACES.contains(&namespace)
     && SAFE_TEXT_OUTLINE_DRAWING_ELEMENTS.contains(&local);
   let is_word_2010 = namespace == WORD_2010_NAMESPACE
-    && SAFE_TEXT_OUTLINE_WORD_2010_ELEMENTS.contains(&local);
+    && SAFE_TEXT_OUTLINE_DRAWING_ELEMENTS.contains(&local);
   if !is_drawing && !is_word_2010 {
     return Err(unsupported(
       "DOCX text outline contains an unsupported DrawingML element",
@@ -2018,11 +2024,6 @@ fn serialize_text_outline_drawing_node(
   let mut children = String::new();
   for child in node.children() {
     if child.is_element() {
-      if is_word_2010 {
-        return Err(unsupported(
-          "DOCX text outline contains an unsupported Word extension child",
-        ));
-      }
       serialize_text_outline_drawing_node(child, &mut children)?;
     } else if child.is_text()
       && child.text().is_some_and(|text| !text.trim().is_empty())
@@ -2814,10 +2815,10 @@ mod tests {
 
   use super::{
     DRAWINGML_NAMESPACE, STRICT_DRAWINGML_NAMESPACE, THEME_CONTENT_TYPE,
-    WORD_2010_NAMESPACE, escape_attribute, finalize_docx_anonymized_export,
-    prepare_docx_anonymized_export, sanitize_formatting_xml,
-    valid_numbering_label, validate_docx_anonymized_export,
-    word_attribute_value_allowed,
+    WORD_2010_NAMESPACE, common_font, escape_attribute,
+    finalize_docx_anonymized_export, prepare_docx_anonymized_export,
+    sanitize_formatting_xml, valid_numbering_label,
+    validate_docx_anonymized_export, word_attribute_value_allowed,
   };
 
   const CONTENT_TYPES: &str =
@@ -2909,7 +2910,7 @@ mod tests {
       (
         "word/styles.xml",
         &format!(
-          "<w:styles xmlns:w=\"{WORD}\" xmlns:w14=\"{WORD_2010_NAMESPACE}\"><w:style w:type=\"paragraph\" w:styleId=\"PrivateStyleName\"><w:name w:val=\"Private Style Name\"/><w:uiPriority w:val=\"9\"/><w:rPr><w:b/><w14:textOutline w14:w=\"12700\" w14:cap=\"rnd\" w14:cmpd=\"sng\" w14:algn=\"ctr\"><w14:noFill/><w14:prstDash w14:val=\"solid\"/><w14:bevel/></w14:textOutline></w:rPr></w:style></w:styles>"
+          "<w:styles xmlns:w=\"{WORD}\" xmlns:w14=\"{WORD_2010_NAMESPACE}\"><w:style w:type=\"paragraph\" w:styleId=\"PrivateStyleName\"><w:name w:val=\"Private Style Name\"/><w:uiPriority w:val=\"9\"/><w:rPr><w:b/><w14:textOutline w14:w=\"12700\" w14:cap=\"rnd\" w14:cmpd=\"sng\" w14:algn=\"ctr\"><w14:gradFill w14:rotWithShape=\"1\"><w14:gsLst><w14:gs w14:pos=\"0\"><w14:srgbClr w14:val=\"112233\"/></w14:gs></w14:gsLst></w14:gradFill><w14:prstDash w14:val=\"solid\"/><w14:miter w14:lim=\"800000\"/></w14:textOutline></w:rPr></w:style><w:style w:type=\"character\" w:styleId=\"SecondaryStyle\"><w:rPr><w14:textOutline><w14:solidFill><w14:srgbClr w14:val=\"AABBCC\"/></w14:solidFill><w14:round/></w14:textOutline></w:rPr></w:style></w:styles>"
         ),
       ),
       (
@@ -3032,7 +3033,12 @@ mod tests {
     assert!(document_xml.contains("stellaStyle1"));
     assert!(styles_xml.contains("stellaStyle1"));
     assert!(styles_xml.contains("<w14:textOutline"));
+    assert!(styles_xml.contains("<w14:gradFill w14:rotWithShape=\"1\">"));
+    assert!(styles_xml.contains("<w14:srgbClr w14:val=\"112233\"/>"));
     assert!(styles_xml.contains("<w14:prstDash w14:val=\"solid\"/>"));
+    assert!(styles_xml.contains("<w14:miter w14:lim=\"800000\"/>"));
+    assert!(styles_xml.contains("<w14:solidFill>"));
+    assert!(styles_xml.contains("<w14:round/>"));
     assert!(styles_xml.contains("<w:uiPriority w:val=\"9\"/>"));
     assert!(!styles_xml.contains("Private"));
     let all_xml = archive_text(&prepared.document)?;
@@ -3102,6 +3108,8 @@ mod tests {
     assert!(canonical.contains(&format!("xmlns:a=\"{DRAWINGML_NAMESPACE}\"")));
     assert!(!canonical.contains(STRICT_DRAWINGML_NAMESPACE));
     assert!(!canonical.contains("Display"));
+    assert!(common_font("游ゴシック Light"));
+    assert!(common_font("等线 Light"));
     assert_eq!(escape_attribute("a\tb\nc\rd"), "a&#x9;b&#xA;c&#xD;d");
     let priority_xml =
       format!("<w:uiPriority xmlns:w=\"{WORD}\" w:val=\"99\"/>");
