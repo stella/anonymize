@@ -568,6 +568,7 @@ const SAFE_WORD_VALUES: &[&str] = &[
   "nil",
   "none",
   "nothing",
+  "num",
   "numbering",
   "oddPage",
   "page",
@@ -2808,16 +2809,20 @@ mod tests {
 
   use zip::{ZipArchive, ZipWriter, write::SimpleFileOptions};
 
-  use crate::{DocxBlockRewrite, DocxTextReplacement, rewrite_docx_text};
+  use crate::{
+    DocxBlockRewrite, DocxRewriteErrorCode, DocxTextReplacement,
+    rewrite_docx_text,
+  };
 
   use super::{
-    BOOLEAN_WORD_ELEMENTS, DRAWINGML_NAMESPACE, SAFE_CONTENT_WORD_ELEMENTS,
-    SAFE_NUMBERING_WORD_ELEMENTS, SAFE_STYLE_WORD_ELEMENTS,
-    STRICT_DRAWINGML_NAMESPACE, THEME_CONTENT_TYPE, WORD_2010_NAMESPACE,
-    common_font, escape_attribute, finalize_docx_anonymized_export,
-    prepare_docx_anonymized_export, sanitize_formatting_xml,
-    valid_numbering_label, validate_docx_anonymized_export,
-    word_attribute_allowed, word_attribute_value_allowed,
+    BOOLEAN_WORD_ELEMENTS, DRAWINGML_NAMESPACE, FORMATTING_WORD_PART_SUFFIXES,
+    SAFE_CONTENT_WORD_ELEMENTS, SAFE_NUMBERING_WORD_ELEMENTS,
+    SAFE_STYLE_WORD_ELEMENTS, STRICT_DRAWINGML_NAMESPACE, THEME_CONTENT_TYPE,
+    WORD_2010_NAMESPACE, common_font, escape_attribute,
+    finalize_docx_anonymized_export, prepare_docx_anonymized_export,
+    sanitize_formatting_xml, valid_numbering_label,
+    validate_docx_anonymized_export, word_attribute_allowed,
+    word_attribute_value_allowed,
   };
 
   const CONTENT_TYPES: &str =
@@ -3126,6 +3131,56 @@ mod tests {
       "val",
       "100"
     ));
+    Ok(())
+  }
+
+  #[test]
+  fn preserves_automatic_numbering_tab_alignment()
+  -> Result<(), Box<dyn std::error::Error>> {
+    let xml = format!(
+      "<w:numbering xmlns:w=\"{WORD}\"><w:abstractNum w:abstractNumId=\"0\"><w:lvl w:ilvl=\"0\"><w:pPr><w:tabs><w:tab w:val=\"num\" w:pos=\"720\"/></w:tabs></w:pPr></w:lvl></w:abstractNum></w:numbering>"
+    );
+    let canonical = sanitize_formatting_xml(
+      &xml,
+      "word/numbering.xml",
+      &format!("{WORD_CONTENT}numbering+xml"),
+      &HashMap::new(),
+    )?;
+    assert!(
+      canonical.contains("<w:tab w:pos=\"720\" w:val=\"num\"/>"),
+      "automatic numbering alignment must survive sanitization"
+    );
+    Ok(())
+  }
+
+  #[test]
+  fn rejects_unclassified_text_in_every_word_formatting_part()
+  -> Result<(), Box<dyn std::error::Error>> {
+    for suffix in FORMATTING_WORD_PART_SUFFIXES {
+      let root = suffix.trim_end_matches("+xml");
+      for text in [
+        "Synthetic secret",
+        "<![CDATA[Synthetic secret]]>",
+        "&#83;ynthetic secret",
+      ] {
+        let xml = format!(
+          "<w:{root} xmlns:w=\"{WORD}\"><w:p><w:r><w:t>{text}</w:t></w:r></w:p></w:{root}>"
+        );
+        let failure = sanitize_formatting_xml(
+          &xml,
+          &format!("word/{root}.xml"),
+          &format!("{WORD_CONTENT}{suffix}"),
+          &HashMap::new(),
+        )
+        .err()
+        .ok_or("formatting text was accepted")?;
+        assert_eq!(
+          failure.code(),
+          DocxRewriteErrorCode::UnsupportedReplacement,
+          "formatting parts must reject text outside extraction coverage"
+        );
+      }
+    }
     Ok(())
   }
 
