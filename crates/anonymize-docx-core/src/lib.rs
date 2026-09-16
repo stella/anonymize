@@ -7,14 +7,18 @@ use std::{
 };
 
 use percent_encoding::percent_decode_str;
-use roxmltree::{Document, Node, NodeId};
+use quick_xml::{Reader, events::Event};
+#[cfg(test)]
+use roxmltree::NodeId;
+use roxmltree::{Document, Node};
 use serde::{Deserialize, Serialize};
 use stella_docx_kernel as docx_kernel;
 use thiserror::Error;
 use zip::{CompressionMethod, ZipArchive, ZipWriter, write::SimpleFileOptions};
 
 mod export;
-mod xml_limits;
+#[cfg(test)]
+mod xml_limits_tests;
 
 pub use export::{
   DocxAnonymizedExportPreparation, DocxAnonymizedExportReport,
@@ -1095,6 +1099,60 @@ fn read_archive(document: &[u8]) -> Result<Vec<ArchiveEntry>, DocxError> {
   Ok(entries)
 }
 
+// roxmltree recursively parses element content. Bound its input with an
+// iterative reader before it can consume one stack frame per nested element.
+fn validate_xml_depth(bytes: &[u8]) -> Result<(), DocxError> {
+  let mut reader = Reader::from_reader(bytes);
+  let mut depth = 0_usize;
+  loop {
+    let event = reader.read_event().map_err(|_| {
+      error(DocxErrorCode::InvalidXml, "DOCX part is not valid XML")
+    })?;
+    match event {
+      Event::Start(_) | Event::Empty(_) => {
+        let next_depth = depth.saturating_add(1);
+        if next_depth >= DOCX_XML_MAX_DEPTH {
+          return Err(error(
+            DocxErrorCode::UncompressedLimitExceeded,
+            format!(
+              "DOCX XML must contain fewer than {DOCX_XML_MAX_DEPTH} nested elements"
+            ),
+          ));
+        }
+        if matches!(event, Event::Start(_)) {
+          depth = next_depth;
+        }
+      }
+      Event::End(_) => {
+        depth = depth.checked_sub(1).ok_or_else(|| {
+          error(DocxErrorCode::InvalidXml, "DOCX part is not valid XML")
+        })?;
+      }
+      Event::DocType(_) => {
+        return Err(error(
+          DocxErrorCode::InvalidPackage,
+          "DOCX XML must not contain a document type declaration",
+        ));
+      }
+      Event::Eof => {
+        if depth != 0 {
+          return Err(error(
+            DocxErrorCode::InvalidXml,
+            "DOCX part is not valid XML",
+          ));
+        }
+        return Ok(());
+      }
+      Event::Text(_)
+      | Event::CData(_)
+      | Event::Comment(_)
+      | Event::Decl(_)
+      | Event::PI(_)
+      | Event::GeneralRef(_) => {}
+    }
+  }
+}
+
 fn parse_xml<'a>(
   bytes: &'a [u8],
   path: &str,
@@ -1114,7 +1172,7 @@ fn parse_xml<'a>(
       "DOCX XML must not contain a document type declaration",
     ));
   }
-  xml_limits::validate_xml_depth(bytes)?;
+  validate_xml_depth(bytes)?;
   Document::parse(text).map_err(|_| {
     error(
       DocxErrorCode::InvalidXml,
