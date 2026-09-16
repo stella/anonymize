@@ -662,35 +662,23 @@ fn collect_style_identifiers(
 
 const WORD_VAL_ATTRIBUTE_ELEMENTS: &[&str] = &[
   "abstractNumId",
-  "b",
-  "bCs",
   "basedOn",
-  "caps",
   "cnfStyle",
-  "contextualSpacing",
-  "dstrike",
   "effect",
   "em",
   "fitText",
   "gridSpan",
-  "hideMark",
   "highlight",
   "hMerge",
-  "i",
-  "iCs",
   "ilvl",
   "jc",
   "kern",
-  "keepLines",
-  "keepNext",
   "link",
   "lvlJc",
   "lvlRestart",
   "lvlText",
-  "mirrorInd",
   "multiLevelType",
   "next",
-  "noProof",
   "nsid",
   "numFmt",
   "numId",
@@ -698,26 +686,16 @@ const WORD_VAL_ATTRIBUTE_ELEMENTS: &[&str] = &[
   "numRestart",
   "numStart",
   "numStyleLink",
-  "outline",
   "outlineLvl",
-  "pageBreakBefore",
   "paperSrc",
   "position",
   "pos",
   "pStyle",
   "rStyle",
-  "rtl",
-  "shadow",
-  "smallCaps",
-  "snapToGrid",
-  "specVanish",
   "start",
   "startOverride",
-  "strike",
   "styleLink",
   "suff",
-  "suppressAutoHyphens",
-  "suppressLineNumbers",
   "sz",
   "szCs",
   "tblLayout",
@@ -725,21 +703,15 @@ const WORD_VAL_ATTRIBUTE_ELEMENTS: &[&str] = &[
   "tblStyle",
   "tblStyleColBandSize",
   "tblStyleRowBandSize",
-  "tcFitText",
   "textAlignment",
   "textDirection",
-  "titlePg",
   "tmpl",
   "type",
   "uiPriority",
   "vAlign",
-  "vanish",
   "vertAlign",
   "vMerge",
   "w",
-  "webHidden",
-  "widowControl",
-  "wordWrap",
 ];
 
 fn word_border_attribute_allowed(
@@ -866,7 +838,9 @@ fn word_attribute_allowed(node: Node<'_, '_>, name: &str) -> bool {
   if let Some(allowed) = word_border_attribute_allowed(node, name) {
     return allowed;
   }
-  if WORD_VAL_ATTRIBUTE_ELEMENTS.contains(&local) {
+  if WORD_VAL_ATTRIBUTE_ELEMENTS.contains(&local)
+    || BOOLEAN_WORD_ELEMENTS.contains(&local)
+  {
     return name == "val";
   }
   if let Some(allowed) = word_layout_attribute_allowed(local, name) {
@@ -990,21 +964,37 @@ const NUMERIC_WORD_ATTRIBUTES: &[&str] = &[
   "tblpY",
 ];
 const BOOLEAN_WORD_ELEMENTS: &[&str] = &[
+  "adjustRightInd",
+  "autoRedefine",
   "b",
   "bCs",
+  "bidi",
+  "bidiVisual",
+  "cantSplit",
   "caps",
   "contextualSpacing",
+  "cs",
   "dstrike",
+  "hidden",
   "hideMark",
   "i",
   "iCs",
+  "imprint",
+  "isLgl",
   "keepLines",
   "keepNext",
+  "locked",
   "mirrorInd",
   "noProof",
+  "noWrap",
   "outline",
   "pageBreakBefore",
+  "personal",
+  "personalCompose",
+  "personalReply",
+  "qFormat",
   "rtl",
+  "semiHidden",
   "shadow",
   "smallCaps",
   "snapToGrid",
@@ -1012,8 +1002,10 @@ const BOOLEAN_WORD_ELEMENTS: &[&str] = &[
   "strike",
   "suppressAutoHyphens",
   "suppressLineNumbers",
+  "tblHeader",
   "tcFitText",
   "titlePg",
+  "unhideWhenUsed",
   "vanish",
   "webHidden",
   "widowControl",
@@ -1811,7 +1803,8 @@ fn theme_numeric_attribute_allowed(
       | "shade" | "tint",
       "val",
     )
-    | ("gs", "pos") => parsed_i32_in(value, 0, 100_000),
+    | ("gs", "pos")
+    | ("scrgbClr", "r" | "g" | "b") => parsed_i32_in(value, 0, 100_000),
     ("ln" | "bevelT", "w") => parsed_i32_in(value, 0, 20_116_800),
     ("fillToRect", "l" | "t" | "r" | "b") => {
       parsed_i32_in(value, -100_000, 100_000)
@@ -1820,7 +1813,6 @@ fn theme_numeric_attribute_allowed(
       parsed_i32_in(value, 0, 21_600_000)
     }
     ("miter", "lim") => parsed_i32_in(value, 0, 1_000_000),
-    ("scrgbClr", "r" | "g" | "b") => parsed_i32_in(value, 0, 100_000),
     (
       element,
       "h" | "blurRad" | "dist" | "dir" | "kx" | "ky" | "sx" | "sy" | "rad",
@@ -2246,6 +2238,14 @@ fn sanitize_relationships(
     let identifier = node.attribute("Id").unwrap_or_default();
     let relation_type = node.attribute("Type").unwrap_or_default();
     let target = node.attribute("Target").unwrap_or_default();
+    if node
+      .attribute("TargetMode")
+      .is_some_and(|mode| mode != "Internal")
+    {
+      return Err(unsupported(
+        "DOCX relationships contain an unsafe target mode",
+      ));
+    }
     let resolved = resolve_relationship_target(target, path);
     let remove = relationship_type_removed(relation_type)
       || resolved
@@ -2254,10 +2254,7 @@ fn sanitize_relationships(
     if remove {
       continue;
     }
-    if node.attribute("TargetMode").is_some()
-      || !valid_relationship_id(identifier)
-      || identifier.trim() != identifier
-    {
+    if !valid_relationship_id(identifier) || identifier.trim() != identifier {
       return Err(unsupported(
         "DOCX relationships contain an unsafe identifier or mode",
       ));
@@ -2814,11 +2811,13 @@ mod tests {
   use crate::{DocxBlockRewrite, DocxTextReplacement, rewrite_docx_text};
 
   use super::{
-    DRAWINGML_NAMESPACE, STRICT_DRAWINGML_NAMESPACE, THEME_CONTENT_TYPE,
-    WORD_2010_NAMESPACE, common_font, escape_attribute,
-    finalize_docx_anonymized_export, prepare_docx_anonymized_export,
-    sanitize_formatting_xml, valid_numbering_label,
-    validate_docx_anonymized_export, word_attribute_value_allowed,
+    BOOLEAN_WORD_ELEMENTS, DRAWINGML_NAMESPACE, SAFE_CONTENT_WORD_ELEMENTS,
+    SAFE_NUMBERING_WORD_ELEMENTS, SAFE_STYLE_WORD_ELEMENTS,
+    STRICT_DRAWINGML_NAMESPACE, THEME_CONTENT_TYPE, WORD_2010_NAMESPACE,
+    common_font, escape_attribute, finalize_docx_anonymized_export,
+    prepare_docx_anonymized_export, sanitize_formatting_xml,
+    valid_numbering_label, validate_docx_anonymized_export,
+    word_attribute_allowed, word_attribute_value_allowed,
   };
 
   const CONTENT_TYPES: &str =
@@ -3083,7 +3082,10 @@ mod tests {
     let finalized = finalize_docx_anonymized_export(&rewritten.document)?;
     let extraction = validate_docx_anonymized_export(&finalized)?;
     assert_eq!(
-      extraction.blocks.first().map(|block| block.text.as_str()),
+      extraction
+        .blocks
+        .first()
+        .map(|extracted_block| extracted_block.text.as_str()),
       Some("██\ttail")
     );
     assert!(
@@ -3124,6 +3126,27 @@ mod tests {
       "val",
       "100"
     ));
+    Ok(())
+  }
+
+  #[test]
+  fn every_preserved_on_off_element_accepts_explicit_values()
+  -> Result<(), Box<dyn std::error::Error>> {
+    for element in BOOLEAN_WORD_ELEMENTS {
+      assert!(
+        SAFE_CONTENT_WORD_ELEMENTS.contains(element)
+          || SAFE_STYLE_WORD_ELEMENTS.contains(element)
+          || SAFE_NUMBERING_WORD_ELEMENTS.contains(element)
+      );
+      let xml = format!("<w:{element} xmlns:w=\"{WORD}\" w:val=\"true\"/>");
+      let parsed = roxmltree::Document::parse(&xml)?;
+      let node = parsed.root_element();
+      assert!(word_attribute_allowed(node, "val"));
+      for value in ["0", "1", "true", "false", "on", "off"] {
+        assert!(word_attribute_value_allowed(node, "val", value));
+      }
+      assert!(!word_attribute_value_allowed(node, "val", "yes"));
+    }
     Ok(())
   }
 
@@ -3187,7 +3210,7 @@ mod tests {
   }
 
   #[test]
-  fn rejects_invalid_package_relationship_graphs()
+  fn validates_package_relationship_modes_and_graphs()
   -> Result<(), Box<dyn std::error::Error>> {
     let empty_root = format!("<Relationships xmlns=\"{PACKAGE_RELS}\"/>");
     let missing_main =
@@ -3206,6 +3229,25 @@ mod tests {
     let valid_root = format!(
       "<Relationships xmlns=\"{PACKAGE_RELS}\"><Relationship Id=\"rId1\" Type=\"{OFFICE_RELS}/officeDocument\" Target=\"word/document.xml\"/></Relationships>"
     );
+    let explicit_internal_root = format!(
+      "<Relationships xmlns=\"{PACKAGE_RELS}\"><Relationship Id=\"rId1\" Type=\"{OFFICE_RELS}/officeDocument\" Target=\"word/document.xml\" TargetMode=\"Internal\"/></Relationships>"
+    );
+    let explicit_internal = minimal_document(
+      &explicit_internal_root,
+      "<w:p><w:r><w:t>Alice</w:t></w:r></w:p>",
+    )?;
+    let prepared = prepare_docx_anonymized_export(&explicit_internal)?;
+    assert!(!entry(&prepared.document, "_rels/.rels")?.contains("TargetMode"));
+
+    let external_root = format!(
+      "<Relationships xmlns=\"{PACKAGE_RELS}\"><Relationship Id=\"rId1\" Type=\"{OFFICE_RELS}/officeDocument\" Target=\"word/document.xml\" TargetMode=\"External\"/></Relationships>"
+    );
+    let external = minimal_document(
+      &external_root,
+      "<w:p><w:r><w:t>Alice</w:t></w:r></w:p>",
+    )?;
+    assert!(prepare_docx_anonymized_export(&external).is_err());
+
     let unresolved = minimal_document(
       &valid_root,
       "<w:p><w:r><w:t>Alice</w:t></w:r></w:p><w:sectPr><w:headerReference w:type=\"default\" r:id=\"rId9\"/></w:sectPr>",
