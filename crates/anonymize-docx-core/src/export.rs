@@ -2238,14 +2238,6 @@ fn sanitize_relationships(
     let identifier = node.attribute("Id").unwrap_or_default();
     let relation_type = node.attribute("Type").unwrap_or_default();
     let target = node.attribute("Target").unwrap_or_default();
-    if node
-      .attribute("TargetMode")
-      .is_some_and(|mode| mode != "Internal")
-    {
-      return Err(unsupported(
-        "DOCX relationships contain an unsafe target mode",
-      ));
-    }
     let resolved = resolve_relationship_target(target, path);
     let remove = relationship_type_removed(relation_type)
       || resolved
@@ -2253,6 +2245,14 @@ fn sanitize_relationships(
         .is_some_and(|resolved| removed_paths.contains(resolved));
     if remove {
       continue;
+    }
+    if node
+      .attribute("TargetMode")
+      .is_some_and(|mode| mode != "Internal")
+    {
+      return Err(unsupported(
+        "DOCX relationships contain an unsafe target mode",
+      ));
     }
     if !valid_relationship_id(identifier) || identifier.trim() != identifier {
       return Err(unsupported(
@@ -3253,6 +3253,54 @@ mod tests {
       "<w:p><w:r><w:t>Alice</w:t></w:r></w:p><w:sectPr><w:headerReference w:type=\"default\" r:id=\"rId9\"/></w:sectPr>",
     )?;
     assert!(prepare_docx_anonymized_export(&unresolved).is_err());
+    Ok(())
+  }
+
+  #[test]
+  fn strips_external_hyperlinks_but_preserves_visible_text()
+  -> Result<(), Box<dyn std::error::Error>> {
+    let source = archive(&[
+      (
+        "[Content_Types].xml",
+        &format!(
+          "<Types xmlns=\"{CONTENT_TYPES}\"><Override PartName=\"/word/document.xml\" ContentType=\"{WORD_CONTENT}document.main+xml\"/></Types>"
+        ),
+      ),
+      (
+        "_rels/.rels",
+        &format!(
+          "<Relationships xmlns=\"{PACKAGE_RELS}\"><Relationship Id=\"rId1\" Type=\"{OFFICE_RELS}/officeDocument\" Target=\"word/document.xml\"/></Relationships>"
+        ),
+      ),
+      (
+        "word/document.xml",
+        &format!(
+          "<w:document xmlns:w=\"{WORD}\" xmlns:r=\"{OFFICE_RELS}\"><w:body><w:p><w:hyperlink r:id=\"rId1\"><w:r><w:t>Visible link</w:t></w:r></w:hyperlink></w:p></w:body></w:document>"
+        ),
+      ),
+      (
+        "word/_rels/document.xml.rels",
+        &format!(
+          "<Relationships xmlns=\"{PACKAGE_RELS}\"><Relationship Id=\"rId1\" Type=\"{OFFICE_RELS}/hyperlink\" Target=\"https://example.invalid/private\" TargetMode=\"External\"/></Relationships>"
+        ),
+      ),
+    ])?;
+    let prepared = prepare_docx_anonymized_export(&source)?;
+    assert_eq!(
+      prepared
+        .extraction
+        .blocks
+        .first()
+        .map(|extracted_block| extracted_block.text.as_str()),
+      Some("Visible link")
+    );
+    assert!(
+      !entry(&prepared.document, "word/document.xml")?.contains("hyperlink")
+    );
+    let relationships =
+      entry(&prepared.document, "word/_rels/document.xml.rels")?;
+    assert!(!relationships.contains("TargetMode"));
+    assert!(!relationships.contains("example.invalid"));
     Ok(())
   }
 
