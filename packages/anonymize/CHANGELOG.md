@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.0.1
+
+### Patch Changes
+
+- [#507](https://github.com/stella/anonymize/pull/507) [`50d8643`](https://github.com/stella/anonymize/commit/50d8643004d32b2f3fbc146128f8b0e918447342) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Preserve UTF-8 byte offsets when coreference resolution re-merges entities whose display whitespace was normalized.
+
 ## 3.0.0
 
 ### Patch Changes
