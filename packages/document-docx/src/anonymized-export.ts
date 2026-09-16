@@ -16,6 +16,15 @@ const REPORT_FIELDS = [
   "sanitizedXmlPartCount",
 ] as const;
 
+const INVALID_DOCUMENT_NATIVE_CODES = new Set([
+  "archive-limit-exceeded",
+  "invalid-archive",
+  "invalid-package",
+  "invalid-xml",
+  "uncompressed-limit-exceeded",
+  "unsafe-entry-path",
+]);
+
 export class DocxAnonymizedExportError extends Error {
   readonly code: DocxAnonymizedExportErrorCode;
 
@@ -72,14 +81,21 @@ const prepare = (document: Uint8Array) => {
     };
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
-    const code = detail.startsWith("unsupported-replacement:")
-      ? DOCX_ANONYMIZED_EXPORT_ERROR_CODES.unsupportedDocument
-      : DOCX_ANONYMIZED_EXPORT_ERROR_CODES.invalidDocument;
+    const nativeCode = detail.split(":", 1).at(0);
+    const code =
+      nativeCode === "unsupported-replacement"
+        ? DOCX_ANONYMIZED_EXPORT_ERROR_CODES.unsupportedDocument
+        : nativeCode !== undefined &&
+            INVALID_DOCUMENT_NATIVE_CODES.has(nativeCode)
+          ? DOCX_ANONYMIZED_EXPORT_ERROR_CODES.invalidDocument
+          : DOCX_ANONYMIZED_EXPORT_ERROR_CODES.validationFailed;
     throw exportError(
       code,
       code === DOCX_ANONYMIZED_EXPORT_ERROR_CODES.unsupportedDocument
         ? "The DOCX contains content unsupported by anonymized export"
-        : "The DOCX is not a valid document for anonymized export",
+        : code === DOCX_ANONYMIZED_EXPORT_ERROR_CODES.invalidDocument
+          ? "The DOCX is not a valid document for anonymized export"
+          : "The anonymized DOCX export could not be prepared",
     );
   }
 };
