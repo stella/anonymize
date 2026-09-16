@@ -47,7 +47,9 @@ use stella_anonymize_core::{
 use stella_anonymize_docx_core::{
   DocxBlockRewrite, DocxRestorationErrorCode, DocxRewriteErrorCode,
   extract_docx_text as extract_docx_text_core,
+  finalize_docx_anonymized_export as finalize_docx_anonymized_export_core,
   plan_docx_restoration as plan_docx_restoration_core,
+  prepare_docx_anonymized_export as prepare_docx_anonymized_export_core,
   rewrite_docx_text as rewrite_docx_text_core,
 };
 use stella_anonymize_pdf_core::{
@@ -1602,6 +1604,36 @@ fn rewrite_docx_text_native(
 }
 
 #[pyfunction]
+fn prepare_docx_anonymized_export_native(
+  document: &[u8],
+) -> PyResult<(Vec<u8>, String, String)> {
+  let prepared =
+    prepare_docx_anonymized_export_core(document).map_err(|error| {
+      PyValueError::new_err(format!(
+        "{}: {error}",
+        docx_rewrite_code(error.code())
+      ))
+    })?;
+  let extraction_json = serde_json::to_string(&prepared.extraction)
+    .map_err(|error| to_py_serde_error(&error))?;
+  let report_json = serde_json::to_string(&prepared.report)
+    .map_err(|error| to_py_serde_error(&error))?;
+  Ok((prepared.document, extraction_json, report_json))
+}
+
+#[pyfunction]
+fn finalize_docx_anonymized_export_native(
+  document: &[u8],
+) -> PyResult<Vec<u8>> {
+  finalize_docx_anonymized_export_core(document).map_err(|error| {
+    PyValueError::new_err(format!(
+      "{}: {error}",
+      docx_rewrite_code(error.code())
+    ))
+  })
+}
+
+#[pyfunction]
 fn plan_docx_restoration_json(
   document: &[u8],
   session_id: &str,
@@ -1680,6 +1712,14 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module
   )?)?;
   module.add_function(wrap_pyfunction!(rewrite_docx_text_native, module)?)?;
+  module.add_function(wrap_pyfunction!(
+    prepare_docx_anonymized_export_native,
+    module
+  )?)?;
+  module.add_function(wrap_pyfunction!(
+    finalize_docx_anonymized_export_native,
+    module
+  )?)?;
   module.add_function(wrap_pyfunction!(plan_docx_restoration_json, module)?)?;
   Ok(())
 }

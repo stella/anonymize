@@ -7,12 +7,18 @@ All offsets are UTF-16 code-unit offsets, matching the cross-runtime contract.
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any, TypedDict
 
 from ._caller_limits import CALLER_DETECTION_MAX_COUNT
 from ._native import extract_docx_text_json as _extract_docx_text_json
+from ._native import (
+    finalize_docx_anonymized_export_native as _finalize_docx_anonymized_export_native,
+)
 from ._native import plan_docx_restoration_json as _plan_docx_restoration_json
+from ._native import (
+    prepare_docx_anonymized_export_native as _prepare_docx_anonymized_export_native,
+)
 from ._native import rewrite_docx_text_native as _rewrite_docx_text_native
 
 DOCX_EXTRACTION_CONTRACT_VERSION = 1
@@ -45,6 +51,10 @@ class DocxAnonymizationError(DocxError):
 
 
 class DocxRestorationError(DocxError):
+    pass
+
+
+class DocxAnonymizedExportError(DocxError):
     pass
 
 
@@ -242,6 +252,65 @@ def rewrite_docx_text(
         "document": bytes(rewritten),
         "rewrittenBlockCount": block_count,
         "appliedReplacementCount": replacement_count,
+    }
+
+
+def rewrite_docx_for_anonymized_export(
+    document: bytes | bytearray | memoryview,
+    plan_rewrites: Callable[
+        [dict[str, Any]], Sequence[Mapping[str, Any]]
+    ],
+) -> dict[str, Any]:
+    """Sanitize, rewrite, and validate a DOCX for anonymized export."""
+
+    try:
+        prepared_document, extraction_json, report_json = (
+            _prepare_docx_anonymized_export_native(bytes(document))
+        )
+        extraction = json.loads(extraction_json)
+        report = json.loads(report_json)
+    except ValueError as error:
+        native_code = str(error).partition(": ")[0]
+        if native_code == "unsupported-replacement":
+            code = "unsupported-document"
+            message = "The DOCX contains content unsupported by anonymized export"
+        elif native_code in {
+            "archive-limit-exceeded",
+            "invalid-archive",
+            "invalid-package",
+            "invalid-xml",
+            "uncompressed-limit-exceeded",
+            "unsafe-entry-path",
+        }:
+            code = "invalid-document"
+            message = "The DOCX is not a valid document for anonymized export"
+        else:
+            code = "validation-failed"
+            message = "The anonymized DOCX export could not be prepared"
+        raise DocxAnonymizedExportError(code, message) from error
+
+    rewrites = plan_rewrites(extraction)
+    try:
+        rewritten = rewrite_docx_text(bytes(prepared_document), rewrites)
+    except Exception as error:
+        raise DocxAnonymizedExportError(
+            "invalid-rewrite-plan",
+            "The DOCX anonymization rewrite plan is invalid",
+        ) from error
+    try:
+        finalized_document = _finalize_docx_anonymized_export_native(
+            rewritten["document"]
+        )
+    except ValueError as error:
+        raise DocxAnonymizedExportError(
+            "validation-failed",
+            "The anonymized DOCX did not pass export validation",
+        ) from error
+    return {
+        "document": bytes(finalized_document),
+        "rewrittenBlockCount": rewritten["rewrittenBlockCount"],
+        "appliedReplacementCount": rewritten["appliedReplacementCount"],
+        "report": report,
     }
 
 

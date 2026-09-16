@@ -33,6 +33,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { afterAll, describe, expect, setDefaultTimeout, test } from "bun:test";
+import { strToU8, zipSync } from "fflate";
+
+import {
+  DocxAnonymizedExportError,
+  extractDocxText,
+  rewriteDocxForAnonymizedExport,
+} from "../../../document-docx/src/index";
 
 import {
   CALLER_DETECTION_CONTRACT_VERSION,
@@ -238,6 +245,16 @@ type PythonParityOutput = {
     success: readonly { id: string; text: string }[];
     errors: readonly { id: string; code: string }[];
   };
+  docx_export_result: {
+    success: {
+      text: string;
+      rewritten_block_count: number;
+      applied_replacement_count: number;
+      report: unknown;
+    };
+    errors: Record<string, { code: string; message: string }>;
+    planner_exception: { type: string; message: string };
+  };
 };
 
 const PYTHON_PARITY_SCRIPT = `
@@ -360,6 +377,9 @@ surface_probes = {
     ),
     "document.docx.extract": hasattr(anonymize, "extract_docx_text"),
     "document.docx.rewrite": hasattr(anonymize, "rewrite_docx_text"),
+    "document.docx.anonymized-export": hasattr(
+        anonymize, "rewrite_docx_for_anonymized_export"
+    ),
     "document.docx.anonymize": hasattr(anonymize, "anonymize_docx"),
     "document.docx.restore": hasattr(anonymize, "restore_docx_text"),
     "document.pdf.inspect": hasattr(anonymize, "inspect_pdf"),
@@ -731,7 +751,7 @@ try:
 except ValueError as error:
     session_plan_second_commit_error = str(error)
 
-def make_docx(text, external_target=None):
+def make_docx(text, external_target=None, extra_entry=None):
     output = io.BytesIO()
     with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
         archive.writestr(
@@ -760,6 +780,8 @@ def make_docx(text, external_target=None):
                 + external_target
                 + '"/></Relationships>',
             )
+        if extra_entry is not None:
+            archive.writestr(extra_entry, b"synthetic")
     return output.getvalue()
 
 docx_source = make_docx("Jan Novak signed.")
@@ -869,6 +891,67 @@ docx_ignored_extra_field = (
     anonymize.extract_docx_text(docx_extra_result["document"])["blocks"][0]["text"]
     == "Ana Novak signed."
 )
+
+def docx_export_plan(extraction):
+    block = extraction["blocks"][0]
+    return [{
+        "location": block["location"],
+        "expectedText": block["text"],
+        "replacements": [{"start": 0, "end": 9, "replacement": "█████████"}],
+    }]
+
+docx_export = anonymize.rewrite_docx_for_anonymized_export(
+    docx_source, docx_export_plan
+)
+
+def normalized_docx_export_error(document, planner):
+    try:
+        anonymize.rewrite_docx_for_anonymized_export(document, planner)
+    except anonymize.DocxAnonymizedExportError as error:
+        return {"code": error.code, "message": str(error)}
+    raise AssertionError("invalid anonymized DOCX export was accepted")
+
+def invalid_docx_export_plan(extraction):
+    block = extraction["blocks"][0]
+    return [{
+        "location": block["location"],
+        "expectedText": block["text"],
+        "replacements": [{"start": -1, "end": 2, "replacement": "x"}],
+    }]
+
+docx_export_errors = {
+    "unsupported": normalized_docx_export_error(
+        make_docx("Jan Novak signed.", extra_entry="word/media/private-name.png"),
+        lambda extraction: [],
+    ),
+    "invalid_document": normalized_docx_export_error(
+        b"not a DOCX archive", lambda extraction: []
+    ),
+    "invalid_plan": normalized_docx_export_error(
+        docx_source, invalid_docx_export_plan
+    ),
+}
+
+class PlannedFailure(Exception):
+    pass
+
+planned_failure = PlannedFailure("planner failed")
+
+def fail_docx_export_planner(extraction):
+    raise planned_failure
+
+try:
+    anonymize.rewrite_docx_for_anonymized_export(
+        docx_source, fail_docx_export_planner
+    )
+except PlannedFailure as error:
+    if error is not planned_failure:
+        raise AssertionError("planner exception identity changed")
+    docx_export_planner_exception = {
+        "type": type(error).__name__, "message": str(error)
+    }
+else:
+    raise AssertionError("planner exception was swallowed")
 docx_vector_success = []
 for vector in payload["docx_vectors"]["successCases"]:
     source = make_docx(vector["text"])
@@ -1129,6 +1212,16 @@ print(
                 "success": docx_vector_success,
                 "errors": docx_vector_errors,
             },
+            "docx_export_result": {
+                "success": {
+                    "text": anonymize.extract_docx_text(docx_export["document"])["blocks"][0]["text"],
+                    "rewritten_block_count": docx_export["rewrittenBlockCount"],
+                    "applied_replacement_count": docx_export["appliedReplacementCount"],
+                    "report": docx_export["report"],
+                },
+                "errors": docx_export_errors,
+                "planner_exception": docx_export_planner_exception,
+            },
         }
     )
 )
@@ -1293,6 +1386,41 @@ const packageJsonVersion = (): string => {
     throw new TypeError("package.json version is missing");
   }
   return version;
+};
+
+const makeDocxExportFixture = (
+  extraEntries: Record<string, Uint8Array> = {},
+): Uint8Array =>
+  zipSync({
+    "[Content_Types].xml": strToU8(
+      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+        "</Types>",
+    ),
+    "_rels/.rels": strToU8(
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>' +
+        "</Relationships>",
+    ),
+    "word/document.xml": strToU8(
+      '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+        "<w:body><w:p><w:r><w:t>Jan Novak signed.</w:t></w:r></w:p></w:body></w:document>",
+    ),
+    ...extraEntries,
+  });
+
+const normalizedDocxExportError = async (
+  operation: Promise<unknown>,
+): Promise<{ code: string; message: string }> => {
+  const error = await operation.then(
+    () => null,
+    (reason: unknown) => reason,
+  );
+  expect(error).toBeInstanceOf(DocxAnonymizedExportError);
+  if (!(error instanceof DocxAnonymizedExportError)) {
+    throw new TypeError("anonymized DOCX export did not return its coded error");
+  }
+  return { code: error.code, message: error.message };
 };
 
 describe("python binding parity", () => {
@@ -1516,7 +1644,7 @@ describe("python binding parity", () => {
     },
   );
 
-  pythonParityTest("python executes the full DOCX workflow", () => {
+  pythonParityTest("python executes the full DOCX workflow", async () => {
     const python = runPythonParity([]);
     expect(python.docx_result).toEqual({
       extracted_text: "Jan Novak signed.",
@@ -1543,6 +1671,87 @@ describe("python binding parity", () => {
       errors: DOCX_RUNTIME_PARITY_FIXTURE.errorCases.map(
         ({ expectedCode, id }) => ({ id, code: expectedCode }),
       ),
+    });
+
+    const source = makeDocxExportFixture();
+    const nodeExport = await rewriteDocxForAnonymizedExport({
+      document: source,
+      planRewrites: async (extraction) => {
+        const block = extraction.blocks.at(0);
+        if (block === undefined) {
+          throw new TypeError("DOCX parity fixture has no text block");
+        }
+        return [
+          {
+            location: block.location,
+            expectedText: block.text,
+            replacements: [{ start: 0, end: 9, replacement: "█████████" }],
+          },
+        ];
+      },
+    });
+    const exportedBlock = extractDocxText(nodeExport.document).blocks.at(0);
+    if (exportedBlock === undefined) {
+      throw new TypeError("anonymized DOCX parity output has no text block");
+    }
+    const nodeErrors = {
+      unsupported: await normalizedDocxExportError(
+        rewriteDocxForAnonymizedExport({
+          document: makeDocxExportFixture({
+            "word/media/private-name.png": strToU8("synthetic"),
+          }),
+          planRewrites: async () => [],
+        }),
+      ),
+      invalid_document: await normalizedDocxExportError(
+        rewriteDocxForAnonymizedExport({
+          document: strToU8("not a DOCX archive"),
+          planRewrites: async () => [],
+        }),
+      ),
+      invalid_plan: await normalizedDocxExportError(
+        rewriteDocxForAnonymizedExport({
+          document: source,
+          planRewrites: async (extraction) => {
+            const block = extraction.blocks.at(0);
+            if (block === undefined) {
+              throw new TypeError("DOCX parity fixture has no text block");
+            }
+            return [
+              {
+                location: block.location,
+                expectedText: block.text,
+                replacements: [{ start: -1, end: 2, replacement: "x" }],
+              },
+            ];
+          },
+        }),
+      ),
+    };
+    const plannerFailure = new Error("planner failed");
+    plannerFailure.name = "PlannedFailure";
+    const plannerRejection = await rewriteDocxForAnonymizedExport({
+      document: source,
+      planRewrites: async () => {
+        throw plannerFailure;
+      },
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(plannerRejection).toBe(plannerFailure);
+    expect(python.docx_export_result).toEqual({
+      success: {
+        text: exportedBlock.text,
+        rewritten_block_count: nodeExport.rewrittenBlockCount,
+        applied_replacement_count: nodeExport.appliedReplacementCount,
+        report: nodeExport.report,
+      },
+      errors: nodeErrors,
+      planner_exception: {
+        type: plannerFailure.name,
+        message: plannerFailure.message,
+      },
     });
   });
 
