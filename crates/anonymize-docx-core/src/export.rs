@@ -1411,18 +1411,15 @@ fn valid_numbering_label(value: &str) -> bool {
   if value.is_empty() || value.len() > 64 {
     return false;
   }
-  let characters = value.chars().collect::<Vec<_>>();
-  let mut index = 0;
-  while index < characters.len() {
-    let character = characters[index];
+  let mut characters = value.chars();
+  while let Some(character) = characters.next() {
     if character == '%' {
-      if characters
-        .get(index.saturating_add(1))
-        .is_none_or(|level| !matches!(level, '1'..='9'))
+      if !characters
+        .next()
+        .is_some_and(|level| matches!(level, '1'..='9'))
       {
         return false;
       }
-      index = index.saturating_add(2);
       continue;
     }
     if character.is_ascii_digit()
@@ -1449,7 +1446,6 @@ fn valid_numbering_label(value: &str) -> bool {
     {
       return false;
     }
-    index = index.saturating_add(1);
   }
   true
 }
@@ -3171,9 +3167,9 @@ mod tests {
     assert!(!canonical.contains(STRICT_DRAWINGML_NAMESPACE));
     assert!(!canonical.contains("Display"));
     assert_eq!(escape_attribute("a\tb\nc\rd"), "a&#x9;b&#xA;c&#xD;d");
-    let priority = roxmltree::Document::parse(&format!(
-      "<w:uiPriority xmlns:w=\"{WORD}\" w:val=\"99\"/>"
-    ))?;
+    let priority_xml =
+      format!("<w:uiPriority xmlns:w=\"{WORD}\" w:val=\"99\"/>");
+    let priority = roxmltree::Document::parse(&priority_xml)?;
     assert!(word_attribute_value_allowed(
       priority.root_element(),
       "val",
