@@ -13,6 +13,14 @@ use stella_docx_kernel as docx_kernel;
 use thiserror::Error;
 use zip::{CompressionMethod, ZipArchive, ZipWriter, write::SimpleFileOptions};
 
+mod export;
+
+pub use export::{
+  DocxAnonymizedExportPreparation, DocxAnonymizedExportReport,
+  finalize_docx_anonymized_export, prepare_docx_anonymized_export,
+  validate_docx_anonymized_export,
+};
+
 pub const DOCX_EXTRACTION_CONTRACT_VERSION: u8 = 1;
 pub const DOCX_ARCHIVE_MAX_BYTES: usize = 64 * 1024 * 1024;
 pub const DOCX_ENTRY_MAX_BYTES: usize = 16 * 1024 * 1024;
@@ -333,7 +341,7 @@ struct XmlPatch {
   value: String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct ArchiveEntry {
   path: String,
   bytes: Vec<u8>,

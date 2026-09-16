@@ -244,6 +244,12 @@ export type NativeAnonymizeBinding = {
   ) => NativeCallerDetection[];
   externalDetectionLimitsJson: () => string;
   extractDocxTextJson: (document: Uint8Array) => string;
+  prepareDocxAnonymizedExportNative: (document: Uint8Array) => {
+    document: Uint8Array;
+    extractionJson: string;
+    reportJson: string;
+  };
+  finalizeDocxAnonymizedExportNative: (document: Uint8Array) => Uint8Array;
   inspectPdfJson: (document: Uint8Array, observationsJson?: string) => string;
   rewritePdfRasterFromDetectionsJson: (
     document: Uint8Array,
@@ -315,6 +321,8 @@ export const NATIVE_BINDING_PARITY_MEMBERS = {
     "convertExternalDetectionBatch",
     "externalDetectionLimitsJson",
     "extractDocxTextJson",
+    "prepareDocxAnonymizedExportNative",
+    "finalizeDocxAnonymizedExportNative",
     "inspectPdfJson",
     "rewritePdfRasterFromDetectionsJson",
     "rewriteDocxTextNative",
