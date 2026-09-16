@@ -8,8 +8,7 @@ import {
 
 const CONTENT_TYPES =
   "http://schemas.openxmlformats.org/package/2006/content-types";
-const WORD =
-  "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+const WORD = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
 const OFFICE_RELS =
   "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
 const PACKAGE_RELS =

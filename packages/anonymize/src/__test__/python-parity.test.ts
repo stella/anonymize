@@ -1420,7 +1420,9 @@ const normalizedDocxExportError = async (
   );
   expect(error).toBeInstanceOf(DocxAnonymizedExportError);
   if (!(error instanceof DocxAnonymizedExportError)) {
-    throw new TypeError("anonymized DOCX export did not return its coded error");
+    throw new TypeError(
+      "anonymized DOCX export did not return its coded error",
+    );
   }
   return { code: error.code, message: error.message };
 };

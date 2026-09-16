@@ -277,8 +277,7 @@ export const createWasmBinding = (
       reportJson: result.reportJson,
     };
   },
-  finalizeDocxAnonymizedExportNative:
-    raw.finalizeDocxAnonymizedExportNative,
+  finalizeDocxAnonymizedExportNative: raw.finalizeDocxAnonymizedExportNative,
   inspectPdfJson: raw.inspectPdfJson,
   rewritePdfRasterFromDetectionsJson: (document, requestJson, pagePixels) => {
     assertPdfPixelPages(pagePixels);
