@@ -9,6 +9,7 @@ publish.workspace = true
 repository.workspace = true
 
 [dependencies]
+quick-xml = "0.41"
 roxmltree = "0.21"
 percent-encoding = "2.3"
 serde = { version = "1", features = ["derive"] }
