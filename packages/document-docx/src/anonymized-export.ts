@@ -82,20 +82,24 @@ const prepare = (document: Uint8Array) => {
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     const nativeCode = detail.split(":", 1).at(0);
-    const code =
-      nativeCode === "unsupported-replacement"
-        ? DOCX_ANONYMIZED_EXPORT_ERROR_CODES.unsupportedDocument
-        : nativeCode !== undefined &&
-            INVALID_DOCUMENT_NATIVE_CODES.has(nativeCode)
-          ? DOCX_ANONYMIZED_EXPORT_ERROR_CODES.invalidDocument
-          : DOCX_ANONYMIZED_EXPORT_ERROR_CODES.validationFailed;
+    if (nativeCode === "unsupported-replacement") {
+      throw exportError(
+        DOCX_ANONYMIZED_EXPORT_ERROR_CODES.unsupportedDocument,
+        "The DOCX contains content unsupported by anonymized export",
+      );
+    }
+    if (
+      nativeCode !== undefined &&
+      INVALID_DOCUMENT_NATIVE_CODES.has(nativeCode)
+    ) {
+      throw exportError(
+        DOCX_ANONYMIZED_EXPORT_ERROR_CODES.invalidDocument,
+        "The DOCX is not a valid document for anonymized export",
+      );
+    }
     throw exportError(
-      code,
-      code === DOCX_ANONYMIZED_EXPORT_ERROR_CODES.unsupportedDocument
-        ? "The DOCX contains content unsupported by anonymized export"
-        : code === DOCX_ANONYMIZED_EXPORT_ERROR_CODES.invalidDocument
-          ? "The DOCX is not a valid document for anonymized export"
-          : "The anonymized DOCX export could not be prepared",
+      DOCX_ANONYMIZED_EXPORT_ERROR_CODES.validationFailed,
+      "The anonymized DOCX export could not be prepared",
     );
   }
 };
