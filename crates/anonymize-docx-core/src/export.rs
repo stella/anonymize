@@ -151,12 +151,14 @@ const SAFE_CONTENT_WORD_ELEMENTS: &[&str] = &[
   "em",
   "endnote",
   "endnotePr",
+  "endnoteRef",
   "endnoteReference",
   "endnotes",
   "ftr",
   "footerReference",
   "footnote",
   "footnotePr",
+  "footnoteRef",
   "footnoteReference",
   "footnotes",
   "gridAfter",
@@ -860,6 +862,7 @@ fn word_attribute_allowed(node: Node<'_, '_>, name: &str) -> bool {
         | "eastAsiaTheme"
         | "csTheme"
         | "cstheme"
+        | "hint"
     ),
     "footnote" | "endnote" => matches!(name, "id" | "type"),
     "footnoteReference" | "endnoteReference" => {
@@ -1240,6 +1243,13 @@ fn canonical_word_attributes(
         ));
       }
       attribute.value().to_owned()
+    } else if local == "rFonts" && name == "hint" {
+      if !matches!(attribute.value(), "default" | "eastAsia" | "cs") {
+        return Err(unsupported(
+          "DOCX formatting uses an unsupported font hint",
+        ));
+      }
+      attribute.value().to_owned()
     } else if matches!(local, "nsid" | "tmpl") && name == "val"
       || local == "lvl" && name == "tplc"
     {
@@ -1288,6 +1298,11 @@ fn validate_retained_content_node(
     return Err(unsupported(
       "DOCX content contains an unclassified Word element",
     ));
+  }
+  if matches!(local, "footnoteRef" | "endnoteRef")
+    && node.children().next().is_some()
+  {
+    return Err(unsupported("DOCX note marker must be an empty element"));
   }
   if local == "p"
     && node
@@ -1475,6 +1490,7 @@ fn valid_numbering_label(value: &str) -> bool {
             | '\u{2022}'
             | '\u{25e6}'
             | '\u{25aa}'
+            | '\u{f0b7}'
         ))
     {
       return false;
@@ -2920,7 +2936,7 @@ mod tests {
       (
         "word/numbering.xml",
         &format!(
-          "<w:numbering xmlns:w=\"{WORD}\"><w:abstractNum w:abstractNumId=\"0\"><w:lvl w:ilvl=\"0\"><w:numFmt w:val=\"decimal\"/><w:lvlText w:val=\"%1.\"/></w:lvl></w:abstractNum></w:numbering>"
+          "<w:numbering xmlns:w=\"{WORD}\"><w:abstractNum w:abstractNumId=\"0\"><w:lvl w:ilvl=\"0\"><w:numFmt w:val=\"bullet\"/><w:lvlText w:val=\"\u{f0b7}\"/><w:pPr><w:tabs><w:tab w:val=\"num\" w:pos=\"720\"/></w:tabs></w:pPr><w:rPr><w:rFonts w:ascii=\"Symbol\" w:hAnsi=\"Symbol\" w:hint=\"default\"/></w:rPr></w:lvl></w:abstractNum></w:numbering>"
         ),
       ),
       (
@@ -2971,7 +2987,7 @@ mod tests {
       (
         "[Content_Types].xml",
         &format!(
-          "<Types xmlns=\"{CONTENT_TYPES}\"><Override PartName=\"/word/document.xml\" ContentType=\"{WORD_CONTENT}document.main+xml\"/><Override PartName=\"/word/footnotes.xml\" ContentType=\"{WORD_CONTENT}footnotes+xml\"/><Override PartName=\"/word/webextensions/taskpanes.xml\" ContentType=\"application/vnd.ms-office.webextensiontaskpanes+xml\"/><Override PartName=\"/word/webextensions/webextension1.xml\" ContentType=\"application/vnd.ms-office.webextension+xml\"/></Types>"
+          "<Types xmlns=\"{CONTENT_TYPES}\"><Override PartName=\"/word/document.xml\" ContentType=\"{WORD_CONTENT}document.main+xml\"/><Override PartName=\"/word/footnotes.xml\" ContentType=\"{WORD_CONTENT}footnotes+xml\"/><Override PartName=\"/word/endnotes.xml\" ContentType=\"{WORD_CONTENT}endnotes+xml\"/><Override PartName=\"/word/webextensions/taskpanes.xml\" ContentType=\"application/vnd.ms-office.webextensiontaskpanes+xml\"/><Override PartName=\"/word/webextensions/webextension1.xml\" ContentType=\"application/vnd.ms-office.webextension+xml\"/></Types>"
         ),
       ),
       (
@@ -2983,19 +2999,25 @@ mod tests {
       (
         "word/document.xml",
         &format!(
-          "<w:document xmlns:w=\"{WORD}\"><w:body><w:p><w:r><w:fldChar w:fldCharType=\"begin\"/></w:r><w:r><w:instrText>HIDDEN OUTER INSTRUCTION</w:instrText></w:r><w:r><w:fldChar w:fldCharType=\"separate\"/></w:r><w:fldSimple w:instr=\"HIDDEN SIMPLE INSTRUCTION\"><w:r><w:t>Cached Client </w:t></w:r><w:r><w:fldChar w:fldCharType=\"begin\"/></w:r><w:r><w:instrText>HIDDEN NESTED INSTRUCTION</w:instrText></w:r><w:r><w:fldChar w:fldCharType=\"separate\"/></w:r><w:r><w:t>Name</w:t></w:r><w:r><w:fldChar w:fldCharType=\"end\"/></w:r></w:fldSimple><w:r><w:fldChar w:fldCharType=\"end\"/></w:r></w:p></w:body></w:document>"
+          "<w:document xmlns:w=\"{WORD}\"><w:body><w:p><w:r><w:fldChar w:fldCharType=\"begin\"/></w:r><w:r><w:instrText>HIDDEN OUTER INSTRUCTION</w:instrText></w:r><w:r><w:fldChar w:fldCharType=\"separate\"/></w:r><w:fldSimple w:instr=\"HIDDEN SIMPLE INSTRUCTION\"><w:r><w:t>Cached Client </w:t></w:r><w:r><w:fldChar w:fldCharType=\"begin\"/></w:r><w:r><w:instrText>HIDDEN NESTED INSTRUCTION</w:instrText></w:r><w:r><w:fldChar w:fldCharType=\"separate\"/></w:r><w:r><w:t>Name</w:t></w:r><w:r><w:fldChar w:fldCharType=\"end\"/></w:r></w:fldSimple><w:r><w:fldChar w:fldCharType=\"end\"/></w:r></w:p><w:p><w:r><w:footnoteReference w:id=\"1\"/></w:r><w:r><w:endnoteReference w:id=\"1\"/></w:r></w:p></w:body></w:document>"
         ),
       ),
       (
         "word/_rels/document.xml.rels",
         &format!(
-          "<Relationships xmlns=\"{PACKAGE_RELS}\"><Relationship Id=\"rId1\" Type=\"{OFFICE_RELS}/footnotes\" Target=\"footnotes.xml\"/></Relationships>"
+          "<Relationships xmlns=\"{PACKAGE_RELS}\"><Relationship Id=\"rId1\" Type=\"{OFFICE_RELS}/footnotes\" Target=\"footnotes.xml\"/><Relationship Id=\"rId2\" Type=\"{OFFICE_RELS}/endnotes\" Target=\"endnotes.xml\"/></Relationships>"
         ),
       ),
       (
         "word/footnotes.xml",
         &format!(
-          "<w:footnotes xmlns:w=\"{WORD}\"><w:footnote w:id=\"-1\" w:type=\"separator\"><w:p><w:r><w:separator/></w:r></w:p></w:footnote><w:footnote w:id=\"0\" w:type=\"continuationSeparator\"><w:p><w:r><w:continuationSeparator/></w:r></w:p></w:footnote></w:footnotes>"
+          "<w:footnotes xmlns:w=\"{WORD}\"><w:footnote w:id=\"-1\" w:type=\"separator\"><w:p><w:r><w:separator/></w:r></w:p></w:footnote><w:footnote w:id=\"0\" w:type=\"continuationSeparator\"><w:p><w:r><w:continuationSeparator/></w:r></w:p></w:footnote><w:footnote w:id=\"1\"><w:p><w:r><w:footnoteRef/></w:r><w:r><w:t>Footnote text</w:t></w:r></w:p></w:footnote></w:footnotes>"
+        ),
+      ),
+      (
+        "word/endnotes.xml",
+        &format!(
+          "<w:endnotes xmlns:w=\"{WORD}\"><w:endnote w:id=\"1\"><w:p><w:r><w:endnoteRef/></w:r><w:r><w:t>Endnote text</w:t></w:r></w:p></w:endnote></w:endnotes>"
         ),
       ),
       (
@@ -3033,6 +3055,7 @@ mod tests {
     assert_eq!(prepared.report.removed_part_count, 3);
     let document_xml = entry(&prepared.document, "word/document.xml")?;
     let styles_xml = entry(&prepared.document, "word/styles.xml")?;
+    let numbering_xml = entry(&prepared.document, "word/numbering.xml")?;
     assert!(document_xml.contains("<w:b/>"));
     assert!(document_xml.contains("stellaStyle1"));
     assert!(styles_xml.contains("stellaStyle1"));
@@ -3044,6 +3067,8 @@ mod tests {
     assert!(styles_xml.contains("<w14:solidFill>"));
     assert!(styles_xml.contains("<w14:round/>"));
     assert!(styles_xml.contains("<w:uiPriority w:val=\"9\"/>"));
+    assert!(numbering_xml.contains("<w:lvlText w:val=\"\u{f0b7}\"/>"));
+    assert!(numbering_xml.contains("w:hint=\"default\""));
     assert!(!styles_xml.contains("Private"));
     let all_xml = archive_text(&prepared.document)?;
     for hidden in [
@@ -3225,6 +3250,19 @@ mod tests {
       }],
     )?;
     let finalized = finalize_docx_anonymized_export(&rewritten.document)?;
+    let finalized_extraction = validate_docx_anonymized_export(&finalized)?;
+    assert!(
+      finalized_extraction
+        .blocks
+        .iter()
+        .any(|extracted_block| extracted_block.text == "Footnote text")
+    );
+    assert!(
+      finalized_extraction
+        .blocks
+        .iter()
+        .any(|extracted_block| extracted_block.text == "Endnote text")
+    );
     assert!(!has_entry(&finalized, "word/webextensions/taskpanes.xml")?);
     assert!(!has_entry(
       &finalized,
@@ -3232,6 +3270,8 @@ mod tests {
     )?);
     let all_xml = archive_text(&finalized)?;
     assert!(all_xml.contains("████"));
+    assert!(all_xml.contains("<w:footnoteRef/>"));
+    assert!(all_xml.contains("<w:endnoteRef/>"));
     assert!(all_xml.contains("<w:separator/>"));
     assert!(all_xml.contains("<w:continuationSeparator/>"));
     for hidden in [
@@ -3254,6 +3294,8 @@ mod tests {
       "<w:p w:val=\"1234567890\"><w:r><w:t>Alice</w:t></w:r></w:p>",
       "<w:p><w:pPr><w:pPrChange w:id=\"1\" w:author=\"Author\"/></w:pPr><w:r><w:t>Alice</w:t></w:r></w:p>",
       "<w:p><w:r><w:drawing><w:inline/></w:drawing><w:t>Alice</w:t></w:r></w:p>",
+      "<w:p><w:r><w:footnoteRef><w:t>Hidden</w:t></w:footnoteRef></w:r></w:p>",
+      "<w:p><w:r><w:rPr><w:rFonts w:hint=\"custom\"/></w:rPr><w:t>Alice</w:t></w:r></w:p>",
     ] {
       let source = ordinary_document(body)?;
       assert!(prepare_docx_anonymized_export(&source).is_err());
@@ -3261,6 +3303,7 @@ mod tests {
     assert!(!valid_numbering_label("1234567890"));
     assert!(!valid_numbering_label("%1. 1234567890"));
     assert!(valid_numbering_label("%1.%2."));
+    assert!(valid_numbering_label("\u{f0b7}"));
     Ok(())
   }
 
