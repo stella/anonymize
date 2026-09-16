@@ -779,7 +779,9 @@ fn word_border_attribute_allowed(
         | "type"
     ));
   }
-  if parent.is_some_and(|value| matches!(value, "tblCellMar" | "tcMar")) {
+  if !matches!(local, "insideH" | "insideV")
+    && parent.is_some_and(|value| matches!(value, "tblCellMar" | "tcMar"))
+  {
     return Some(matches!(name, "w" | "type"));
   }
   None
@@ -1790,10 +1792,10 @@ fn theme_enum_attribute_allowed(local: &str, name: &str, value: &str) -> bool {
   }
 }
 
-fn parsed_i32_in(value: &str, range: std::ops::RangeInclusive<i32>) -> bool {
+fn parsed_i32_in(value: &str, minimum: i32, maximum: i32) -> bool {
   value
     .parse::<i32>()
-    .is_ok_and(|number| range.contains(&number))
+    .is_ok_and(|number| (minimum..=maximum).contains(&number))
 }
 
 fn theme_numeric_attribute_allowed(
@@ -1807,16 +1809,16 @@ fn theme_numeric_attribute_allowed(
       | "shade" | "tint",
       "val",
     )
-    | ("gs", "pos") => parsed_i32_in(value, 0..=100_000),
-    ("ln" | "bevelT", "w") => parsed_i32_in(value, 0..=20_116_800),
+    | ("gs", "pos") => parsed_i32_in(value, 0, 100_000),
+    ("ln" | "bevelT", "w") => parsed_i32_in(value, 0, 20_116_800),
     ("fillToRect", "l" | "t" | "r" | "b") => {
-      parsed_i32_in(value, -100_000..=100_000)
+      parsed_i32_in(value, -100_000, 100_000)
     }
     ("lin", "ang") | ("hslClr", "hue" | "sat" | "lum") => {
-      parsed_i32_in(value, 0..=21_600_000)
+      parsed_i32_in(value, 0, 21_600_000)
     }
-    ("miter", "lim") => parsed_i32_in(value, 0..=1_000_000),
-    ("scrgbClr", "r" | "g" | "b") => parsed_i32_in(value, 0..=100_000),
+    ("miter", "lim") => parsed_i32_in(value, 0, 1_000_000),
+    ("scrgbClr", "r" | "g" | "b") => parsed_i32_in(value, 0, 100_000),
     (
       element,
       "h" | "blurRad" | "dist" | "dir" | "kx" | "ky" | "sx" | "sy" | "rad",
@@ -2768,7 +2770,7 @@ pub fn prepare_docx_anonymized_export(
       && !removed_paths.contains(&entry.path)
       && !removed_relationship_paths.contains(&entry.path)
   });
-  let mut sanitized_xml_part_count = 0;
+  let mut sanitized_xml_part_count = 0_usize;
   for entry in &mut entries {
     if sanitize_export_entry(entry, &by_path, &removed_paths, &styles)? {
       sanitized_xml_part_count = sanitized_xml_part_count.saturating_add(1);
