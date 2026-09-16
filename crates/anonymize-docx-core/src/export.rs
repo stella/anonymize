@@ -428,9 +428,12 @@ fn theme_path(path: &str) -> bool {
 
 fn relationship_entry(path: &str) -> bool {
   path == ROOT_RELATIONSHIPS_PATH
-    || path
-      .rsplit_once("/_rels/")
-      .is_some_and(|(_, name)| !name.contains('/') && name.ends_with(".rels"))
+    || path.rsplit_once("/_rels/").is_some_and(|(_, name)| {
+      !name.contains('/')
+        && name
+          .rsplit_once('.')
+          .is_some_and(|(_, extension)| extension == "rels")
+    })
 }
 
 fn relationship_source_path(path: &str) -> Option<String> {
@@ -493,125 +496,129 @@ fn valid_relationship_id(value: &str) -> bool {
   })
 }
 
+const SAFE_WORD_VALUES: &[&str] = &[
+  "0",
+  "1",
+  "true",
+  "false",
+  "on",
+  "off",
+  "accent1",
+  "accent2",
+  "accent3",
+  "accent4",
+  "accent5",
+  "accent6",
+  "after",
+  "all",
+  "atLeast",
+  "auto",
+  "autofit",
+  "bar",
+  "baseline",
+  "before",
+  "between",
+  "both",
+  "bottom",
+  "center",
+  "character",
+  "clear",
+  "continuous",
+  "decimal",
+  "decimalZero",
+  "default",
+  "distributed",
+  "dot",
+  "dotted",
+  "double",
+  "dxa",
+  "eastAsia",
+  "end",
+  "evenPage",
+  "even",
+  "exact",
+  "firstLine",
+  "first",
+  "firstColumn",
+  "firstRow",
+  "fixed",
+  "heavy",
+  "hanging",
+  "hybridMultilevel",
+  "highKashida",
+  "inside",
+  "left",
+  "light",
+  "line",
+  "lowerLetter",
+  "lowerRoman",
+  "lowKashida",
+  "majorAscii",
+  "majorBidi",
+  "majorEastAsia",
+  "majorHAnsi",
+  "mediumKashida",
+  "minorAscii",
+  "minorBidi",
+  "minorEastAsia",
+  "minorHAnsi",
+  "multiple",
+  "multilevel",
+  "nextPage",
+  "nil",
+  "none",
+  "nothing",
+  "numbering",
+  "oddPage",
+  "page",
+  "paragraph",
+  "portrait",
+  "pct",
+  "right",
+  "restart",
+  "section",
+  "separator",
+  "single",
+  "singleLevel",
+  "space",
+  "start",
+  "continuationNotice",
+  "continuationSeparator",
+  "landscape",
+  "tab",
+  "table",
+  "text",
+  "thick",
+  "top",
+  "transparent",
+  "upperLetter",
+  "upperRoman",
+  "bullet",
+  "wave",
+  "word",
+  "black",
+  "blue",
+  "cyan",
+  "darkBlue",
+  "darkCyan",
+  "darkGray",
+  "darkGreen",
+  "darkMagenta",
+  "darkRed",
+  "darkYellow",
+  "green",
+  "lightGray",
+  "magenta",
+  "red",
+  "white",
+  "yellow",
+];
+
 fn safe_word_value(value: &str) -> bool {
-  if value.is_empty() || value.len() > 32 || value.trim() != value {
-    return false;
-  }
-  if matches!(value, "0" | "1" | "true" | "false" | "on" | "off") {
-    return true;
-  }
-  matches!(
-    value,
-    "accent1"
-      | "accent2"
-      | "accent3"
-      | "accent4"
-      | "accent5"
-      | "accent6"
-      | "after"
-      | "all"
-      | "atLeast"
-      | "auto"
-      | "autofit"
-      | "bar"
-      | "baseline"
-      | "before"
-      | "between"
-      | "both"
-      | "bottom"
-      | "center"
-      | "character"
-      | "clear"
-      | "continuous"
-      | "decimal"
-      | "decimalZero"
-      | "default"
-      | "distributed"
-      | "dot"
-      | "dotted"
-      | "double"
-      | "dxa"
-      | "eastAsia"
-      | "end"
-      | "evenPage"
-      | "even"
-      | "exact"
-      | "firstLine"
-      | "first"
-      | "firstColumn"
-      | "firstRow"
-      | "fixed"
-      | "heavy"
-      | "hanging"
-      | "hybridMultilevel"
-      | "highKashida"
-      | "inside"
-      | "left"
-      | "light"
-      | "line"
-      | "lowerLetter"
-      | "lowerRoman"
-      | "lowKashida"
-      | "majorAscii"
-      | "majorBidi"
-      | "majorEastAsia"
-      | "majorHAnsi"
-      | "mediumKashida"
-      | "minorAscii"
-      | "minorBidi"
-      | "minorEastAsia"
-      | "minorHAnsi"
-      | "multiple"
-      | "multilevel"
-      | "nextPage"
-      | "nil"
-      | "none"
-      | "nothing"
-      | "numbering"
-      | "oddPage"
-      | "page"
-      | "paragraph"
-      | "portrait"
-      | "pct"
-      | "right"
-      | "restart"
-      | "section"
-      | "separator"
-      | "single"
-      | "singleLevel"
-      | "space"
-      | "start"
-      | "continuationNotice"
-      | "continuationSeparator"
-      | "landscape"
-      | "tab"
-      | "table"
-      | "text"
-      | "thick"
-      | "top"
-      | "transparent"
-      | "upperLetter"
-      | "upperRoman"
-      | "bullet"
-      | "wave"
-      | "word"
-      | "black"
-      | "blue"
-      | "cyan"
-      | "darkBlue"
-      | "darkCyan"
-      | "darkGray"
-      | "darkGreen"
-      | "darkMagenta"
-      | "darkRed"
-      | "darkYellow"
-      | "green"
-      | "lightGray"
-      | "magenta"
-      | "red"
-      | "white"
-      | "yellow"
-  )
+  !value.is_empty()
+    && value.len() <= 32
+    && value.trim() == value
+    && SAFE_WORD_VALUES.contains(&value)
 }
 
 fn collect_style_identifiers(
@@ -646,48 +653,140 @@ fn collect_style_identifiers(
       }
       identifiers.insert(
         identifier.value().to_owned(),
-        format!("stellaStyle{}", identifiers.len() + 1),
+        format!("stellaStyle{}", identifiers.len().saturating_add(1)),
       );
     }
   }
   Ok(identifiers)
 }
 
-fn word_attribute_allowed(node: Node<'_, '_>, name: &str) -> bool {
+const WORD_VAL_ATTRIBUTE_ELEMENTS: &[&str] = &[
+  "abstractNumId",
+  "b",
+  "bCs",
+  "basedOn",
+  "caps",
+  "cnfStyle",
+  "contextualSpacing",
+  "dstrike",
+  "effect",
+  "em",
+  "fitText",
+  "gridSpan",
+  "hideMark",
+  "highlight",
+  "hMerge",
+  "i",
+  "iCs",
+  "ilvl",
+  "jc",
+  "kern",
+  "keepLines",
+  "keepNext",
+  "link",
+  "lvlJc",
+  "lvlRestart",
+  "lvlText",
+  "mirrorInd",
+  "multiLevelType",
+  "next",
+  "noProof",
+  "nsid",
+  "numFmt",
+  "numId",
+  "numIdMacAtCleanup",
+  "numRestart",
+  "numStart",
+  "numStyleLink",
+  "outline",
+  "outlineLvl",
+  "pageBreakBefore",
+  "paperSrc",
+  "position",
+  "pos",
+  "pStyle",
+  "rStyle",
+  "rtl",
+  "shadow",
+  "smallCaps",
+  "snapToGrid",
+  "specVanish",
+  "start",
+  "startOverride",
+  "strike",
+  "styleLink",
+  "suff",
+  "suppressAutoHyphens",
+  "suppressLineNumbers",
+  "sz",
+  "szCs",
+  "tblLayout",
+  "tblOverlap",
+  "tblStyle",
+  "tblStyleColBandSize",
+  "tblStyleRowBandSize",
+  "tcFitText",
+  "textAlignment",
+  "textDirection",
+  "titlePg",
+  "tmpl",
+  "type",
+  "uiPriority",
+  "vAlign",
+  "vanish",
+  "vertAlign",
+  "vMerge",
+  "w",
+  "webHidden",
+  "widowControl",
+  "wordWrap",
+];
+
+fn word_border_attribute_allowed(
+  node: Node<'_, '_>,
+  name: &str,
+) -> Option<bool> {
   let local = node.tag_name().name();
-  match local {
-    "style" => matches!(name, "styleId" | "type" | "default" | "customStyle"),
-    "basedOn" | "link" | "next" | "numStyleLink" | "pStyle" | "rStyle"
-    | "styleLink" | "tblStyle" => name == "val",
-    "rFonts" => matches!(
+  if !matches!(
+    local,
+    "top"
+      | "left"
+      | "bottom"
+      | "right"
+      | "start"
+      | "end"
+      | "insideH"
+      | "insideV"
+  ) {
+    return None;
+  }
+  let parent = node.parent_element().and_then(word_local);
+  if parent
+    .is_some_and(|value| matches!(value, "pBdr" | "tblBorders" | "tcBorders"))
+  {
+    return Some(matches!(
       name,
-      "ascii"
-        | "hAnsi"
-        | "eastAsia"
-        | "cs"
-        | "asciiTheme"
-        | "hAnsiTheme"
-        | "eastAsiaTheme"
-        | "csTheme"
-        | "cstheme"
-    ),
-    "footnote" | "endnote" => matches!(name, "id" | "type"),
-    "footnoteReference" | "endnoteReference" => {
-      matches!(name, "id" | "customMarkFollows")
-    }
-    "headerReference" | "footerReference" => name == "type",
-    "abstractNum" => name == "abstractNumId",
-    "num" => name == "numId",
-    "lvl" => matches!(name, "ilvl" | "tplc" | "tentative"),
-    "lvlOverride" => name == "ilvl",
-    "tblStylePr" => name == "type",
-    "nsid" | "tmpl" | "lvlText" => name == "val",
-    "gridCol" | "tblInd" | "tblW" | "tcW" => matches!(name, "w" | "type"),
-    "pgSz" => matches!(name, "w" | "h" | "orient" | "code"),
-    "pgMar" => matches!(
-      name,
-      "top" | "right" | "bottom" | "left" | "header" | "footer" | "gutter"
-    ),
+      "val"
+        | "color"
+        | "sz"
+        | "space"
+        | "shadow"
+        | "frame"
+        | "themeColor"
+        | "themeTint"
+        | "themeShade"
+        | "w"
+        | "type"
+    ));
+  }
+  if parent.is_some_and(|value| matches!(value, "tblCellMar" | "tcMar")) {
+    return Some(matches!(name, "w" | "type"));
+  }
+  None
+}
+
+fn word_layout_attribute_allowed(local: &str, name: &str) -> Option<bool> {
+  let allowed = match local {
     "ind" => matches!(
       name,
       "left"
@@ -722,40 +821,8 @@ fn word_attribute_allowed(node: Node<'_, '_>, name: &str) -> bool {
         | "themeFillTint"
         | "themeFillShade"
     ),
-    "top" | "left" | "bottom" | "right" | "insideH" | "insideV" | "start"
-    | "end"
-      if node
-        .parent_element()
-        .and_then(word_local)
-        .is_some_and(|parent| {
-          matches!(parent, "pBdr" | "tblBorders" | "tcBorders")
-        }) =>
-    {
-      matches!(
-        name,
-        "val"
-          | "color"
-          | "sz"
-          | "space"
-          | "shadow"
-          | "frame"
-          | "themeColor"
-          | "themeTint"
-          | "themeShade"
-          | "w"
-          | "type"
-      )
-    }
     "color" => {
       matches!(name, "val" | "themeColor" | "themeTint" | "themeShade")
-    }
-    "top" | "left" | "bottom" | "right" | "start" | "end"
-      if node
-        .parent_element()
-        .and_then(word_local)
-        .is_some_and(|parent| matches!(parent, "tblCellMar" | "tcMar")) =>
-    {
-      matches!(name, "w" | "type")
     }
     "u" => matches!(
       name,
@@ -787,74 +854,51 @@ fn word_attribute_allowed(node: Node<'_, '_>, name: &str) -> bool {
         | "tblpXSpec"
         | "tblpYSpec"
     ),
-    "textDirection"
-    | "vAlign"
-    | "jc"
-    | "textAlignment"
-    | "vertAlign"
-    | "highlight"
-    | "sz"
-    | "szCs"
-    | "kern"
-    | "position"
-    | "effect"
-    | "em"
-    | "numId"
-    | "ilvl"
-    | "numFmt"
-    | "suff"
-    | "startOverride"
-    | "start"
-    | "abstractNumId"
-    | "multiLevelType"
-    | "lvlJc"
-    | "lvlRestart"
-    | "outlineLvl"
-    | "vMerge"
-    | "hMerge"
-    | "tblLayout"
-    | "tblOverlap"
-    | "tblStyleRowBandSize"
-    | "tblStyleColBandSize"
-    | "gridSpan"
-    | "fitText"
-    | "cnfStyle"
-    | "paperSrc"
-    | "type"
-    | "b"
-    | "bCs"
-    | "caps"
-    | "contextualSpacing"
-    | "dstrike"
-    | "hideMark"
-    | "i"
-    | "iCs"
-    | "keepLines"
-    | "keepNext"
-    | "mirrorInd"
-    | "noProof"
-    | "outline"
-    | "pageBreakBefore"
-    | "rtl"
-    | "shadow"
-    | "smallCaps"
-    | "snapToGrid"
-    | "specVanish"
-    | "strike"
-    | "suppressAutoHyphens"
-    | "suppressLineNumbers"
-    | "tcFitText"
-    | "titlePg"
-    | "vanish"
-    | "webHidden"
-    | "widowControl"
-    | "wordWrap"
-    | "w"
-    | "numIdMacAtCleanup"
-    | "uiPriority"
-    | "numStart"
-    | "numRestart"
-    | "pos" => name == "val",
+    _ => return None,
+  };
+  Some(allowed)
+}
+
+fn word_attribute_allowed(node: Node<'_, '_>, name: &str) -> bool {
+  let local = node.tag_name().name();
+  if let Some(allowed) = word_border_attribute_allowed(node, name) {
+    return allowed;
+  }
+  if WORD_VAL_ATTRIBUTE_ELEMENTS.contains(&local) {
+    return name == "val";
+  }
+  if let Some(allowed) = word_layout_attribute_allowed(local, name) {
+    return allowed;
+  }
+  match local {
+    "style" => matches!(name, "styleId" | "type" | "default" | "customStyle"),
+    "rFonts" => matches!(
+      name,
+      "ascii"
+        | "hAnsi"
+        | "eastAsia"
+        | "cs"
+        | "asciiTheme"
+        | "hAnsiTheme"
+        | "eastAsiaTheme"
+        | "csTheme"
+        | "cstheme"
+    ),
+    "footnote" | "endnote" => matches!(name, "id" | "type"),
+    "footnoteReference" | "endnoteReference" => {
+      matches!(name, "id" | "customMarkFollows")
+    }
+    "headerReference" | "footerReference" | "tblStylePr" => name == "type",
+    "abstractNum" => name == "abstractNumId",
+    "num" => name == "numId",
+    "lvl" => matches!(name, "ilvl" | "tplc" | "tentative"),
+    "lvlOverride" => name == "ilvl",
+    "gridCol" | "tblInd" | "tblW" | "tcW" => matches!(name, "w" | "type"),
+    "pgSz" => matches!(name, "w" | "h" | "orient" | "code"),
+    "pgMar" => matches!(
+      name,
+      "top" | "right" | "bottom" | "left" | "header" | "footer" | "gutter"
+    ),
     "br" => matches!(name, "type" | "clear"),
     "tab" => matches!(name, "val" | "pos" | "leader"),
     "lnNumType" => matches!(name, "countBy" | "start" | "distance" | "restart"),
@@ -882,6 +926,143 @@ fn fixed_hex(value: &str, lengths: &[usize]) -> bool {
     && value.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
+const BOOLEAN_WORD_ATTRIBUTES: &[&str] = &[
+  "default",
+  "customStyle",
+  "tentative",
+  "customMarkFollows",
+  "beforeAutospacing",
+  "afterAutospacing",
+  "shadow",
+  "frame",
+  "firstRow",
+  "lastRow",
+  "firstColumn",
+  "lastColumn",
+  "noHBand",
+  "noVBand",
+  "sep",
+  "equalWidth",
+  "combine",
+  "vert",
+  "vertCompress",
+];
+const NUMERIC_WORD_ATTRIBUTES: &[&str] = &[
+  "id",
+  "abstractNumId",
+  "numId",
+  "ilvl",
+  "code",
+  "num",
+  "countBy",
+  "start",
+  "distance",
+  "top",
+  "right",
+  "bottom",
+  "left",
+  "header",
+  "footer",
+  "gutter",
+  "before",
+  "after",
+  "line",
+  "beforeLines",
+  "afterLines",
+  "w",
+  "h",
+  "firstLine",
+  "hanging",
+  "leftChars",
+  "rightChars",
+  "firstLineChars",
+  "hangingChars",
+  "pos",
+  "space",
+  "sz",
+  "topFromText",
+  "bottomFromText",
+  "leftFromText",
+  "rightFromText",
+  "tblpX",
+  "tblpY",
+];
+const BOOLEAN_WORD_ELEMENTS: &[&str] = &[
+  "b",
+  "bCs",
+  "caps",
+  "contextualSpacing",
+  "dstrike",
+  "hideMark",
+  "i",
+  "iCs",
+  "keepLines",
+  "keepNext",
+  "mirrorInd",
+  "noProof",
+  "outline",
+  "pageBreakBefore",
+  "rtl",
+  "shadow",
+  "smallCaps",
+  "snapToGrid",
+  "specVanish",
+  "strike",
+  "suppressAutoHyphens",
+  "suppressLineNumbers",
+  "tcFitText",
+  "titlePg",
+  "vanish",
+  "webHidden",
+  "widowControl",
+  "wordWrap",
+];
+const NUMERIC_WORD_ELEMENTS: &[&str] = &[
+  "sz",
+  "szCs",
+  "kern",
+  "position",
+  "numId",
+  "ilvl",
+  "start",
+  "startOverride",
+  "abstractNumId",
+  "lvlRestart",
+  "outlineLvl",
+  "tblStyleRowBandSize",
+  "tblStyleColBandSize",
+  "gridSpan",
+  "fitText",
+  "paperSrc",
+  "w",
+];
+const THEME_COLOR_VALUES: &[&str] = &[
+  "accent1",
+  "accent2",
+  "accent3",
+  "accent4",
+  "accent5",
+  "accent6",
+  "background1",
+  "background2",
+  "dark1",
+  "dark2",
+  "followedHyperlink",
+  "hyperlink",
+  "light1",
+  "light2",
+  "text1",
+  "text2",
+];
+const SHADING_VALUES: &[&str] = &[
+  "clear", "nil", "solid", "pct5", "pct10", "pct20", "pct25", "pct30", "pct40",
+  "pct50", "pct60", "pct70", "pct75", "pct80", "pct90",
+];
+
+fn boolean_word_value(value: &str) -> bool {
+  matches!(value, "0" | "1" | "true" | "false" | "on" | "off")
+}
+
 fn word_attribute_value_allowed(
   node: Node<'_, '_>,
   name: &str,
@@ -891,76 +1072,10 @@ fn word_attribute_value_allowed(
   if local == "uiPriority" && name == "val" {
     return value.parse::<u8>().is_ok_and(|number| number <= 99);
   }
-  if matches!(
-    name,
-    "default"
-      | "customStyle"
-      | "tentative"
-      | "customMarkFollows"
-      | "beforeAutospacing"
-      | "afterAutospacing"
-      | "shadow"
-      | "frame"
-      | "firstRow"
-      | "lastRow"
-      | "firstColumn"
-      | "lastColumn"
-      | "noHBand"
-      | "noVBand"
-      | "sep"
-      | "equalWidth"
-      | "combine"
-      | "vert"
-      | "vertCompress"
-  ) {
-    return matches!(value, "0" | "1" | "true" | "false" | "on" | "off");
+  if BOOLEAN_WORD_ATTRIBUTES.contains(&name) {
+    return boolean_word_value(value);
   }
-  if matches!(
-    name,
-    "id"
-      | "abstractNumId"
-      | "numId"
-      | "ilvl"
-      | "code"
-      | "num"
-      | "countBy"
-      | "start"
-      | "distance"
-  ) {
-    return bounded_number(value, 1_000_000);
-  }
-  if matches!(
-    name,
-    "top"
-      | "right"
-      | "bottom"
-      | "left"
-      | "header"
-      | "footer"
-      | "gutter"
-      | "before"
-      | "after"
-      | "line"
-      | "beforeLines"
-      | "afterLines"
-      | "w"
-      | "h"
-      | "firstLine"
-      | "hanging"
-      | "leftChars"
-      | "rightChars"
-      | "firstLineChars"
-      | "hangingChars"
-      | "pos"
-      | "space"
-      | "sz"
-      | "topFromText"
-      | "bottomFromText"
-      | "leftFromText"
-      | "rightFromText"
-      | "tblpX"
-      | "tblpY"
-  ) {
+  if NUMERIC_WORD_ATTRIBUTES.contains(&name) {
     return bounded_number(value, 1_000_000);
   }
   if matches!(name, "color" | "fill") {
@@ -972,26 +1087,8 @@ fn word_attribute_value_allowed(
   ) {
     return fixed_hex(value, &[2]);
   }
-  if name == "themeColor" || name == "themeFill" {
-    return matches!(
-      value,
-      "accent1"
-        | "accent2"
-        | "accent3"
-        | "accent4"
-        | "accent5"
-        | "accent6"
-        | "background1"
-        | "background2"
-        | "dark1"
-        | "dark2"
-        | "followedHyperlink"
-        | "hyperlink"
-        | "light1"
-        | "light2"
-        | "text1"
-        | "text2"
-    );
+  if matches!(name, "themeColor" | "themeFill") {
+    return THEME_COLOR_VALUES.contains(&value);
   }
   if local == "tblLook" && name == "val" {
     return fixed_hex(value, &[4]);
@@ -1004,80 +1101,12 @@ fn word_attribute_value_allowed(
     return value == "auto" || fixed_hex(value, &[6]);
   }
   if local == "shd" && name == "val" {
-    return matches!(
-      value,
-      "clear"
-        | "nil"
-        | "solid"
-        | "pct5"
-        | "pct10"
-        | "pct20"
-        | "pct25"
-        | "pct30"
-        | "pct40"
-        | "pct50"
-        | "pct60"
-        | "pct70"
-        | "pct75"
-        | "pct80"
-        | "pct90"
-    );
+    return SHADING_VALUES.contains(&value);
   }
-  if matches!(
-    local,
-    "b"
-      | "bCs"
-      | "caps"
-      | "contextualSpacing"
-      | "dstrike"
-      | "hideMark"
-      | "i"
-      | "iCs"
-      | "keepLines"
-      | "keepNext"
-      | "mirrorInd"
-      | "noProof"
-      | "outline"
-      | "pageBreakBefore"
-      | "rtl"
-      | "shadow"
-      | "smallCaps"
-      | "snapToGrid"
-      | "specVanish"
-      | "strike"
-      | "suppressAutoHyphens"
-      | "suppressLineNumbers"
-      | "tcFitText"
-      | "titlePg"
-      | "vanish"
-      | "webHidden"
-      | "widowControl"
-      | "wordWrap"
-  ) && name == "val"
-  {
-    return matches!(value, "0" | "1" | "true" | "false" | "on" | "off");
+  if BOOLEAN_WORD_ELEMENTS.contains(&local) && name == "val" {
+    return boolean_word_value(value);
   }
-  if matches!(
-    local,
-    "sz"
-      | "szCs"
-      | "kern"
-      | "position"
-      | "numId"
-      | "ilvl"
-      | "start"
-      | "startOverride"
-      | "abstractNumId"
-      | "lvlRestart"
-      | "outlineLvl"
-      | "tblStyleRowBandSize"
-      | "tblStyleColBandSize"
-      | "gridSpan"
-      | "fitText"
-      | "paperSrc"
-      | "w"
-  ) && name == "val"
-  {
+  if NUMERIC_WORD_ELEMENTS.contains(&local) && name == "val" {
     return bounded_number(value, 1_000_000);
   }
   safe_word_value(value)
@@ -1214,9 +1243,9 @@ fn canonical_word_attributes(
         ));
       }
       attribute.value().to_owned()
-    } else if matches!(local, "nsid" | "tmpl") && name == "val" {
-      "00000001".to_owned()
-    } else if local == "lvl" && name == "tplc" {
+    } else if matches!(local, "nsid" | "tmpl") && name == "val"
+      || local == "lvl" && name == "tplc"
+    {
       "00000001".to_owned()
     } else if local == "lvlText" && name == "val" {
       if !valid_numbering_label(attribute.value()) {
@@ -1252,6 +1281,52 @@ fn write_attributes(output: &mut String, attributes: &[(String, String)]) {
 fn content_node_is_removed(local: &str) -> bool {
   REMOVED_WORD_ELEMENTS.contains(&local)
     || matches!(local, "lang" | "tblCaption" | "tblDescription")
+}
+
+fn validate_retained_content_node(
+  node: Node<'_, '_>,
+  local: &str,
+) -> Result<(), DocxRewriteError> {
+  if !SAFE_CONTENT_WORD_ELEMENTS.contains(&local) {
+    return Err(unsupported(
+      "DOCX content contains an unclassified Word element",
+    ));
+  }
+  if local == "p"
+    && node
+      .ancestors()
+      .skip(1)
+      .any(|parent| word_local(parent) == Some("p"))
+  {
+    return Err(unsupported("DOCX content contains nested paragraphs"));
+  }
+  if local == "t"
+    && (node.parent_element().and_then(word_local) != Some("r")
+      || !node
+        .ancestors()
+        .any(|ancestor| word_local(ancestor) == Some("p"))
+      || node.children().any(|child| !child.is_text()))
+  {
+    return Err(unsupported(
+      "DOCX text is outside a supported paragraph run",
+    ));
+  }
+  let is_run_control = matches!(local, "tab" | "br" | "cr")
+    && node.parent_element().and_then(word_local) == Some("r")
+    && node
+      .ancestors()
+      .any(|ancestor| word_local(ancestor) == Some("p"));
+  let is_tab_stop = local == "tab"
+    && node.parent_element().and_then(word_local) == Some("tabs")
+    && node
+      .ancestors()
+      .any(|ancestor| word_local(ancestor) == Some("pPr"));
+  if matches!(local, "tab" | "br" | "cr") && !is_run_control && !is_tab_stop {
+    return Err(unsupported(
+      "DOCX control text is outside a supported paragraph run",
+    ));
+  }
+  Ok(())
 }
 
 fn serialize_content_node(
@@ -1302,46 +1377,7 @@ fn serialize_content_node(
     }
     return Ok(());
   }
-  if !SAFE_CONTENT_WORD_ELEMENTS.contains(&local) {
-    return Err(unsupported(
-      "DOCX content contains an unclassified Word element",
-    ));
-  }
-  if local == "p"
-    && node
-      .ancestors()
-      .skip(1)
-      .any(|parent| word_local(parent) == Some("p"))
-  {
-    return Err(unsupported("DOCX content contains nested paragraphs"));
-  }
-  if local == "t" {
-    if node.parent_element().and_then(word_local) != Some("r")
-      || !node
-        .ancestors()
-        .any(|ancestor| word_local(ancestor) == Some("p"))
-      || node.children().any(|child| !child.is_text())
-    {
-      return Err(unsupported(
-        "DOCX text is outside a supported paragraph run",
-      ));
-    }
-  }
-  let is_run_control = matches!(local, "tab" | "br" | "cr")
-    && node.parent_element().and_then(word_local) == Some("r")
-    && node
-      .ancestors()
-      .any(|ancestor| word_local(ancestor) == Some("p"));
-  let is_tab_stop = local == "tab"
-    && node.parent_element().and_then(word_local) == Some("tabs")
-    && node
-      .ancestors()
-      .any(|ancestor| word_local(ancestor) == Some("pPr"));
-  if matches!(local, "tab" | "br" | "cr") && !is_run_control && !is_tab_stop {
-    return Err(unsupported(
-      "DOCX control text is outside a supported paragraph run",
-    ));
-  }
+  validate_retained_content_node(node, local)?;
   output.push_str("<w:");
   output.push_str(local);
   if is_root {
@@ -1653,6 +1689,169 @@ fn valid_preset_dash(value: &str) -> bool {
   )
 }
 
+const SCHEME_COLOR_VALUES: &[&str] = &[
+  "accent1", "accent2", "accent3", "accent4", "accent5", "accent6", "bg1",
+  "bg2", "dk1", "dk2", "folHlink", "hlink", "lt1", "lt2", "phClr", "tx1",
+  "tx2",
+];
+const PATTERN_FILL_VALUES: &[&str] = &[
+  "cross",
+  "dashDnDiag",
+  "dashHorz",
+  "dashUpDiag",
+  "dashVert",
+  "diagCross",
+  "dkDnDiag",
+  "dkHorz",
+  "dkUpDiag",
+  "dkVert",
+  "dnDiag",
+  "horz",
+  "ltDnDiag",
+  "ltHorz",
+  "ltUpDiag",
+  "ltVert",
+  "pct10",
+  "pct20",
+  "pct25",
+  "pct30",
+  "pct40",
+  "pct5",
+  "pct50",
+  "pct60",
+  "pct70",
+  "pct75",
+  "pct80",
+  "pct90",
+  "smCheck",
+  "smGrid",
+  "solidDmnd",
+  "upDiag",
+  "vert",
+];
+
+fn theme_enum_attribute_allowed(local: &str, name: &str, value: &str) -> bool {
+  match (local, name) {
+    ("sysClr", "val") => {
+      matches!(value, "window" | "windowText" | "btnFace" | "btnText")
+    }
+    ("schemeClr", "val") => SCHEME_COLOR_VALUES.contains(&value),
+    ("prstClr", "val") => matches!(
+      value,
+      "black" | "blue" | "gray" | "green" | "red" | "white" | "yellow"
+    ),
+    ("prstDash", "val") => valid_preset_dash(value),
+    ("path", "path") => matches!(value, "circle" | "rect" | "shape"),
+    ("pattFill", "prst") => PATTERN_FILL_VALUES.contains(&value),
+    ("camera", "prst") => matches!(
+      value,
+      "legacyObliqueFront"
+        | "legacyPerspectiveFront"
+        | "orthographicFront"
+        | "perspectiveFront"
+        | "perspectiveRelaxed"
+    ),
+    ("bevelT", "prst") => {
+      matches!(value, "angle" | "circle" | "convex" | "relaxedInset")
+    }
+    ("lightRig", "rig") => matches!(
+      value,
+      "balanced"
+        | "brightRoom"
+        | "contrasting"
+        | "flat"
+        | "soft"
+        | "threePt"
+        | "twoPt"
+    ),
+    ("lightRig", "dir") => {
+      matches!(value, "b" | "bl" | "br" | "l" | "r" | "t" | "tl" | "tr")
+    }
+    (_, "rotWithShape") | ("lin", "scaled") => {
+      matches!(value, "0" | "1" | "true" | "false")
+    }
+    ("headEnd" | "tailEnd", "w" | "len") => {
+      matches!(value, "lg" | "med" | "sm")
+    }
+    ("headEnd" | "tailEnd", "type") => matches!(
+      value,
+      "arrow" | "diamond" | "none" | "oval" | "stealth" | "triangle"
+    ),
+    (_, "cap") => matches!(value, "flat" | "rnd" | "sq"),
+    (_, "cmpd") => {
+      matches!(value, "dbl" | "sng" | "thickThin" | "thinThick" | "tri")
+    }
+    (_, "algn") => matches!(
+      value,
+      "b" | "bl" | "br" | "ctr" | "in" | "l" | "out" | "r" | "t" | "tl" | "tr"
+    ),
+    (_, "flip") => matches!(value, "none" | "x" | "xy" | "y"),
+    _ => false,
+  }
+}
+
+fn parsed_i32_in(value: &str, range: std::ops::RangeInclusive<i32>) -> bool {
+  value
+    .parse::<i32>()
+    .is_ok_and(|number| range.contains(&number))
+}
+
+fn theme_numeric_attribute_allowed(
+  local: &str,
+  name: &str,
+  value: &str,
+) -> bool {
+  match (local, name) {
+    (
+      "alpha" | "alphaMod" | "alphaOff" | "lumMod" | "lumOff" | "satMod"
+      | "shade" | "tint",
+      "val",
+    )
+    | ("gs", "pos") => parsed_i32_in(value, 0..=100_000),
+    ("ln" | "bevelT", "w") => parsed_i32_in(value, 0..=20_116_800),
+    ("fillToRect", "l" | "t" | "r" | "b") => {
+      parsed_i32_in(value, -100_000..=100_000)
+    }
+    ("lin", "ang") | ("hslClr", "hue" | "sat" | "lum") => {
+      parsed_i32_in(value, 0..=21_600_000)
+    }
+    ("miter", "lim") => parsed_i32_in(value, 0..=1_000_000),
+    ("scrgbClr", "r" | "g" | "b") => parsed_i32_in(value, 0..=100_000),
+    (
+      element,
+      "h" | "blurRad" | "dist" | "dir" | "kx" | "ky" | "sx" | "sy" | "rad",
+    ) if element != "lightRig" => bounded_number(value, 21_600_000),
+    ("rot", "lat" | "lon" | "rev") => bounded_number(value, 21_600_000),
+    _ => false,
+  }
+}
+
+fn canonical_theme_attribute(
+  local: &str,
+  name: &str,
+  value: &str,
+) -> Option<String> {
+  if name == "name"
+    && matches!(local, "theme" | "clrScheme" | "fontScheme" | "fmtScheme")
+  {
+    return Some("stella".to_owned());
+  }
+  if name == "script" && local == "font" && safe_theme_script(value) {
+    return Some(value.to_owned());
+  }
+  if (name == "val" && local == "srgbClr" && fixed_hex(value, &[6]))
+    || (name == "lastClr" && local == "sysClr" && fixed_hex(value, &[6]))
+  {
+    return Some(value.to_ascii_uppercase());
+  }
+  if theme_enum_attribute_allowed(local, name, value)
+    || theme_numeric_attribute_allowed(local, name, value)
+  {
+    return Some(value.to_owned());
+  }
+  None
+}
+
 fn canonical_theme_attributes(
   node: Node<'_, '_>,
 ) -> Result<Vec<(String, String)>, DocxRewriteError> {
@@ -1664,329 +1863,17 @@ fn canonical_theme_attributes(
     }
     let name = attribute.name();
     let value = attribute.value();
-    let canonical = match name {
-      "name"
-        if matches!(
-          local,
-          "theme" | "clrScheme" | "fontScheme" | "fmtScheme"
-        ) =>
-      {
-        "stella".to_owned()
+    let canonical = if name == "typeface"
+      && matches!(local, "latin" | "ea" | "cs" | "font")
+    {
+      if !value.is_empty() && !common_font(value) {
+        return Err(unsupported("DOCX theme uses an unsupported font"));
       }
-      "typeface" if matches!(local, "latin" | "ea" | "cs" | "font") => {
-        if !value.is_empty() && !common_font(value) {
-          return Err(unsupported("DOCX theme uses an unsupported font"));
-        }
-        value.to_owned()
-      }
-      "script" if local == "font" && safe_theme_script(value) => {
-        value.to_owned()
-      }
-      "val"
-        if local == "srgbClr"
-          && value.len() == 6
-          && value.bytes().all(|byte| byte.is_ascii_hexdigit()) =>
-      {
-        value.to_ascii_uppercase()
-      }
-      "lastClr"
-        if local == "sysClr"
-          && value.len() == 6
-          && value.bytes().all(|byte| byte.is_ascii_hexdigit()) =>
-      {
-        value.to_ascii_uppercase()
-      }
-      "val"
-        if local == "sysClr"
-          && matches!(
-            value,
-            "window" | "windowText" | "btnFace" | "btnText"
-          ) =>
-      {
-        value.to_owned()
-      }
-      "val"
-        if local == "schemeClr"
-          && matches!(
-            value,
-            "accent1"
-              | "accent2"
-              | "accent3"
-              | "accent4"
-              | "accent5"
-              | "accent6"
-              | "bg1"
-              | "bg2"
-              | "dk1"
-              | "dk2"
-              | "folHlink"
-              | "hlink"
-              | "lt1"
-              | "lt2"
-              | "phClr"
-              | "tx1"
-              | "tx2"
-          ) =>
-      {
-        value.to_owned()
-      }
-      "val"
-        if local == "prstClr"
-          && matches!(
-            value,
-            "black" | "blue" | "gray" | "green" | "red" | "white" | "yellow"
-          ) =>
-      {
-        value.to_owned()
-      }
-      "val"
-        if matches!(
-          local,
-          "alpha"
-            | "alphaMod"
-            | "alphaOff"
-            | "lumMod"
-            | "lumOff"
-            | "satMod"
-            | "shade"
-            | "tint"
-        ) && value
-          .parse::<i32>()
-          .is_ok_and(|number| (0..=100_000).contains(&number)) =>
-      {
-        value.to_owned()
-      }
-      "pos"
-        if local == "gs"
-          && value
-            .parse::<i32>()
-            .is_ok_and(|number| (0..=100_000).contains(&number)) =>
-      {
-        value.to_owned()
-      }
-      "val" if local == "prstDash" && valid_preset_dash(value) => {
-        value.to_owned()
-      }
-      "path"
-        if local == "path" && matches!(value, "circle" | "rect" | "shape") =>
-      {
-        value.to_owned()
-      }
-      "prst"
-        if local == "pattFill"
-          && matches!(
-            value,
-            "cross"
-              | "dashDnDiag"
-              | "dashHorz"
-              | "dashUpDiag"
-              | "dashVert"
-              | "diagCross"
-              | "dkDnDiag"
-              | "dkHorz"
-              | "dkUpDiag"
-              | "dkVert"
-              | "dnDiag"
-              | "horz"
-              | "ltDnDiag"
-              | "ltHorz"
-              | "ltUpDiag"
-              | "ltVert"
-              | "pct10"
-              | "pct20"
-              | "pct25"
-              | "pct30"
-              | "pct40"
-              | "pct5"
-              | "pct50"
-              | "pct60"
-              | "pct70"
-              | "pct75"
-              | "pct80"
-              | "pct90"
-              | "smCheck"
-              | "smGrid"
-              | "solidDmnd"
-              | "upDiag"
-              | "vert"
-          ) =>
-      {
-        value.to_owned()
-      }
-      "prst"
-        if local == "camera"
-          && matches!(
-            value,
-            "legacyObliqueFront"
-              | "legacyPerspectiveFront"
-              | "orthographicFront"
-              | "perspectiveFront"
-              | "perspectiveRelaxed"
-          ) =>
-      {
-        value.to_owned()
-      }
-      "prst"
-        if local == "bevelT"
-          && matches!(
-            value,
-            "angle" | "circle" | "convex" | "relaxedInset"
-          ) =>
-      {
-        value.to_owned()
-      }
-      "rig"
-        if local == "lightRig"
-          && matches!(
-            value,
-            "balanced"
-              | "brightRoom"
-              | "contrasting"
-              | "flat"
-              | "soft"
-              | "threePt"
-              | "twoPt"
-          ) =>
-      {
-        value.to_owned()
-      }
-      "dir"
-        if local == "lightRig"
-          && matches!(
-            value,
-            "b" | "bl" | "br" | "l" | "r" | "t" | "tl" | "tr"
-          ) =>
-      {
-        value.to_owned()
-      }
-      "rotWithShape" if matches!(value, "0" | "1" | "true" | "false") => {
-        value.to_owned()
-      }
-      "scaled"
-        if local == "lin" && matches!(value, "0" | "1" | "true" | "false") =>
-      {
-        value.to_owned()
-      }
-      "w"
-        if local == "ln"
-          && value
-            .parse::<i32>()
-            .is_ok_and(|number| (0..=20_116_800).contains(&number)) =>
-      {
-        value.to_owned()
-      }
-      "w"
-        if local == "bevelT"
-          && value
-            .parse::<i32>()
-            .is_ok_and(|number| (0..=20_116_800).contains(&number)) =>
-      {
-        value.to_owned()
-      }
-      "w" | "len"
-        if matches!(local, "headEnd" | "tailEnd")
-          && matches!(value, "lg" | "med" | "sm") =>
-      {
-        value.to_owned()
-      }
-      "type"
-        if matches!(local, "headEnd" | "tailEnd")
-          && matches!(
-            value,
-            "arrow" | "diamond" | "none" | "oval" | "stealth" | "triangle"
-          ) =>
-      {
-        value.to_owned()
-      }
-      "l" | "t" | "r" | "b"
-        if local == "fillToRect"
-          && value
-            .parse::<i32>()
-            .is_ok_and(|number| (-100_000..=100_000).contains(&number)) =>
-      {
-        value.to_owned()
-      }
-      "ang"
-        if local == "lin"
-          && value
-            .parse::<i32>()
-            .is_ok_and(|number| (0..=21_600_000).contains(&number)) =>
-      {
-        value.to_owned()
-      }
-      "lim"
-        if local == "miter"
-          && value
-            .parse::<i32>()
-            .is_ok_and(|number| (0..=1_000_000).contains(&number)) =>
-      {
-        value.to_owned()
-      }
-      "hue" | "sat" | "lum"
-        if local == "hslClr"
-          && value
-            .parse::<i32>()
-            .is_ok_and(|number| (0..=21_600_000).contains(&number)) =>
-      {
-        value.to_owned()
-      }
-      "r" | "g" | "b"
-        if local == "scrgbClr"
-          && value
-            .parse::<i32>()
-            .is_ok_and(|number| (0..=100_000).contains(&number)) =>
-      {
-        value.to_owned()
-      }
-      "h" | "blurRad" | "dist" | "dir" | "kx" | "ky" | "sx" | "sy" | "rad"
-        if local != "lightRig"
-          && value
-            .parse::<i32>()
-            .is_ok_and(|number| number.unsigned_abs() <= 21_600_000) =>
-      {
-        value.to_owned()
-      }
-      "lat" | "lon" | "rev"
-        if local == "rot"
-          && value
-            .parse::<i32>()
-            .is_ok_and(|number| number.unsigned_abs() <= 21_600_000) =>
-      {
-        value.to_owned()
-      }
-      "cap" if matches!(value, "flat" | "rnd" | "sq") => value.to_owned(),
-      "cmpd"
-        if matches!(
-          value,
-          "dbl" | "sng" | "thickThin" | "thinThick" | "tri"
-        ) =>
-      {
-        value.to_owned()
-      }
-      "algn"
-        if matches!(
-          value,
-          "b"
-            | "bl"
-            | "br"
-            | "ctr"
-            | "in"
-            | "l"
-            | "out"
-            | "r"
-            | "t"
-            | "tl"
-            | "tr"
-        ) =>
-      {
-        value.to_owned()
-      }
-      "flip" if matches!(value, "none" | "x" | "xy" | "y") => value.to_owned(),
-      _ => {
-        return Err(unsupported(
-          "DOCX theme contains an unsupported attribute",
-        ));
-      }
+      value.to_owned()
+    } else {
+      canonical_theme_attribute(local, name, value).ok_or_else(|| {
+        unsupported("DOCX theme contains an unsupported attribute")
+      })?
     };
     output.push((name.to_owned(), canonical));
   }
@@ -2495,8 +2382,202 @@ fn write_archive(
   }
   writer
     .finish()
-    .map(|cursor| cursor.into_inner())
+    .map(Cursor::into_inner)
     .map_err(|_| unsupported("Sanitized DOCX archive could not be created"))
+}
+
+fn validate_relationship_identifiers(
+  entries: &[ArchiveEntry],
+) -> Result<HashMap<String, HashSet<String>>, DocxRewriteError> {
+  let mut relationship_ids = HashMap::<String, HashSet<String>>::new();
+  let mut main_relationship_count = 0_usize;
+  for entry in entries
+    .iter()
+    .filter(|entry| relationship_entry(&entry.path))
+  {
+    let xml = std::str::from_utf8(&entry.bytes)
+      .map_err(|_| unsupported("Sanitized DOCX relationships are not UTF-8"))?;
+    let relationships = parse_export_xml(xml, "relationships part")?;
+    let source = relationship_source_path(&entry.path).unwrap_or_default();
+    let ids = relationship_ids.entry(source).or_default();
+    for relation in relationships.descendants().filter(|node| {
+      node.is_element() && node.tag_name().name() == "Relationship"
+    }) {
+      let identifier = relation.attribute("Id").unwrap_or_default();
+      if !ids.insert(identifier.to_owned()) {
+        return Err(unsupported(
+          "Sanitized DOCX contains duplicate relationship identifiers",
+        ));
+      }
+      let is_main = entry.path == ROOT_RELATIONSHIPS_PATH
+        && relation.attribute("Type").is_some_and(|value| {
+          value == format!("{OFFICE_RELATIONSHIP_NAMESPACE}/officeDocument")
+        })
+        && resolve_relationship_target(
+          relation.attribute("Target").unwrap_or_default(),
+          &entry.path,
+        )
+        .as_deref()
+          == Some("word/document.xml");
+      if is_main {
+        main_relationship_count = main_relationship_count.saturating_add(1);
+      }
+    }
+  }
+  if main_relationship_count != 1 {
+    return Err(unsupported(
+      "Sanitized DOCX must have one main-document relationship",
+    ));
+  }
+  Ok(relationship_ids)
+}
+
+fn validate_relationship_entry(
+  entry: &ArchiveEntry,
+  entry_paths: &HashSet<&str>,
+) -> Result<(), DocxRewriteError> {
+  if entry.path != ROOT_RELATIONSHIPS_PATH
+    && relationship_source_path(&entry.path)
+      .as_ref()
+      .is_none_or(|source| !entry_paths.contains(source.as_str()))
+  {
+    return Err(unsupported(
+      "Sanitized DOCX contains an orphaned relationships part",
+    ));
+  }
+  let xml = std::str::from_utf8(&entry.bytes)
+    .map_err(|_| unsupported("Sanitized DOCX relationships are not UTF-8"))?;
+  if sanitize_relationships(xml, &entry.path, &HashSet::new())? != xml {
+    return Err(unsupported(
+      "Sanitized DOCX relationships are not canonical",
+    ));
+  }
+  let relationships = parse_export_xml(xml, "relationships part")?;
+  for relation in relationships.descendants().filter(|node| {
+    node.is_element() && node.tag_name().name() == "Relationship"
+  }) {
+    let target = relation.attribute("Target").unwrap_or_default();
+    if resolve_relationship_target(target, &entry.path)
+      .is_none_or(|target| !entry_paths.contains(target.as_str()))
+    {
+      return Err(unsupported(
+        "Sanitized DOCX contains a dangling relationship",
+      ));
+    }
+  }
+  Ok(())
+}
+
+fn validate_xml_entry(
+  entry: &ArchiveEntry,
+  content_type: &str,
+  styles: &HashMap<String, String>,
+  relationship_ids: &HashMap<String, HashSet<String>>,
+) -> Result<(), DocxRewriteError> {
+  let xml = std::str::from_utf8(&entry.bytes)
+    .map_err(|_| unsupported("Sanitized DOCX XML is not UTF-8"))?;
+  let part = ContentTypePart {
+    path: entry.path.clone(),
+    content_type: content_type.to_owned(),
+  };
+  let is_content = classify_part(&part).is_some();
+  let canonical = if is_content {
+    sanitize_content_xml(xml, &entry.path, styles)?
+  } else if formatting_content_type(content_type) {
+    sanitize_formatting_xml(xml, &entry.path, content_type, styles)?
+  } else {
+    return Err(unsupported("Sanitized DOCX contains an unsupported part"));
+  };
+  if canonical != xml {
+    return Err(unsupported("Sanitized DOCX XML is not canonical"));
+  }
+  if !is_content {
+    return Ok(());
+  }
+  let parsed = parse_export_xml(xml, "content part")?;
+  for attribute in parsed
+    .descendants()
+    .filter(Node::is_element)
+    .flat_map(|node| node.attributes())
+    .filter(|attribute| {
+      attribute.name() == "id"
+        && RELATIONSHIP_NAMESPACES
+          .contains(&attribute.namespace().unwrap_or_default())
+    })
+  {
+    if relationship_ids
+      .get(&entry.path)
+      .is_none_or(|ids| !ids.contains(attribute.value()))
+    {
+      return Err(unsupported(
+        "Sanitized DOCX content has an unresolved relationship reference",
+      ));
+    }
+  }
+  Ok(())
+}
+
+fn retained_text_node_count(
+  entries: &[ArchiveEntry],
+  by_path: &HashMap<&str, &str>,
+) -> Result<usize, DocxRewriteError> {
+  entries
+    .iter()
+    .filter(|entry| {
+      by_path
+        .get(entry.path.as_str())
+        .is_some_and(|content_type| {
+          classify_part(&ContentTypePart {
+            path: entry.path.clone(),
+            content_type: (*content_type).to_owned(),
+          })
+          .is_some()
+        })
+    })
+    .try_fold(0_usize, |count, entry| {
+      let xml = std::str::from_utf8(&entry.bytes)
+        .map_err(|_| unsupported("Sanitized DOCX content is not UTF-8"))?;
+      let parsed = parse_export_xml(xml, "content part")?;
+      let part_count = parsed
+        .descendants()
+        .filter(|node| {
+          node.is_element()
+            && word_local(*node) == Some("t")
+            && node.text().is_some_and(|text| !text.is_empty())
+        })
+        .count();
+      count
+        .checked_add(part_count)
+        .ok_or_else(|| unsupported("Sanitized DOCX text count overflowed"))
+    })
+}
+
+fn validate_extraction_coverage(
+  extraction: &DocxExtraction,
+  retained_text_count: usize,
+) -> Result<(), DocxRewriteError> {
+  if extraction.coverage.hyperlink_text_segment_count > 0
+    || extraction.coverage.revision_text_segment_count > 0
+    || extraction.coverage.unsupported_alternate_content_count > 0
+    || extraction.coverage.unsupported_symbol_count > 0
+    || extraction.coverage.unsupported_field_instruction_count > 0
+  {
+    return Err(unsupported(
+      "Sanitized DOCX still contains unsupported coverage",
+    ));
+  }
+  let extracted_text_count = extraction
+    .blocks
+    .iter()
+    .flat_map(|block| &block.segments)
+    .filter(|segment| segment.source == DocxSegmentSource::Text)
+    .count();
+  if retained_text_count != extracted_text_count {
+    return Err(unsupported(
+      "Sanitized DOCX text is not fully covered by extraction",
+    ));
+  }
+  Ok(())
 }
 
 fn validate_profile(
@@ -2528,46 +2609,7 @@ fn validate_profile(
     .map(|part| (part.path.as_str(), part.content_type.as_str()))
     .collect::<HashMap<_, _>>();
   let styles = collect_style_identifiers(&entries, &by_path)?;
-  let mut relationship_ids = HashMap::<String, HashSet<String>>::new();
-  let mut main_relationship_count = 0_usize;
-  for entry in entries
-    .iter()
-    .filter(|entry| relationship_entry(&entry.path))
-  {
-    let xml = std::str::from_utf8(&entry.bytes)
-      .map_err(|_| unsupported("Sanitized DOCX relationships are not UTF-8"))?;
-    let relationships = parse_export_xml(xml, "relationships part")?;
-    let source = relationship_source_path(&entry.path).unwrap_or_default();
-    let ids = relationship_ids.entry(source).or_default();
-    for relation in relationships.descendants().filter(|node| {
-      node.is_element() && node.tag_name().name() == "Relationship"
-    }) {
-      let identifier = relation.attribute("Id").unwrap_or_default();
-      if !ids.insert(identifier.to_owned()) {
-        return Err(unsupported(
-          "Sanitized DOCX contains duplicate relationship identifiers",
-        ));
-      }
-      if entry.path == ROOT_RELATIONSHIPS_PATH
-        && relation.attribute("Type").is_some_and(|value| {
-          value == format!("{OFFICE_RELATIONSHIP_NAMESPACE}/officeDocument")
-        })
-        && resolve_relationship_target(
-          relation.attribute("Target").unwrap_or_default(),
-          &entry.path,
-        )
-        .as_deref()
-          == Some("word/document.xml")
-      {
-        main_relationship_count = main_relationship_count.saturating_add(1);
-      }
-    }
-  }
-  if main_relationship_count != 1 {
-    return Err(unsupported(
-      "Sanitized DOCX must have one main-document relationship",
-    ));
-  }
+  let relationship_ids = validate_relationship_identifiers(&entries)?;
   let content_types_xml = std::str::from_utf8(&content_types_entry.bytes)
     .map_err(|_| unsupported("Sanitized DOCX content types are not UTF-8"))?;
   if sanitize_content_types(content_types_xml, &HashSet::new())?
@@ -2591,140 +2633,88 @@ fn validate_profile(
       continue;
     }
     if relationship_entry(&entry.path) {
-      if entry.path != ROOT_RELATIONSHIPS_PATH
-        && relationship_source_path(&entry.path)
-          .as_ref()
-          .is_none_or(|source| !entry_paths.contains(source.as_str()))
-      {
-        return Err(unsupported(
-          "Sanitized DOCX contains an orphaned relationships part",
-        ));
-      }
-      let xml = std::str::from_utf8(&entry.bytes).map_err(|_| {
-        unsupported("Sanitized DOCX relationships are not UTF-8")
-      })?;
-      if sanitize_relationships(xml, &entry.path, &HashSet::new())? != xml {
-        return Err(unsupported(
-          "Sanitized DOCX relationships are not canonical",
-        ));
-      }
-      let relationships = parse_export_xml(xml, "relationships part")?;
-      for relation in relationships.descendants().filter(|node| {
-        node.is_element() && node.tag_name().name() == "Relationship"
-      }) {
-        let target = relation.attribute("Target").unwrap_or_default();
-        if resolve_relationship_target(target, &entry.path)
-          .is_none_or(|target| !entry_paths.contains(target.as_str()))
-        {
-          return Err(unsupported(
-            "Sanitized DOCX contains a dangling relationship",
-          ));
-        }
-      }
+      validate_relationship_entry(entry, &entry_paths)?;
       continue;
     }
-    let Some(content_type) = by_path.get(entry.path.as_str()).copied() else {
-      return Err(unsupported("Sanitized DOCX contains an undeclared part"));
-    };
-    let xml = std::str::from_utf8(&entry.bytes)
-      .map_err(|_| unsupported("Sanitized DOCX XML is not UTF-8"))?;
-    let canonical = if classify_part(&ContentTypePart {
-      path: entry.path.clone(),
-      content_type: content_type.to_owned(),
-    })
-    .is_some()
-    {
-      sanitize_content_xml(xml, &entry.path, &styles)?
-    } else if formatting_content_type(content_type) {
-      sanitize_formatting_xml(xml, &entry.path, content_type, &styles)?
-    } else {
-      return Err(unsupported("Sanitized DOCX contains an unsupported part"));
-    };
-    if canonical != xml {
-      return Err(unsupported("Sanitized DOCX XML is not canonical"));
-    }
-    if classify_part(&ContentTypePart {
-      path: entry.path.clone(),
-      content_type: content_type.to_owned(),
-    })
-    .is_some()
-    {
-      let document = parse_export_xml(xml, "content part")?;
-      for attribute in document
-        .descendants()
-        .filter(Node::is_element)
-        .flat_map(|node| node.attributes())
-        .filter(|attribute| {
-          attribute.name() == "id"
-            && RELATIONSHIP_NAMESPACES
-              .contains(&attribute.namespace().unwrap_or_default())
-        })
-      {
-        if relationship_ids
-          .get(&entry.path)
-          .is_none_or(|ids| !ids.contains(attribute.value()))
-        {
-          return Err(unsupported(
-            "Sanitized DOCX content has an unresolved relationship reference",
-          ));
-        }
-      }
-    }
+    let content_type =
+      by_path.get(entry.path.as_str()).copied().ok_or_else(|| {
+        unsupported("Sanitized DOCX contains an undeclared part")
+      })?;
+    validate_xml_entry(entry, content_type, &styles, &relationship_ids)?;
   }
   let extraction = extract_docx_text(document).map_err(|error| {
     rewrite_error(DocxRewriteErrorCode::InvalidPackage, error.to_string())
   })?;
-  if extraction.coverage.hyperlink_text_segment_count > 0
-    || extraction.coverage.revision_text_segment_count > 0
-    || extraction.coverage.unsupported_alternate_content_count > 0
-    || extraction.coverage.unsupported_symbol_count > 0
-    || extraction.coverage.unsupported_field_instruction_count > 0
-  {
-    return Err(unsupported(
-      "Sanitized DOCX still contains unsupported coverage",
-    ));
-  }
-  let retained_text_node_count = entries
-    .iter()
-    .filter(|entry| {
-      by_path
-        .get(entry.path.as_str())
-        .is_some_and(|content_type| {
-          classify_part(&ContentTypePart {
-            path: entry.path.clone(),
-            content_type: (*content_type).to_owned(),
-          })
-          .is_some()
-        })
-    })
-    .try_fold(0_usize, |count, entry| {
-      let xml = std::str::from_utf8(&entry.bytes)
-        .map_err(|_| unsupported("Sanitized DOCX content is not UTF-8"))?;
-      let parsed = parse_export_xml(xml, "content part")?;
-      let part_count = parsed
-        .descendants()
-        .filter(|node| {
-          node.is_element()
-            && word_local(*node) == Some("t")
-            && node.text().is_some_and(|text| !text.is_empty())
-        })
-        .count();
-      count
-        .checked_add(part_count)
-        .ok_or_else(|| unsupported("Sanitized DOCX text count overflowed"))
-    })?;
-  let extracted_text_segment_count = extraction
-    .blocks
-    .iter()
-    .flat_map(|block| &block.segments)
-    .filter(|segment| segment.source == DocxSegmentSource::Text)
-    .count();
-  if retained_text_node_count != extracted_text_segment_count {
-    return Err(unsupported(
-      "Sanitized DOCX text is not fully covered by extraction",
-    ));
-  }
+  validate_extraction_coverage(
+    &extraction,
+    retained_text_node_count(&entries, &by_path)?,
+  )?;
   Ok(extraction)
+}
+
+fn sanitize_export_entry(
+  entry: &mut ArchiveEntry,
+  content_types: &HashMap<&str, &str>,
+  removed_paths: &HashSet<String>,
+  styles: &HashMap<String, String>,
+) -> Result<bool, DocxRewriteError> {
+  if entry.path == CONTENT_TYPES_PATH {
+    let xml = std::str::from_utf8(&entry.bytes)
+      .map_err(|_| unsupported("DOCX content types are not valid UTF-8"))?;
+    entry.bytes = sanitize_content_types(xml, removed_paths)?.into_bytes();
+    return Ok(true);
+  }
+  if relationship_entry(&entry.path) {
+    let xml = std::str::from_utf8(&entry.bytes)
+      .map_err(|_| unsupported("DOCX relationships are not valid UTF-8"))?;
+    entry.bytes =
+      sanitize_relationships(xml, &entry.path, removed_paths)?.into_bytes();
+    return Ok(true);
+  }
+  let content_type = content_types
+    .get(entry.path.as_str())
+    .copied()
+    .ok_or_else(|| {
+      unsupported(format!(
+        "DOCX anonymized export does not support undeclared part: {}",
+        entry.path
+      ))
+    })?;
+  if removed_content_type(content_type) {
+    return Ok(false);
+  }
+  let part = ContentTypePart {
+    path: entry.path.clone(),
+    content_type: content_type.to_owned(),
+  };
+  if classify_part(&part).is_some() {
+    if !conventional_supported_path(&entry.path, content_type) {
+      return Err(unsupported(
+        "DOCX anonymized export requires conventional content-part paths",
+      ));
+    }
+    let xml = std::str::from_utf8(&entry.bytes)
+      .map_err(|_| unsupported("DOCX content part is not valid UTF-8"))?;
+    entry.bytes = sanitize_content_xml(xml, &entry.path, styles)?.into_bytes();
+    return Ok(true);
+  }
+  if formatting_content_type(content_type)
+    && conventional_supported_path(&entry.path, content_type)
+  {
+    let xml = std::str::from_utf8(&entry.bytes)
+      .map_err(|_| unsupported("DOCX formatting part is not valid UTF-8"))?;
+    entry.bytes =
+      sanitize_formatting_xml(xml, &entry.path, content_type, styles)?
+        .into_bytes();
+    return Ok(true);
+  }
+  if content_type == RELATIONSHIPS_CONTENT_TYPE {
+    return Ok(false);
+  }
+  Err(unsupported(format!(
+    "DOCX anonymized export does not support package part: {}",
+    entry.path
+  )))
 }
 
 pub fn prepare_docx_anonymized_export(
@@ -2780,66 +2770,9 @@ pub fn prepare_docx_anonymized_export(
   });
   let mut sanitized_xml_part_count = 0;
   for entry in &mut entries {
-    if entry.path == CONTENT_TYPES_PATH {
-      let xml = std::str::from_utf8(&entry.bytes)
-        .map_err(|_| unsupported("DOCX content types are not valid UTF-8"))?;
-      entry.bytes = sanitize_content_types(xml, &removed_paths)?.into_bytes();
-      sanitized_xml_part_count += 1;
-      continue;
+    if sanitize_export_entry(entry, &by_path, &removed_paths, &styles)? {
+      sanitized_xml_part_count = sanitized_xml_part_count.saturating_add(1);
     }
-    if relationship_entry(&entry.path) {
-      let xml = std::str::from_utf8(&entry.bytes)
-        .map_err(|_| unsupported("DOCX relationships are not valid UTF-8"))?;
-      entry.bytes =
-        sanitize_relationships(xml, &entry.path, &removed_paths)?.into_bytes();
-      sanitized_xml_part_count += 1;
-      continue;
-    }
-    let Some(content_type) = by_path.get(entry.path.as_str()).copied() else {
-      return Err(unsupported(format!(
-        "DOCX anonymized export does not support undeclared part: {}",
-        entry.path
-      )));
-    };
-    if removed_content_type(content_type) {
-      continue;
-    }
-    if classify_part(&ContentTypePart {
-      path: entry.path.clone(),
-      content_type: content_type.to_owned(),
-    })
-    .is_some()
-    {
-      if !conventional_supported_path(&entry.path, content_type) {
-        return Err(unsupported(
-          "DOCX anonymized export requires conventional content-part paths",
-        ));
-      }
-      let xml = std::str::from_utf8(&entry.bytes)
-        .map_err(|_| unsupported("DOCX content part is not valid UTF-8"))?;
-      entry.bytes =
-        sanitize_content_xml(xml, &entry.path, &styles)?.into_bytes();
-      sanitized_xml_part_count += 1;
-      continue;
-    }
-    if formatting_content_type(content_type)
-      && conventional_supported_path(&entry.path, content_type)
-    {
-      let xml = std::str::from_utf8(&entry.bytes)
-        .map_err(|_| unsupported("DOCX formatting part is not valid UTF-8"))?;
-      entry.bytes =
-        sanitize_formatting_xml(xml, &entry.path, content_type, &styles)?
-          .into_bytes();
-      sanitized_xml_part_count += 1;
-      continue;
-    }
-    if content_type == RELATIONSHIPS_CONTENT_TYPE {
-      continue;
-    }
-    return Err(unsupported(format!(
-      "DOCX anonymized export does not support package part: {}",
-      entry.path
-    )));
   }
   let sanitized = write_archive(entries)?;
   let extraction = validate_profile(&sanitized)?;
@@ -2926,7 +2859,8 @@ mod tests {
     let mut output = String::new();
     for index in 0..archive.len() {
       let mut file = archive.by_index(index)?;
-      if file.name().ends_with(".xml") || file.name().ends_with(".rels") {
+      let extension = file.name().rsplit_once('.').map(|(_, value)| value);
+      if matches!(extension, Some("xml" | "rels")) {
         file.read_to_string(&mut output)?;
       }
     }
