@@ -21,6 +21,10 @@ use super::{
 
 const DRAWINGML_NAMESPACE: &str =
   "http://schemas.openxmlformats.org/drawingml/2006/main";
+const STRICT_DRAWINGML_NAMESPACE: &str =
+  "http://purl.oclc.org/ooxml/drawingml/main";
+const DRAWINGML_NAMESPACES: [&str; 2] =
+  [DRAWINGML_NAMESPACE, STRICT_DRAWINGML_NAMESPACE];
 const XML_NAMESPACE: &str = "http://www.w3.org/XML/1998/namespace";
 const WORD_2010_NAMESPACE: &str =
   "http://schemas.microsoft.com/office/word/2010/wordml";
@@ -341,7 +345,7 @@ fn unsupported(message: impl Into<String>) -> DocxRewriteError {
   rewrite_error(DocxRewriteErrorCode::UnsupportedReplacement, message)
 }
 
-fn word_local(node: Node<'_, '_>) -> Option<&str> {
+fn word_local<'input>(node: Node<'_, 'input>) -> Option<&'input str> {
   WORDPROCESSING_NAMESPACES
     .contains(&node.tag_name().namespace().unwrap_or_default())
     .then(|| node.tag_name().name())
@@ -464,9 +468,21 @@ fn escape_text(value: &str) -> String {
 }
 
 fn escape_attribute(value: &str) -> String {
-  escape_text(value)
-    .replace('"', "&quot;")
-    .replace('\'', "&apos;")
+  let mut output = String::with_capacity(value.len());
+  for character in value.chars() {
+    match character {
+      '&' => output.push_str("&amp;"),
+      '<' => output.push_str("&lt;"),
+      '>' => output.push_str("&gt;"),
+      '"' => output.push_str("&quot;"),
+      '\'' => output.push_str("&apos;"),
+      '\t' => output.push_str("&#x9;"),
+      '\n' => output.push_str("&#xA;"),
+      '\r' => output.push_str("&#xD;"),
+      _ => output.push(character),
+    }
+  }
+  output
 }
 
 fn valid_relationship_id(value: &str) -> bool {
@@ -794,7 +810,6 @@ fn word_attribute_allowed(node: Node<'_, '_>, name: &str) -> bool {
     | "lvlJc"
     | "lvlRestart"
     | "outlineLvl"
-    | "pgNumType"
     | "vMerge"
     | "hMerge"
     | "tblLayout"
@@ -804,7 +819,6 @@ fn word_attribute_allowed(node: Node<'_, '_>, name: &str) -> bool {
     | "gridSpan"
     | "fitText"
     | "cnfStyle"
-    | "docGrid"
     | "paperSrc"
     | "type"
     | "b"
@@ -874,6 +888,9 @@ fn word_attribute_value_allowed(
   value: &str,
 ) -> bool {
   let local = node.tag_name().name();
+  if local == "uiPriority" && name == "val" {
+    return value.parse::<u8>().is_ok_and(|number| number <= 99);
+  }
   if matches!(
     name,
     "default"
@@ -1310,12 +1327,17 @@ fn serialize_content_node(
       ));
     }
   }
-  if matches!(local, "tab" | "br" | "cr")
-    && (node.parent_element().and_then(word_local) != Some("r")
-      || !node
-        .ancestors()
-        .any(|ancestor| word_local(ancestor) == Some("p")))
-  {
+  let is_run_control = matches!(local, "tab" | "br" | "cr")
+    && node.parent_element().and_then(word_local) == Some("r")
+    && node
+      .ancestors()
+      .any(|ancestor| word_local(ancestor) == Some("p"));
+  let is_tab_stop = local == "tab"
+    && node.parent_element().and_then(word_local) == Some("tabs")
+    && node
+      .ancestors()
+      .any(|ancestor| word_local(ancestor) == Some("pPr"));
+  if matches!(local, "tab" | "br" | "cr") && !is_run_control && !is_tab_stop {
     return Err(unsupported(
       "DOCX control text is outside a supported paragraph run",
     ));
@@ -1628,6 +1650,13 @@ fn safe_theme_script(value: &str) -> bool {
   )
 }
 
+fn valid_preset_dash(value: &str) -> bool {
+  matches!(
+    value,
+    "dash" | "dashDot" | "dot" | "lgDash" | "solid" | "sysDash" | "sysDot"
+  )
+}
+
 fn canonical_theme_attributes(
   node: Node<'_, '_>,
 ) -> Result<Vec<(String, String)>, DocxRewriteError> {
@@ -1739,19 +1768,7 @@ fn canonical_theme_attributes(
       {
         value.to_owned()
       }
-      "val"
-        if local == "prstDash"
-          && matches!(
-            value,
-            "dash"
-              | "dashDot"
-              | "dot"
-              | "lgDash"
-              | "solid"
-              | "sysDash"
-              | "sysDot"
-          ) =>
-      {
+      "val" if local == "prstDash" && valid_preset_dash(value) => {
         value.to_owned()
       }
       "path"
@@ -1986,7 +2003,9 @@ fn serialize_theme_node(
   output: &mut String,
   is_root: bool,
 ) -> Result<(), DocxRewriteError> {
-  if node.tag_name().namespace() != Some(DRAWINGML_NAMESPACE) {
+  if !DRAWINGML_NAMESPACES
+    .contains(&node.tag_name().namespace().unwrap_or_default())
+  {
     return Err(unsupported(
       "DOCX theme contains an unsupported XML namespace",
     ));
@@ -2062,24 +2081,63 @@ const SAFE_TEXT_OUTLINE_DRAWING_ELEMENTS: &[&str] = &[
   "tint",
 ];
 
+const SAFE_TEXT_OUTLINE_WORD_2010_ELEMENTS: &[&str] =
+  &["bevel", "noFill", "prstDash"];
+
+fn canonical_text_outline_word_2010_attributes(
+  node: Node<'_, '_>,
+) -> Result<Vec<(String, String)>, DocxRewriteError> {
+  let local = node.tag_name().name();
+  let mut output = Vec::new();
+  for attribute in node.attributes() {
+    if attribute.namespace() != Some(WORD_2010_NAMESPACE)
+      || local != "prstDash"
+      || attribute.name() != "val"
+      || !valid_preset_dash(attribute.value())
+    {
+      return Err(unsupported(
+        "DOCX text outline contains an unsupported Word extension attribute",
+      ));
+    }
+    output.push(("w14:val".to_owned(), attribute.value().to_owned()));
+  }
+  Ok(output)
+}
+
 fn serialize_text_outline_drawing_node(
   node: Node<'_, '_>,
   output: &mut String,
 ) -> Result<(), DocxRewriteError> {
-  if node.tag_name().namespace() != Some(DRAWINGML_NAMESPACE)
-    || !SAFE_TEXT_OUTLINE_DRAWING_ELEMENTS.contains(&node.tag_name().name())
-  {
+  let namespace = node.tag_name().namespace().unwrap_or_default();
+  let local = node.tag_name().name();
+  let is_drawing = DRAWINGML_NAMESPACES.contains(&namespace)
+    && SAFE_TEXT_OUTLINE_DRAWING_ELEMENTS.contains(&local);
+  let is_word_2010 = namespace == WORD_2010_NAMESPACE
+    && SAFE_TEXT_OUTLINE_WORD_2010_ELEMENTS.contains(&local);
+  if !is_drawing && !is_word_2010 {
     return Err(unsupported(
       "DOCX text outline contains an unsupported DrawingML element",
     ));
   }
-  let local = node.tag_name().name();
-  output.push_str("<a:");
+  let prefix = if is_word_2010 { "w14" } else { "a" };
+  output.push('<');
+  output.push_str(prefix);
+  output.push(':');
   output.push_str(local);
-  write_attributes(output, &canonical_theme_attributes(node)?);
+  let attributes = if is_word_2010 {
+    canonical_text_outline_word_2010_attributes(node)?
+  } else {
+    canonical_theme_attributes(node)?
+  };
+  write_attributes(output, &attributes);
   let mut children = String::new();
   for child in node.children() {
     if child.is_element() {
+      if is_word_2010 {
+        return Err(unsupported(
+          "DOCX text outline contains an unsupported Word extension child",
+        ));
+      }
       serialize_text_outline_drawing_node(child, &mut children)?;
     } else if child.is_text()
       && child.text().is_some_and(|text| !text.trim().is_empty())
@@ -2092,7 +2150,9 @@ fn serialize_text_outline_drawing_node(
   } else {
     output.push('>');
     output.push_str(&children);
-    output.push_str("</a:");
+    output.push_str("</");
+    output.push_str(prefix);
+    output.push(':');
     output.push_str(local);
     output.push('>');
   }
@@ -2182,9 +2242,13 @@ fn sanitize_formatting_xml(
 ) -> Result<String, DocxRewriteError> {
   let document = parse_export_xml(xml, "formatting part")?;
   if content_type == THEME_CONTENT_TYPE {
-    if document.root_element().tag_name().namespace()
-      != Some(DRAWINGML_NAMESPACE)
-      || document.root_element().tag_name().name() != "theme"
+    if !DRAWINGML_NAMESPACES.contains(
+      &document
+        .root_element()
+        .tag_name()
+        .namespace()
+        .unwrap_or_default(),
+    ) || document.root_element().tag_name().name() != "theme"
     {
       return Err(unsupported("DOCX theme has an unexpected root element"));
     }
@@ -2808,16 +2872,21 @@ pub fn finalize_docx_anonymized_export(
 
 #[cfg(test)]
 mod tests {
-  use std::io::{Cursor, Read as _, Write as _};
+  use std::{
+    collections::HashMap,
+    io::{Cursor, Read as _, Write as _},
+  };
 
   use zip::{ZipArchive, ZipWriter, write::SimpleFileOptions};
 
   use crate::{DocxBlockRewrite, DocxTextReplacement, rewrite_docx_text};
 
   use super::{
-    DRAWINGML_NAMESPACE, WORD_2010_NAMESPACE, finalize_docx_anonymized_export,
-    prepare_docx_anonymized_export, valid_numbering_label,
-    validate_docx_anonymized_export,
+    DRAWINGML_NAMESPACE, STRICT_DRAWINGML_NAMESPACE, THEME_CONTENT_TYPE,
+    WORD_2010_NAMESPACE, escape_attribute, finalize_docx_anonymized_export,
+    prepare_docx_anonymized_export, sanitize_formatting_xml,
+    valid_numbering_label, validate_docx_anonymized_export,
+    word_attribute_value_allowed,
   };
 
   const CONTENT_TYPES: &str =
@@ -2908,7 +2977,7 @@ mod tests {
       (
         "word/styles.xml",
         &format!(
-          "<w:styles xmlns:w=\"{WORD}\" xmlns:w14=\"{WORD_2010_NAMESPACE}\" xmlns:a=\"{DRAWINGML_NAMESPACE}\"><w:style w:type=\"paragraph\" w:styleId=\"PrivateStyleName\"><w:name w:val=\"Private Style Name\"/><w:rPr><w:b/><w14:textOutline w14:w=\"12700\" w14:cap=\"rnd\" w14:cmpd=\"sng\" w14:algn=\"ctr\"><a:solidFill><a:srgbClr val=\"112233\"/></a:solidFill><a:prstDash val=\"solid\"/><a:round/></w14:textOutline></w:rPr></w:style></w:styles>"
+          "<w:styles xmlns:w=\"{WORD}\" xmlns:w14=\"{WORD_2010_NAMESPACE}\"><w:style w:type=\"paragraph\" w:styleId=\"PrivateStyleName\"><w:name w:val=\"Private Style Name\"/><w:uiPriority w:val=\"9\"/><w:rPr><w:b/><w14:textOutline w14:w=\"12700\" w14:cap=\"rnd\" w14:cmpd=\"sng\" w14:algn=\"ctr\"><w14:noFill/><w14:prstDash w14:val=\"solid\"/><w14:bevel/></w14:textOutline></w:rPr></w:style></w:styles>"
         ),
       ),
       (
@@ -3031,7 +3100,8 @@ mod tests {
     assert!(document_xml.contains("stellaStyle1"));
     assert!(styles_xml.contains("stellaStyle1"));
     assert!(styles_xml.contains("<w14:textOutline"));
-    assert!(styles_xml.contains("<a:srgbClr val=\"112233\"/>"));
+    assert!(styles_xml.contains("<w14:prstDash w14:val=\"solid\"/>"));
+    assert!(styles_xml.contains("<w:uiPriority w:val=\"9\"/>"));
     assert!(!styles_xml.contains("Private"));
     let all_xml = archive_text(&prepared.document)?;
     for hidden in [
@@ -3055,7 +3125,7 @@ mod tests {
   fn finalizes_cross_run_unicode_rewrites_with_control_segments()
   -> Result<(), Box<dyn std::error::Error>> {
     let source = ordinary_document(
-      "<w:p><w:r><w:t>Al</w:t></w:r><w:r><w:t>😀</w:t></w:r><w:r><w:t>ice</w:t><w:tab/><w:t>tail</w:t></w:r></w:p>",
+      "<w:p><w:pPr><w:tabs><w:tab w:val=\"left\" w:pos=\"720\" w:leader=\"dot\"/></w:tabs></w:pPr><w:r><w:t>Al</w:t></w:r><w:r><w:t>😀</w:t></w:r><w:r><w:t>ice</w:t><w:tab/><w:t>tail</w:t></w:r></w:p>",
     )?;
     let prepared = prepare_docx_anonymized_export(&source)?;
     let block = prepared.extraction.blocks.first().ok_or("missing block")?;
@@ -3078,6 +3148,42 @@ mod tests {
       extraction.blocks.first().map(|block| block.text.as_str()),
       Some("██\ttail")
     );
+    assert!(
+      entry(&finalized, "word/document.xml")?
+        .contains("<w:tab w:leader=\"dot\" w:pos=\"720\" w:val=\"left\"/>")
+    );
+    Ok(())
+  }
+
+  #[test]
+  fn canonicalizes_strict_drawingml_and_escaped_attributes()
+  -> Result<(), Box<dyn std::error::Error>> {
+    let strict_theme = format!(
+      "<a:theme xmlns:a=\"{STRICT_DRAWINGML_NAMESPACE}\" name=\"Display&#x9;Name\"><a:themeElements><a:clrScheme name=\"Colors\"><a:dk1><a:srgbClr val=\"112233\"/></a:dk1></a:clrScheme></a:themeElements></a:theme>"
+    );
+    let canonical = sanitize_formatting_xml(
+      &strict_theme,
+      "word/theme/theme1.xml",
+      THEME_CONTENT_TYPE,
+      &HashMap::new(),
+    )?;
+    assert!(canonical.contains(&format!("xmlns:a=\"{DRAWINGML_NAMESPACE}\"")));
+    assert!(!canonical.contains(STRICT_DRAWINGML_NAMESPACE));
+    assert!(!canonical.contains("Display"));
+    assert_eq!(escape_attribute("a\tb\nc\rd"), "a&#x9;b&#xA;c&#xD;d");
+    let priority = roxmltree::Document::parse(&format!(
+      "<w:uiPriority xmlns:w=\"{WORD}\" w:val=\"99\"/>"
+    ))?;
+    assert!(word_attribute_value_allowed(
+      priority.root_element(),
+      "val",
+      "99"
+    ));
+    assert!(!word_attribute_value_allowed(
+      priority.root_element(),
+      "val",
+      "100"
+    ));
     Ok(())
   }
 
