@@ -67,8 +67,8 @@
     "@stll/typescript-config": "0.6.0",
     "@typescript/native": "npm:typescript@7.0.2",
     "lefthook": "^2.1.12",
-    "oxfmt": "^0.66.0",
-    "oxlint": "1.81.0",
+    "oxfmt": "^0.67.0",
+    "oxlint": "1.82.0",
     "oxlint-tsgolint": "7.0.2001",
     "turbo": "^2.10.12"
   }
