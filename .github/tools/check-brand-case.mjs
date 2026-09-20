@@ -4,7 +4,7 @@ import process from "node:process";
 
 const DISALLOWED = ["S", "tella"].join("");
 const EXPECTED = DISALLOWED.toLowerCase();
-const IGNORED_PATHS = new Set(["AGENTS.md", "CLAUDE.md", "GEMINI.md"]);
+const IGNORED_PATHS = new Set(["AGENTS.md", "GEMINI.md"]);
 const IGNORED_PREFIXES = [
   ".ai/",
   ".agents/",
