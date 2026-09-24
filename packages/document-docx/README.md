@@ -116,6 +116,35 @@ Untouched ZIP entries and XML are preserved by content. Empty, overlapping,
 cross-block, tab/break-crossing, revision-content, stale, and invalid-XML
 replacements are rejected explicitly.
 
+## Anonymized DOCX export
+
+Use `rewriteDocxForAnonymizedExport` when returning a rewritten DOCX to an
+untrusted recipient. It removes document properties, comments, collaboration
+metadata, bookmarks, content-control metadata, Office add-in parts, and field
+instructions before exposing text to the planner. Static cached field display
+text is retained and scanned as ordinary text. It rejects revisions, images,
+embedded content, external relationships, and unclassified package parts. The
+final package is validated again before it is returned.
+
+```ts
+import { rewriteDocxForAnonymizedExport } from "@stll/anonymize-docx";
+
+const result = await rewriteDocxForAnonymizedExport({
+  document,
+  planRewrites: async (extraction) =>
+    extraction.blocks.map((block) => ({
+      location: block.location,
+      expectedText: block.text,
+      replacements: planBlockReplacements(block.text),
+    })),
+});
+```
+
+Planner offsets are UTF-16 code-unit offsets into each sanitized block. The
+export profile preserves ordinary paragraph, run, table, section, header,
+footer, style, numbering, font, and theme formatting. Documents whose visible
+rendering depends on rejected content must use another output format.
+
 ## Session-backed restoration
 
 Restore session placeholders with a live, already-authorized session object.

@@ -11,7 +11,7 @@ export const DOCX_EXTRACTION_CONTRACT_VERSION = 1 as const;
 export const DOCX_ARCHIVE_MAX_BYTES = 64 * 1024 * 1024;
 export const DOCX_ENTRY_MAX_BYTES = 16 * 1024 * 1024;
 export const DOCX_UNCOMPRESSED_MAX_BYTES = 128 * 1024 * 1024;
-export const DOCX_XML_MAX_DEPTH = 256;
+export const DOCX_XML_MAX_DEPTH = 128;
 
 export class DocxExtractionError extends Error {
   readonly code: DocxExtractionErrorCode;

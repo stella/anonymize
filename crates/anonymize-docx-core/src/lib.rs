@@ -7,17 +7,31 @@ use std::{
 };
 
 use percent_encoding::percent_decode_str;
-use roxmltree::{Document, Node, NodeId};
+use quick_xml::{Reader, events::Event};
+#[cfg(test)]
+use roxmltree::NodeId;
+use roxmltree::{Document, Node};
 use serde::{Deserialize, Serialize};
 use stella_docx_kernel as docx_kernel;
 use thiserror::Error;
 use zip::{CompressionMethod, ZipArchive, ZipWriter, write::SimpleFileOptions};
 
+mod export;
+#[cfg(test)]
+mod xml_limits_tests;
+
+pub use export::{
+  DocxAnonymizedExportPreparation, DocxAnonymizedExportReport,
+  finalize_docx_anonymized_export, prepare_docx_anonymized_export,
+  validate_docx_anonymized_export,
+};
+
 pub const DOCX_EXTRACTION_CONTRACT_VERSION: u8 = 1;
 pub const DOCX_ARCHIVE_MAX_BYTES: usize = 64 * 1024 * 1024;
 pub const DOCX_ENTRY_MAX_BYTES: usize = 16 * 1024 * 1024;
 pub const DOCX_UNCOMPRESSED_MAX_BYTES: usize = 128 * 1024 * 1024;
-pub const DOCX_XML_MAX_DEPTH: usize = 256;
+// Exclusive nesting limit bounds recursive XML consumers after iterative validation.
+pub const DOCX_XML_MAX_DEPTH: usize = 128;
 const DOCX_MAX_ENTRIES: usize = 4_096;
 const DOCX_MAX_TEXT_BLOCKS: usize = 100_000;
 const DOCX_MAX_TEXT_SEGMENTS: usize = 1_000_000;
@@ -333,7 +347,7 @@ struct XmlPatch {
   value: String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct ArchiveEntry {
   path: String,
   bytes: Vec<u8>,
@@ -1085,6 +1099,60 @@ fn read_archive(document: &[u8]) -> Result<Vec<ArchiveEntry>, DocxError> {
   Ok(entries)
 }
 
+// roxmltree recursively parses element content. Bound its input with an
+// iterative reader before it can consume one stack frame per nested element.
+fn validate_xml_depth(bytes: &[u8]) -> Result<(), DocxError> {
+  let mut reader = Reader::from_reader(bytes);
+  let mut depth = 0_usize;
+  loop {
+    let event = reader.read_event().map_err(|_| {
+      error(DocxErrorCode::InvalidXml, "DOCX part is not valid XML")
+    })?;
+    match event {
+      Event::Start(_) | Event::Empty(_) => {
+        let next_depth = depth.saturating_add(1);
+        if next_depth >= DOCX_XML_MAX_DEPTH {
+          return Err(error(
+            DocxErrorCode::UncompressedLimitExceeded,
+            format!(
+              "DOCX XML must contain fewer than {DOCX_XML_MAX_DEPTH} nested elements"
+            ),
+          ));
+        }
+        if matches!(event, Event::Start(_)) {
+          depth = next_depth;
+        }
+      }
+      Event::End(_) => {
+        depth = depth.checked_sub(1).ok_or_else(|| {
+          error(DocxErrorCode::InvalidXml, "DOCX part is not valid XML")
+        })?;
+      }
+      Event::DocType(_) => {
+        return Err(error(
+          DocxErrorCode::InvalidPackage,
+          "DOCX XML must not contain a document type declaration",
+        ));
+      }
+      Event::Eof => {
+        if depth != 0 {
+          return Err(error(
+            DocxErrorCode::InvalidXml,
+            "DOCX part is not valid XML",
+          ));
+        }
+        return Ok(());
+      }
+      Event::Text(_)
+      | Event::CData(_)
+      | Event::Comment(_)
+      | Event::Decl(_)
+      | Event::PI(_)
+      | Event::GeneralRef(_) => {}
+    }
+  }
+}
+
 fn parse_xml<'a>(
   bytes: &'a [u8],
   path: &str,
@@ -1104,31 +1172,13 @@ fn parse_xml<'a>(
       "DOCX XML must not contain a document type declaration",
     ));
   }
-  let document = Document::parse(text).map_err(|_| {
+  validate_xml_depth(bytes)?;
+  Document::parse(text).map_err(|_| {
     error(
       DocxErrorCode::InvalidXml,
       format!("DOCX part is not valid XML: {path}"),
     )
-  })?;
-  let mut depths = HashMap::<NodeId, usize>::new();
-  for node in document.descendants().filter(Node::is_element) {
-    let parent_depth = node
-      .parent_element()
-      .and_then(|parent| depths.get(&parent.id()))
-      .copied()
-      .unwrap_or_default();
-    let depth = parent_depth.saturating_add(1);
-    if depth >= DOCX_XML_MAX_DEPTH {
-      return Err(error(
-        DocxErrorCode::UncompressedLimitExceeded,
-        format!(
-          "DOCX XML must not exceed {DOCX_XML_MAX_DEPTH} nested elements"
-        ),
-      ));
-    }
-    depths.insert(node.id(), depth);
-  }
-  Ok(document)
+  })
 }
 
 fn attribute(node: Node<'_, '_>, local: &str) -> Option<String> {
@@ -1786,7 +1836,9 @@ fn kernel_error(source: docx_kernel::ScanError, part_path: &str) -> DocxError {
     ),
     docx_kernel::ScanError::TooDeep => error(
       DocxErrorCode::UncompressedLimitExceeded,
-      format!("DOCX XML must not exceed {DOCX_XML_MAX_DEPTH} nested elements"),
+      format!(
+        "DOCX XML must contain fewer than {DOCX_XML_MAX_DEPTH} nested elements"
+      ),
     ),
     docx_kernel::ScanError::TooManyBlocks => error(
       DocxErrorCode::UncompressedLimitExceeded,
@@ -2730,7 +2782,7 @@ mod extraction_kernel_parity {
       (
         stella_docx_kernel::ScanError::TooDeep,
         DocxErrorCode::UncompressedLimitExceeded,
-        "DOCX XML must not exceed 256 nested elements",
+        "DOCX XML must contain fewer than 128 nested elements",
       ),
       (
         stella_docx_kernel::ScanError::TooManyBlocks,
