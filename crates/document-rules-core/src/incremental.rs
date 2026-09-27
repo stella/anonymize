@@ -751,7 +751,7 @@ mod tests {
     assert_send::<IncrementalDocumentSession>();
   }
 
-  fn input_count(database: &Database, debug_name: &str) -> usize {
+  fn input_count(database: &mut Database, debug_name: &str) -> usize {
     <dyn salsa::Database>::memory_usage(database)
       .structs
       .iter()
@@ -795,14 +795,14 @@ mod tests {
       live_count.saturating_add(retired_record_limit(live_count));
     assert!(session.allocated_record_count <= retained_limit);
     assert_eq!(
-      input_count(&session.database, "BlockInput"),
+      input_count(&mut session.database, "BlockInput"),
       session.allocated_record_count
     );
     assert_eq!(
-      input_count(&session.database, "LinkInput"),
+      input_count(&mut session.database, "LinkInput"),
       session.allocated_record_count
     );
-    assert_eq!(input_count(&session.database, "DocumentInput"), 1);
+    assert_eq!(input_count(&mut session.database, "DocumentInput"), 1);
   }
 
   fn one_block_edit_patch_and_refresh_counts(
