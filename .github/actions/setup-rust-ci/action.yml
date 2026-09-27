@@ -85,12 +85,12 @@ runs:
 
     - if: inputs.profile == 'quality'
       name: Install pinned Rust quality tools
-      uses: taiki-e/install-action@a6b2e2dcd845ddd7f509ce4f3ed3d922b80cc5d9 # v2.84.0
+      uses: taiki-e/install-action@94c31af3204a9f15ab40b35ad084410b905bbc73 # v2.87.17
       with:
-        tool: nextest@0.9.140,cargo-deny@0.20.2,cargo-insta@1.48.0
+        tool: nextest@0.9.145,cargo-deny@0.20.2,cargo-insta@1.48.0
 
     - if: inputs.profile == 'detached'
       name: Install pinned cargo-deny
-      uses: taiki-e/install-action@a6b2e2dcd845ddd7f509ce4f3ed3d922b80cc5d9 # v2.84.0
+      uses: taiki-e/install-action@94c31af3204a9f15ab40b35ad084410b905bbc73 # v2.87.17
       with:
         tool: cargo-deny@0.20.2

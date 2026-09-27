@@ -5,9 +5,9 @@ runs:
   using: composite
   steps:
     - name: Install wasm-bindgen CLI
-      uses: taiki-e/install-action@ed67fa35ac944f3a9b33f12c4dd43b6f31a47e20 # v2.83.3
+      uses: taiki-e/install-action@94c31af3204a9f15ab40b35ad084410b905bbc73 # v2.87.17
       with:
-        tool: wasm-bindgen-cli@0.2.126
+        tool: wasm-bindgen-cli@0.2.128
 
     - name: Verify wasm-bindgen CLI
       shell: bash
