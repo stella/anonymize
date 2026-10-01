@@ -268,10 +268,9 @@ fn should_strip_period(
   if !text.ends_with('.') || known_period_suffix(text) {
     return false;
   }
-  // Gazetteer extensions already carry evidence of a recognized legal form.
+  // A gazetteer hit extended over a legal form ends with that form's dot.
   if entity.source == DetectionSource::LegalForm
-    || (entity.source == DetectionSource::Gazetteer
-      && entity.source_detail == Some(SourceDetail::GazetteerExtension))
+    || entity.source_detail == Some(SourceDetail::GazetteerExtension)
   {
     return false;
   }
