@@ -5,7 +5,8 @@
 //! scored per class. Run with `--nocapture` to print the per-class table.
 
 use stella_anonymize_adapter_contract::{
-  assemble_static_search_config, prepared_search_config_from_binding,
+  BindingPreparedSearchConfig, assemble_static_search_config,
+  prepared_search_config_from_binding,
 };
 use stella_anonymize_core::assemble::{GazetteerEntry, PipelineConfig};
 use stella_anonymize_core::{DetectionSource, PipelineEntity, PreparedEngine};
@@ -232,6 +233,17 @@ fn engine_for(
   language: Option<&str>,
   entries: &[(&str, &str, &[&str])],
 ) -> PreparedEngine {
+  let core =
+    prepared_search_config_from_binding(binding_for(language, entries))
+      .expect("assembled config should convert");
+  PreparedEngine::new(core).expect("pipeline should prepare")
+}
+
+/// The assembled binding config of [`engine_for`].
+fn binding_for(
+  language: Option<&str>,
+  entries: &[(&str, &str, &[&str])],
+) -> BindingPreparedSearchConfig {
   let mut config = serde_json::json!({
     "threshold": 0.3,
     "enableTriggerPhrases": false,
@@ -268,11 +280,8 @@ fn engine_for(
       .expect("entry should deserialize")
     })
     .collect();
-  let binding = assemble_static_search_config(&config, None, &gazetteer)
-    .expect("config should assemble");
-  let core = prepared_search_config_from_binding(binding)
-    .expect("assembled config should convert");
-  PreparedEngine::new(core).expect("pipeline should prepare")
+  assemble_static_search_config(&config, None, &gazetteer)
+    .expect("config should assemble")
 }
 
 fn gazetteer_texts(engine: &PreparedEngine, text: &str) -> Vec<String> {
@@ -280,6 +289,27 @@ fn gazetteer_texts(engine: &PreparedEngine, text: &str) -> Vec<String> {
     .into_iter()
     .map(|entity| entity.text)
     .collect()
+}
+
+#[test]
+fn configs_without_the_newer_gazetteer_fields_still_load() {
+  const NOVAK: &[(&str, &str, &[&str])] = &[("Novák", PERSON, &[])];
+  let mut json = serde_json::to_value(binding_for(None, NOVAK))
+    .expect("binding config should serialize");
+  let gazetteer = json
+    .get_mut("gazetteer_data")
+    .and_then(serde_json::Value::as_object_mut)
+    .expect("gazetteer data should be present");
+  gazetteer.remove("legal_form_suffixes");
+  gazetteer.remove("inflection");
+  let binding: BindingPreparedSearchConfig = serde_json::from_value(json)
+    .expect("a config without the newer fields should deserialize");
+  let engine = PreparedEngine::new(
+    prepared_search_config_from_binding(binding)
+      .expect("old-shape config should convert"),
+  )
+  .expect("old-shape config should prepare");
+  assert_eq!(gazetteer_texts(&engine, "Předáno Novákovi."), ["Novákovi"]);
 }
 
 #[test]

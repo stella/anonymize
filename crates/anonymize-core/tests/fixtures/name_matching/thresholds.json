@@ -11,7 +11,7 @@
   },
   "deny-list/case": {
     "metric": "recall",
-    "minimum_exact_hits": 6,
+    "minimum_exact_hits": 7,
     "total": 7
   },
   "deny-list/diacritics-added": {
@@ -61,7 +61,7 @@
   },
   "deny-list/legal-form-variant": {
     "metric": "recall",
-    "minimum_exact_hits": 7,
+    "minimum_exact_hits": 10,
     "total": 11
   },
   "deny-list/marker-control": {
@@ -91,12 +91,12 @@
   },
   "deny-list/typo-1": {
     "metric": "recall",
-    "minimum_exact_hits": 5,
+    "minimum_exact_hits": 6,
     "total": 7
   },
   "deny-list/typo-2": {
     "metric": "recall",
-    "minimum_exact_hits": 5,
+    "minimum_exact_hits": 6,
     "total": 6
   },
   "deny-list/uuid": {

@@ -976,9 +976,6 @@ fn fuzzy_options(
     case_insensitive: options.case_insensitive,
     whole_words: options.whole_words,
     normalize_diacritics: options.normalize_diacritics,
-    // Keep every pattern's hits: a window of one pattern that the detector
-    // later rejects must not hide an overlapping hit of another pattern.
-    overlap_strategy: text_search::OverlapStrategy::All,
     ..text_search::TextSearchOptions::default()
   }
 }
