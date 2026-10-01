@@ -2,12 +2,12 @@
   "deny-list/adjacent-word": {
     "maximum_false_positives": 0,
     "metric": "false-positives",
-    "total": 94
+    "total": 95
   },
   "deny-list/bracketed-id": {
     "maximum_false_positives": 1,
     "metric": "false-positives",
-    "total": 5
+    "total": 4
   },
   "deny-list/case": {
     "metric": "recall",
@@ -57,12 +57,22 @@
   "deny-list/language-scope": {
     "maximum_false_positives": 0,
     "metric": "false-positives",
-    "total": 139
+    "total": 140
   },
   "deny-list/legal-form-variant": {
     "metric": "recall",
     "minimum_exact_hits": 7,
     "total": 11
+  },
+  "deny-list/marker-control": {
+    "metric": "recall",
+    "minimum_exact_hits": 1,
+    "total": 1
+  },
+  "deny-list/marker-suppression": {
+    "metric": "false-positives",
+    "maximum_false_positives": 0,
+    "total": 1
   },
   "deny-list/ordinary-word": {
     "maximum_false_positives": 0,
@@ -72,7 +82,7 @@
   "deny-list/span-extent": {
     "maximum_false_positives": 1,
     "metric": "false-positives",
-    "total": 84
+    "total": 85
   },
   "deny-list/split": {
     "metric": "recall",
@@ -102,7 +112,7 @@
   "forced/bracketed-id": {
     "maximum_false_positives": 0,
     "metric": "false-positives",
-    "total": 5
+    "total": 4
   },
   "forced/forced-adjacent-word": {
     "maximum_false_positives": 0,
@@ -153,6 +163,11 @@
     "maximum_false_positives": 0,
     "metric": "false-positives",
     "total": 68
+  },
+  "forced/marker-suppression": {
+    "metric": "false-positives",
+    "maximum_false_positives": 0,
+    "total": 1
   },
   "forced/ordinary-word": {
     "maximum_false_positives": 0,

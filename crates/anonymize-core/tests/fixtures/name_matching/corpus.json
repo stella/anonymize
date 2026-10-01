@@ -954,11 +954,19 @@
     },
     {
       "expectation": "keep",
-      "kind": "bracketed-id",
-      "text": "before ⟦token-acfe-01⟧ after",
-      "surface": "⟦token-acfe-01⟧",
+      "kind": "marker-suppression",
+      "text": "before ⟦Zeta⟧ after",
+      "surface": "⟦Zeta⟧",
       "language": "en",
       "label": null
+    },
+    {
+      "expectation": "redact",
+      "kind": "marker-control",
+      "text": "before Zeta after",
+      "surface": "Zeta",
+      "language": "en",
+      "label": "organization"
     },
     {
       "expectation": "keep",

@@ -16,6 +16,10 @@ only those entries active.
 Each case declares its language. Scores use that language alone; the
 `language-scope` class requires identical resolved entities and redaction when
 either other language, or both, are enabled. Its divergence ceiling is zero.
+The `marker-suppression` case contains the configured fictional name `Zeta`
+inside `⟦…⟧`, with zero false positives allowed. Its `marker-control` pair
+requires an exact hit on the same name in the same sentence without brackets;
+both cases must pass, so marker suppression cannot pass vacuously.
 
 Recall requires a gazetteer entity with the expected label and exactly the
 labeled byte range, with no overlapping entity extending outside it. Partial matches, even several
