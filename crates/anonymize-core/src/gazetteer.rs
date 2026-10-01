@@ -139,10 +139,72 @@ struct SequenceTrie {
   nodes: Vec<TrieNode>,
 }
 
+/// An entry ending at a trie node: its label and the punctuation it spells
+/// before its first and after its last word (`@` in `@alice`, `++` in
+/// `C++`), which the document must spell around the words too.
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct Terminal {
+  label: String,
+  edges: EdgePunctuation,
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+struct EdgePunctuation {
+  leading: String,
+  trailing: String,
+}
+
+impl EdgePunctuation {
+  /// The span widened over this punctuation, when the text spells it right
+  /// before `start` and right after `end`.
+  fn around(
+    &self,
+    text: &str,
+    start: usize,
+    end: usize,
+  ) -> Option<(usize, usize)> {
+    let before = text.get(..start)?;
+    let after = text.get(end..)?;
+    let leading = trailing_match(before, &self.leading)?;
+    let trailing = leading_match(after, &self.trailing)?;
+    Some((start.saturating_sub(leading), end.saturating_add(trailing)))
+  }
+}
+
+/// Byte length of `marks` at the end of `text`, compared as canonical
+/// punctuation.
+fn trailing_match(text: &str, marks: &str) -> Option<usize> {
+  let mut len = 0_usize;
+  let mut text_chars = text.chars().rev();
+  for expected in marks.chars().rev() {
+    let actual = text_chars.next()?;
+    if canonical_punctuation(actual) != canonical_punctuation(expected) {
+      return None;
+    }
+    len = len.saturating_add(actual.len_utf8());
+  }
+  Some(len)
+}
+
+/// Byte length of `marks` at the start of `text`, compared as canonical
+/// punctuation.
+fn leading_match(text: &str, marks: &str) -> Option<usize> {
+  let mut len = 0_usize;
+  let mut text_chars = text.chars();
+  for expected in marks.chars() {
+    let actual = text_chars.next()?;
+    if canonical_punctuation(actual) != canonical_punctuation(expected) {
+      return None;
+    }
+    len = len.saturating_add(actual.len_utf8());
+  }
+  Some(len)
+}
+
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 struct TrieNode {
-  /// Labels of the entries that end here.
-  labels: Vec<String>,
+  /// The entries that end here.
+  terminals: Vec<Terminal>,
   /// Word -> child.
   children: HashMap<usize, usize>,
   /// `(separator key, word)` -> longest separator, in chars, accepted
@@ -187,11 +249,16 @@ impl PreparedGazetteerMatchData {
   pub(crate) fn new(
     data: GazetteerMatchData,
     slice: PatternSlice,
-    patterns: &[SearchPattern],
+    patterns: Option<&[SearchPattern]>,
   ) -> Result<Self> {
     validate_length("gazetteer_data.labels", slice, data.labels.len())?;
     validate_length("gazetteer_data.is_fuzzy", slice, data.is_fuzzy.len())?;
-    validate_length("gazetteer patterns", slice, patterns.len())?;
+    if !data.terms.is_empty() {
+      validate_length("gazetteer_data.terms", slice, data.terms.len())?;
+    }
+    if let Some(patterns) = patterns {
+      validate_length("gazetteer patterns", slice, patterns.len())?;
+    }
     let legal_forms = data
       .legal_form_suffixes
       .iter()
@@ -200,47 +267,43 @@ impl PreparedGazetteerMatchData {
       .collect::<Vec<_>>();
     let mut prepared = Self {
       slice,
-      rows: Vec::with_capacity(patterns.len()),
+      rows: Vec::with_capacity(data.labels.len()),
       fuzzy_deletions: HashMap::new(),
       fuzzy_shape: FuzzyShape::default(),
       sequences: SequenceTrie::new(data.inflection),
       legal_forms,
     };
-    for (index, ((label, is_fuzzy), pattern)) in data
-      .labels
-      .into_iter()
-      .zip(data.is_fuzzy)
-      .zip(patterns)
-      .enumerate()
+    for (index, (label, is_fuzzy)) in
+      data.labels.into_iter().zip(data.is_fuzzy).enumerate()
     {
-      let kind = match (is_fuzzy, pattern) {
+      let pattern = patterns.and_then(|patterns| patterns.get(index));
+      let term = row_term(index, data.terms.get(index), pattern)?;
+      let kind = match (is_fuzzy, pattern, term) {
         (
           false,
-          SearchPattern::Literal(term)
-          | SearchPattern::LiteralWithOptions { pattern: term, .. },
+          None
+          | Some(
+            SearchPattern::Literal(_)
+            | SearchPattern::LiteralWithOptions { .. },
+          ),
+          term,
         ) => {
-          prepared.add_sequences(term, &label);
+          // An artifact-only config from before entry text was carried
+          // keeps its exact search hits; only folded matching needs text.
+          if let Some(term) = term {
+            prepared.add_sequences(term, &label);
+          }
           RowKind::Exact
         }
-        (
-          true,
-          SearchPattern::Fuzzy {
-            pattern: term,
-            distance,
-          },
-        ) => RowKind::Fuzzy {
-          folded: fold_word_chars(term),
-          words: tokenize(term).len(),
-          // An automatic distance follows the same length scale as the
-          // assembled patterns; short entries then accept folded hits only.
-          // A caller-supplied distance is capped at the supported maximum.
-          max_distance: usize::from(
-            distance
-              .or_else(|| gazetteer_fuzzy_distance(term))
-              .unwrap_or(0),
-          )
-          .min(MAX_FUZZY_DISTANCE),
-        },
+        (true, None, Some(term)) => fuzzy_row(term, None),
+        (true, Some(SearchPattern::Fuzzy { distance, .. }), Some(term)) => {
+          fuzzy_row(term, *distance)
+        }
+        (true, None, None) => {
+          return Err(Error::MissingStaticData {
+            field: "gazetteer_data.terms",
+          });
+        }
         _ => {
           return Err(Error::InvalidStaticData {
             field: "gazetteer_data.is_fuzzy",
@@ -250,7 +313,7 @@ impl PreparedGazetteerMatchData {
           });
         }
       };
-      let term_chars = pattern_text(pattern).chars().count();
+      let term_chars = term.map_or(0, |term| term.chars().count());
       if let RowKind::Fuzzy {
         folded,
         max_distance,
@@ -286,10 +349,11 @@ impl PreparedGazetteerMatchData {
 
   fn add_sequences(&mut self, term: &str, label: &str) {
     let core = self.strip_legal_form(term);
-    let Some((words, gaps)) = split_term(core) else {
+    let Some(SplitTerm { words, gaps, edges }) = split_term(core) else {
       return;
     };
     let reorderable = label == PERSON_LABEL
+      && edges == EdgePunctuation::default()
       && (2..=MAX_REORDERED_PERSON_WORDS).contains(&words.len())
       && !words.iter().any(|word| word.chars().any(char::is_numeric));
     if reorderable
@@ -304,9 +368,11 @@ impl PreparedGazetteerMatchData {
       reordered_gaps.push(first_gap.clone().with_comma());
       reordered_gaps
         .extend(gaps.iter().take(gaps.len().saturating_sub(1)).cloned());
-      self.sequences.insert(&reordered, reordered_gaps, label);
+      self
+        .sequences
+        .insert((&reordered, reordered_gaps), label, &edges);
     }
-    self.sequences.insert(&words, gaps, label);
+    self.sequences.insert((&words, gaps), label, &edges);
   }
 
   /// The entry without a trailing legal form, so `Beta Trading s.r.o.` also
@@ -579,7 +645,12 @@ impl SequenceTrie {
     }
   }
 
-  fn insert(&mut self, words: &[String], gaps: Vec<GapRule>, label: &str) {
+  fn insert(
+    &mut self,
+    (words, gaps): (&[String], Vec<GapRule>),
+    label: &str,
+    edges: &EdgePunctuation,
+  ) {
     let mut node = 0_usize;
     let mut gaps = gaps.into_iter();
     for (position, word) in words.iter().enumerate() {
@@ -612,10 +683,14 @@ impl SequenceTrie {
       }
       node = child;
     }
+    let terminal = Terminal {
+      label: label.to_owned(),
+      edges: edges.clone(),
+    };
     if let Some(end) = self.nodes.get_mut(node)
-      && !end.labels.iter().any(|known| known == label)
+      && !end.terminals.contains(&terminal)
     {
-      end.labels.push(label.to_owned());
+      end.terminals.push(terminal);
     }
   }
 
@@ -695,13 +770,17 @@ impl SequenceTrie {
     let Some(current) = self.nodes.get(node) else {
       return;
     };
-    for label in &current.labels {
-      hits.push(Hit {
-        start: walk.start,
-        end,
-        label,
-        score: EXACT_SCORE,
-      });
+    for terminal in &current.terminals {
+      if let Some((start, end)) =
+        terminal.edges.around(walk.text, walk.start, end)
+      {
+        hits.push(Hit {
+          start,
+          end,
+          label: &terminal.label,
+          score: EXACT_SCORE,
+        });
+      }
     }
     let Some(token) = walk.tokens.get(next) else {
       return;
@@ -924,17 +1003,40 @@ impl LegalFormSuffix {
   }
 }
 
-/// Splits an entry into words and the separators between them. Entries in
-/// scripts written without spaces, and entries whose edges are punctuation
-/// (`C++`, `@alice`, `.NET`), stay on the literal path only: dropping that
-/// punctuation would let the bare word match.
-fn split_term(term: &str) -> Option<(Vec<String>, Vec<GapRule>)> {
+/// An entry split into its words, the separators between them, and the
+/// punctuation around them.
+struct SplitTerm {
+  words: Vec<String>,
+  gaps: Vec<GapRule>,
+  edges: EdgePunctuation,
+}
+
+/// Splits an entry into words and the separators between them. Punctuation
+/// at either end (`@alice`, `C++`, `.NET`) is kept as edge punctuation the
+/// document must spell too, so the bare word never matches. Entries in
+/// scripts written without spaces stay on the literal path only.
+fn split_term(term: &str) -> Option<SplitTerm> {
   let trimmed = term.trim();
-  let significant_edge =
-    |edge: Option<char>| edge.is_some_and(|ch| !is_word_char(ch));
-  if trimmed.chars().any(is_unspaced_script)
-    || significant_edge(trimmed.chars().next())
-    || significant_edge(trimmed.chars().next_back())
+  if trimmed.chars().any(is_unspaced_script) {
+    return None;
+  }
+  let core = trimmed.trim_matches(|ch: char| !is_word_char(ch));
+  let leading = trimmed
+    .get(
+      ..trimmed.len().saturating_sub(
+        trimmed
+          .trim_start_matches(|ch: char| !is_word_char(ch))
+          .len(),
+      ),
+    )
+    .unwrap_or_default();
+  let trailing = trimmed
+    .get(trimmed.trim_end_matches(|ch: char| !is_word_char(ch)).len()..)
+    .unwrap_or_default();
+  if leading
+    .chars()
+    .chain(trailing.chars())
+    .any(char::is_whitespace)
   {
     return None;
   }
@@ -942,7 +1044,7 @@ fn split_term(term: &str) -> Option<(Vec<String>, Vec<GapRule>)> {
   let mut gaps = Vec::new();
   let mut word = String::new();
   let mut gap = String::new();
-  for ch in term.chars() {
+  for ch in core.chars() {
     if is_word_char(ch) {
       if !word.is_empty() && !gap.is_empty() {
         words.push(std::mem::take(&mut word));
@@ -958,7 +1060,14 @@ fn split_term(term: &str) -> Option<(Vec<String>, Vec<GapRule>)> {
     return None;
   }
   words.push(word);
-  Some((words, gaps))
+  Some(SplitTerm {
+    words,
+    gaps,
+    edges: EdgePunctuation {
+      leading: leading.to_owned(),
+      trailing: trailing.to_owned(),
+    },
+  })
 }
 
 /// Folded spellings a word may take: itself and, for names of letters when
@@ -1278,6 +1387,40 @@ fn without_contained<'a>(
     .into_iter()
     .filter(|hit| !covering.contains(&(hit.start, hit.end, hit.label)))
     .collect()
+}
+
+/// The entry text of gazetteer row `index`: the data's own term, or the
+/// text of its search pattern, if either exists. When both exist they must
+/// agree.
+fn row_term<'t>(
+  index: usize,
+  term: Option<&'t String>,
+  pattern: Option<&'t SearchPattern>,
+) -> Result<Option<&'t str>> {
+  match (term, pattern.map(pattern_text)) {
+    (Some(term), Some(text)) if term != text => Err(Error::InvalidStaticData {
+      field: "gazetteer_data.terms",
+      reason: format!("row {index} differs from its search pattern"),
+    }),
+    (Some(term), _) => Ok(Some(term)),
+    (None, text) => Ok(text),
+  }
+}
+
+/// A fuzzy row for `term`. An automatic distance follows the same length
+/// scale as the assembled patterns, so short entries accept folded hits
+/// only; a caller-supplied distance is capped at the supported maximum.
+fn fuzzy_row(term: &str, distance: Option<u8>) -> RowKind {
+  RowKind::Fuzzy {
+    folded: fold_word_chars(term),
+    words: tokenize(term).len(),
+    max_distance: usize::from(
+      distance
+        .or_else(|| gazetteer_fuzzy_distance(term))
+        .unwrap_or(0),
+    )
+    .min(MAX_FUZZY_DISTANCE),
+  }
 }
 
 /// The entry text a gazetteer search pattern carries.
@@ -1697,9 +1840,10 @@ mod tests {
         .map(|form| (*form).to_owned())
         .collect(),
       inflection,
+      terms: Vec::new(),
     };
     (
-      PreparedGazetteerMatchData::new(data, slice, &patterns).unwrap(),
+      PreparedGazetteerMatchData::new(data, slice, Some(&patterns)).unwrap(),
       terms,
     )
   }
@@ -2046,12 +2190,29 @@ mod tests {
   }
 
   #[test]
+  fn punctuated_entries_fold_like_any_other() {
+    let entries = [exact("@álîce", PERSON), exact(".NÉT", ORGANIZATION)];
+    for (text, expected) in [
+      ("Ping @alice today.", "@alice"),
+      ("Ping @Alice today.", "@Alice"),
+      ("Ping @ÁLÎCE today.", "@ÁLÎCE"),
+      ("Built on .net today.", ".net"),
+    ] {
+      assert_eq!(found(&entries, text), [expected], "{text}");
+    }
+    for text in ["alice agreed.", "Ping #alice today.", "the net result"] {
+      assert!(found(&entries, text).is_empty(), "{text}");
+    }
+  }
+
+  #[test]
   fn automatic_fuzzy_distance_follows_the_length_scale() {
     let data = GazetteerMatchData {
       labels: vec![PERSON.to_owned(), PERSON.to_owned()],
       is_fuzzy: vec![true, true],
       legal_form_suffixes: Vec::new(),
       inflection: GazetteerInflection::CzechSlovak,
+      terms: Vec::new(),
     };
     let patterns = ["Wintermute", "Acme"].map(|term| SearchPattern::Fuzzy {
       pattern: term.to_owned(),
@@ -2060,7 +2221,7 @@ mod tests {
     let prepared = PreparedGazetteerMatchData::new(
       data,
       PatternSlice { start: 0, end: 2 },
-      &patterns,
+      Some(&patterns),
     )
     .unwrap();
     let fuzzy = |pattern: u32, text: &str, end: usize| {
@@ -2728,12 +2889,33 @@ mod tests {
   }
 
   #[test]
+  fn carried_terms_must_agree_with_their_patterns() {
+    let data = GazetteerMatchData {
+      labels: vec![ORGANIZATION.to_owned()],
+      is_fuzzy: vec![false],
+      legal_form_suffixes: Vec::new(),
+      inflection: GazetteerInflection::CzechSlovak,
+      terms: vec!["Other".to_owned()],
+    };
+    let literal = [SearchPattern::Literal("Acme".to_owned())];
+    let slice = PatternSlice { start: 0, end: 1 };
+    assert!(matches!(
+      PreparedGazetteerMatchData::new(data, slice, Some(&literal)),
+      Err(Error::InvalidStaticData {
+        field: "gazetteer_data.terms",
+        ..
+      })
+    ));
+  }
+
+  #[test]
   fn row_kinds_must_match_their_patterns() {
     let data = GazetteerMatchData {
       labels: vec![ORGANIZATION.to_owned()],
       is_fuzzy: vec![false],
       legal_form_suffixes: Vec::new(),
       inflection: GazetteerInflection::CzechSlovak,
+      terms: Vec::new(),
     };
     let fuzzy = [SearchPattern::Fuzzy {
       pattern: "Acme".to_owned(),
@@ -2741,9 +2923,10 @@ mod tests {
     }];
     let slice = PatternSlice { start: 0, end: 1 };
     assert!(
-      PreparedGazetteerMatchData::new(data.clone(), slice, &fuzzy).is_err()
+      PreparedGazetteerMatchData::new(data.clone(), slice, Some(&fuzzy))
+        .is_err()
     );
-    assert!(PreparedGazetteerMatchData::new(data, slice, &[]).is_err());
+    assert!(PreparedGazetteerMatchData::new(data, slice, Some(&[])).is_err());
   }
 
   const SAMPLE_NAMES: &[&str] = &[

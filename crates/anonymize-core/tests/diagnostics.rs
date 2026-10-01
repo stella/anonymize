@@ -91,6 +91,7 @@ fn static_redaction_diagnostics_engine() -> PreparedEngine {
       is_fuzzy: vec![false],
       legal_form_suffixes: vec![String::from("s.r.o.")],
       inflection: GazetteerInflection::None,
+      terms: Vec::new(),
     }),
     country_data: None,
     hotword_data: None,
@@ -447,6 +448,7 @@ fn engine_reports_prepare_slot_diagnostics() {
       is_fuzzy: vec![false],
       legal_form_suffixes: vec![String::from("s.r.o.")],
       inflection: GazetteerInflection::None,
+      terms: Vec::new(),
     }),
     ..empty_config(PreparedEngineSlices::default())
   };

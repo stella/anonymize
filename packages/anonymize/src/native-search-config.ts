@@ -293,6 +293,7 @@ export type NativeGazetteerData = {
   is_fuzzy: boolean[];
   legal_form_suffixes: string[];
   inflection: NativeGazetteerInflection;
+  terms: string[];
 };
 
 export type NativeHotwordRule = {
