@@ -451,7 +451,16 @@ impl PreparedGazetteerMatchData {
     let mut entities =
       Vec::with_capacity(exact.len().saturating_add(fuzzy.len()));
     for hit in exact.into_iter().chain(fuzzy) {
-      let legal_form_end = self.legal_form_end(text, hit.end);
+      // Every emitted span must close any dotted chain it ends or starts
+      // in (`s.r.o` inside `s.r.o.y`); fall back to the unextended span,
+      // then drop the hit.
+      let extended = self
+        .legal_form_end(text, hit.end)
+        .filter(|end| dotted_edges_close(text, hit.start, *end));
+      if extended.is_none() && !dotted_edges_close(text, hit.start, hit.end) {
+        continue;
+      }
+      let legal_form_end = extended;
       let end = legal_form_end.unwrap_or(hit.end);
       if !seen.insert((hit.start, end, hit.label)) {
         continue;
@@ -1279,6 +1288,33 @@ fn pattern_text(pattern: &SearchPattern) -> &str {
     | SearchPattern::Fuzzy { pattern: text, .. }
     | SearchPattern::Regex(text)
     | SearchPattern::RegexWithOptions { pattern: text, .. } => text,
+  }
+}
+
+/// Whether the span's first and last whitespace-free parts are whole: a part
+/// that holds a dot (a dotted abbreviation such as `s.r.o` or `a.s.`) must
+/// not continue with a word character or a dot and a word character
+/// outside the span, as in `s.r.o.y`. Without a dot the joiner rules of
+/// [`Guard::in_identifier`] apply (`acme.cz` keeps `acme`).
+fn dotted_edges_close(text: &str, start: usize, end: usize) -> bool {
+  let span = text.get(start..end).unwrap_or_default();
+  let last = span.rsplit(char::is_whitespace).next().unwrap_or_default();
+  let first = span.split(char::is_whitespace).next().unwrap_or_default();
+  let open_after = last.contains('.')
+    && continues_chain(text.get(end..).unwrap_or_default().chars());
+  let open_before = first.contains('.')
+    && continues_chain(text.get(..start).unwrap_or_default().chars().rev());
+  !(open_after || open_before)
+}
+
+/// Whether `chars`, read away from a span, continue a word or a dotted
+/// chain: a word character, or a dot and a word character.
+fn continues_chain(chars: impl Iterator<Item = char>) -> bool {
+  let mut chars = chars.peekable();
+  match chars.next() {
+    Some(ch) if is_word_char(ch) => true,
+    Some('.') => chars.peek().copied().is_some_and(is_word_char),
+    _ => false,
   }
 }
 
@@ -2421,6 +2457,25 @@ mod tests {
     assert!(found.iter().all(|hit| hit == "Wintermute"), "{found:?}");
   }
 
+  #[test]
+  fn spans_never_end_inside_a_dotted_chain() {
+    let entries = [fuzzy_entry("Luma s.r.o.")];
+    let text = "archived Luma s.r.o. reviewed xLuma s.r.o.y e\u{301} konec";
+    let found = engine_found(&entries, text);
+    assert_eq!(found, ["Luma s.r.o."], "{text:?}");
+  }
+
+  /// Word boundaries per UAX #29.
+  fn word_boundaries(text: &str) -> HashSet<usize> {
+    use unicode_segmentation::UnicodeSegmentation;
+    let mut boundaries = HashSet::from([0, text.len()]);
+    for (start, segment) in text.split_word_bound_indices() {
+      boundaries.insert(start);
+      boundaries.insert(start.saturating_add(segment.len()));
+    }
+    boundaries
+  }
+
   /// Byte offsets the gazetteer covers in `text` for `entries`.
   fn coverage(entries: &[Entry<'_>], text: &str) -> Vec<bool> {
     let (prepared, _) = prepare(entries);
@@ -2481,6 +2536,43 @@ mod tests {
       failure_persistence: None,
       ..ProptestConfig::default()
     })]
+
+    #[test]
+    fn spaced_spans_sit_on_unicode_word_boundaries(
+      names in prop::collection::vec(
+        prop_oneof![
+          prop::sample::select(vec!["Zy", "Dab", "Luma", "Velomír", "Žilora", "Ľunora"])
+            .prop_map(str::to_owned),
+          (
+            prop::sample::select(vec!["Luma", "Bex", "Mivo", "Wintermute"]),
+            prop::sample::select(vec!["Labs", "s.r.o.", "a.s.", "GmbH", "Ltd"]),
+          )
+            .prop_map(|(name, suffix)| format!("{name} {suffix}")),
+        ],
+        1..4,
+      ),
+      separator in prop::sample::select(vec![" ", ", ", "\n", "\u{a0}", "\u{1f980}"]),
+    ) {
+      let entries = names.iter().map(|name| fuzzy_entry(name)).collect::<Vec<_>>();
+      let text = names
+        .iter()
+        .map(|name| format!("archived{separator}{name}{separator}reviewed x{name}y e\u{301} Ελληνικά 界"))
+        .collect::<Vec<_>>()
+        .join(separator);
+      let boundaries = word_boundaries(&text);
+      let (prepared, _) = prepare(&entries);
+      let entities = prepared.detect(&engine_hits(&entries, &text), &text).unwrap();
+      prop_assert!(!entities.is_empty());
+      for entity in entities {
+        let start = usize::try_from(entity.start).unwrap();
+        let end = usize::try_from(entity.end).unwrap();
+        prop_assert!(
+          boundaries.contains(&start) && boundaries.contains(&end),
+          "{:?} at {start}..{end} in {text:?}",
+          entity.text
+        );
+      }
+    }
 
     #[test]
     fn adding_entries_never_reduces_coverage(
