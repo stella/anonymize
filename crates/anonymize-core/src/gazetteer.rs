@@ -1964,6 +1964,10 @@ fn validate_length(
 }
 
 #[cfg(test)]
+#[path = "../tests/support/gazetteer_policy.rs"]
+mod fuzz_policy;
+
+#[cfg(test)]
 mod tests {
   #![allow(clippy::expect_used, clippy::indexing_slicing, clippy::unwrap_used)]
 
@@ -3025,6 +3029,23 @@ mod tests {
     }
   }
 
+  #[test]
+  fn fuzz_joined_identifier_regression_rejects_the_bad_span() {
+    let text = "dead1234-a1b2";
+    assert!(
+      fuzz_policy::edges_are_free(text, 0, 4),
+      "numeric glue is allowed at a word edge"
+    );
+    assert!(
+      fuzz_policy::touches_identifier(text, 0, 4),
+      "oracle must reject the partial joined identifier"
+    );
+    assert!(
+      Guard::new(text).in_identifier(0, 4),
+      "production must agree with the oracle"
+    );
+  }
+
   proptest! {
     #![proptest_config(ProptestConfig {
       cases: 256,
@@ -3032,6 +3053,65 @@ mod tests {
       failure_persistence: None,
       ..ProptestConfig::default()
     })]
+
+    #[test]
+    fn fuzz_marker_oracle_matches_production(
+      text in "[⟦⟧a \t\n\r\u{00a0}]{0,128}",
+    ) {
+      let expected = markers(&text)
+        .into_iter()
+        .map(|(start, close)| (start, close.saturating_add('⟧'.len_utf8())))
+        .collect::<Vec<_>>();
+      prop_assert_eq!(fuzz_policy::marker_ranges(&text), expected);
+    }
+
+    #[test]
+    fn fuzz_acceptance_predicates_match_production(
+      characters in prop::collection::vec(any::<char>(), 0..80),
+      character in any::<char>(),
+      left in any::<usize>(),
+      right in any::<usize>(),
+      identifier in ".{0,40}",
+      glue in prop::collection::vec(any::<char>(), 0..40),
+      edge in prop::option::of(any::<char>()),
+    ) {
+      prop_assert_eq!(fuzz_policy::glue_is_free(&glue, edge), glue_is_free(glue.into_iter(), edge));
+      prop_assert_eq!(fuzz_policy::is_word_interior(character), is_word_char(character));
+      prop_assert_eq!(fuzz_policy::is_unspaced_script(character), is_unspaced_script(character));
+      prop_assert_eq!(fuzz_policy::is_compound_joiner(character), COMPOUND_JOINERS.contains(&character));
+      prop_assert_eq!(fuzz_policy::is_identifier_segment(&identifier), is_identifier_segment(&identifier));
+      // Structured envelopes ensure numeric glue, joined segments, markers,
+      // and their interactions are exercised alongside arbitrary Unicode.
+      let arbitrary = characters.into_iter().collect::<String>();
+      for text in [arbitrary, format!("⟦a1b2-1234{identifier}1234-a1b2⟧")] {
+        let offsets = text.char_indices().map(|(offset, _)| offset)
+          .chain(std::iter::once(text.len())).collect::<Vec<_>>();
+        let first = offsets[left.checked_rem(offsets.len()).unwrap()];
+        let second = offsets[right.checked_rem(offsets.len()).unwrap()];
+        let (start, end) = (first.min(second), first.max(second));
+        let guard = Guard::new(&text);
+        prop_assert_eq!(fuzz_policy::edges_are_free(&text, start, end), guard.edges_are_free(start, end));
+        prop_assert_eq!(fuzz_policy::in_marker(&text, start, end), guard.in_marker(start, end));
+        prop_assert_eq!(fuzz_policy::touches_identifier(&text, start, end) || fuzz_policy::in_marker(&text, start, end), guard.in_identifier(start, end));
+        let mut joined_guard = Guard::new(&text);
+        joined_guard.markers.clear();
+        prop_assert_eq!(fuzz_policy::touches_identifier(&text, start, end), joined_guard.in_identifier(start, end));
+      }
+    }
+
+    #[test]
+    fn fuzz_joined_identifier_predicate_skips_numeric_glue(
+      digits in "[0-9]{0,20}",
+      segment in "[a-f][0-9][a-f][0-9]{1,12}",
+      joiner in prop::sample::select(COMPOUND_JOINERS.to_vec()),
+    ) {
+      for text in [format!("dead{digits}{joiner}{segment}"), format!("{segment}{joiner}{digits}dead")] {
+        let start = text.find("dead").unwrap();
+        let end = start.checked_add("dead".len()).unwrap();
+        prop_assert!(fuzz_policy::touches_identifier(&text, start, end));
+        prop_assert_eq!(fuzz_policy::touches_identifier(&text, start, end), Guard::new(&text).in_identifier(start, end));
+      }
+    }
 
     #[test]
     fn spaced_spans_sit_on_unicode_word_boundaries(

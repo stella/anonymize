@@ -1,0 +1,10 @@
+[
+  {
+    "canonical": "Dome",
+    "words": ["home", "homes", "some", "come", "comes", "done"]
+  },
+  { "canonical": "Luma", "words": ["lump", "lumps", "lamb", "lime"] },
+  { "canonical": "Bex", "words": ["box", "bed", "beds", "beg", "begs"] },
+  { "canonical": "Nivor", "words": ["minor", "diver", "river"] },
+  { "canonical": "Plora", "words": ["flora", "glory"] }
+]
