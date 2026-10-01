@@ -368,6 +368,20 @@ mod properties {
     );
   }
 
+  #[test]
+  fn fuzz_oracle_accepts_arabic_end_of_ayah_boundary() {
+    let engine = gazetteer::engine(&["a".to_owned()], "cs").unwrap();
+    let detected = engine.detect_static_entities("a\u{06dd}").unwrap();
+    assert!(
+      detected
+        .entities
+        .all_entities()
+        .iter()
+        .any(|entity| { entity.start == 0 && entity.end == 1 })
+    );
+    gazetteer_fuzz::exercise("a\nb\nc\nd\na\u{06dd}".as_bytes());
+  }
+
   // The stable harness compiles and exercises the same bounded driver as libFuzzer.
   #[test]
   fn fuzz_driver_exercises_identifiers_and_accepted_neighbours() {

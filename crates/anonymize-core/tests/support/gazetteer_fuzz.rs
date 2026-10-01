@@ -2,6 +2,8 @@
 //! Fixed opaque envelopes keep the privacy invariant meaningful with empty
 //! fuzz input or input that contains no useful gazetteer term.
 
+use unicode_normalization::char::is_combining_mark;
+
 use super::gazetteer;
 
 const MAX_INPUT_BYTES: usize = 768;
@@ -14,26 +16,6 @@ const ID_COMPOUND: &str = "a1b2-dead-c3d4";
 
 fn bounded_chars(value: &str, limit: usize) -> String {
   value.chars().take(limit).collect()
-}
-
-fn is_combining_mark(character: char) -> bool {
-  matches!(
-    u32::from(character),
-    0x0300..=0x036f
-      | 0x0483..=0x0489
-      | 0x0591..=0x05bd
-      | 0x05bf
-      | 0x05c1..=0x05c2
-      | 0x05c4..=0x05c5
-      | 0x0610..=0x061a
-      | 0x064b..=0x065f
-      | 0x0670
-      | 0x06d6..=0x06ed
-      | 0x1ab0..=0x1aff
-      | 0x1dc0..=0x1dff
-      | 0x20d0..=0x20ff
-      | 0xfe20..=0xfe2f
-  )
 }
 
 fn is_word_interior(character: char) -> bool {

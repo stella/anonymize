@@ -666,6 +666,7 @@ dependencies = [
  "libfuzzer-sys",
  "stella-anonymize-adapter-contract",
  "stella-anonymize-core",
+ "unicode-normalization",
 ]
 
 [[package]]

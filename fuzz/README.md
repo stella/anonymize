@@ -26,7 +26,7 @@ and `crates/anonymize-core/tests/support/gazetteer_fuzz.rs` to exercise the
 assembled engine path. The integration property file calls the same driver for
 stable, sanitizer-free smoke inputs. It checks the matcher’s edge rule: a
 name may touch plain numeric glue and underscores, while alphabetic glue and
-mixed identifier segments are rejected. Common combining marks count as word
+mixed identifier segments are rejected. Unicode Mark characters count as word
 interior; scripts written without spaces do not. This is a character-level
 oracle, not full Unicode segmentation. The integration property checks UAX
 word boundaries for spaced Latin-name contexts where those definitions agree.
