@@ -60,6 +60,12 @@ const MIN_BASE64_SEGMENT_CHARS: usize = 12;
 
 /// Fewer letters than this match only exactly (after folding and declension):
 /// one edit turns a short name into an ordinary word (`Acme` -> `acne`).
+const MIN_SHORT_FUZZY_LETTERS: usize = 5;
+
+/// From this many letters an entry tolerates an edit anywhere. Shorter
+/// fuzzy entries (exactly [`MIN_SHORT_FUZZY_LETTERS`]) tolerate one edit only
+/// on a token spelled like a proper noun, as the entry is (see
+/// [`short_typo_fits`]): `Orbys` for `Orbis`, never `orbit`.
 const MIN_FUZZY_LETTERS: usize = 6;
 
 /// Entries with at least this many letters tolerate two edits; shorter fuzzy
@@ -82,10 +88,40 @@ pub fn gazetteer_fuzzy_distance(term: &str) -> Option<u8> {
     return None;
   }
   match term.chars().filter(|ch| ch.is_alphabetic()).count() {
-    letters if letters < MIN_FUZZY_LETTERS => None,
+    letters if letters < MIN_SHORT_FUZZY_LETTERS => None,
+    letters if letters < MIN_FUZZY_LETTERS => {
+      case_shape(term.trim()).map(|_| 1)
+    }
     letters if letters < MIN_TWO_EDIT_LETTERS => Some(1),
     _ => Some(2),
   }
+}
+
+/// Letter case a short entry is spelled in, and a one-edit match must share.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum CaseShape {
+  /// `Orbis`: an uppercase letter, then lowercase letters.
+  Capitalized,
+  /// `ORBIS`: uppercase letters only.
+  Upper,
+}
+
+/// The proper-noun case shape of a single word of letters, if it has one.
+fn case_shape(word: &str) -> Option<CaseShape> {
+  let mut letters = word.chars().filter(|ch| !is_combining_mark(*ch));
+  let first = letters.next()?;
+  let rest = letters.collect::<Vec<_>>();
+  if !first.is_alphabetic()
+    || rest.is_empty()
+    || !rest.iter().all(|ch| ch.is_alphabetic())
+  {
+    return None;
+  }
+  if first.is_uppercase() && rest.iter().all(|ch| ch.is_uppercase()) {
+    return Some(CaseShape::Upper);
+  }
+  (first.is_uppercase() && rest.iter().all(|ch| ch.is_lowercase()))
+    .then_some(CaseShape::Capitalized)
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -118,6 +154,9 @@ enum RowKind {
     max_distance: usize,
     /// Word count of the entry; see [`token_count_fits`].
     words: usize,
+    /// For a short entry, the case a matched token must be spelled in; see
+    /// [`short_typo_fits`].
+    short_shape: Option<CaseShape>,
   },
 }
 
@@ -473,6 +512,7 @@ impl PreparedGazetteerMatchData {
             folded,
             max_distance,
             words,
+            short_shape,
           },
       }) = self.row(found.pattern())
       else {
@@ -484,6 +524,9 @@ impl PreparedGazetteerMatchData {
         && guard.fuzzy_span_is_whole_words(start, end)
         && !guard.in_identifier(start, end)
         && token_count_fits(tokenize(surface).len(), *words)
+        && short_shape.is_none_or(|shape| {
+          short_typo_fits(text, (start, end), shape, folded.len())
+        })
         && edit_distance(&fold_word_chars(surface), folded) <= *max_distance
       {
         fuzzy.push(Hit {
@@ -577,6 +620,16 @@ impl PreparedGazetteerMatchData {
       rows
     });
     for row in rows.iter().filter_map(|row| self.rows.get(*row)) {
+      // The case shape depends on the span itself, not its folded spelling.
+      if let RowKind::Fuzzy {
+        short_shape: Some(shape),
+        folded: ref entry,
+        ..
+      } = row.kind
+        && !short_typo_fits(guard.text, (start, end), shape, entry.len())
+      {
+        continue;
+      }
       hits.push(Hit {
         start,
         end,
@@ -616,6 +669,7 @@ impl PreparedGazetteerMatchData {
             folded: entry,
             max_distance,
             words,
+            ..
           },
         ..
       }) = self.rows.get(*row)
@@ -1411,16 +1465,70 @@ fn row_term<'t>(
 /// scale as the assembled patterns, so short entries accept folded hits
 /// only; a caller-supplied distance is capped at the supported maximum.
 fn fuzzy_row(term: &str, distance: Option<u8>) -> RowKind {
+  let folded = fold_word_chars(term);
+  let short_shape = (folded.len() < MIN_FUZZY_LETTERS)
+    .then(|| case_shape(term.trim()))
+    .flatten();
+  // Shorter entries match only exactly; a short entry without a
+  // proper-noun shape too.
+  let cap = match folded.len() {
+    letters if letters < MIN_SHORT_FUZZY_LETTERS => 0,
+    letters if letters < MIN_FUZZY_LETTERS => {
+      usize::from(short_shape.is_some())
+    }
+    _ => MAX_FUZZY_DISTANCE,
+  };
   RowKind::Fuzzy {
-    folded: fold_word_chars(term),
     words: tokenize(term).len(),
     max_distance: usize::from(
       distance
         .or_else(|| gazetteer_fuzzy_distance(term))
         .unwrap_or(0),
     )
-    .min(MAX_FUZZY_DISTANCE),
+    .min(cap),
+    folded,
+    short_shape,
   }
+}
+
+/// Whether a fuzzy span may stand for a short entry of `letters` letters
+/// spelled in `shape`: a whole token of as many letters (a substitution, so
+/// added endings stay with inflection), in the same proper-noun case, not
+/// opening a sentence, where ordinary words are capitalized too
+/// (`Nová smlouva`).
+fn short_typo_fits(
+  text: &str,
+  (start, end): (usize, usize),
+  shape: CaseShape,
+  letters: usize,
+) -> bool {
+  let span = text.get(start..end).unwrap_or_default();
+  // A whole token: no digits glued on either side (`Orbys2`).
+  let glued = previous_char(text, start).is_some_and(is_word_char)
+    || next_char(text, end).is_some_and(is_word_char);
+  !glued
+    && fold_word_chars(span).len() == letters
+    && case_shape(span) == Some(shape)
+    && !opens_sentence(text, start)
+}
+
+/// Whether `start` begins a sentence or a line: only whitespace and opening
+/// quotes or brackets separate it from the text start, a line break, or
+/// sentence-final punctuation.
+fn opens_sentence(text: &str, start: usize) -> bool {
+  const OPENERS: [char; 12] =
+    ['"', '\'', '„', '“', '”', '‘', '’', '«', '»', '(', '[', '¿'];
+  const TERMINALS: [char; 5] = ['.', '!', '?', '…', ':'];
+  for ch in text.get(..start).unwrap_or_default().chars().rev().take(32) {
+    if is_line_break(ch) {
+      return true;
+    }
+    if ch.is_whitespace() || OPENERS.contains(&ch) {
+      continue;
+    }
+    return TERMINALS.contains(&ch);
+  }
+  true
 }
 
 /// The entry text a gazetteer search pattern carries.
@@ -1600,28 +1708,56 @@ impl<'t> Guard<'t> {
   }
 }
 
-/// Outermost balanced `⟦…⟧` markers as `(open, close)` byte offsets, in one
-/// pass. Markers never contain whitespace, so whitespace drops any bracket
-/// still open; a `⟧` without an open `⟦` is ignored.
+/// Marker delimiters: `⟦…⟧` and the template placeholders `<<…>>`, `{{…}}`
+/// and `[[…]]`.
+const MARKER_DELIMITERS: [(&str, &str); 4] =
+  [("⟦", "⟧"), ("<<", ">>"), ("{{", "}}"), ("[[", "]]")];
+
+/// Outermost balanced markers as `(open, close)` byte offsets, in one pass.
+/// Markers never contain whitespace, so whitespace drops any marker still
+/// open; a closing delimiter without an open one is ignored.
 fn markers(text: &str) -> Vec<(usize, usize)> {
   let mut markers = Vec::new();
-  if !text.contains('⟦') {
+  if !MARKER_DELIMITERS
+    .iter()
+    .any(|(open, _)| text.contains(open))
+  {
     return markers;
   }
-  let mut open = Vec::new();
-  for (index, ch) in text.char_indices() {
-    match ch {
-      '⟦' => open.push(index),
-      '⟧' => {
-        if let Some(start) = open.pop()
-          && open.is_empty()
-        {
-          markers.push((start, index));
-        }
-      }
-      _ if ch.is_whitespace() => open.clear(),
-      _ => {}
+  let mut open = Vec::<(usize, usize)>::new();
+  let mut index = 0_usize;
+  while let Some(rest) = text.get(index..) {
+    let Some(ch) = rest.chars().next() else {
+      break;
+    };
+    if ch.is_whitespace() {
+      open.clear();
     }
+    let opening = MARKER_DELIMITERS
+      .iter()
+      .enumerate()
+      .find(|(_, (opener, _))| rest.starts_with(opener));
+    let closing = open.last().copied().and_then(|(kind, _)| {
+      MARKER_DELIMITERS
+        .get(kind)
+        .filter(|(_, closer)| rest.starts_with(closer))
+        .map(|(_, closer)| closer.len())
+    });
+    if let Some(len) = closing {
+      if let Some((_, start)) = open.pop()
+        && open.is_empty()
+      {
+        markers.push((start, index));
+      }
+      index = index.saturating_add(len);
+      continue;
+    }
+    if let Some((kind, (opener, _))) = opening {
+      open.push((kind, index));
+      index = index.saturating_add(opener.len());
+      continue;
+    }
+    index = index.saturating_add(ch.len_utf8());
   }
   markers
 }
@@ -2174,6 +2310,72 @@ mod tests {
         ),
         [surface]
       );
+    }
+  }
+
+  fn short_entry(term: &str) -> Entry<'_> {
+    Entry {
+      term,
+      label: ORGANIZATION,
+      fuzzy_distance: gazetteer_fuzzy_distance(term),
+    }
+  }
+
+  #[test]
+  fn five_letter_entries_take_one_typo_on_a_proper_noun() {
+    assert_eq!(gazetteer_fuzzy_distance("Orbis"), Some(1));
+    assert_eq!(gazetteer_fuzzy_distance("ORBIS"), Some(1));
+    assert_eq!(gazetteer_fuzzy_distance("orbis"), None);
+    assert_eq!(gazetteer_fuzzy_distance("Zeta"), None);
+    let entries = [short_entry("Orbis")];
+    for (text, expected) in [
+      ("Klient Orbys zaplatil.", "Orbys"),
+      ("Klient Orbís zaplatil.", "Orbís"),
+      ("Klient Orbisu zaplatil.", "Orbisu"),
+    ] {
+      assert!(
+        engine_found(&entries, text)
+          .iter()
+          .any(|hit| hit == expected),
+        "{text}"
+      );
+    }
+    for text in [
+      "The orbit is stable.",
+      "Vstoupil na orbitu.",
+      "Klient ORBYS zaplatil.",
+      "Orbit zaplatil.",
+      "Klient Orbys2 zaplatil.",
+    ] {
+      assert!(engine_found(&entries, text).is_empty(), "{text}");
+    }
+    let upper = [short_entry("ORBIS")];
+    assert_eq!(engine_found(&upper, "Klient ORBYS zaplatil."), ["ORBYS"]);
+    assert!(engine_found(&upper, "Klient Orbys zaplatil.").is_empty());
+  }
+
+  #[test]
+  fn four_letter_entries_stay_exact() {
+    let entries = [short_entry("Zeta")];
+    assert!(engine_found(&entries, "Klient Zeda zaplatil.").is_empty());
+  }
+
+  #[test]
+  fn template_placeholders_are_markers() {
+    let entries = [exact("Zeta", ORGANIZATION)];
+    for text in [
+      "see <<token:zeta9>> below",
+      "see {{zeta}} below",
+      "see [[Zeta]] below",
+    ] {
+      assert!(found(&entries, text).is_empty(), "{text}");
+    }
+    for (text, expected) in [
+      ("see [Zeta] below", "Zeta"),
+      ("Pište na zeta9@example.cz.", "zeta"),
+      ("<<a>> Zeta <<b>>", "Zeta"),
+    ] {
+      assert_eq!(found(&entries, text), [expected], "{text}");
     }
   }
 

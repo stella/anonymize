@@ -161,6 +161,10 @@ const CASES: &[Case] = &[
   // Typos in long names.
   hit(Class::Typo, "Smluvní strana Beta Tradng s.r.o. souhlasí.", "Beta Tradng s.r.o."),
   hit(Class::Typo, "The memo names Wintermite as the sender.", "Wintermite"),
+  hit(Class::Typo, "Klient Orbys zaplatil.", "Orbys"),
+  hit(Class::Typo, "Smlouvu podepsal pan Novác dnes.", "Novác"),
+  miss(Class::Typo, "Zvolili orbys jako název.", "orbys"),
+  miss(Class::Typo, "Orbit se nezměnil.", "Orbit"),
   // Entries spelled with edge punctuation, folded like any other.
   hit(Class::Punctuated, "Napište @alice dnes.", "@alice"),
   hit(Class::Punctuated, "Napište @Álîce dnes.", "@Álîce"),
@@ -223,6 +227,7 @@ const CASES: &[Case] = &[
   miss(Class::IdShapes, "Kód ORB1S platí.", "ORB1S"),
   miss(Class::IdShapes, "Kód ZT4471Z platí.", "ZT4471Z"),
   miss(Class::IdShapes, "Sloupec acmeA_total platí.", "acmeA_total"),
+  miss(Class::IdShapes, "Viz <<token:zeta9>> níže.", "<<token:zeta9>>"),
   miss(Class::IdShapes, "Blob QWNtZUEvb3JiaXM9WmV0YQ== platí.", "QWNtZUEvb3JiaXM9WmV0YQ=="),
   miss(Class::IdShapes, "Id 9b1d0c3e-acfe-4c1b-9d2e-5f6a7b8c9d0f uložen.", "9b1d0c3e-acfe-4c1b-9d2e-5f6a7b8c9d0f"),
   // A hit covers the name (plus legal form) and nothing more.
