@@ -13,13 +13,18 @@ Forced values are gazetteer entries labeled `registration number`, including
 case-insensitive and embedded occurrences; negative name cases run again with
 only those entries active.
 
-Recall requires a resolved entity with exactly the labeled byte range, with
-no overlapping entity extending outside it. Partial matches, even several
+Each case declares its language. Scores use that language alone; the
+`language-scope` class requires identical resolved entities and redaction when
+either other language, or both, are enabled. Its divergence ceiling is zero.
+
+Recall requires a gazetteer entity with the expected label and exactly the
+labeled byte range, with no overlapping entity extending outside it. Partial matches, even several
 that collectively remove the name, do not count. Any overlap with a keep
 surface is a false positive. Every must-redact case additionally contributes
-a negative word check to `adjacent-word`: swallowing neighboring words both
-fails recall and counts as a false positive. `span-extent` separately scores
-all overreach, including punctuation, so punctuation cannot relax the
+a negative word check to `adjacent-word`: all resolved entities are checked
+against the nearest preceding and following Unicode word ranges, including
+separate neighboring entities. Swallowing a neighboring word also fails
+recall. `span-extent` separately scores all overreach, including punctuation, so punctuation cannot relax the
 adjacent-word ceiling. Offsets must remain valid UTF-8
 boundaries. A scoring test rejects substring and overextended matchers.
 

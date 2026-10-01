@@ -54,6 +54,11 @@
     "minimum_exact_hits": 7,
     "total": 7
   },
+  "deny-list/language-scope": {
+    "maximum_false_positives": 0,
+    "metric": "false-positives",
+    "total": 139
+  },
   "deny-list/legal-form-variant": {
     "metric": "recall",
     "minimum_exact_hits": 7,
@@ -143,6 +148,11 @@
     "maximum_false_positives": 0,
     "metric": "false-positives",
     "total": 6
+  },
+  "forced/language-scope": {
+    "maximum_false_positives": 0,
+    "metric": "false-positives",
+    "total": 68
   },
   "forced/ordinary-word": {
     "maximum_false_positives": 0,

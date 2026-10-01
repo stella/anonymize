@@ -34,10 +34,30 @@ enum Expectation {
   Keep,
 }
 
+#[derive(Clone, Copy, Deserialize, Eq, Ord, PartialEq, PartialOrd)]
+#[serde(rename_all = "lowercase")]
+enum Language {
+  Cs,
+  Sk,
+  En,
+}
+
+impl Language {
+  const fn code(self) -> &'static str {
+    match self {
+      Self::Cs => "cs",
+      Self::Sk => "sk",
+      Self::En => "en",
+    }
+  }
+}
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Case {
   expectation: Expectation,
+  language: Language,
+  label: Option<String>,
   kind: String,
   text: String,
   surface: String,
@@ -66,12 +86,17 @@ type Report = BTreeMap<String, Tally>;
 
 fn engine(
   entries: &[GazetteerEntry],
+  languages: &[Language],
 ) -> Result<PreparedEngine, Box<dyn Error>> {
   // This profile isolates caller-owned names from unrelated dictionary,
   // regex and contextual detectors while using production assembly/resolution.
+  let language_codes = languages
+    .iter()
+    .map(|language| language.code())
+    .collect::<Vec<_>>();
   let config: PipelineConfig = serde_json::from_value(serde_json::json!({
     "threshold": 0.3, "enableTriggerPhrases": false, "enableRegex": false,
-    "languages": ["cs", "sk", "en"], "enableLegalForms": false,
+    "languages": language_codes, "enableLegalForms": false,
     "enableNameCorpus": false, "enableDenyList": false,
     "enableGazetteer": true, "enableCountries": false,
     "enableConfidenceBoost": false, "enableCoreference": false,
@@ -105,11 +130,17 @@ const fn overlaps(entity: &PipelineEntity, range: &Range<u32>) -> bool {
   entity.start < range.end && range.start < entity.end
 }
 
-fn exact_hit(entities: &[PipelineEntity], range: &Range<u32>) -> bool {
-  entities
-    .iter()
-    .any(|entity| entity.start == range.start && entity.end == range.end)
-    && !overreaches(entities, range)
+fn exact_hit(
+  entities: &[PipelineEntity],
+  range: &Range<u32>,
+  label: &str,
+) -> bool {
+  entities.iter().any(|entity| {
+    entity.start == range.start
+      && entity.end == range.end
+      && entity.label == label
+      && entity.source == DetectionSource::Gazetteer
+  }) && !overreaches(entities, range)
 }
 
 fn overreaches(entities: &[PipelineEntity], range: &Range<u32>) -> bool {
@@ -124,27 +155,24 @@ fn swallows_word(
   range: &Range<u32>,
   text: &str,
 ) -> Result<bool, Box<dyn Error>> {
-  let surface_start = usize::try_from(range.start)?;
-  let surface_end = usize::try_from(range.end)?;
-  for entity in entities.iter().filter(|entity| overlaps(entity, range)) {
-    if entity.start < range.start {
-      let prefix = text
-        .get(usize::try_from(entity.start)?..surface_start)
-        .ok_or("invalid prefix span")?;
-      if prefix.unicode_words().next().is_some() {
-        return Ok(true);
-      }
-    }
-    if entity.end > range.end {
-      let suffix = text
-        .get(surface_end..usize::try_from(entity.end)?)
-        .ok_or("invalid suffix span")?;
-      if suffix.unicode_words().next().is_some() {
-        return Ok(true);
-      }
+  let mut previous = None;
+  let mut following = None;
+  for (start, word) in text.unicode_word_indices() {
+    let word_range = u32::try_from(start)?
+      ..u32::try_from(start.checked_add(word.len()).ok_or("offset overflow")?)?;
+    if word_range.end <= range.start {
+      previous = Some(word_range);
+    } else if word_range.start >= range.end {
+      following = Some(word_range);
+      break;
     }
   }
-  Ok(false)
+  Ok(
+    previous
+      .iter()
+      .chain(following.iter())
+      .any(|neighbor| entities.iter().any(|entity| overlaps(entity, neighbor))),
+  )
 }
 
 fn record(
@@ -170,15 +198,55 @@ fn record(
 }
 
 fn measure(
-  engine: &PreparedEngine,
+  entries: &[GazetteerEntry],
   cases: &[&Case],
   mode: &str,
   report: &mut Report,
 ) -> Result<(), Box<dyn Error>> {
+  let scopes = [
+    vec![Language::Cs],
+    vec![Language::Sk],
+    vec![Language::En],
+    vec![Language::Cs, Language::Sk],
+    vec![Language::Cs, Language::En],
+    vec![Language::Sk, Language::En],
+    vec![Language::Cs, Language::Sk, Language::En],
+  ];
+  let engines = scopes
+    .into_iter()
+    .map(|scope| {
+      let scoped_engine = engine(entries, &scope)?;
+      Ok((scope, scoped_engine))
+    })
+    .collect::<Result<BTreeMap<_, _>, Box<dyn Error>>>()?;
   let operators = OperatorConfig::default();
   for case in cases {
+    if (case.expectation == Expectation::Redact) != case.label.is_some() {
+      return Err(
+        "redact cases require a label; keep cases require null".into(),
+      );
+    }
+    let isolated = engines
+      .get([case.language].as_slice())
+      .ok_or("missing language scope")?;
     let range = surface_range(case)?;
-    let result = engine.redact_static_entities(&case.text, &operators)?;
+    let result = isolated.redact_static_entities(&case.text, &operators)?;
+    let mut unchanged = true;
+    for (scope, expanded) in &engines {
+      if scope.len() == 1 || !scope.contains(&case.language) {
+        continue;
+      }
+      let comparison =
+        expanded.redact_static_entities(&case.text, &operators)?;
+      unchanged &= result.resolved_entities == comparison.resolved_entities
+        && result.redaction == comparison.redaction;
+    }
+    record(
+      report,
+      format!("{mode}/language-scope"),
+      Expectation::Keep,
+      unchanged,
+    )?;
     let entities = &result.resolved_entities;
     for entity in entities {
       let start = usize::try_from(entity.start)?;
@@ -194,7 +262,11 @@ fn measure(
       }
     }
     let passed = match case.expectation {
-      Expectation::Redact => exact_hit(entities, &range),
+      Expectation::Redact => exact_hit(
+        entities,
+        &range,
+        case.label.as_deref().ok_or("missing expected label")?,
+      ),
       Expectation::Keep => {
         !entities.iter().any(|entity| overlaps(entity, &range))
       }
@@ -247,7 +319,7 @@ fn labeled_name_matching_corpus_gate() -> Result<(), Box<dyn Error>> {
     .collect::<Vec<_>>();
   let mut report = Report::new();
   measure(
-    &engine(&corpus.entries)?,
+    &corpus.entries,
     &corpus.cases.iter().collect::<Vec<_>>(),
     "deny-list",
     &mut report,
@@ -262,12 +334,7 @@ fn labeled_name_matching_corpus_gate() -> Result<(), Box<dyn Error>> {
         .filter(|case| case.expectation == Expectation::Keep),
     )
     .collect::<Vec<_>>();
-  measure(
-    &engine(&forced_entries)?,
-    &forced_cases,
-    "forced",
-    &mut report,
-  )?;
+  measure(&forced_entries, &forced_cases, "forced", &mut report)?;
   check_thresholds(&report, &thresholds)
 }
 
@@ -358,10 +425,26 @@ fn exact_span_scoring_rejects_substrings_and_swallowed_neighbors()
     )
   };
   let expected = 5..10;
-  assert!(exact_hit(&[span(5, 10)], &expected), "exact span must pass");
-  assert!(!exact_hit(&[span(6, 9)], &expected), "substring must fail");
   assert!(
-    !exact_hit(&[span(5, 17)], &expected),
+    !exact_hit(&[span(5, 10)], &expected, "organization"),
+    "wrong label must fail"
+  );
+  let mut wrong_source = span(5, 10);
+  wrong_source.source = DetectionSource::Regex;
+  assert!(
+    !exact_hit(&[wrong_source], &expected, "person"),
+    "non-gazetteer source must fail"
+  );
+  assert!(
+    exact_hit(&[span(5, 10)], &expected, "person"),
+    "exact span must pass"
+  );
+  assert!(
+    !exact_hit(&[span(6, 9)], &expected, "person"),
+    "substring must fail"
+  );
+  assert!(
+    !exact_hit(&[span(5, 17)], &expected, "person"),
     "swallowed neighbor must fail recall"
   );
   assert!(
@@ -369,16 +452,32 @@ fn exact_span_scoring_rejects_substrings_and_swallowed_neighbors()
     "swallowed neighbor must count as FP"
   );
   assert!(
-    !exact_hit(&[span(5, 10), span(3, 17)], &expected),
+    !exact_hit(&[span(5, 10), span(3, 17)], &expected, "person"),
     "exact candidate cannot hide overreach"
   );
   assert!(
-    !exact_hit(&[span(5, 7), span(7, 10)], &expected),
+    !exact_hit(&[span(5, 7), span(7, 10)], &expected, "person"),
     "partial spans cannot masquerade as an exact hit"
   );
   assert!(
     swallows_word(&[span(5, 17)], &expected, "lead Alice signed")?,
     "adjacent word must count as FP"
+  );
+  assert!(
+    swallows_word(
+      &[span(5, 10), span(11, 17)],
+      &expected,
+      "lead Alice signed"
+    )?,
+    "separate following entity must count as FP"
+  );
+  assert!(
+    swallows_word(&[span(0, 4), span(5, 10)], &expected, "lead Alice signed")?,
+    "separate preceding entity must count as FP"
+  );
+  assert!(
+    swallows_word(&[span(0, 5), span(6, 11)], &(6..11), "žena Alice, další")?,
+    "Unicode neighbor ranges must use byte offsets"
   );
   assert!(
     !swallows_word(&[span(5, 11)], &expected, "lead Alice.")?,
