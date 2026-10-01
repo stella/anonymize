@@ -139,10 +139,72 @@ struct SequenceTrie {
   nodes: Vec<TrieNode>,
 }
 
+/// An entry ending at a trie node: its label and the punctuation it spells
+/// before its first and after its last word (`@` in `@alice`, `++` in
+/// `C++`), which the document must spell around the words too.
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct Terminal {
+  label: String,
+  edges: EdgePunctuation,
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+struct EdgePunctuation {
+  leading: String,
+  trailing: String,
+}
+
+impl EdgePunctuation {
+  /// The span widened over this punctuation, when the text spells it right
+  /// before `start` and right after `end`.
+  fn around(
+    &self,
+    text: &str,
+    start: usize,
+    end: usize,
+  ) -> Option<(usize, usize)> {
+    let before = text.get(..start)?;
+    let after = text.get(end..)?;
+    let leading = trailing_match(before, &self.leading)?;
+    let trailing = leading_match(after, &self.trailing)?;
+    Some((start.saturating_sub(leading), end.saturating_add(trailing)))
+  }
+}
+
+/// Byte length of `marks` at the end of `text`, compared as canonical
+/// punctuation.
+fn trailing_match(text: &str, marks: &str) -> Option<usize> {
+  let mut len = 0_usize;
+  let mut text_chars = text.chars().rev();
+  for expected in marks.chars().rev() {
+    let actual = text_chars.next()?;
+    if canonical_punctuation(actual) != canonical_punctuation(expected) {
+      return None;
+    }
+    len = len.saturating_add(actual.len_utf8());
+  }
+  Some(len)
+}
+
+/// Byte length of `marks` at the start of `text`, compared as canonical
+/// punctuation.
+fn leading_match(text: &str, marks: &str) -> Option<usize> {
+  let mut len = 0_usize;
+  let mut text_chars = text.chars();
+  for expected in marks.chars() {
+    let actual = text_chars.next()?;
+    if canonical_punctuation(actual) != canonical_punctuation(expected) {
+      return None;
+    }
+    len = len.saturating_add(actual.len_utf8());
+  }
+  Some(len)
+}
+
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 struct TrieNode {
-  /// Labels of the entries that end here.
-  labels: Vec<String>,
+  /// The entries that end here.
+  terminals: Vec<Terminal>,
   /// Word -> child.
   children: HashMap<usize, usize>,
   /// `(separator key, word)` -> longest separator, in chars, accepted
@@ -286,10 +348,11 @@ impl PreparedGazetteerMatchData {
 
   fn add_sequences(&mut self, term: &str, label: &str) {
     let core = self.strip_legal_form(term);
-    let Some((words, gaps)) = split_term(core) else {
+    let Some(SplitTerm { words, gaps, edges }) = split_term(core) else {
       return;
     };
     let reorderable = label == PERSON_LABEL
+      && edges == EdgePunctuation::default()
       && (2..=MAX_REORDERED_PERSON_WORDS).contains(&words.len())
       && !words.iter().any(|word| word.chars().any(char::is_numeric));
     if reorderable
@@ -304,9 +367,11 @@ impl PreparedGazetteerMatchData {
       reordered_gaps.push(first_gap.clone().with_comma());
       reordered_gaps
         .extend(gaps.iter().take(gaps.len().saturating_sub(1)).cloned());
-      self.sequences.insert(&reordered, reordered_gaps, label);
+      self
+        .sequences
+        .insert((&reordered, reordered_gaps), label, &edges);
     }
-    self.sequences.insert(&words, gaps, label);
+    self.sequences.insert((&words, gaps), label, &edges);
   }
 
   /// The entry without a trailing legal form, so `Beta Trading s.r.o.` also
@@ -579,7 +644,12 @@ impl SequenceTrie {
     }
   }
 
-  fn insert(&mut self, words: &[String], gaps: Vec<GapRule>, label: &str) {
+  fn insert(
+    &mut self,
+    (words, gaps): (&[String], Vec<GapRule>),
+    label: &str,
+    edges: &EdgePunctuation,
+  ) {
     let mut node = 0_usize;
     let mut gaps = gaps.into_iter();
     for (position, word) in words.iter().enumerate() {
@@ -612,10 +682,14 @@ impl SequenceTrie {
       }
       node = child;
     }
+    let terminal = Terminal {
+      label: label.to_owned(),
+      edges: edges.clone(),
+    };
     if let Some(end) = self.nodes.get_mut(node)
-      && !end.labels.iter().any(|known| known == label)
+      && !end.terminals.contains(&terminal)
     {
-      end.labels.push(label.to_owned());
+      end.terminals.push(terminal);
     }
   }
 
@@ -695,13 +769,17 @@ impl SequenceTrie {
     let Some(current) = self.nodes.get(node) else {
       return;
     };
-    for label in &current.labels {
-      hits.push(Hit {
-        start: walk.start,
-        end,
-        label,
-        score: EXACT_SCORE,
-      });
+    for terminal in &current.terminals {
+      if let Some((start, end)) =
+        terminal.edges.around(walk.text, walk.start, end)
+      {
+        hits.push(Hit {
+          start,
+          end,
+          label: &terminal.label,
+          score: EXACT_SCORE,
+        });
+      }
     }
     let Some(token) = walk.tokens.get(next) else {
       return;
@@ -924,17 +1002,40 @@ impl LegalFormSuffix {
   }
 }
 
-/// Splits an entry into words and the separators between them. Entries in
-/// scripts written without spaces, and entries whose edges are punctuation
-/// (`C++`, `@alice`, `.NET`), stay on the literal path only: dropping that
-/// punctuation would let the bare word match.
-fn split_term(term: &str) -> Option<(Vec<String>, Vec<GapRule>)> {
+/// An entry split into its words, the separators between them, and the
+/// punctuation around them.
+struct SplitTerm {
+  words: Vec<String>,
+  gaps: Vec<GapRule>,
+  edges: EdgePunctuation,
+}
+
+/// Splits an entry into words and the separators between them. Punctuation
+/// at either end (`@alice`, `C++`, `.NET`) is kept as edge punctuation the
+/// document must spell too, so the bare word never matches. Entries in
+/// scripts written without spaces stay on the literal path only.
+fn split_term(term: &str) -> Option<SplitTerm> {
   let trimmed = term.trim();
-  let significant_edge =
-    |edge: Option<char>| edge.is_some_and(|ch| !is_word_char(ch));
-  if trimmed.chars().any(is_unspaced_script)
-    || significant_edge(trimmed.chars().next())
-    || significant_edge(trimmed.chars().next_back())
+  if trimmed.chars().any(is_unspaced_script) {
+    return None;
+  }
+  let core = trimmed.trim_matches(|ch: char| !is_word_char(ch));
+  let leading = trimmed
+    .get(
+      ..trimmed.len().saturating_sub(
+        trimmed
+          .trim_start_matches(|ch: char| !is_word_char(ch))
+          .len(),
+      ),
+    )
+    .unwrap_or_default();
+  let trailing = trimmed
+    .get(trimmed.trim_end_matches(|ch: char| !is_word_char(ch)).len()..)
+    .unwrap_or_default();
+  if leading
+    .chars()
+    .chain(trailing.chars())
+    .any(char::is_whitespace)
   {
     return None;
   }
@@ -942,7 +1043,7 @@ fn split_term(term: &str) -> Option<(Vec<String>, Vec<GapRule>)> {
   let mut gaps = Vec::new();
   let mut word = String::new();
   let mut gap = String::new();
-  for ch in term.chars() {
+  for ch in core.chars() {
     if is_word_char(ch) {
       if !word.is_empty() && !gap.is_empty() {
         words.push(std::mem::take(&mut word));
@@ -958,7 +1059,14 @@ fn split_term(term: &str) -> Option<(Vec<String>, Vec<GapRule>)> {
     return None;
   }
   words.push(word);
-  Some((words, gaps))
+  Some(SplitTerm {
+    words,
+    gaps,
+    edges: EdgePunctuation {
+      leading: leading.to_owned(),
+      trailing: trailing.to_owned(),
+    },
+  })
 }
 
 /// Folded spellings a word may take: itself and, for names of letters when
@@ -2039,6 +2147,22 @@ mod tests {
     assert!(found(&entries, "Plan C and alice agreed.").is_empty());
     assert_eq!(found(&entries, "Use C++ today."), ["C++"]);
     assert_eq!(found(&entries, "Ping @alice today."), ["@alice"]);
+  }
+
+  #[test]
+  fn punctuated_entries_fold_like_any_other() {
+    let entries = [exact("@álîce", PERSON), exact(".NÉT", ORGANIZATION)];
+    for (text, expected) in [
+      ("Ping @alice today.", "@alice"),
+      ("Ping @Alice today.", "@Alice"),
+      ("Ping @ÁLÎCE today.", "@ÁLÎCE"),
+      ("Built on .net today.", ".net"),
+    ] {
+      assert_eq!(found(&entries, text), [expected], "{text}");
+    }
+    for text in ["alice agreed.", "Ping #alice today.", "the net result"] {
+      assert!(found(&entries, text).is_empty(), "{text}");
+    }
   }
 
   #[test]
