@@ -1518,7 +1518,13 @@ fn short_typo_fits(
 fn opens_sentence(text: &str, start: usize) -> bool {
   const OPENERS: [char; 12] =
     ['"', '\'', '„', '“', '”', '‘', '’', '«', '»', '(', '[', '¿'];
-  const TERMINALS: [char; 5] = ['.', '!', '?', '…', ':'];
+  // Sentence terminals (Unicode Sentence_Terminal, plus `…` and `:`) of
+  // the scripts in common use: Latin, CJK fullwidth, Arabic, Devanagari,
+  // Armenian, Ethiopic, Myanmar.
+  const TERMINALS: [char; 20] = [
+    '.', '!', '?', '…', ':', '‼', '⁇', '⁈', '⁉', '。', '．', '！', '？', '؟',
+    '۔', '।', '॥', '։', '።', '။',
+  ];
   for ch in text.get(..start).unwrap_or_default().chars().rev().take(32) {
     if is_line_break(ch) {
       return true;
@@ -1615,8 +1621,8 @@ fn trim_fuzzy_span(text: &str, (start, end): (usize, usize)) -> (usize, usize) {
 /// glue, joiners, and one joined segment.
 struct Guard<'t> {
   text: &'t str,
-  /// Outermost balanced markers, sorted and disjoint.
-  markers: Vec<Marker>,
+  /// Balanced markers by kind.
+  markers: Markers,
   /// Characters the scans have looked at, for scaling tests.
   visits: Cell<usize>,
   /// Deletion lookups and distance checks of the fuzzy fallback.
@@ -1712,16 +1718,14 @@ impl<'t> Guard<'t> {
       || after.is_some_and(|segment| is_identifier_segment(&segment))
   }
 
-  /// The kind of the balanced marker enclosing the span, if any: one binary
-  /// search over the indexed markers.
+  /// The strongest kind of balanced marker enclosing the span, if any: an
+  /// opaque marker wins over a template around it. Binary searches over the
+  /// indexed markers.
   fn marker_kind(&self, start: usize, end: usize) -> Option<MarkerKind> {
-    let opened_before =
-      self.markers.partition_point(|marker| marker.open < start);
-    opened_before
-      .checked_sub(1)
-      .and_then(|index| self.markers.get(index))
-      .filter(|marker| marker.close >= end)
-      .map(|marker| marker.kind)
+    if encloses(&self.markers.opaque, start, end) {
+      return Some(MarkerKind::Opaque);
+    }
+    encloses(&self.markers.template, start, end).then_some(MarkerKind::Template)
   }
 }
 
@@ -1735,13 +1739,6 @@ enum MarkerKind {
   Template,
 }
 
-#[derive(Clone, Copy, Debug)]
-struct Marker {
-  open: usize,
-  close: usize,
-  kind: MarkerKind,
-}
-
 /// Marker delimiters and the kind of marker each opens.
 const MARKER_DELIMITERS: [(&str, &str, MarkerKind); 4] = [
   ("⟦", "⟧", MarkerKind::Opaque),
@@ -1750,11 +1747,14 @@ const MARKER_DELIMITERS: [(&str, &str, MarkerKind); 4] = [
   ("[[", "]]", MarkerKind::Template),
 ];
 
-/// Outermost balanced markers, in one pass. Markers never contain
-/// whitespace, so whitespace drops any marker still open; a closing
-/// delimiter without an open one is ignored.
-fn markers(text: &str) -> Vec<Marker> {
-  let mut markers = Vec::new();
+/// Balanced markers, in one pass: the outermost opaque markers (also those
+/// nested in a template, so `[[⟦Zeta⟧]]` stays suppressed) and the
+/// outermost templates, each list sorted and disjoint. An opaque marker never
+/// contains whitespace; a template may, but never a line break, so a
+/// delimiter still open there is dropped and suppresses nothing after it. A
+/// closing delimiter without an open one is ignored.
+fn markers(text: &str) -> Markers {
+  let mut markers = Markers::default();
   if !MARKER_DELIMITERS
     .iter()
     .any(|(open, _, _)| text.contains(open))
@@ -1762,18 +1762,28 @@ fn markers(text: &str) -> Vec<Marker> {
     return markers;
   }
   let mut open = Vec::<(usize, usize)>::new();
+  // Open delimiters per kind, so whitespace and closings stay O(1)
+  // amortized however many delimiters stay open on a line.
+  let mut open_opaque = 0_usize;
+  let mut open_template = 0_usize;
+  let kind_of = |delimiter: usize| {
+    MARKER_DELIMITERS
+      .get(delimiter)
+      .map_or(MarkerKind::Opaque, |(_, _, kind)| *kind)
+  };
   let mut index = 0_usize;
   while let Some(rest) = text.get(index..) {
     let Some(ch) = rest.chars().next() else {
       break;
     };
-    if ch.is_whitespace() {
+    if is_line_break(ch) {
       open.clear();
+      open_opaque = 0;
+      open_template = 0;
+    } else if ch.is_whitespace() && open_opaque > 0 {
+      open.retain(|(delimiter, _)| kind_of(*delimiter) != MarkerKind::Opaque);
+      open_opaque = 0;
     }
-    let opening = MARKER_DELIMITERS
-      .iter()
-      .enumerate()
-      .find(|(_, (opener, _, _))| rest.starts_with(opener));
     let closing = open.last().copied().and_then(|(delimiter, _)| {
       MARKER_DELIMITERS
         .get(delimiter)
@@ -1781,20 +1791,31 @@ fn markers(text: &str) -> Vec<Marker> {
         .map(|(_, closer, _)| closer.len())
     });
     if let Some(len) = closing {
-      if let Some((delimiter, start)) = open.pop()
-        && open.is_empty()
-        && let Some((_, _, kind)) = MARKER_DELIMITERS.get(delimiter)
-      {
-        markers.push(Marker {
-          open: start,
-          close: index,
-          kind: *kind,
-        });
+      if let Some((delimiter, start)) = open.pop() {
+        // Record a marker unless one of its kind still encloses it.
+        let (still_open, list) = match kind_of(delimiter) {
+          MarkerKind::Opaque => (&mut open_opaque, &mut markers.opaque),
+          MarkerKind::Template => (&mut open_template, &mut markers.template),
+        };
+        *still_open = still_open.saturating_sub(1);
+        if *still_open == 0 {
+          list.push((start, index));
+        }
       }
       index = index.saturating_add(len);
       continue;
     }
-    if let Some((delimiter, (opener, _, _))) = opening {
+    let opening = MARKER_DELIMITERS
+      .iter()
+      .enumerate()
+      .find(|(_, (opener, _, _))| rest.starts_with(opener));
+    if let Some((delimiter, (opener, _, kind))) = opening {
+      match kind {
+        MarkerKind::Opaque => open_opaque = open_opaque.saturating_add(1),
+        MarkerKind::Template => {
+          open_template = open_template.saturating_add(1);
+        }
+      }
       open.push((delimiter, index));
       index = index.saturating_add(opener.len());
       continue;
@@ -1802,6 +1823,22 @@ fn markers(text: &str) -> Vec<Marker> {
     index = index.saturating_add(ch.len_utf8());
   }
   markers
+}
+
+/// Marker spans by kind, each sorted and disjoint.
+#[derive(Debug, Default)]
+struct Markers {
+  opaque: Vec<(usize, usize)>,
+  template: Vec<(usize, usize)>,
+}
+
+/// Whether one of the sorted, disjoint `spans` encloses `start..end`.
+fn encloses(spans: &[(usize, usize)], start: usize, end: usize) -> bool {
+  let opened_before = spans.partition_point(|(open, _)| *open < start);
+  opened_before
+    .checked_sub(1)
+    .and_then(|index| spans.get(index))
+    .is_some_and(|(_, close)| *close >= end)
 }
 
 fn glue_is_free(
@@ -2400,6 +2437,55 @@ mod tests {
   fn four_letter_entries_stay_exact() {
     let entries = [short_entry("Zeta")];
     assert!(engine_found(&entries, "Klient Zeda zaplatil.").is_empty());
+  }
+
+  #[test]
+  fn many_open_delimiters_on_a_line_stay_linear() {
+    let text =
+      format!("{} Acme {}", "<< ⟦".repeat(50_000), ">>".repeat(50_000));
+    let found_markers = markers(&text);
+    assert_eq!(found_markers.template.len(), 1);
+    assert!(found_markers.opaque.is_empty());
+  }
+
+  #[test]
+  fn opaque_markers_win_inside_templates() {
+    let entries = [exact("Zeta", ORGANIZATION), exact("Acme", ORGANIZATION)];
+    for text in ["see [[⟦Zeta⟧]] below", "see {{⟦Zeta⟧}} below"] {
+      assert!(found(&entries, text).is_empty(), "{text}");
+    }
+    assert_eq!(found(&entries, "see {{Acme:⟦Zeta⟧}} below"), ["Acme"]);
+  }
+
+  #[test]
+  fn templates_stay_open_across_spaces_on_their_line() {
+    let entries = [exact("Zeta", ORGANIZATION), exact("Jan Novák", PERSON)];
+    for text in ["see <<token: zeta9>> below", "see {{ field zeta9 }} below"] {
+      assert!(found(&entries, text).is_empty(), "{text}");
+    }
+    for (text, expected) in [
+      ("see << Jan Novák2024 here", "Jan Novák"),
+      ("see <<token:\nzeta9>> below", "zeta"),
+      ("see {{ Jan Novák }} below", "Jan Novák"),
+    ] {
+      assert_eq!(found(&entries, text), [expected], "{text:?}");
+    }
+  }
+
+  #[test]
+  fn short_typos_skip_sentence_starts_in_other_scripts() {
+    let entries = [short_entry("Orbis")];
+    for text in [
+      "Předtím skončil。 Orbit zůstal.",
+      "Předtím skončil؟ Orbit zůstal.",
+      "Předtím skončil। Orbit zůstal.",
+    ] {
+      assert!(engine_found(&entries, text).is_empty(), "{text}");
+    }
+    assert_eq!(
+      engine_found(&entries, "Předtím skončil, Orbys zůstal."),
+      ["Orbys"]
+    );
   }
 
   #[test]
