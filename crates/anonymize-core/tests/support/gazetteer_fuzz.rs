@@ -111,13 +111,14 @@ fn is_identifier_segment(segment: &str) -> bool {
   hex || base64
 }
 
-fn is_compound_joiner(character: char) -> bool {
+const fn is_compound_joiner(character: char) -> bool {
   matches!(
     character,
     '-' | '_' | '.' | '/' | '+' | '=' | ':' | '@' | '#' | '\\'
   )
 }
 
+#[derive(Clone, Copy)]
 enum Edge {
   Start(usize),
   End(usize),
@@ -207,8 +208,16 @@ fn glue_is_free(glue: &[char], edge: Option<char>) -> bool {
     && glue.iter().skip(1).all(|character| character.is_numeric())
 }
 
-pub(crate) fn exercise(data: &[u8]) {
-  let input = String::from_utf8_lossy(&data[..data.len().min(MAX_INPUT_BYTES)]);
+pub fn exercise(data: &[u8]) {
+  // Arbitrary bytes become synthetic text before any offsets are measured.
+  // Preserve valid chunks and replace each invalid sequence with one marker.
+  let mut input = String::new();
+  for chunk in data[..data.len().min(MAX_INPUT_BYTES)].utf8_chunks() {
+    input.push_str(chunk.valid());
+    if !chunk.invalid().is_empty() {
+      input.push(char::REPLACEMENT_CHARACTER);
+    }
+  }
   let mut chunks = input.split('\n');
   let mut entries = chunks
     .by_ref()

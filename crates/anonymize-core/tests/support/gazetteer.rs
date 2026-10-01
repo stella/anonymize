@@ -5,10 +5,10 @@ use stella_anonymize_adapter_contract::{
 };
 use stella_anonymize_core::PreparedEngine;
 use stella_anonymize_core::assemble::{
-  GazetteerEntry, GazetteerSource, PipelineConfig,
+  GazetteerEntry, GazetteerSource, PipelineConfig, StandaloneStreetDetection,
 };
 
-pub(crate) fn engine(
+pub fn engine(
   entries: &[String],
   language: &str,
 ) -> Result<PreparedEngine, String> {
@@ -33,7 +33,7 @@ pub(crate) fn engine(
     enable_coreference: false,
     enable_zone_classification: Some(false),
     enable_hotword_rules: Some(false),
-    standalone_street_detection: Default::default(),
+    standalone_street_detection: StandaloneStreetDetection::default(),
     labels: vec![],
     workspace_id: "property-test".to_owned(),
     dictionaries: None,
@@ -53,7 +53,7 @@ pub(crate) fn engine(
     .collect::<Vec<_>>();
   let binding = assemble_static_search_config(&config, None, &entries)
     .map_err(|error| error.to_string())?;
-  let config = prepared_search_config_from_binding(binding)
+  let prepared_config = prepared_search_config_from_binding(binding)
     .map_err(|error| error.to_string())?;
-  PreparedEngine::new(config).map_err(|error| error.to_string())
+  PreparedEngine::new(prepared_config).map_err(|error| error.to_string())
 }

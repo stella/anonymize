@@ -19,7 +19,7 @@ its nightly-only sanitizer dependencies never touch the default build.
 | ----------------- | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
 | `artifact_decode` | `SearchIndexArtifacts::from_bytes` | Any byte slice returns `Ok` or a typed `Err`, never panics / indexes OOB / slices a codepoint. Accepted input round-trips through `to_bytes`. |
 | `normalize_text`  | `normalize_for_search`             | Never panics on any UTF-8; output is a fixed point (idempotent).                                                                              |
-| `gazetteer_match` | assembled `PreparedEngine`          | Bounded arbitrary entries and text preserve UTF-8 and range safety, whole-word spans, and protection of synthetic opaque envelopes.          |
+| `gazetteer_match` | assembled `PreparedEngine`         | Bounded arbitrary entries and text preserve UTF-8 and range safety, whole-word spans, and protection of synthetic opaque envelopes.           |
 
 The gazetteer target reuses `crates/anonymize-core/tests/support/gazetteer.rs`
 and `crates/anonymize-core/tests/support/gazetteer_fuzz.rs` to exercise the
@@ -29,7 +29,8 @@ name may touch plain numeric glue and underscores, while alphabetic glue and
 mixed identifier segments are rejected. Common combining marks count as word
 interior; scripts written without spaces do not. This is a character-level
 oracle, not full Unicode segmentation. The integration property checks UAX
-word boundaries for spaced Latin-name contexts where those definitions agree. Arbitrary `⟦...⟧` spans are protected,
+word boundaries for spaced Latin-name contexts where those definitions agree.
+Arbitrary `⟦...⟧` spans are protected,
 and manufactured identifier compounds are protected as subranges inside URL,
 email, UUID, hex, underscore, and bracketed contexts; ordinary URL/domain and
 email text remains eligible. A manufactured plain term must be found on every

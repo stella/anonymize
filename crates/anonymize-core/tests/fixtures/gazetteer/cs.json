@@ -12,13 +12,7 @@
   },
   {
     "canonical": "Milora",
-    "forms": [
-      "Milora",
-      "Milory",
-      "Miloře",
-      "Miloru",
-      "Milorou"
-    ]
+    "forms": ["Milora", "Milory", "Miloře", "Miloru", "Milorou"]
   },
   {
     "canonical": "Velomír Milora",
@@ -32,12 +26,6 @@
   },
   {
     "canonical": "Žilora",
-    "forms": [
-      "Žilora",
-      "Žilory",
-      "Žiloře",
-      "Žiloru",
-      "Žilorou"
-    ]
+    "forms": ["Žilora", "Žilory", "Žiloře", "Žiloru", "Žilorou"]
   }
 ]

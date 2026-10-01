@@ -16,6 +16,7 @@ mod gazetteer;
 mod gazetteer_fuzz;
 
 use std::collections::BTreeSet;
+use std::fmt::Write;
 use std::ops::Range;
 
 use proptest::prelude::*;
@@ -71,7 +72,7 @@ fn spans(engine: &PreparedEngine, text: &str) -> Vec<Range<usize>> {
     .collect()
 }
 
-fn disjoint(a: &Range<usize>, b: &Range<usize>) -> bool {
+const fn disjoint(a: &Range<usize>, b: &Range<usize>) -> bool {
   a.end <= b.start || b.end <= a.start
 }
 
@@ -90,13 +91,13 @@ fn opaque_tokens(entry: &str, hex: &str) -> Vec<String> {
     format!("{hex}{hex}{hex}{hex}"),
     format!(
       "{}-{}-4{}-a{}-{}{}{}",
-      &hex[..8],
-      &hex[..4],
-      &hex[..3],
-      &hex[..3],
-      &hex[..4],
-      &hex[..4],
-      &hex[..4]
+      hex.get(..8).unwrap(),
+      hex.get(..4).unwrap(),
+      hex.get(..3).unwrap(),
+      hex.get(..3).unwrap(),
+      hex.get(..4).unwrap(),
+      hex.get(..4).unwrap(),
+      hex.get(..4).unwrap()
     ),
     format!("{hex}{hex}{hex}{hex}{hex}{hex}{hex}{hex}"),
     format!("ID{entry}72"),
@@ -184,14 +185,14 @@ proptest! {
 
   #[test]
   fn p1_opaque_tokens_are_preserved(entry in single_entry(), hex in "a1[a-f0-9]{6}") {
-    let engine = gazetteer::engine(&[entry.clone()], "cs").unwrap();
+    let engine = gazetteer::engine(std::slice::from_ref(&entry), "cs").unwrap();
     let mut text = format!("{entry} archived ");
     let mut protected = Vec::new();
     for token in opaque_tokens(&entry, &hex) {
       let start = text.len();
       text.push_str(&token);
       protected.push(start..text.len());
-      text.push_str(&format!(" reviewed {entry} archived "));
+      write!(text, " reviewed {entry} archived ").unwrap();
     }
     let actual = spans(&engine, &text);
     prop_assert!(actual.contains(&(0..entry.len())), "real hit must exist");
@@ -219,7 +220,7 @@ proptest! {
 
   #[test]
   fn p3_hits_do_not_swallow_adjacent_words(entry in short_entry(), prefix in sample::select(vec!["archived", "reviewed", "completed"]), next in sample::select(vec!["documents", "yesterday", "carefully"])) {
-    let engine = gazetteer::engine(&[entry.clone()], "cs").unwrap();
+    let engine = gazetteer::engine(std::slice::from_ref(&entry), "cs").unwrap();
     let text = format!("{prefix} {entry} {next} tomorrow");
     let start = prefix.len() + 1;
     prop_assert!(exact_hit(&spans(&engine, &text), &(start..start + entry.len())));
@@ -281,15 +282,15 @@ fn substring_matcher(text: &str, entry: &str) -> Vec<Range<usize>> {
 }
 
 fn edit_distance(left: &str, right: &str) -> usize {
-  let right = right.chars().collect::<Vec<_>>();
-  let mut previous = (0..=right.len()).collect::<Vec<_>>();
-  for (row, left) in left.chars().enumerate() {
+  let right_chars = right.chars().collect::<Vec<_>>();
+  let mut previous = (0..=right_chars.len()).collect::<Vec<_>>();
+  for (row, left_char) in left.chars().enumerate() {
     let mut current = vec![row + 1];
-    for (column, right) in right.iter().enumerate() {
+    for (column, right_char) in right_chars.iter().enumerate() {
       current.push(
         (previous[column + 1] + 1)
           .min(current[column] + 1)
-          .min(previous[column] + usize::from(left != *right)),
+          .min(previous[column] + usize::from(left_char != *right_char)),
       );
     }
     previous = current;
@@ -300,22 +301,26 @@ fn edit_distance(left: &str, right: &str) -> usize {
 #[test]
 fn property_oracles_reject_wrong_matchers() {
   // P1/P2: substring matching cuts a production-shaped identifier.
-  let text = "IDLuma72";
-  let wrong = substring_matcher(text, "Luma");
-  assert!(!wrong.is_empty());
-  assert!(!wrong.iter().all(|span| disjoint(span, &(0..text.len()))));
-  assert!(!wrong.iter().all(|span| {
-    let boundaries = boundaries(text);
+  let identifier_text = "IDLuma72";
+  let identifier_spans = substring_matcher(identifier_text, "Luma");
+  assert!(!identifier_spans.is_empty());
+  assert!(
+    !identifier_spans
+      .iter()
+      .all(|span| disjoint(span, &(0..identifier_text.len())))
+  );
+  assert!(!identifier_spans.iter().all(|span| {
+    let boundaries = boundaries(identifier_text);
     boundaries.contains(&span.start) && boundaries.contains(&span.end)
   }));
 
   // P3: a matcher growing through the next word fails exact span recall.
-  let text = "archived Luma documents";
-  let wrong = substring_matcher(text, "Luma")
+  let adjacent_text = "archived Luma documents";
+  let adjacent_spans = substring_matcher(adjacent_text, "Luma")
     .into_iter()
-    .map(|span| span.start..text.len())
+    .map(|span| span.start..adjacent_text.len())
     .collect::<Vec<_>>();
-  assert!(!exact_hit(&wrong, &(9..13)));
+  assert!(!exact_hit(&adjacent_spans, &(9..13)));
 
   // P4: unconstrained edit matching must reject the actual ordinary vocabulary.
   let vocabulary: Vec<OrdinaryWords> =
@@ -327,31 +332,33 @@ fn property_oracles_reject_wrong_matchers() {
         (1..=2).contains(&distance),
         "probe must be a real near match"
       );
-      let wrong = if distance <= 2 {
-        vec![0..word.len()]
+      let fuzzy_spans = if distance <= 2 {
+        std::iter::once(0..word.len()).collect::<Vec<_>>()
       } else {
         vec![]
       };
       assert!(
-        !wrong.is_empty(),
+        !fuzzy_spans.is_empty(),
         "the no-hit oracle rejects unbounded fuzzy matching"
       );
     }
   }
 
   // P5: exact-only matching fails synthetic inflection recall.
-  let text = "Velomírovi";
-  let wrong = substring_matcher(text, "Velomír");
-  assert!(!exact_hit(&wrong, &(0..text.len())));
+  let inflected_text = "Velomírovi";
+  let exact_only_spans = substring_matcher(inflected_text, "Velomír");
+  assert!(!exact_hit(&exact_only_spans, &(0..inflected_text.len())));
 
   // P6: repeated substring redaction corrupts its own placeholder.
-  let wrong_redact = |text: &str| text.replace("Luma", "[Luma_1]");
+  let wrong_redact = |source: &str| source.replace("Luma", "[Luma_1]");
   let first = wrong_redact("Luma");
   assert_ne!(first, wrong_redact(&first));
   let ordered_redact = |entries: &[&str]| {
-    entries.iter().fold("Luma Labs".to_owned(), |text, entry| {
-      text.replace(entry, "[ORGANIZATION_1]")
-    })
+    entries
+      .iter()
+      .fold("Luma Labs".to_owned(), |redacted, entry| {
+        redacted.replace(entry, "[ORGANIZATION_1]")
+      })
   };
   assert_ne!(
     ordered_redact(&["Luma", "Luma Labs"]),
@@ -386,9 +393,7 @@ fn fuzz_driver_exercises_identifiers_and_accepted_neighbours() {
   for (start, name) in text.match_indices("Luma") {
     assert!(
       exact_hit(&actual, &(start..start + name.len())),
-      "accepted neighbour must retain exact detection recall: {:?} at {}",
-      actual,
-      start
+      "accepted neighbour must retain exact detection recall: {actual:?} at {start}"
     );
   }
 }
