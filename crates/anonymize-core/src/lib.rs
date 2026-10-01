@@ -12,12 +12,14 @@ pub(crate) mod bounded_regex;
 pub(crate) mod byte_offsets;
 mod coreference;
 mod dates;
+mod declension;
 mod diagnostics;
 /// Cross-crate concurrency seam: scoped OS threads on native, sequential
 /// execution on WebAssembly. Public for reuse by workspace binding crates.
 #[doc(hidden)]
 pub mod exec;
 mod false_positives;
+mod gazetteer;
 mod hotwords;
 pub(crate) mod labels;
 mod legal_forms;
@@ -44,10 +46,12 @@ pub use address_context::AddressContextData;
 pub use address_seeds::{AddressSeedData, StandaloneStreetData};
 pub use coreference::{CoreferenceData, CoreferencePatternData};
 pub use dates::DateData;
+pub use declension::expand_name_declensions;
 pub use diagnostics::{
   DiagnosticDetail, DiagnosticEvent, DiagnosticEventKind, DiagnosticPhase,
   DiagnosticScope, DiagnosticStage, StaticRedactionDiagnostics,
 };
+pub use gazetteer::gazetteer_fuzzy_distance;
 pub use hotwords::{HotwordRule, HotwordRuleData};
 pub use legal_forms::{LegalFormData, LowercaseBridge};
 pub use money::{
@@ -68,9 +72,9 @@ pub use prepared::{
 };
 pub use processors::{
   CountryMatchData, CountryVariant, DenyListFilterData, DenyListMatchData,
-  DenyListPatternMeta, DenyListPatternMetaSet, GazetteerMatchData,
-  PatternSlice, RegexMatchMeta, SigningPlaceGuardData, StringGroups,
-  process_country_matches, process_deny_list_matches,
+  DenyListPatternMeta, DenyListPatternMetaSet, GazetteerInflection,
+  GazetteerMatchData, PatternSlice, RegexMatchMeta, SigningPlaceGuardData,
+  StringGroups, process_country_matches, process_deny_list_matches,
   process_gazetteer_matches, process_regex_matches,
 };
 pub use redact::{

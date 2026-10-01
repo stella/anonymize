@@ -13,13 +13,13 @@ use stella_anonymize_core::{
   CoreferencePatternData, CountryMatchData, CountryVariant, CurrencyData,
   DateData, DenyListFilterData, DenyListMatchData, DetectionSource,
   DiagnosticEventKind, DiagnosticStage, EntityKind, Error, FuzzySearchOptions,
-  GazetteerMatchData, HotwordRule, HotwordRuleData, LegalFormData,
-  LiteralSearchOptions, MagnitudeSuffixData, MonetaryData, OperatorConfig,
-  PERSON_OR_ORGANIZATION_TRIGGER_LABEL, PatternSlice, PreparedEngine,
-  PreparedEngineArtifacts, PreparedEngineConfig, PreparedEngineSlices,
-  PreparedSessionCallerRedactionOptions, PreparedSessionRedactionOptions,
-  REDACTION_TEXT_MAX_BYTES, RedactionSession, RegexMatchMeta,
-  RegexSearchOptions, SearchOptions, SearchPattern, SessionId,
+  GazetteerInflection, GazetteerMatchData, HotwordRule, HotwordRuleData,
+  LegalFormData, LiteralSearchOptions, MagnitudeSuffixData, MonetaryData,
+  OperatorConfig, PERSON_OR_ORGANIZATION_TRIGGER_LABEL, PatternSlice,
+  PreparedEngine, PreparedEngineArtifacts, PreparedEngineConfig,
+  PreparedEngineSlices, PreparedSessionCallerRedactionOptions,
+  PreparedSessionRedactionOptions, REDACTION_TEXT_MAX_BYTES, RedactionSession,
+  RegexMatchMeta, RegexSearchOptions, SearchOptions, SearchPattern, SessionId,
   SessionLifecycle, SessionTimestamp, SignatureData, SourceDetail, TriggerData,
   TriggerRule, TriggerStrategy, TriggerValidation, WrittenAmountPatternData,
   ZoneData, ZonePatternData, ZoneSigningClauseData, redact_text,
@@ -670,6 +670,9 @@ fn prepared_engine_runs_normalized_literal_pass() {
     gazetteer_data: Some(GazetteerMatchData {
       labels: vec![String::from("organization")],
       is_fuzzy: vec![false],
+      legal_form_suffixes: vec![String::from("s.r.o.")],
+      inflection: GazetteerInflection::None,
+      terms: Vec::new(),
     }),
     country_data: None,
     hotword_data: None,
@@ -1498,6 +1501,9 @@ fn prepared_engine_artifacts_match_direct_prepare() {
     gazetteer_data: Some(GazetteerMatchData {
       labels: vec![String::from("organization")],
       is_fuzzy: vec![false],
+      legal_form_suffixes: vec![String::from("s.r.o.")],
+      inflection: GazetteerInflection::None,
+      terms: Vec::new(),
     }),
     country_data: None,
     hotword_data: None,
@@ -1554,6 +1560,9 @@ fn prepared_engine_artifacts_roundtrip_bytes() {
     gazetteer_data: Some(GazetteerMatchData {
       labels: vec![String::from("organization")],
       is_fuzzy: vec![false],
+      legal_form_suffixes: vec![String::from("s.r.o.")],
+      inflection: GazetteerInflection::None,
+      terms: Vec::new(),
     }),
     ..empty_config(PreparedEngineSlices::default())
   };
@@ -1568,6 +1577,71 @@ fn prepared_engine_artifacts_roundtrip_bytes() {
   assert_eq!(
     prepared.find_matches("Acme Corp signed ID123").unwrap(),
     direct.find_matches("Acme Corp signed ID123").unwrap()
+  );
+}
+
+/// A gazetteer-only config over the plain literal `Acme`, with or without
+/// the entry text in its gazetteer data.
+fn artifact_gazetteer_config(terms: Vec<String>) -> PreparedEngineConfig {
+  prepared_config! {
+    literal_patterns: vec![SearchPattern::Literal(String::from("Acme"))],
+    slices: PreparedEngineSlices {
+      gazetteer: PatternSlice { start: 0, end: 1 },
+      ..PreparedEngineSlices::default()
+    },
+    gazetteer_data: Some(GazetteerMatchData {
+      labels: vec![String::from("organization")],
+      is_fuzzy: vec![false],
+      legal_form_suffixes: Vec::new(),
+      inflection: GazetteerInflection::CzechSlovak,
+      terms,
+    }),
+    ..empty_config(PreparedEngineSlices::default())
+  }
+}
+
+fn gazetteer_texts(engine: &PreparedEngine, text: &str) -> Vec<String> {
+  engine
+    .detect_static_entities(text)
+    .unwrap()
+    .entities
+    .all_entities()
+    .into_iter()
+    .filter(|entity| entity.source == DetectionSource::Gazetteer)
+    .map(|entity| entity.text)
+    .collect()
+}
+
+#[test]
+fn artifact_only_configs_keep_gazetteer_terms() {
+  let config = artifact_gazetteer_config(vec![String::from("Acme")]);
+  let artifacts = PreparedEngine::prepare_artifacts(config.clone()).unwrap();
+  let mut compact = config;
+  compact.search.literal_patterns.clear();
+  let text = "Smlouvu podepsala Acmé a ACME dnes.";
+
+  let owned =
+    PreparedEngine::new_with_artifacts(compact.clone(), &artifacts).unwrap();
+  let viewed =
+    PreparedEngine::new_with_artifact_view(compact, &artifacts.as_view())
+      .unwrap();
+
+  assert_eq!(gazetteer_texts(&owned, text), ["Acmé", "ACME"]);
+  assert_eq!(gazetteer_texts(&viewed, text), ["Acmé", "ACME"]);
+}
+
+#[test]
+fn artifact_only_configs_without_gazetteer_terms_keep_exact_hits() {
+  let config = artifact_gazetteer_config(Vec::new());
+  let artifacts = PreparedEngine::prepare_artifacts(config.clone()).unwrap();
+  let mut compact = config;
+  compact.search.literal_patterns.clear();
+
+  let engine = PreparedEngine::new_with_artifacts(compact, &artifacts).unwrap();
+
+  assert_eq!(
+    gazetteer_texts(&engine, "Smlouvu podepsala Acmé a Acme dnes."),
+    ["Acme"]
   );
 }
 
@@ -1659,6 +1733,9 @@ fn prepared_engine_emits_static_detector_entities() {
     gazetteer_data: Some(GazetteerMatchData {
       labels: vec![String::from("organization")],
       is_fuzzy: vec![false],
+      legal_form_suffixes: vec![String::from("s.r.o.")],
+      inflection: GazetteerInflection::None,
+      terms: Vec::new(),
     }),
     country_data: Some(turkey_country_match_data()),
     hotword_data: None,
@@ -1693,7 +1770,7 @@ fn prepared_engine_emits_static_detector_entities() {
 }
 
 #[test]
-fn prepared_engine_extends_gazetteer_suffix_in_text_offsets() {
+fn prepared_engine_extends_gazetteer_legal_form_in_text_offsets() {
   let prepared = PreparedEngine::new(prepared_config! {
     literal_patterns: vec![SearchPattern::LiteralWithOptions {
       pattern: String::from("Acme"),
@@ -1714,17 +1791,23 @@ fn prepared_engine_extends_gazetteer_suffix_in_text_offsets() {
     gazetteer_data: Some(GazetteerMatchData {
       labels: vec![String::from("organization")],
       is_fuzzy: vec![false],
+      legal_form_suffixes: vec![String::from("spółka jawna")],
+      inflection: GazetteerInflection::None,
+      terms: Vec::new(),
     }),
     ..empty_config(PreparedEngineSlices::default())
   })
   .unwrap();
 
   let result = prepared
-    .redact_static_entities("Acme spółka signed.", &OperatorConfig::default())
+    .redact_static_entities(
+      "Acme spółka jawna signed.",
+      &OperatorConfig::default(),
+    )
     .unwrap();
 
   assert!(result.resolved_entities.iter().any(|entity| {
-    entity.label == "organization" && entity.text == "Acme spółka"
+    entity.label == "organization" && entity.text == "Acme spółka jawna"
   }));
   assert_eq!(result.redaction.redacted_text, "[ORGANIZATION_1] signed.");
 }
@@ -2499,6 +2582,9 @@ fn prepared_engine_redacts_static_entities_end_to_end() {
     gazetteer_data: Some(GazetteerMatchData {
       labels: vec![String::from("organization")],
       is_fuzzy: vec![false],
+      legal_form_suffixes: vec![String::from("s.r.o.")],
+      inflection: GazetteerInflection::None,
+      terms: Vec::new(),
     }),
     country_data: Some(turkey_country_match_data()),
     hotword_data: None,

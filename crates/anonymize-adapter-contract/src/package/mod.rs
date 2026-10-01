@@ -683,8 +683,8 @@ mod tests {
   #![allow(clippy::unwrap_used)]
 
   use stella_anonymize_core::{
-    DiagnosticStage, PatternSlice, PreparedEngineArtifacts, SearchMatch,
-    process_deny_list_matches,
+    DetectionSource, DiagnosticStage, PatternSlice, PreparedEngine,
+    PreparedEngineArtifacts, SearchMatch, process_deny_list_matches,
   };
 
   #[cfg(feature = "zstd")]
@@ -726,19 +726,21 @@ mod tests {
   use crate::error::ContractError;
   use crate::types::{
     BindingCountryMatchData, BindingCountryVariant, BindingDenyListFilterData,
-    BindingDenyListMatchData, BindingLegalFormData,
-    BindingPreparedSearchConfig, BindingSearchPattern,
+    BindingDenyListMatchData, BindingGazetteerInflection,
+    BindingGazetteerMatchData, BindingLegalFormData, BindingPatternSlice,
+    BindingPreparedSearchConfig, BindingPreparedSearchSlices,
+    BindingSearchPattern,
   };
 
   #[test]
   fn prepared_package_schema_versions_track_the_current_payload_shape() {
-    assert_eq!(BINDING_PACKAGE_SCHEMA_VERSION, 14);
-    assert_eq!(CORE_PACKAGE_SCHEMA_VERSION, 14);
+    assert_eq!(BINDING_PACKAGE_SCHEMA_VERSION, 15);
+    assert_eq!(CORE_PACKAGE_SCHEMA_VERSION, 15);
   }
 
   #[test]
   fn prepared_package_readers_reject_previous_schema_payloads() {
-    const PREVIOUS_RELEASED_SCHEMA_VERSION: u32 = 11;
+    const PREVIOUS_RELEASED_SCHEMA_VERSION: u32 = 14;
     let binding_payload = prepared_search_package_payload_to_bytes(
       &package_test_config(),
       b"artifacts",
@@ -1139,6 +1141,51 @@ mod tests {
       ),
       "binding package loader should reject core payloads"
     );
+  }
+
+  #[test]
+  fn prepared_search_core_package_keeps_plain_gazetteer_terms() {
+    let config =
+      prepared_search_config_from_binding(BindingPreparedSearchConfig {
+        slices: BindingPreparedSearchSlices {
+          gazetteer: Some(BindingPatternSlice { start: 0, end: 1 }),
+          ..BindingPreparedSearchSlices::default()
+        },
+        gazetteer_data: Some(BindingGazetteerMatchData {
+          labels: vec![String::from("organization")],
+          is_fuzzy: vec![false],
+          legal_form_suffixes: Vec::new(),
+          inflection: BindingGazetteerInflection::None,
+          terms: Vec::new(),
+        }),
+        country_data: None,
+        ..package_test_config()
+      })
+      .unwrap();
+    let artifacts = PreparedEngine::prepare_artifacts(config.clone())
+      .unwrap()
+      .to_bytes()
+      .unwrap();
+
+    let bytes =
+      prepared_search_core_package_to_bytes(&config, &artifacts).unwrap();
+    let package = prepared_search_core_package_from_bytes(&bytes).unwrap();
+    let engine = PreparedEngine::new_with_artifacts(
+      package.config,
+      &PreparedEngineArtifacts::from_bytes(&package.artifacts).unwrap(),
+    )
+    .unwrap();
+
+    let found = engine
+      .detect_static_entities("Signed by Acme today.")
+      .unwrap()
+      .entities
+      .all_entities()
+      .into_iter()
+      .filter(|entity| entity.source == DetectionSource::Gazetteer)
+      .map(|entity| entity.text)
+      .collect::<Vec<_>>();
+    assert_eq!(found, ["Acme"]);
   }
 
   #[test]

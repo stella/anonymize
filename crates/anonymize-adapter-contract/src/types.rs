@@ -90,6 +90,27 @@ pub struct BindingRegexMatchMeta {
 pub struct BindingGazetteerMatchData {
   pub labels: Vec<String>,
   pub is_fuzzy: Vec<bool>,
+  /// Absent in configs built before legal-form extension: no extension.
+  #[serde(default)]
+  pub legal_form_suffixes: Vec<String>,
+  /// Absent in configs built before language scoping: every form, as an
+  /// unscoped assembly would choose.
+  #[serde(default)]
+  pub inflection: BindingGazetteerInflection,
+  /// Entry text per row; absent in older configs, which take it from the
+  /// search patterns.
+  #[serde(default)]
+  pub terms: Vec<String>,
+}
+
+#[derive(
+  Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum BindingGazetteerInflection {
+  None,
+  #[default]
+  CzechSlovak,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]

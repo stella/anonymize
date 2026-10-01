@@ -3,9 +3,10 @@
 use stella_anonymize_core::{
   CountryMatchData, CountryVariant, DenyListFilterData, DenyListMatchData,
   DenyListPatternMeta, DenyListPatternMetaSet, DetectionSource, Error,
-  GazetteerMatchData, PatternSlice, PipelineEntity, RegexMatchMeta,
-  SearchMatch, SigningPlaceGuardData, SourceDetail, process_country_matches,
-  process_deny_list_matches, process_gazetteer_matches, process_regex_matches,
+  GazetteerInflection, GazetteerMatchData, PatternSlice, PipelineEntity,
+  RegexMatchMeta, SearchMatch, SearchPattern, SigningPlaceGuardData,
+  SourceDetail, process_country_matches, process_deny_list_matches,
+  process_gazetteer_matches, process_regex_matches,
 };
 
 #[test]
@@ -705,6 +706,14 @@ fn deny_list_processor_rejects_curated_sources_without_filters() {
   );
 }
 
+fn gazetteer_literal(pattern: &str) -> SearchPattern {
+  SearchPattern::LiteralWithOptions {
+    pattern: pattern.to_owned(),
+    case_insensitive: None,
+    whole_words: Some(false),
+  }
+}
+
 #[test]
 fn gazetteer_processor_extends_exact_matches_and_drops_overlapping_fuzzy() {
   let matches = vec![
@@ -723,13 +732,24 @@ fn gazetteer_processor_extends_exact_matches_and_drops_overlapping_fuzzy() {
   let data = GazetteerMatchData {
     labels: vec![String::from("organization"), String::from("organization")],
     is_fuzzy: vec![false, true],
+    legal_form_suffixes: vec![String::from("s.r.o.")],
+    inflection: GazetteerInflection::None,
+    terms: Vec::new(),
   };
+  let patterns = [
+    gazetteer_literal("Acme"),
+    SearchPattern::Fuzzy {
+      pattern: String::from("Acme"),
+      distance: Some(1),
+    },
+  ];
 
   let entities = process_gazetteer_matches(
     &matches,
     PatternSlice { start: 10, end: 12 },
     "Acme s.r.o. signed",
     &data,
+    &patterns,
   )
   .unwrap();
 
@@ -746,24 +766,60 @@ fn gazetteer_processor_emits_non_overlapping_fuzzy_matches() {
   let matches = vec![SearchMatch::Fuzzy {
     pattern: 2,
     start: 10,
-    end: 15,
+    end: 19,
     distance: 1,
   }];
   let data = GazetteerMatchData {
     labels: vec![String::from("organization")],
     is_fuzzy: vec![true],
+    legal_form_suffixes: Vec::new(),
+    inflection: GazetteerInflection::None,
+    terms: Vec::new(),
   };
+  let patterns = [SearchPattern::Fuzzy {
+    pattern: String::from("Wintermute"),
+    distance: Some(2),
+  }];
 
   let entities = process_gazetteer_matches(
     &matches,
     PatternSlice { start: 2, end: 3 },
-    "Signed by Akmee today",
+    "Signed by Wintermte today",
     &data,
+    &patterns,
   )
   .unwrap();
 
-  assert_eq!(entities[0].text, "Akmee");
+  assert_eq!(entities[0].text, "Wintermte");
   assert_eq!(entities[0].score.to_bits(), 0.85_f64.to_bits());
+}
+
+#[test]
+fn gazetteer_processor_rejects_pattern_kinds_that_disagree_with_rows() {
+  let data = GazetteerMatchData {
+    labels: vec![String::from("organization")],
+    is_fuzzy: vec![true],
+    legal_form_suffixes: Vec::new(),
+    inflection: GazetteerInflection::None,
+    terms: Vec::new(),
+  };
+
+  let error = process_gazetteer_matches(
+    &[],
+    PatternSlice { start: 0, end: 1 },
+    "Acme",
+    &data,
+    &[gazetteer_literal("Acme")],
+  )
+  .unwrap_err();
+
+  assert!(matches!(
+    error,
+    Error::InvalidStaticData {
+      field: "gazetteer_data.is_fuzzy",
+      ..
+    }
+  ));
 }
 
 #[test]

@@ -2,11 +2,15 @@ use web_time::Instant;
 
 use crate::dates::{DateData, PreparedDateData};
 use crate::diagnostics::{DiagnosticStage, StaticRedactionDiagnostics};
+use crate::gazetteer::PreparedGazetteerMatchData;
 use crate::money::{MonetaryData, PreparedMonetaryData};
 use crate::prepared_metadata::{
-  PreparedCountryMatchData, PreparedGazetteerMatchData, PreparedRegexMatchData,
+  PreparedCountryMatchData, PreparedRegexMatchData,
 };
-use crate::processors::{CountryMatchData, GazetteerMatchData, RegexMatchMeta};
+use crate::processors::{
+  CountryMatchData, GazetteerMatchData, PatternSlice, RegexMatchMeta,
+};
+use crate::search::SearchPattern;
 use crate::types::{Error, Result};
 
 use super::artifacts::{PreparedEngineArtifacts, PreparedEngineArtifactsView};
@@ -184,6 +188,7 @@ impl PreparedEngine {
         gazetteer: detectors.gazetteer_data.take(),
         countries: detectors.country_data.take(),
         slices: &slices,
+        literal_patterns: &literal_patterns,
       })?;
     let anchored_len = anchored_config_len(
       detectors.date_data.as_ref(),
@@ -263,6 +268,7 @@ struct PrepareMatchMetadataInput<'a> {
   gazetteer: Option<GazetteerMatchData>,
   countries: Option<CountryMatchData>,
   slices: &'a PreparedEngineSlices,
+  literal_patterns: &'a [SearchPattern],
 }
 
 struct PreparedMatchMetadata {
@@ -270,6 +276,28 @@ struct PreparedMatchMetadata {
   custom_regex: PreparedRegexMatchData,
   gazetteer: Option<PreparedGazetteerMatchData>,
   countries: Option<PreparedCountryMatchData>,
+}
+
+/// The search patterns of `slice`, or `None` for a config prepared from
+/// artifacts alone, which carries no literal patterns.
+fn slice_patterns(
+  patterns: &[SearchPattern],
+  slice: PatternSlice,
+) -> Result<Option<&[SearchPattern]>> {
+  if patterns.is_empty() {
+    return Ok(None);
+  }
+  let range = usize::try_from(slice.start)
+    .ok()
+    .zip(usize::try_from(slice.end).ok());
+  range
+    .and_then(|(start, end)| patterns.get(start..end))
+    .map(Some)
+    .ok_or_else(|| Error::StaticDataLengthMismatch {
+      field: "literal_patterns",
+      expected: usize::try_from(slice.end).unwrap_or(usize::MAX),
+      actual: patterns.len(),
+    })
 }
 
 fn prepare_match_metadata(
@@ -281,6 +309,7 @@ fn prepare_match_metadata(
     gazetteer,
     countries,
     slices,
+    literal_patterns,
   } = input;
   Ok(PreparedMatchMetadata {
     regex: PreparedRegexMatchData::new(regex, slices.regex, "regex_meta")?,
@@ -290,7 +319,13 @@ fn prepare_match_metadata(
       "custom_regex_meta",
     )?,
     gazetteer: gazetteer
-      .map(|data| PreparedGazetteerMatchData::new(data, slices.gazetteer))
+      .map(|data| {
+        PreparedGazetteerMatchData::new(
+          data,
+          slices.gazetteer,
+          slice_patterns(literal_patterns, slices.gazetteer)?,
+        )
+      })
       .transpose()?,
     countries: countries
       .map(|data| PreparedCountryMatchData::new(data, slices.countries))

@@ -7,10 +7,10 @@ use stella_anonymize_core::{
   AddressContextData, AddressSeedData, AmountWordsData, CoreferenceData,
   CoreferencePatternData, CountryMatchData, CountryVariant, CurrencyData,
   DateData, DenyListFilterData, DenyListMatchData, DenyListPatternMetaSet,
-  FuzzySearchOptions, GazetteerMatchData, HotwordRule, HotwordRuleData,
-  LegalFormData, LiteralSearchOptions, LowercaseBridge, MagnitudeSuffixData,
-  MaskConfig, MaskDirection, MonetaryData, NameCorpusData, NameCorpusMode,
-  NumberWordData, Operator, OperatorConfig,
+  FuzzySearchOptions, GazetteerInflection, GazetteerMatchData, HotwordRule,
+  HotwordRuleData, LegalFormData, LiteralSearchOptions, LowercaseBridge,
+  MagnitudeSuffixData, MaskConfig, MaskDirection, MonetaryData, NameCorpusData,
+  NameCorpusMode, NumberWordData, Operator, OperatorConfig,
   PERSON_OR_ORGANIZATION_TRIGGER_LABEL, PatternSlice, PreparedArtifactPolicy,
   PreparedEngineConfig, PreparedEngineDetectorConfig,
   PreparedEnginePolicyConfig, PreparedEngineSearchConfig, PreparedEngineSlices,
@@ -25,6 +25,7 @@ use crate::error::{ContractError, Result};
 use crate::types::{
   BindingAddressSeedData, BindingCoreferenceData, BindingCountryMatchData,
   BindingCountryVariant, BindingDenyListFilterData, BindingDenyListMatchData,
+  BindingGazetteerInflection, BindingGazetteerMatchData,
   BindingHotwordRuleData, BindingLegalFormData, BindingLowercaseBridgePolicy,
   BindingMonetaryData, BindingNameCorpusData, BindingNameCorpusMode,
   BindingOperator, BindingOperatorConfig, BindingPatternSlice,
@@ -98,10 +99,7 @@ pub fn prepared_search_config_from_binding(
       false_positive_filters: config
         .false_positive_filters
         .map(deny_list_filters_from_binding),
-      gazetteer_data: config.gazetteer_data.map(|data| GazetteerMatchData {
-        labels: data.labels,
-        is_fuzzy: data.is_fuzzy,
-      }),
+      gazetteer_data: config.gazetteer_data.map(gazetteer_data_from_binding),
       country_data: config.country_data.map(country_data_from_binding),
       hotword_data: config.hotword_data.map(hotword_data_from_binding),
       trigger_data: config.trigger_data.map(|data| {
@@ -150,6 +148,23 @@ fn address_seed_data_from_binding(
         street_type_words: data.street_type_words,
       }
     }),
+  }
+}
+
+fn gazetteer_data_from_binding(
+  data: BindingGazetteerMatchData,
+) -> GazetteerMatchData {
+  GazetteerMatchData {
+    labels: data.labels,
+    is_fuzzy: data.is_fuzzy,
+    legal_form_suffixes: data.legal_form_suffixes,
+    terms: data.terms,
+    inflection: match data.inflection {
+      BindingGazetteerInflection::None => GazetteerInflection::None,
+      BindingGazetteerInflection::CzechSlovak => {
+        GazetteerInflection::CzechSlovak
+      }
+    },
   }
 }
 
