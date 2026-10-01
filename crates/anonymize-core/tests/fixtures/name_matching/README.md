@@ -57,6 +57,25 @@ English-only engines must resolve no entities and return unchanged text.
 Czech and Slovak share the matcher inflection policy; these cases test that
 explicit boundary against English, without claiming separate cs/sk policies.
 
+Every keep fixture declares a tagged `negativeCheck`. Suppression cases
+identify a configured surface inside the guarded region and a neutral context
+where the real assembled engine must resolve that entire surface with its
+expected label and exact output. All identifier, hex, UUID, hash and marker
+classes require this control, and the `guard-control` class requires every
+control to pass. The synthetic four-letter name `Acfe` seeds hex-compatible
+opaque tokens without enabling fuzzy matching for that name. Plain numeric
+or word segments are intentionally permitted by the matcher; bracketed
+identifier fixtures therefore use opaque compound segments, rather than
+assuming arbitrary brackets suppress names.
+
+Distinct negatives declare why the text is not a configured surface;
+context negatives require expected entities elsewhere in the document.
+Forced-only replay declares `forcedNegativeCheck` separately because those
+fixtures contain neither configured forced UUID. Missing negative intent,
+a control seed absent from its guarded surface, an unmatched neutral
+control, or a guard class relabelled as a distinct non-match rejects the gate.
+Unit tests exercise these validation failures through the production engine.
+
 `thresholds.json` stores class floors and ceilings as integer numerators with
 fixed denominators, avoiding rounded percentages. Bounds were measured on the
 matcher this suite ships with; class ceilings retain its behavior for

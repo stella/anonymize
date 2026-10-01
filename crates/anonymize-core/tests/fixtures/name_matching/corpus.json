@@ -143,6 +143,15 @@
       "workspaceId": "corpus-workspace",
       "createdAt": 0,
       "source": "manual"
+    },
+    {
+      "id": "corpus-entry-acfe",
+      "canonical": "Acfe",
+      "label": "organization",
+      "variants": [],
+      "workspaceId": "corpus-workspace",
+      "createdAt": 0,
+      "source": "manual"
     }
   ],
   "cases": [
@@ -1355,25 +1364,55 @@
       "surface": "3f2acfeca1b04d2e9c7a5b6d8e0f1a2b",
       "language": "en",
       "expectedEntities": [],
-      "forcedExpectedEntities": []
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "suppression",
+        "surface": "acfe",
+        "label": "organization",
+        "context": "before acfe after"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
     },
     {
       "expectation": "keep",
       "kind": "hex",
-      "text": "build acme0a1b2c3d4e5f ready",
-      "surface": "acme0a1b2c3d4e5f",
+      "text": "build acfe0a1b2c3d4e5f ready",
+      "surface": "acfe0a1b2c3d4e5f",
       "language": "en",
       "expectedEntities": [],
-      "forcedExpectedEntities": []
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "suppression",
+        "surface": "acfe",
+        "label": "organization",
+        "context": "before acfe after"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
     },
     {
       "expectation": "keep",
       "kind": "hex",
-      "text": "pointer 0xacbe12ef freed",
-      "surface": "0xacbe12ef",
+      "text": "pointer 0xacfe12ef freed",
+      "surface": "0xacfe12ef",
       "language": "en",
       "expectedEntities": [],
-      "forcedExpectedEntities": []
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "suppression",
+        "surface": "acfe",
+        "label": "organization",
+        "context": "before acfe after"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
     },
     {
       "expectation": "keep",
@@ -1382,7 +1421,17 @@
       "surface": "deadbeefacfe0042",
       "language": "en",
       "expectedEntities": [],
-      "forcedExpectedEntities": []
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "suppression",
+        "surface": "acfe",
+        "label": "organization",
+        "context": "before acfe after"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
     },
     {
       "expectation": "keep",
@@ -1391,7 +1440,17 @@
       "surface": "ACFE00A1",
       "language": "en",
       "expectedEntities": [],
-      "forcedExpectedEntities": []
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "suppression",
+        "surface": "ACFE",
+        "label": "organization",
+        "context": "before ACFE after"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
     },
     {
       "expectation": "keep",
@@ -1400,88 +1459,188 @@
       "surface": "9b1d0c3e-acfe-4ca1-8b2e-5c7a0a1b2c3d",
       "language": "en",
       "expectedEntities": [],
-      "forcedExpectedEntities": []
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "suppression",
+        "surface": "acfe",
+        "label": "organization",
+        "context": "before acfe after"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
     },
     {
       "expectation": "keep",
       "kind": "uuid",
-      "text": "row acee4f1b-0c2d-4e5f-9a8b-7c6d5e4f3a2b updated",
-      "surface": "acee4f1b-0c2d-4e5f-9a8b-7c6d5e4f3a2b",
+      "text": "row acfe4f1b-0c2d-4e5f-9a8b-7c6d5e4f3a2b updated",
+      "surface": "acfe4f1b-0c2d-4e5f-9a8b-7c6d5e4f3a2b",
       "language": "en",
       "expectedEntities": [],
-      "forcedExpectedEntities": []
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "suppression",
+        "surface": "acfe",
+        "label": "organization",
+        "context": "before acfe after"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
     },
     {
       "expectation": "keep",
       "kind": "uuid",
-      "text": "file 0d8f6a2c-acde-4b7e-8f01-ac3ea1b2c3d4 uploaded",
-      "surface": "0d8f6a2c-acde-4b7e-8f01-ac3ea1b2c3d4",
+      "text": "file 0d8f6a2c-acfe-4b7e-8f01-ac3ea1b2c3d4 uploaded",
+      "surface": "0d8f6a2c-acfe-4b7e-8f01-ac3ea1b2c3d4",
       "language": "en",
       "expectedEntities": [],
-      "forcedExpectedEntities": []
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "suppression",
+        "surface": "acfe",
+        "label": "organization",
+        "context": "before acfe after"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
     },
     {
       "expectation": "keep",
       "kind": "uuid",
-      "text": "dokument 7e4b9c1a-2f3d-4a5b-b6c7-d8e9f0a1b2c3 nahrán",
-      "surface": "7e4b9c1a-2f3d-4a5b-b6c7-d8e9f0a1b2c3",
+      "text": "dokument acfe9c1a-2f3d-4a5b-b6c7-d8e9f0a1b2c3 nahrán",
+      "surface": "acfe9c1a-2f3d-4a5b-b6c7-d8e9f0a1b2c3",
       "language": "cs",
       "expectedEntities": [],
-      "forcedExpectedEntities": []
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "suppression",
+        "surface": "acfe",
+        "label": "organization",
+        "context": "before acfe after"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
     },
     {
       "expectation": "keep",
       "kind": "hash",
-      "text": "sha256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 ok",
-      "surface": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "text": "sha256 acfec44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 ok",
+      "surface": "acfec44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "language": "en",
       "expectedEntities": [],
-      "forcedExpectedEntities": []
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "suppression",
+        "surface": "acfe",
+        "label": "organization",
+        "context": "before acfe after"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
     },
     {
       "expectation": "keep",
       "kind": "hash",
-      "text": "sha1 da39a3ee5e6b4b0d3255bfef95601890afd80709 ok",
-      "surface": "da39a3ee5e6b4b0d3255bfef95601890afd80709",
+      "text": "sha1 acfea3ee5e6b4b0d3255bfef95601890afd80709 ok",
+      "surface": "acfea3ee5e6b4b0d3255bfef95601890afd80709",
       "language": "en",
       "expectedEntities": [],
-      "forcedExpectedEntities": []
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "suppression",
+        "surface": "acfe",
+        "label": "organization",
+        "context": "before acfe after"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
     },
     {
       "expectation": "keep",
       "kind": "hash",
-      "text": "md5 9e107d9d372bb6826bd81d3542a419d6 ok",
-      "surface": "9e107d9d372bb6826bd81d3542a419d6",
+      "text": "md5 acfe7d9d372bb6826bd81d3542a419d6 ok",
+      "surface": "acfe7d9d372bb6826bd81d3542a419d6",
       "language": "en",
       "expectedEntities": [],
-      "forcedExpectedEntities": []
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "suppression",
+        "surface": "acfe",
+        "label": "organization",
+        "context": "before acfe after"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
     },
     {
       "expectation": "keep",
       "kind": "hash",
-      "text": "token QWNtZSBBIHJlcG9ydA== expired",
-      "surface": "QWNtZSBBIHJlcG9ydA==",
+      "text": "token AcfeZSBBIHJlcG9ydA== expired",
+      "surface": "AcfeZSBBIHJlcG9ydA==",
       "language": "en",
       "expectedEntities": [],
-      "forcedExpectedEntities": []
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "suppression",
+        "surface": "Acfe",
+        "label": "organization",
+        "context": "before Acfe after"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
     },
     {
       "expectation": "keep",
       "kind": "id-code",
-      "text": "Faktura INV-2024-0042 je splatná.",
-      "surface": "INV-2024-0042",
+      "text": "Faktura INV-ACFE-4c1b0042 je splatná.",
+      "surface": "INV-ACFE-4c1b0042",
       "language": "cs",
       "expectedEntities": [],
-      "forcedExpectedEntities": []
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "suppression",
+        "surface": "ACFE",
+        "label": "organization",
+        "context": "before ACFE after"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
     },
     {
       "expectation": "keep",
       "kind": "id-code",
-      "text": "Kód ACM3A-77 je neplatný.",
-      "surface": "ACM3A-77",
+      "text": "Kód ACFEA-77 je neplatný.",
+      "surface": "ACFEA-77",
       "language": "cs",
       "expectedEntities": [],
-      "forcedExpectedEntities": []
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "suppression",
+        "surface": "ACFE",
+        "label": "organization",
+        "context": "before ACFE after"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
     },
     {
       "expectation": "keep",
@@ -1490,34 +1649,74 @@
       "surface": "zeta9f3c21",
       "language": "en",
       "expectedEntities": [],
-      "forcedExpectedEntities": []
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "suppression",
+        "surface": "zeta",
+        "label": "organization",
+        "context": "before zeta after"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
     },
     {
       "expectation": "keep",
       "kind": "id-code",
-      "text": "ref ORB1S-55 closed",
-      "surface": "ORB1S-55",
+      "text": "ref ACFEA-55 closed",
+      "surface": "ACFEA-55",
       "language": "en",
       "expectedEntities": [],
-      "forcedExpectedEntities": []
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "suppression",
+        "surface": "ACFE",
+        "label": "organization",
+        "context": "before ACFE after"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
     },
     {
       "expectation": "keep",
       "kind": "id-code",
-      "text": "SKU ZT4471Z out of stock",
-      "surface": "ZT4471Z",
+      "text": "SKU ACFE71Z out of stock",
+      "surface": "ACFE71Z",
       "language": "en",
       "expectedEntities": [],
-      "forcedExpectedEntities": []
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "suppression",
+        "surface": "ACFE",
+        "label": "organization",
+        "context": "before ACFE after"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
     },
     {
       "expectation": "keep",
       "kind": "id-code",
-      "text": "variable acmeA_total reset",
-      "surface": "acmeA_total",
+      "text": "variable acfeA_total reset",
+      "surface": "acfeA_total",
       "language": "en",
       "expectedEntities": [],
-      "forcedExpectedEntities": []
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "suppression",
+        "surface": "acfe",
+        "label": "organization",
+        "context": "before acfe after"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
     },
     {
       "expectation": "keep",
@@ -1526,7 +1725,17 @@
       "surface": "⟦Zeta⟧",
       "language": "en",
       "expectedEntities": [],
-      "forcedExpectedEntities": []
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "suppression",
+        "surface": "Zeta",
+        "label": "organization",
+        "context": "before Zeta after"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
     },
     {
       "expectation": "redact",
@@ -1545,11 +1754,21 @@
     {
       "expectation": "keep",
       "kind": "bracketed-id",
-      "text": "insert {{clause_ref}} here",
-      "surface": "{{clause_ref}}",
+      "text": "insert {{Acfe_4c1b}} here",
+      "surface": "{{Acfe_4c1b}}",
       "language": "en",
       "expectedEntities": [],
-      "forcedExpectedEntities": []
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "suppression",
+        "surface": "Acfe",
+        "label": "organization",
+        "context": "before Acfe after"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
     },
     {
       "expectation": "keep",
@@ -1568,25 +1787,55 @@
           }
         ],
         "redactedText": "see <<token:[REDACTED]>> below"
+      },
+      "negativeCheck": {
+        "type": "suppression",
+        "surface": "zeta",
+        "label": "organization",
+        "context": "before zeta after"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
       }
     },
     {
       "expectation": "keep",
       "kind": "bracketed-id",
-      "text": "text [[[__token_id_3__]]] text",
-      "surface": "[[[__token_id_3__]]]",
+      "text": "text [[[__Acfe_4c1b_3__]]] text",
+      "surface": "[[[__Acfe_4c1b_3__]]]",
       "language": "en",
       "expectedEntities": [],
-      "forcedExpectedEntities": []
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "suppression",
+        "surface": "Acfe",
+        "label": "organization",
+        "context": "before Acfe after"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
     },
     {
       "expectation": "keep",
       "kind": "bracketed-id",
-      "text": "section %%ACMEA_SECTION%% end",
-      "surface": "%%ACMEA_SECTION%%",
+      "text": "section %%ACFE_4c1b_SECTION%% end",
+      "surface": "%%ACFE_4c1b_SECTION%%",
       "language": "en",
       "expectedEntities": [],
-      "forcedExpectedEntities": []
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "suppression",
+        "surface": "ACFE",
+        "label": "organization",
+        "context": "before ACFE after"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
     },
     {
       "expectation": "keep",
@@ -1595,7 +1844,15 @@
       "surface": "clause",
       "language": "en",
       "expectedEntities": [],
-      "forcedExpectedEntities": []
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "Similar text is not a configured gazetteer surface."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
     },
     {
       "expectation": "keep",
@@ -1604,7 +1861,15 @@
       "surface": "acre",
       "language": "en",
       "expectedEntities": [],
-      "forcedExpectedEntities": []
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "Similar text is not a configured gazetteer surface."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
     },
     {
       "expectation": "keep",
@@ -1613,7 +1878,15 @@
       "surface": "came",
       "language": "en",
       "expectedEntities": [],
-      "forcedExpectedEntities": []
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "Similar text is not a configured gazetteer surface."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
     },
     {
       "expectation": "keep",
@@ -1622,7 +1895,15 @@
       "surface": "acne",
       "language": "en",
       "expectedEntities": [],
-      "forcedExpectedEntities": []
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "Similar text is not a configured gazetteer surface."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
     },
     {
       "expectation": "keep",
@@ -1631,7 +1912,15 @@
       "surface": "marker",
       "language": "en",
       "expectedEntities": [],
-      "forcedExpectedEntities": []
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "Similar text is not a configured gazetteer surface."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
     },
     {
       "expectation": "keep",
@@ -1640,7 +1929,15 @@
       "surface": "orbit",
       "language": "en",
       "expectedEntities": [],
-      "forcedExpectedEntities": []
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "Similar text is not a configured gazetteer surface."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
     },
     {
       "expectation": "keep",
@@ -1649,7 +1946,15 @@
       "surface": "zebra",
       "language": "en",
       "expectedEntities": [],
-      "forcedExpectedEntities": []
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "Similar text is not a configured gazetteer surface."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
     },
     {
       "expectation": "keep",
@@ -1658,7 +1963,15 @@
       "surface": "Meta",
       "language": "en",
       "expectedEntities": [],
-      "forcedExpectedEntities": []
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "Similar text is not a configured gazetteer surface."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
     },
     {
       "expectation": "keep",
@@ -1667,7 +1980,15 @@
       "surface": "data",
       "language": "en",
       "expectedEntities": [],
-      "forcedExpectedEntities": []
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "Similar text is not a configured gazetteer surface."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
     },
     {
       "expectation": "keep",
@@ -1676,7 +1997,15 @@
       "surface": "Akce a",
       "language": "cs",
       "expectedEntities": [],
-      "forcedExpectedEntities": []
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "Similar text is not a configured gazetteer surface."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
     },
     {
       "expectation": "keep",
@@ -1685,7 +2014,15 @@
       "surface": "Beta verze",
       "language": "cs",
       "expectedEntities": [],
-      "forcedExpectedEntities": []
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "Similar text is not a configured gazetteer surface."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
     },
     {
       "expectation": "keep",
@@ -1694,7 +2031,15 @@
       "surface": "Nová",
       "language": "cs",
       "expectedEntities": [],
-      "forcedExpectedEntities": []
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "Similar text is not a configured gazetteer surface."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
     },
     {
       "expectation": "keep",
@@ -1703,7 +2048,15 @@
       "surface": "Nováček",
       "language": "cs",
       "expectedEntities": [],
-      "forcedExpectedEntities": []
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "Similar text is not a configured gazetteer surface."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
     },
     {
       "expectation": "keep",
@@ -1712,7 +2065,15 @@
       "surface": "Novátor",
       "language": "cs",
       "expectedEntities": [],
-      "forcedExpectedEntities": []
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "Similar text is not a configured gazetteer surface."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
     },
     {
       "expectation": "keep",
@@ -1721,7 +2082,15 @@
       "surface": "orbitu",
       "language": "cs",
       "expectedEntities": [],
-      "forcedExpectedEntities": []
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "Similar text is not a configured gazetteer surface."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
     },
     {
       "expectation": "keep",
@@ -1730,7 +2099,15 @@
       "surface": "Žena",
       "language": "cs",
       "expectedEntities": [],
-      "forcedExpectedEntities": []
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "Similar text is not a configured gazetteer surface."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
     },
     {
       "expectation": "keep",
@@ -1739,7 +2116,15 @@
       "surface": "šťastnú",
       "language": "sk",
       "expectedEntities": [],
-      "forcedExpectedEntities": []
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "Similar text is not a configured gazetteer surface."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
     },
     {
       "expectation": "keep",
@@ -1748,7 +2133,15 @@
       "surface": "šťastný",
       "language": "sk",
       "expectedEntities": [],
-      "forcedExpectedEntities": []
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "Similar text is not a configured gazetteer surface."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
     },
     {
       "expectation": "keep",
@@ -1757,7 +2150,15 @@
       "surface": "Kováč",
       "language": "sk",
       "expectedEntities": [],
-      "forcedExpectedEntities": []
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "Similar text is not a configured gazetteer surface."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
     },
     {
       "expectation": "keep",
@@ -1766,7 +2167,15 @@
       "surface": "Marže",
       "language": "cs",
       "expectedEntities": [],
-      "forcedExpectedEntities": []
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "Similar text is not a configured gazetteer surface."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
     },
     {
       "expectation": "keep",
@@ -1775,7 +2184,15 @@
       "surface": "Obec",
       "language": "cs",
       "expectedEntities": [],
-      "forcedExpectedEntities": []
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "Similar text is not a configured gazetteer surface."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
     },
     {
       "expectation": "keep",
@@ -1790,7 +2207,14 @@
           "label": "organization"
         }
       ],
-      "forcedExpectedEntities": []
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "context"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
     },
     {
       "expectation": "keep",
@@ -1805,7 +2229,14 @@
           "label": "organization"
         }
       ],
-      "forcedExpectedEntities": []
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "context"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
     },
     {
       "expectation": "keep",
@@ -1820,7 +2251,14 @@
           "label": "organization"
         }
       ],
-      "forcedExpectedEntities": []
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "context"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
     },
     {
       "expectation": "keep",
@@ -1835,7 +2273,14 @@
           "label": "person"
         }
       ],
-      "forcedExpectedEntities": []
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "context"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
     },
     {
       "expectation": "keep",
@@ -1850,7 +2295,14 @@
           "label": "person"
         }
       ],
-      "forcedExpectedEntities": []
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "context"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
     },
     {
       "expectation": "keep",
@@ -1865,7 +2317,14 @@
           "label": "organization"
         }
       ],
-      "forcedExpectedEntities": []
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "context"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
     },
     {
       "expectation": "keep",
@@ -1880,7 +2339,14 @@
           "label": "person"
         }
       ],
-      "forcedExpectedEntities": []
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "context"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
     },
     {
       "expectation": "keep",
@@ -1895,7 +2361,14 @@
           "label": "person"
         }
       ],
-      "forcedExpectedEntities": []
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "context"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
     },
     {
       "expectation": "keep",
@@ -1910,7 +2383,14 @@
           "label": "organization"
         }
       ],
-      "forcedExpectedEntities": []
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "context"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
     },
     {
       "expectation": "keep",
@@ -1925,7 +2405,14 @@
           "label": "organization"
         }
       ],
-      "forcedExpectedEntities": []
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "context"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
     },
     {
       "expectation": "redact",
@@ -2211,7 +2698,11 @@
       "text": "organization 5f0c2a9e-7b1d-4c3a-9e8f-1a2b3c4d5e6a archived",
       "surface": "5f0c2a9e-7b1d-4c3a-9e8f-1a2b3c4d5e6a",
       "language": "en",
-      "expectedEntities": []
+      "expectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "The surface is not either exact configured UUID."
+      }
     },
     {
       "expectation": "keep",
@@ -2219,7 +2710,11 @@
       "text": "organization 5f0c2a9e-7b1d-4c3a-9e8f-1a2b3c4d5eaa archived",
       "surface": "5f0c2a9e-7b1d-4c3a-9e8f-1a2b3c4d5eaa",
       "language": "en",
-      "expectedEntities": []
+      "expectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "The surface is not either exact configured UUID."
+      }
     },
     {
       "expectation": "keep",
@@ -2227,7 +2722,11 @@
       "text": "scope c3a91f04-6d2e-4b8a-a1f7-0e9d8c7b6a5 closed",
       "surface": "c3a91f04-6d2e-4b8a-a1f7-0e9d8c7b6a5",
       "language": "en",
-      "expectedEntities": []
+      "expectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "The surface is not either exact configured UUID."
+      }
     },
     {
       "expectation": "keep",
@@ -2235,7 +2734,11 @@
       "text": "row 1b2c3d4e-5f60-4718-9a2b-3c4d5e6f7081 updated",
       "surface": "1b2c3d4e-5f60-4718-9a2b-3c4d5e6f7081",
       "language": "en",
-      "expectedEntities": []
+      "expectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "The surface is not either exact configured UUID."
+      }
     },
     {
       "expectation": "keep",
@@ -2243,7 +2746,11 @@
       "text": "row 5f0c2a9e7b1d4c3a updated",
       "surface": "5f0c2a9e7b1d4c3a",
       "language": "en",
-      "expectedEntities": []
+      "expectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "The surface is not either exact configured UUID."
+      }
     },
     {
       "expectation": "keep",
@@ -2257,7 +2764,10 @@
           "end": 49,
           "label": "registration number"
         }
-      ]
+      ],
+      "negativeCheck": {
+        "type": "context"
+      }
     },
     {
       "expectation": "keep",
@@ -2271,7 +2781,10 @@
           "end": 42,
           "label": "registration number"
         }
-      ]
+      ],
+      "negativeCheck": {
+        "type": "context"
+      }
     },
     {
       "expectation": "keep",
@@ -2285,7 +2798,10 @@
           "end": 46,
           "label": "registration number"
         }
-      ]
+      ],
+      "negativeCheck": {
+        "type": "context"
+      }
     }
   ]
 }

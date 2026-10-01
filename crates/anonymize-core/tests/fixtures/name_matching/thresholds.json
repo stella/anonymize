@@ -34,6 +34,11 @@
     "minimum_exact_hits": 10,
     "total": 11
   },
+  "deny-list/guard-control": {
+    "metric": "recall",
+    "minimum_exact_hits": 24,
+    "total": 24
+  },
   "deny-list/hash": {
     "maximum_false_positives": 0,
     "metric": "false-positives",

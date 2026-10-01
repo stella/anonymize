@@ -65,9 +65,33 @@ struct Case {
   operators: Option<BTreeMap<String, CorpusOperator>>,
   #[serde(rename = "languageExclusions")]
   language_exclusions: Option<Vec<Language>>,
+  #[serde(rename = "negativeCheck")]
+  negative_check: Option<NegativeCheck>,
+  #[serde(rename = "forcedNegativeCheck")]
+  forced_negative_check: Option<NegativeCheck>,
   kind: String,
   text: String,
   surface: String,
+}
+
+#[derive(Deserialize)]
+#[serde(tag = "type", rename_all = "kebab-case", deny_unknown_fields)]
+enum NegativeCheck {
+  Suppression {
+    surface: String,
+    label: String,
+    context: String,
+  },
+  Distinct {
+    reason: String,
+  },
+  Context,
+}
+
+#[derive(Clone, Copy)]
+enum NegativeScope {
+  Configured,
+  ForcedReplay,
 }
 
 #[derive(Deserialize)]
@@ -380,10 +404,124 @@ fn check_language_exclusions(
   Ok(())
 }
 
+const SUPPRESSION_CLASSES: &[&str] = &[
+  "hex",
+  "uuid",
+  "hash",
+  "id-code",
+  "marker-suppression",
+  "bracketed-id",
+];
+
+struct NegativeControlCheck<'a> {
+  case: &'a Case,
+  expected: &'a [ExpectedEntity],
+  check: Option<&'a NegativeCheck>,
+  scope: NegativeScope,
+  engine: &'a PreparedEngine,
+  operators: &'a OperatorConfig,
+}
+
+fn check_negative_control(
+  NegativeControlCheck {
+    case,
+    expected,
+    check,
+    scope,
+    engine: isolated,
+    operators,
+  }: NegativeControlCheck<'_>,
+) -> Result<Option<bool>, Box<dyn Error>> {
+  if case.expectation == Expectation::Redact {
+    if check.is_some() {
+      return Err("redact fixture cannot declare negative intent".into());
+    }
+    return Ok(None);
+  }
+  let intent =
+    check.ok_or("every keep fixture must declare its negative intent")?;
+  if matches!(scope, NegativeScope::Configured)
+    && SUPPRESSION_CLASSES.contains(&case.kind.as_str())
+    && !matches!(intent, NegativeCheck::Suppression { .. })
+  {
+    return Err("guard class requires a suppression positive control".into());
+  }
+  match intent {
+    NegativeCheck::Distinct { reason } => {
+      if reason.trim().is_empty() || !expected.is_empty() {
+        return Err(
+          "distinct negatives require a rationale and an empty expected set"
+            .into(),
+        );
+      }
+      Ok(None)
+    }
+    NegativeCheck::Context => {
+      if expected.is_empty() {
+        return Err(
+          "context negatives require expected matches elsewhere".into(),
+        );
+      }
+      Ok(None)
+    }
+    NegativeCheck::Suppression {
+      surface,
+      label,
+      context,
+    } => {
+      if surface.is_empty()
+        || !expected.is_empty()
+        || case.surface.matches(surface.as_str()).count() != 1
+        || context.matches(surface.as_str()).count() != 1
+      {
+        return Err("suppression control must occur once inside the guarded surface and neutral context".into());
+      }
+      let start = context.find(surface).ok_or("missing control surface")?;
+      let control_expected = [ExpectedEntity {
+        start: u32::try_from(start)?,
+        end: u32::try_from(
+          start
+            .checked_add(surface.len())
+            .ok_or("control offset overflow")?,
+        )?,
+        label: label.clone(),
+      }];
+      let expected_text =
+        expected_redaction(context, &control_expected, operators)?;
+      let result = isolated.redact_static_entities(context, operators)?;
+      if !exact_case(
+        &result.resolved_entities,
+        &result.redaction.redacted_text,
+        &control_expected,
+        &expected_text,
+      ) {
+        return Err("guard positive control did not resolve its complete configured surface".into());
+      }
+      Ok(Some(true))
+    }
+  }
+}
+
+fn validate_resolved_spans(
+  entities: &[PipelineEntity],
+  text: &str,
+) -> Result<(), Box<dyn Error>> {
+  for entity in entities {
+    let start = usize::try_from(entity.start)?;
+    let end = usize::try_from(entity.end)?;
+    if start >= end || text.get(start..end).is_none() {
+      return Err("invalid resolved UTF-8 span".into());
+    }
+  }
+  Ok(())
+}
+
 struct ScoredCase<'a> {
   case: &'a Case,
   expected: &'a [ExpectedEntity],
   known_failure: Option<&'a KnownFailure>,
+  negative_check: Option<&'a NegativeCheck>,
+  negative_scope: NegativeScope,
 }
 
 fn measure(
@@ -404,6 +542,8 @@ fn measure(
     case,
     expected,
     known_failure,
+    negative_check,
+    negative_scope,
   } in cases
   {
     let operators = case_operators(case, &default_operators)?;
@@ -420,6 +560,23 @@ fn measure(
     let isolated = engines
       .get([case.language].as_slice())
       .ok_or("missing language scope")?;
+    if let Some(control_passed) = check_negative_control(NegativeControlCheck {
+      case,
+      expected,
+      check: *negative_check,
+      scope: *negative_scope,
+      engine: isolated,
+      operators: &operators,
+    })
+    .map_err(|error| format!("{mode}/{}: {error}", case.kind))?
+    {
+      record(
+        report,
+        format!("{mode}/guard-control"),
+        Expectation::Redact,
+        control_passed,
+      )?;
+    }
     let result = isolated.redact_static_entities(&case.text, &operators)?;
     let mut unchanged = true;
     for (scope, expanded) in &engines {
@@ -445,19 +602,7 @@ fn measure(
       report,
     })?;
     let entities = &result.resolved_entities;
-    for entity in entities {
-      let start = usize::try_from(entity.start)?;
-      let end = usize::try_from(entity.end)?;
-      if start >= end
-        || end > case.text.len()
-        || !case.text.is_char_boundary(start)
-        || !case.text.is_char_boundary(end)
-      {
-        return Err(
-          format!("{mode}/{}: invalid resolved span", case.kind).into(),
-        );
-      }
-    }
+    validate_resolved_spans(entities, &case.text)?;
     let passed = exact_case(
       entities,
       &result.redaction.redacted_text,
@@ -485,6 +630,19 @@ fn measure(
 fn labeled_name_matching_corpus_gate() -> Result<(), Box<dyn Error>> {
   let corpus: Corpus =
     serde_json::from_str(include_str!("fixtures/name_matching/corpus.json"))?;
+  assert_eq!(
+    corpus
+      .cases
+      .iter()
+      .filter(|case| matches!(
+        case.negative_check,
+        Some(NegativeCheck::Suppression { .. })
+      ))
+      .map(|case| case.kind.as_str())
+      .collect::<BTreeSet<_>>(),
+    SUPPRESSION_CLASSES.iter().copied().collect::<BTreeSet<_>>(),
+    "declared suppression classes must exactly equal exercised classes"
+  );
   let thresholds: BTreeMap<String, Threshold> = serde_json::from_str(
     include_str!("fixtures/name_matching/thresholds.json"),
   )?;
@@ -512,6 +670,8 @@ fn labeled_name_matching_corpus_gate() -> Result<(), Box<dyn Error>> {
         case,
         expected: &case.expected_entities,
         known_failure: case.known_failure.as_ref(),
+        negative_check: case.negative_check.as_ref(),
+        negative_scope: NegativeScope::Configured,
       })
       .collect::<Vec<_>>(),
     "deny-list",
@@ -524,6 +684,8 @@ fn labeled_name_matching_corpus_gate() -> Result<(), Box<dyn Error>> {
       case,
       expected: &case.expected_entities,
       known_failure: case.known_failure.as_ref(),
+      negative_check: case.negative_check.as_ref(),
+      negative_scope: NegativeScope::Configured,
     })
     .collect::<Vec<_>>();
   for case in corpus
@@ -539,6 +701,8 @@ fn labeled_name_matching_corpus_gate() -> Result<(), Box<dyn Error>> {
       case,
       expected,
       known_failure: None,
+      negative_check: case.forced_negative_check.as_ref(),
+      negative_scope: NegativeScope::ForcedReplay,
     });
   }
   measure(&forced_entries, &forced_cases, "forced", &mut report)?;
@@ -834,6 +998,75 @@ fn expected_output_honors_per_label_operators() -> Result<(), Box<dyn Error>> {
   assert_eq!(
     oracle, "Zeta <redacted>",
     "operator dispatch must preserve kept names and redact only the other label"
+  );
+  Ok(())
+}
+
+#[test]
+fn guard_controls_reject_absent_or_unmatchable_seeds()
+-> Result<(), Box<dyn Error>> {
+  let corpus: Corpus =
+    serde_json::from_str(include_str!("fixtures/name_matching/corpus.json"))?;
+  let sample = corpus
+    .cases
+    .iter()
+    .find(|case| case.kind == "uuid")
+    .ok_or("missing UUID guard fixture")?;
+  let isolated = engine(&corpus.entries, &[sample.language])?;
+  let operators = OperatorConfig {
+    operators: BTreeMap::from([(
+      String::from("organization"),
+      Operator::Redact,
+    )]),
+    ..OperatorConfig::default()
+  };
+  let verify = |check| {
+    check_negative_control(NegativeControlCheck {
+      case: sample,
+      expected: &[],
+      check,
+      scope: NegativeScope::Configured,
+      engine: &isolated,
+      operators: &operators,
+    })
+  };
+  assert_eq!(
+    verify(sample.negative_check.as_ref())?,
+    Some(true),
+    "seeded guard fixture must pass its production positive control"
+  );
+  assert!(
+    verify(None).is_err(),
+    "guard fixture cannot omit its control"
+  );
+  let distinct = NegativeCheck::Distinct {
+    reason: String::from("intentional non-match"),
+  };
+  assert!(
+    verify(Some(&distinct)).is_err(),
+    "guard class cannot evade its control by declaring a non-match"
+  );
+  let unrelated = NegativeCheck::Suppression {
+    surface: String::from("Zeta"),
+    label: String::from("organization"),
+    context: String::from("before Zeta after"),
+  };
+  assert!(
+    verify(Some(&unrelated)).is_err(),
+    "matchable control must occur inside the guarded region"
+  );
+  let empty = engine(&[], &[sample.language])?;
+  assert!(
+    check_negative_control(NegativeControlCheck {
+      case: sample,
+      expected: &[],
+      check: sample.negative_check.as_ref(),
+      scope: NegativeScope::Configured,
+      engine: &empty,
+      operators: &operators
+    })
+    .is_err(),
+    "embedded seed without a configured match must fail its control"
   );
   Ok(())
 }
