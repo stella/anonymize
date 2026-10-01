@@ -2,7 +2,7 @@
   "deny-list/adjacent-word": {
     "maximum_false_positives": 0,
     "metric": "false-positives",
-    "total": 95
+    "total": 10
   },
   "deny-list/bracketed-id": {
     "maximum_false_positives": 1,
@@ -79,11 +79,6 @@
     "metric": "false-positives",
     "total": 21
   },
-  "deny-list/span-extent": {
-    "maximum_false_positives": 1,
-    "metric": "false-positives",
-    "total": 85
-  },
   "deny-list/split": {
     "metric": "recall",
     "minimum_exact_hits": 9,
@@ -107,7 +102,7 @@
   "forced/adjacent-word": {
     "maximum_false_positives": 0,
     "metric": "false-positives",
-    "total": 15
+    "total": 10
   },
   "forced/bracketed-id": {
     "maximum_false_positives": 0,
@@ -173,11 +168,6 @@
     "maximum_false_positives": 0,
     "metric": "false-positives",
     "total": 21
-  },
-  "forced/span-extent": {
-    "maximum_false_positives": 0,
-    "metric": "false-positives",
-    "total": 5
   },
   "forced/uuid": {
     "maximum_false_positives": 0,

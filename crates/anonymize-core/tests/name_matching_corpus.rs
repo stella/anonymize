@@ -14,9 +14,8 @@ use stella_anonymize_core::assemble::{
   GazetteerEntry, GazetteerSource, PipelineConfig,
 };
 use stella_anonymize_core::{
-  DetectionSource, OperatorConfig, PipelineEntity, PreparedEngine,
+  DetectionSource, Operator, OperatorConfig, PipelineEntity, PreparedEngine,
 };
-use unicode_segmentation::UnicodeSegmentation;
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -57,10 +56,21 @@ impl Language {
 struct Case {
   expectation: Expectation,
   language: Language,
-  label: Option<String>,
+  #[serde(rename = "expectedEntities")]
+  expected_entities: Vec<ExpectedEntity>,
+  #[serde(rename = "forcedExpectedEntities")]
+  forced_expected_entities: Option<Vec<ExpectedEntity>>,
   kind: String,
   text: String,
   surface: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ExpectedEntity {
+  start: u32,
+  end: u32,
+  label: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -126,54 +136,64 @@ fn surface_range(case: &Case) -> Result<Range<u32>, Box<dyn Error>> {
   )
 }
 
-const fn overlaps(entity: &PipelineEntity, range: &Range<u32>) -> bool {
-  entity.start < range.end && range.start < entity.end
-}
-
-fn exact_hit(
+fn exact_entities(
   entities: &[PipelineEntity],
-  range: &Range<u32>,
-  label: &str,
+  expected: &[ExpectedEntity],
 ) -> bool {
-  !entities.is_empty()
-    && entities.iter().all(|entity| {
-      entity.start == range.start
-        && entity.end == range.end
-        && entity.label == label
-        && entity.source == DetectionSource::Gazetteer
+  let mut actual_set = entities
+    .iter()
+    .map(|entity| {
+      (
+        entity.start,
+        entity.end,
+        entity.label.as_str(),
+        entity.source == DetectionSource::Gazetteer,
+      )
     })
+    .collect::<Vec<_>>();
+  let mut expected_set = expected
+    .iter()
+    .map(|entity| (entity.start, entity.end, entity.label.as_str(), true))
+    .collect::<Vec<_>>();
+  actual_set.sort_unstable();
+  expected_set.sort_unstable();
+  actual_set == expected_set
 }
 
-fn overreaches(entities: &[PipelineEntity], range: &Range<u32>) -> bool {
-  entities.iter().any(|entity| {
-    overlaps(entity, range)
-      && (entity.start < range.start || entity.end > range.end)
-  })
-}
-
-fn swallows_word(
-  entities: &[PipelineEntity],
-  range: &Range<u32>,
+fn expected_redaction(
   text: &str,
-) -> Result<bool, Box<dyn Error>> {
-  let mut previous = None;
-  let mut following = None;
-  for (start, word) in text.unicode_word_indices() {
-    let word_range = u32::try_from(start)?
-      ..u32::try_from(start.checked_add(word.len()).ok_or("offset overflow")?)?;
-    if word_range.end <= range.start {
-      previous = Some(word_range);
-    } else if word_range.start >= range.end {
-      following = Some(word_range);
-      break;
+  expected: &[ExpectedEntity],
+  operators: &OperatorConfig,
+) -> Result<String, Box<dyn Error>> {
+  let mut ordered = expected.iter().collect::<Vec<_>>();
+  ordered.sort_unstable_by_key(|entity| entity.start);
+  let mut output = String::new();
+  let mut cursor = 0;
+  for entity in ordered {
+    let start = usize::try_from(entity.start)?;
+    let end = usize::try_from(entity.end)?;
+    if start < cursor || start >= end || entity.label.is_empty() {
+      return Err("invalid expected entity".into());
     }
+    text.get(start..end).ok_or("invalid expected UTF-8 span")?;
+    if operators.operators.get(&entity.label) != Some(&Operator::Redact) {
+      return Err("corpus oracle requires the redact operator".into());
+    }
+    output.push_str(text.get(cursor..start).ok_or("invalid expected gap")?);
+    output.push_str(&operators.redact_string);
+    cursor = end;
   }
-  Ok(
-    previous
-      .iter()
-      .chain(following.iter())
-      .any(|neighbor| entities.iter().any(|entity| overlaps(entity, neighbor))),
-  )
+  output.push_str(text.get(cursor..).ok_or("invalid expected tail")?);
+  Ok(output)
+}
+
+fn exact_case(
+  entities: &[PipelineEntity],
+  redacted_text: &str,
+  expected: &[ExpectedEntity],
+  expected_text: &str,
+) -> bool {
+  exact_entities(entities, expected) && redacted_text == expected_text
 }
 
 fn record(
@@ -200,7 +220,7 @@ fn record(
 
 fn measure(
   entries: &[GazetteerEntry],
-  cases: &[&Case],
+  cases: &[(&Case, &[ExpectedEntity])],
   mode: &str,
   report: &mut Report,
 ) -> Result<(), Box<dyn Error>> {
@@ -220,17 +240,27 @@ fn measure(
       Ok((scope, scoped_engine))
     })
     .collect::<Result<BTreeMap<_, _>, Box<dyn Error>>>()?;
-  let operators = OperatorConfig::default();
-  for case in cases {
-    if (case.expectation == Expectation::Redact) != case.label.is_some() {
+  let operators = OperatorConfig {
+    operators: entries
+      .iter()
+      .map(|entry| (entry.label.clone(), Operator::Redact))
+      .collect(),
+    ..OperatorConfig::default()
+  };
+  for (case, expected) in cases {
+    let range = surface_range(case)?;
+    let expected_text = expected_redaction(&case.text, expected, &operators)?;
+    let surface_expected = expected
+      .iter()
+      .any(|entity| entity.start == range.start && entity.end == range.end);
+    if (case.expectation == Expectation::Redact) != surface_expected {
       return Err(
-        "redact cases require a label; keep cases require null".into(),
+        "case expectation must agree with the annotated surface".into(),
       );
     }
     let isolated = engines
       .get([case.language].as_slice())
       .ok_or("missing language scope")?;
-    let range = surface_range(case)?;
     let result = isolated.redact_static_entities(&case.text, &operators)?;
     let mut unchanged = true;
     for (scope, expanded) in &engines {
@@ -262,37 +292,18 @@ fn measure(
         );
       }
     }
-    let passed = match case.expectation {
-      Expectation::Redact => exact_hit(
-        entities,
-        &range,
-        case.label.as_deref().ok_or("missing expected label")?,
-      ),
-      Expectation::Keep => {
-        !entities.iter().any(|entity| overlaps(entity, &range))
-      }
-    };
+    let passed = exact_case(
+      entities,
+      &result.redaction.redacted_text,
+      expected,
+      &expected_text,
+    );
     record(
       report,
       format!("{mode}/{}", case.kind),
       case.expectation,
       passed,
     )?;
-    if case.expectation == Expectation::Redact {
-      // Overreach is a false positive even when the identifying text vanished.
-      record(
-        report,
-        format!("{mode}/adjacent-word"),
-        Expectation::Keep,
-        !swallows_word(entities, &range, &case.text)?,
-      )?;
-      record(
-        report,
-        format!("{mode}/span-extent"),
-        Expectation::Keep,
-        !overreaches(entities, &range),
-      )?;
-    }
   }
   Ok(())
 }
@@ -321,20 +332,30 @@ fn labeled_name_matching_corpus_gate() -> Result<(), Box<dyn Error>> {
   let mut report = Report::new();
   measure(
     &corpus.entries,
-    &corpus.cases.iter().collect::<Vec<_>>(),
+    &corpus
+      .cases
+      .iter()
+      .map(|case| (case, case.expected_entities.as_slice()))
+      .collect::<Vec<_>>(),
     "deny-list",
     &mut report,
   )?;
-  let forced_cases = corpus
+  let mut forced_cases = corpus
     .forced_cases
     .iter()
-    .chain(
-      corpus
-        .cases
-        .iter()
-        .filter(|case| case.expectation == Expectation::Keep),
-    )
+    .map(|case| (case, case.expected_entities.as_slice()))
     .collect::<Vec<_>>();
+  for case in corpus
+    .cases
+    .iter()
+    .filter(|case| case.expectation == Expectation::Keep)
+  {
+    let expected = case
+      .forced_expected_entities
+      .as_deref()
+      .ok_or("missing forced replay expectations")?;
+    forced_cases.push((case, expected));
+  }
   measure(&forced_entries, &forced_cases, "forced", &mut report)?;
   check_thresholds(&report, &thresholds)
 }
@@ -413,8 +434,7 @@ fn check_thresholds(
 }
 
 #[test]
-fn exact_span_scoring_rejects_substrings_and_swallowed_neighbors()
--> Result<(), Box<dyn Error>> {
+fn exact_scoring_rejects_missing_extra_and_mislabelled_entities() {
   let span = |start, end| {
     PipelineEntity::detected(
       start,
@@ -425,81 +445,117 @@ fn exact_span_scoring_rejects_substrings_and_swallowed_neighbors()
       DetectionSource::Gazetteer,
     )
   };
-  let expected = 5..10;
+  let expected = [ExpectedEntity {
+    start: 10,
+    end: 15,
+    label: String::from("person"),
+  }];
   assert!(
-    !exact_hit(&[span(5, 10)], &expected, "organization"),
-    "wrong label must fail"
-  );
-  let mut wrong_source = span(5, 10);
-  wrong_source.source = DetectionSource::Regex;
-  assert!(
-    !exact_hit(&[wrong_source], &expected, "person"),
-    "non-gazetteer source must fail"
+    exact_entities(&[span(10, 15)], &expected),
+    "exact entity must pass"
   );
   assert!(
-    exact_hit(&[span(5, 10)], &expected, "person"),
-    "exact span must pass"
+    !exact_entities(&[], &expected),
+    "missing expected match must fail keep and redact cases"
   );
   assert!(
-    !exact_hit(&[span(6, 9)], &expected, "person"),
+    !exact_entities(&[span(11, 14)], &expected),
     "substring must fail"
   );
   assert!(
-    !exact_hit(&[span(5, 17)], &expected, "person"),
-    "swallowed neighbor must fail recall"
+    !exact_entities(&[span(10, 21)], &expected),
+    "swallowed neighbor must fail"
   );
   assert!(
-    overreaches(&[span(5, 17)], &expected),
-    "swallowed neighbor must count as FP"
+    !exact_entities(&[span(10, 12), span(12, 15)], &expected),
+    "partial matches must fail"
   );
-  assert!(
-    !exact_hit(&[span(5, 10), span(3, 17)], &expected, "person"),
-    "exact candidate cannot hide overreach"
-  );
-  for distant_context in [span(0, 4), span(22, 27)] {
-    let entities = [span(10, 15), distant_context];
-    let name_range = 10..15;
+  for extra in [span(0, 4), span(16, 21), span(22, 27), span(8, 17)] {
     assert!(
-      !overreaches(&entities, &name_range)
-        && !swallows_word(
-          &entities,
-          &name_range,
-          "lead near Alice signs later"
-        )?,
-      "distant context must exercise the gap beyond existing extent checks"
-    );
-    assert!(
-      !exact_hit(&entities, &name_range, "person"),
-      "a context entity two words away must fail the case's recall class"
+      !exact_entities(&[span(10, 15), extra], &expected),
+      "extra entity must fail, including distant context"
     );
   }
+  let mut wrong_label = span(10, 15);
+  wrong_label.label = String::from("organization");
   assert!(
-    !exact_hit(&[span(5, 7), span(7, 10)], &expected, "person"),
-    "partial spans cannot masquerade as an exact hit"
+    !exact_entities(&[wrong_label], &expected),
+    "wrong label must fail"
+  );
+  let mut wrong_source = span(10, 15);
+  wrong_source.source = DetectionSource::Regex;
+  assert!(
+    !exact_entities(&[wrong_source], &expected),
+    "wrong source must fail"
+  );
+  assert!(exact_entities(&[], &[]), "empty entity sets must pass");
+  assert!(
+    !exact_entities(&[span(10, 15)], &[]),
+    "empty expected set must reject any false positive"
   );
   assert!(
-    swallows_word(&[span(5, 17)], &expected, "lead Alice signed")?,
-    "adjacent word must count as FP"
+    !exact_entities(&[span(10, 15), span(10, 15)], &expected),
+    "duplicate entity must fail"
   );
-  assert!(
-    swallows_word(
-      &[span(5, 10), span(11, 17)],
-      &expected,
-      "lead Alice signed"
-    )?,
-    "separate following entity must count as FP"
+}
+
+#[test]
+fn redaction_scoring_preserves_every_unannotated_byte()
+-> Result<(), Box<dyn Error>> {
+  let text = "žena\u{a0}Alice\r\nnext Bob\nend";
+  let expected = [
+    ExpectedEntity {
+      start: 7,
+      end: 12,
+      label: String::from("person"),
+    },
+    ExpectedEntity {
+      start: 19,
+      end: 22,
+      label: String::from("person"),
+    },
+  ];
+  let operators = OperatorConfig {
+    operators: BTreeMap::from([(String::from("person"), Operator::Redact)]),
+    redact_string: String::from("<removed>"),
+  };
+  let oracle = expected_redaction(text, &expected, &operators)?;
+  assert_eq!(
+    oracle, "žena\u{a0}<removed>\r\nnext <removed>\nend",
+    "oracle must replace only annotated byte ranges"
   );
+  let entities = expected
+    .iter()
+    .map(|entity| {
+      PipelineEntity::detected(
+        entity.start,
+        entity.end,
+        &entity.label,
+        "synthetic",
+        1.0,
+        DetectionSource::Gazetteer,
+      )
+    })
+    .collect::<Vec<_>>();
   assert!(
-    swallows_word(&[span(0, 4), span(5, 10)], &expected, "lead Alice signed")?,
-    "separate preceding entity must count as FP"
+    exact_case(&entities, &oracle, &expected, &oracle),
+    "exact entities and output must pass"
   );
-  assert!(
-    swallows_word(&[span(0, 5), span(6, 11)], &(6..11), "žena Alice, další")?,
-    "Unicode neighbor ranges must use byte offsets"
-  );
-  assert!(
-    !swallows_word(&[span(5, 11)], &expected, "lead Alice.")?,
-    "terminal punctuation is an extent mismatch, not a swallowed word"
+  for corrupted in [
+    text.to_owned(),
+    oracle.replace("\r\n", "\n"),
+    oracle.replace('\u{a0}', " "),
+    oracle.replace("end", "END"),
+  ] {
+    assert!(
+      !exact_case(&entities, &corrupted, &expected, &oracle),
+      "unchanged source or corrupted context must fail"
+    );
+  }
+  assert_eq!(
+    expected_redaction(text, &[], &operators)?,
+    text,
+    "empty annotations must preserve all text"
   );
   Ok(())
 }

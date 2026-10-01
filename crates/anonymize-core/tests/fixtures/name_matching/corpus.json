@@ -134,7 +134,13 @@
       "text": "Smlouvu podepsala společnost Beta Trading s.r.o. dne 3. 5.",
       "surface": "Beta Trading s.r.o.",
       "language": "cs",
-      "label": "organization"
+      "expectedEntities": [
+        {
+          "start": 30,
+          "end": 49,
+          "label": "organization"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -142,7 +148,13 @@
       "text": "Za kupujícího jednala Marie Dvořáková.",
       "surface": "Marie Dvořáková",
       "language": "cs",
-      "label": "person"
+      "expectedEntities": [
+        {
+          "start": 24,
+          "end": 42,
+          "label": "person"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -150,7 +162,13 @@
       "text": "Návrh doručil partner Acme A včas.",
       "surface": "Acme A",
       "language": "cs",
-      "label": "organization"
+      "expectedEntities": [
+        {
+          "start": 24,
+          "end": 30,
+          "label": "organization"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -158,7 +176,13 @@
       "text": "Dodavatelem zůstává Zeta.",
       "surface": "Zeta",
       "language": "cs",
-      "label": "organization"
+      "expectedEntities": [
+        {
+          "start": 23,
+          "end": 27,
+          "label": "organization"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -166,7 +190,13 @@
       "text": "The report from Orbis arrived late.",
       "surface": "Orbis",
       "language": "en",
-      "label": "organization"
+      "expectedEntities": [
+        {
+          "start": 16,
+          "end": 21,
+          "label": "organization"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -174,7 +204,13 @@
       "text": "Signed for and on behalf of Northfield Analytics Ltd.",
       "surface": "Northfield Analytics Ltd",
       "language": "en",
-      "label": "organization"
+      "expectedEntities": [
+        {
+          "start": 28,
+          "end": 52,
+          "label": "organization"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -182,7 +218,13 @@
       "text": "Witnessed by Harriet Wellbourne.",
       "surface": "Harriet Wellbourne",
       "language": "en",
-      "label": "person"
+      "expectedEntities": [
+        {
+          "start": 13,
+          "end": 31,
+          "label": "person"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -190,7 +232,13 @@
       "text": "Odvolanie podal Ľubomír Šťastný.",
       "surface": "Ľubomír Šťastný",
       "language": "sk",
-      "label": "person"
+      "expectedEntities": [
+        {
+          "start": 16,
+          "end": 36,
+          "label": "person"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -198,7 +246,13 @@
       "text": "Pan Novák s návrhem souhlasil.",
       "surface": "Novák",
       "language": "cs",
-      "label": "person"
+      "expectedEntities": [
+        {
+          "start": 4,
+          "end": 10,
+          "label": "person"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -206,7 +260,13 @@
       "text": "Odberateľom je Zelvanská energetika, a. s.",
       "surface": "Zelvanská energetika, a. s.",
       "language": "sk",
-      "label": "organization"
+      "expectedEntities": [
+        {
+          "start": 16,
+          "end": 44,
+          "label": "organization"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -214,7 +274,13 @@
       "text": "Stavbu provedla Velmorská stavební a.s.",
       "surface": "Velmorská stavební a.s.",
       "language": "cs",
-      "label": "organization"
+      "expectedEntities": [
+        {
+          "start": 16,
+          "end": 41,
+          "label": "organization"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -222,7 +288,13 @@
       "text": "PRODÁVAJÍCÍ: BETA TRADING S.R.O.",
       "surface": "BETA TRADING S.R.O.",
       "language": "cs",
-      "label": "organization"
+      "expectedEntities": [
+        {
+          "start": 16,
+          "end": 35,
+          "label": "organization"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -230,7 +302,13 @@
       "text": "kontakt: marie dvořáková",
       "surface": "marie dvořáková",
       "language": "cs",
-      "label": "person"
+      "expectedEntities": [
+        {
+          "start": 9,
+          "end": 27,
+          "label": "person"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -238,7 +316,13 @@
       "text": "PARTNER: ACME A",
       "surface": "ACME A",
       "language": "cs",
-      "label": "organization"
+      "expectedEntities": [
+        {
+          "start": 9,
+          "end": 15,
+          "label": "organization"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -246,7 +330,13 @@
       "text": "dodavatel zeta potvrdil",
       "surface": "zeta",
       "language": "cs",
-      "label": "organization"
+      "expectedEntities": [
+        {
+          "start": 10,
+          "end": 14,
+          "label": "organization"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -254,7 +344,13 @@
       "text": "CLIENT: ORBIS",
       "surface": "ORBIS",
       "language": "en",
-      "label": "organization"
+      "expectedEntities": [
+        {
+          "start": 8,
+          "end": 13,
+          "label": "organization"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -262,7 +358,13 @@
       "text": "cc: harriet wellbourne",
       "surface": "harriet wellbourne",
       "language": "en",
-      "label": "person"
+      "expectedEntities": [
+        {
+          "start": 4,
+          "end": 22,
+          "label": "person"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -270,7 +372,13 @@
       "text": "ŽALOBCE: NOVÁK",
       "surface": "NOVÁK",
       "language": "cs",
-      "label": "person"
+      "expectedEntities": [
+        {
+          "start": 10,
+          "end": 16,
+          "label": "person"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -278,7 +386,13 @@
       "text": "Za kupujiciho Marie Dvorakova.",
       "surface": "Marie Dvorakova",
       "language": "cs",
-      "label": "person"
+      "expectedEntities": [
+        {
+          "start": 14,
+          "end": 29,
+          "label": "person"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -286,7 +400,13 @@
       "text": "Jednatel Tomas Kubicek podepsal.",
       "surface": "Tomas Kubicek",
       "language": "cs",
-      "label": "person"
+      "expectedEntities": [
+        {
+          "start": 9,
+          "end": 22,
+          "label": "person"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -294,7 +414,13 @@
       "text": "Odvolanie podal Lubomir Stastny.",
       "surface": "Lubomir Stastny",
       "language": "sk",
-      "label": "person"
+      "expectedEntities": [
+        {
+          "start": 16,
+          "end": 31,
+          "label": "person"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -302,7 +428,13 @@
       "text": "Splnomocnenkyna Zuzana Kovacova.",
       "surface": "Zuzana Kovacova",
       "language": "sk",
-      "label": "person"
+      "expectedEntities": [
+        {
+          "start": 16,
+          "end": 31,
+          "label": "person"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -310,7 +442,13 @@
       "text": "Stavbu provedla Velmorska stavebni a.s. vcas.",
       "surface": "Velmorska stavebni a.s.",
       "language": "cs",
-      "label": "organization"
+      "expectedEntities": [
+        {
+          "start": 16,
+          "end": 39,
+          "label": "organization"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -318,7 +456,13 @@
       "text": "Investorem je Brimova Invest spol. s r.o. od roku 2020.",
       "surface": "Brimova Invest spol. s r.o.",
       "language": "cs",
-      "label": "organization"
+      "expectedEntities": [
+        {
+          "start": 14,
+          "end": 41,
+          "label": "organization"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -326,7 +470,13 @@
       "text": "Pan Novak s navrhem souhlasil.",
       "surface": "Novak",
       "language": "cs",
-      "label": "person"
+      "expectedEntities": [
+        {
+          "start": 4,
+          "end": 9,
+          "label": "person"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -334,7 +484,13 @@
       "text": "Odberatelom je Zelvanska energetika, a. s.",
       "surface": "Zelvanska energetika, a. s.",
       "language": "sk",
-      "label": "organization"
+      "expectedEntities": [
+        {
+          "start": 15,
+          "end": 42,
+          "label": "organization"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -342,7 +498,13 @@
       "text": "Klient Orbís zaplatil.",
       "surface": "Orbís",
       "language": "cs",
-      "label": "organization"
+      "expectedEntities": [
+        {
+          "start": 7,
+          "end": 13,
+          "label": "organization"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -350,7 +512,13 @@
       "text": "Dodavatelem je Zéta.",
       "surface": "Zéta",
       "language": "cs",
-      "label": "organization"
+      "expectedEntities": [
+        {
+          "start": 15,
+          "end": 20,
+          "label": "organization"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -358,7 +526,13 @@
       "text": "Společnost Béta Trading s.r.o. odpověděla.",
       "surface": "Béta Trading s.r.o.",
       "language": "cs",
-      "label": "organization"
+      "expectedEntities": [
+        {
+          "start": 12,
+          "end": 32,
+          "label": "organization"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -366,7 +540,13 @@
       "text": "Partner Acmé A potvrdil.",
       "surface": "Acmé A",
       "language": "cs",
-      "label": "organization"
+      "expectedEntities": [
+        {
+          "start": 8,
+          "end": 15,
+          "label": "organization"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -374,7 +554,13 @@
       "text": "Signed by Hárriet Wellbourne.",
       "surface": "Hárriet Wellbourne",
       "language": "en",
-      "label": "person"
+      "expectedEntities": [
+        {
+          "start": 10,
+          "end": 29,
+          "label": "person"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -382,7 +568,13 @@
       "text": "Witnessed by Harriet Welbourne.",
       "surface": "Harriet Welbourne",
       "language": "en",
-      "label": "person"
+      "expectedEntities": [
+        {
+          "start": 13,
+          "end": 30,
+          "label": "person"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -390,7 +582,13 @@
       "text": "Prodávající Beta Tradinq s.r.o. souhlasí.",
       "surface": "Beta Tradinq s.r.o.",
       "language": "cs",
-      "label": "organization"
+      "expectedEntities": [
+        {
+          "start": 15,
+          "end": 34,
+          "label": "organization"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -398,7 +596,13 @@
       "text": "Prepared by Northfield Analytic Ltd.",
       "surface": "Northfield Analytic Ltd",
       "language": "en",
-      "label": "organization"
+      "expectedEntities": [
+        {
+          "start": 12,
+          "end": 35,
+          "label": "organization"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -406,7 +610,13 @@
       "text": "Za kupujícího Marie Dvořákvá.",
       "surface": "Marie Dvořákvá",
       "language": "cs",
-      "label": "person"
+      "expectedEntities": [
+        {
+          "start": 16,
+          "end": 33,
+          "label": "person"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -414,7 +624,13 @@
       "text": "Jednatel Tomáš Kubíšek podepsal.",
       "surface": "Tomáš Kubíšek",
       "language": "cs",
-      "label": "person"
+      "expectedEntities": [
+        {
+          "start": 9,
+          "end": 26,
+          "label": "person"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -422,7 +638,13 @@
       "text": "Splnomocnenkyňa Zuzanna Kováčová.",
       "surface": "Zuzanna Kováčová",
       "language": "sk",
-      "label": "person"
+      "expectedEntities": [
+        {
+          "start": 17,
+          "end": 36,
+          "label": "person"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -430,7 +652,13 @@
       "text": "Klient Orbys zaplatil.",
       "surface": "Orbys",
       "language": "cs",
-      "label": "organization"
+      "expectedEntities": [
+        {
+          "start": 7,
+          "end": 12,
+          "label": "organization"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -438,7 +666,13 @@
       "text": "Witnessed by Hariet Welbourne.",
       "surface": "Hariet Welbourne",
       "language": "en",
-      "label": "person"
+      "expectedEntities": [
+        {
+          "start": 13,
+          "end": 29,
+          "label": "person"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -446,7 +680,13 @@
       "text": "Prodávající Bta Tradng s.r.o. souhlasí.",
       "surface": "Bta Tradng s.r.o.",
       "language": "cs",
-      "label": "organization"
+      "expectedEntities": [
+        {
+          "start": 15,
+          "end": 32,
+          "label": "organization"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -454,7 +694,13 @@
       "text": "Prepared by Northfeld Analytcs Ltd.",
       "surface": "Northfeld Analytcs Ltd",
       "language": "en",
-      "label": "organization"
+      "expectedEntities": [
+        {
+          "start": 12,
+          "end": 34,
+          "label": "organization"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -462,7 +708,13 @@
       "text": "Za kupujícího Mare Dvořákvá.",
       "surface": "Mare Dvořákvá",
       "language": "cs",
-      "label": "person"
+      "expectedEntities": [
+        {
+          "start": 16,
+          "end": 32,
+          "label": "person"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -470,7 +722,13 @@
       "text": "Splnomocnenkyňa Zuzana Kováčovová.",
       "surface": "Zuzana Kováčovová",
       "language": "sk",
-      "label": "person"
+      "expectedEntities": [
+        {
+          "start": 17,
+          "end": 37,
+          "label": "person"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -478,7 +736,13 @@
       "text": "Investorem je Brimová Invst spl. s r.o.",
       "surface": "Brimová Invst spl. s r.o.",
       "language": "cs",
-      "label": "organization"
+      "expectedEntities": [
+        {
+          "start": 14,
+          "end": 40,
+          "label": "organization"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -486,7 +750,13 @@
       "text": "Dopis byl zaslán panu Novákovi.",
       "surface": "Novákovi",
       "language": "cs",
-      "label": "person"
+      "expectedEntities": [
+        {
+          "start": 23,
+          "end": 32,
+          "label": "person"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -494,7 +764,13 @@
       "text": "Žaloba proti panu Nováka byla podána.",
       "surface": "Nováka",
       "language": "cs",
-      "label": "person"
+      "expectedEntities": [
+        {
+          "start": 19,
+          "end": 26,
+          "label": "person"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -502,7 +778,13 @@
       "text": "Jednal jsem s panem Novákem.",
       "surface": "Novákem",
       "language": "cs",
-      "label": "person"
+      "expectedEntities": [
+        {
+          "start": 20,
+          "end": 28,
+          "label": "person"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -510,7 +792,13 @@
       "text": "Plnou moc udělila Marii Dvořákové.",
       "surface": "Marii Dvořákové",
       "language": "cs",
-      "label": "person"
+      "expectedEntities": [
+        {
+          "start": 19,
+          "end": 37,
+          "label": "person"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -518,7 +806,13 @@
       "text": "Jednal jsem s Marií Dvořákovou.",
       "surface": "Marií Dvořákovou",
       "language": "cs",
-      "label": "person"
+      "expectedEntities": [
+        {
+          "start": 14,
+          "end": 33,
+          "label": "person"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -526,7 +820,13 @@
       "text": "Podpis Tomáše Kubíčka chybí.",
       "surface": "Tomáše Kubíčka",
       "language": "cs",
-      "label": "person"
+      "expectedEntities": [
+        {
+          "start": 7,
+          "end": 25,
+          "label": "person"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -534,7 +834,13 @@
       "text": "Zaslali jsme to Tomášovi Kubíčkovi.",
       "surface": "Tomášovi Kubíčkovi",
       "language": "cs",
-      "label": "person"
+      "expectedEntities": [
+        {
+          "start": 16,
+          "end": 38,
+          "label": "person"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -542,7 +848,13 @@
       "text": "Rozsudok proti Ľubomírovi Šťastnému.",
       "surface": "Ľubomírovi Šťastnému",
       "language": "sk",
-      "label": "person"
+      "expectedEntities": [
+        {
+          "start": 15,
+          "end": 40,
+          "label": "person"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -550,7 +862,13 @@
       "text": "Návrh Zuzany Kováčovej bol zamietnutý.",
       "surface": "Zuzany Kováčovej",
       "language": "sk",
-      "label": "person"
+      "expectedEntities": [
+        {
+          "start": 7,
+          "end": 25,
+          "label": "person"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -558,7 +876,13 @@
       "text": "Stretli sme sa so Zuzanou Kováčovou.",
       "surface": "Zuzanou Kováčovou",
       "language": "sk",
-      "label": "person"
+      "expectedEntities": [
+        {
+          "start": 18,
+          "end": 37,
+          "label": "person"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -566,7 +890,13 @@
       "text": "Faktura od Velmorské stavební a.s. dorazila.",
       "surface": "Velmorské stavební a.s.",
       "language": "cs",
-      "label": "organization"
+      "expectedEntities": [
+        {
+          "start": 11,
+          "end": 36,
+          "label": "organization"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -574,7 +904,13 @@
       "text": "Smlouva s Velmorskou stavební a.s. platí.",
       "surface": "Velmorskou stavební a.s.",
       "language": "cs",
-      "label": "organization"
+      "expectedEntities": [
+        {
+          "start": 10,
+          "end": 35,
+          "label": "organization"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -582,7 +918,13 @@
       "text": "Zmluva s Zelvanskou energetikou, a. s. platí.",
       "surface": "Zelvanskou energetikou, a. s.",
       "language": "sk",
-      "label": "organization"
+      "expectedEntities": [
+        {
+          "start": 9,
+          "end": 38,
+          "label": "organization"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -590,7 +932,13 @@
       "text": "Dopis byl zaslan panu Novakovi.",
       "surface": "Novakovi",
       "language": "cs",
-      "label": "person"
+      "expectedEntities": [
+        {
+          "start": 22,
+          "end": 30,
+          "label": "person"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -598,7 +946,13 @@
       "text": "Jednal jsem s panem Novakem.",
       "surface": "Novakem",
       "language": "cs",
-      "label": "person"
+      "expectedEntities": [
+        {
+          "start": 20,
+          "end": 27,
+          "label": "person"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -606,7 +960,13 @@
       "text": "Plnou moc udelila Marii Dvorakove.",
       "surface": "Marii Dvorakove",
       "language": "cs",
-      "label": "person"
+      "expectedEntities": [
+        {
+          "start": 18,
+          "end": 33,
+          "label": "person"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -614,7 +974,13 @@
       "text": "Podpis Tomase Kubicka chybi.",
       "surface": "Tomase Kubicka",
       "language": "cs",
-      "label": "person"
+      "expectedEntities": [
+        {
+          "start": 7,
+          "end": 21,
+          "label": "person"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -622,7 +988,13 @@
       "text": "Rozsudok proti Lubomirovi Stastnemu.",
       "surface": "Lubomirovi Stastnemu",
       "language": "sk",
-      "label": "person"
+      "expectedEntities": [
+        {
+          "start": 15,
+          "end": 35,
+          "label": "person"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -630,7 +1002,13 @@
       "text": "Navrh Zuzany Kovacovej bol zamietnuty.",
       "surface": "Zuzany Kovacovej",
       "language": "sk",
-      "label": "person"
+      "expectedEntities": [
+        {
+          "start": 6,
+          "end": 22,
+          "label": "person"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -638,7 +1016,13 @@
       "text": "Faktura od Velmorske stavebni a.s. dorazila.",
       "surface": "Velmorske stavebni a.s.",
       "language": "cs",
-      "label": "organization"
+      "expectedEntities": [
+        {
+          "start": 11,
+          "end": 34,
+          "label": "organization"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -646,7 +1030,13 @@
       "text": "Prodávající: Beta Trading, s.r.o.",
       "surface": "Beta Trading, s.r.o.",
       "language": "cs",
-      "label": "organization"
+      "expectedEntities": [
+        {
+          "start": 16,
+          "end": 36,
+          "label": "organization"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -654,7 +1044,13 @@
       "text": "Prodávající: Beta Trading s. r. o.",
       "surface": "Beta Trading s. r. o.",
       "language": "cs",
-      "label": "organization"
+      "expectedEntities": [
+        {
+          "start": 16,
+          "end": 37,
+          "label": "organization"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -662,7 +1058,13 @@
       "text": "Prodávající: Beta Trading, s. r. o.",
       "surface": "Beta Trading, s. r. o.",
       "language": "cs",
-      "label": "organization"
+      "expectedEntities": [
+        {
+          "start": 16,
+          "end": 38,
+          "label": "organization"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -670,7 +1072,13 @@
       "text": "Prodávající: Beta Trading spol. s r.o.",
       "surface": "Beta Trading spol. s r.o.",
       "language": "cs",
-      "label": "organization"
+      "expectedEntities": [
+        {
+          "start": 16,
+          "end": 41,
+          "label": "organization"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -678,7 +1086,13 @@
       "text": "Prodávající je Beta Trading.",
       "surface": "Beta Trading",
       "language": "cs",
-      "label": "organization"
+      "expectedEntities": [
+        {
+          "start": 18,
+          "end": 30,
+          "label": "organization"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -686,7 +1100,13 @@
       "text": "Zhotovitel: Velmorská stavební, a.s.",
       "surface": "Velmorská stavební, a.s.",
       "language": "cs",
-      "label": "organization"
+      "expectedEntities": [
+        {
+          "start": 12,
+          "end": 38,
+          "label": "organization"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -694,7 +1114,13 @@
       "text": "Zhotovitel: Velmorská stavební a. s.",
       "surface": "Velmorská stavební a. s.",
       "language": "cs",
-      "label": "organization"
+      "expectedEntities": [
+        {
+          "start": 12,
+          "end": 38,
+          "label": "organization"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -702,7 +1128,13 @@
       "text": "Investor: Brimová Invest s.r.o.",
       "surface": "Brimová Invest s.r.o.",
       "language": "cs",
-      "label": "organization"
+      "expectedEntities": [
+        {
+          "start": 10,
+          "end": 32,
+          "label": "organization"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -710,7 +1142,13 @@
       "text": "Investor: Brimová Invest, spol. s r. o.",
       "surface": "Brimová Invest, spol. s r. o.",
       "language": "cs",
-      "label": "organization"
+      "expectedEntities": [
+        {
+          "start": 10,
+          "end": 40,
+          "label": "organization"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -718,7 +1156,13 @@
       "text": "Odberateľ: Zelvanská energetika a.s.",
       "surface": "Zelvanská energetika a.s.",
       "language": "sk",
-      "label": "organization"
+      "expectedEntities": [
+        {
+          "start": 12,
+          "end": 38,
+          "label": "organization"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -726,7 +1170,13 @@
       "text": "Prepared by Northfield Analytics Limited.",
       "surface": "Northfield Analytics Limited",
       "language": "en",
-      "label": "organization"
+      "expectedEntities": [
+        {
+          "start": 12,
+          "end": 40,
+          "label": "organization"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -734,7 +1184,13 @@
       "text": "Za kupujícího Marie\nDvořáková.",
       "surface": "Marie\nDvořáková",
       "language": "cs",
-      "label": "person"
+      "expectedEntities": [
+        {
+          "start": 16,
+          "end": 34,
+          "label": "person"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -742,7 +1198,13 @@
       "text": "Za kupujícího Marie  Dvořáková.",
       "surface": "Marie  Dvořáková",
       "language": "cs",
-      "label": "person"
+      "expectedEntities": [
+        {
+          "start": 16,
+          "end": 35,
+          "label": "person"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -750,7 +1212,13 @@
       "text": "Za kupujícího Marie Dvořáková.",
       "surface": "Marie Dvořáková",
       "language": "cs",
-      "label": "person"
+      "expectedEntities": [
+        {
+          "start": 16,
+          "end": 35,
+          "label": "person"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -758,7 +1226,13 @@
       "text": "Za kupujícího Dvořáková, Marie.",
       "surface": "Dvořáková, Marie",
       "language": "cs",
-      "label": "person"
+      "expectedEntities": [
+        {
+          "start": 16,
+          "end": 35,
+          "label": "person"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -766,7 +1240,13 @@
       "text": "Prodávající Beta\nTrading s.r.o. souhlasí.",
       "surface": "Beta\nTrading s.r.o.",
       "language": "cs",
-      "label": "organization"
+      "expectedEntities": [
+        {
+          "start": 15,
+          "end": 34,
+          "label": "organization"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -774,7 +1254,13 @@
       "text": "Prodávající Beta  Trading s.r.o. souhlasí.",
       "surface": "Beta  Trading s.r.o.",
       "language": "cs",
-      "label": "organization"
+      "expectedEntities": [
+        {
+          "start": 15,
+          "end": 35,
+          "label": "organization"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -782,7 +1268,13 @@
       "text": "Witnessed by Harriet\tWellbourne.",
       "surface": "Harriet\tWellbourne",
       "language": "en",
-      "label": "person"
+      "expectedEntities": [
+        {
+          "start": 13,
+          "end": 31,
+          "label": "person"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -790,7 +1282,13 @@
       "text": "Partner Acme A potvrdil.",
       "surface": "Acme A",
       "language": "cs",
-      "label": "organization"
+      "expectedEntities": [
+        {
+          "start": 8,
+          "end": 15,
+          "label": "organization"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -798,7 +1296,13 @@
       "text": "Jednatel Tomáš\r\nKubíček podepsal.",
       "surface": "Tomáš\r\nKubíček",
       "language": "cs",
-      "label": "person"
+      "expectedEntities": [
+        {
+          "start": 9,
+          "end": 27,
+          "label": "person"
+        }
+      ]
     },
     {
       "expectation": "keep",
@@ -806,7 +1310,8 @@
       "text": "commit 3f2acfeca1b04d2e9c7a5b6d8e0f1a2b merged",
       "surface": "3f2acfeca1b04d2e9c7a5b6d8e0f1a2b",
       "language": "en",
-      "label": null
+      "expectedEntities": [],
+      "forcedExpectedEntities": []
     },
     {
       "expectation": "keep",
@@ -814,7 +1319,8 @@
       "text": "build acme0a1b2c3d4e5f ready",
       "surface": "acme0a1b2c3d4e5f",
       "language": "en",
-      "label": null
+      "expectedEntities": [],
+      "forcedExpectedEntities": []
     },
     {
       "expectation": "keep",
@@ -822,7 +1328,8 @@
       "text": "pointer 0xacbe12ef freed",
       "surface": "0xacbe12ef",
       "language": "en",
-      "label": null
+      "expectedEntities": [],
+      "forcedExpectedEntities": []
     },
     {
       "expectation": "keep",
@@ -830,7 +1337,8 @@
       "text": "blob deadbeefacfe0042 stored",
       "surface": "deadbeefacfe0042",
       "language": "en",
-      "label": null
+      "expectedEntities": [],
+      "forcedExpectedEntities": []
     },
     {
       "expectation": "keep",
@@ -838,7 +1346,8 @@
       "text": "seed ACFE00A1 used",
       "surface": "ACFE00A1",
       "language": "en",
-      "label": null
+      "expectedEntities": [],
+      "forcedExpectedEntities": []
     },
     {
       "expectation": "keep",
@@ -846,7 +1355,8 @@
       "text": "request 9b1d0c3e-acfe-4ca1-8b2e-5c7a0a1b2c3d failed",
       "surface": "9b1d0c3e-acfe-4ca1-8b2e-5c7a0a1b2c3d",
       "language": "en",
-      "label": null
+      "expectedEntities": [],
+      "forcedExpectedEntities": []
     },
     {
       "expectation": "keep",
@@ -854,7 +1364,8 @@
       "text": "row acee4f1b-0c2d-4e5f-9a8b-7c6d5e4f3a2b updated",
       "surface": "acee4f1b-0c2d-4e5f-9a8b-7c6d5e4f3a2b",
       "language": "en",
-      "label": null
+      "expectedEntities": [],
+      "forcedExpectedEntities": []
     },
     {
       "expectation": "keep",
@@ -862,7 +1373,8 @@
       "text": "file 0d8f6a2c-acde-4b7e-8f01-ac3ea1b2c3d4 uploaded",
       "surface": "0d8f6a2c-acde-4b7e-8f01-ac3ea1b2c3d4",
       "language": "en",
-      "label": null
+      "expectedEntities": [],
+      "forcedExpectedEntities": []
     },
     {
       "expectation": "keep",
@@ -870,7 +1382,8 @@
       "text": "dokument 7e4b9c1a-2f3d-4a5b-b6c7-d8e9f0a1b2c3 nahrán",
       "surface": "7e4b9c1a-2f3d-4a5b-b6c7-d8e9f0a1b2c3",
       "language": "cs",
-      "label": null
+      "expectedEntities": [],
+      "forcedExpectedEntities": []
     },
     {
       "expectation": "keep",
@@ -878,7 +1391,8 @@
       "text": "sha256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 ok",
       "surface": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "language": "en",
-      "label": null
+      "expectedEntities": [],
+      "forcedExpectedEntities": []
     },
     {
       "expectation": "keep",
@@ -886,7 +1400,8 @@
       "text": "sha1 da39a3ee5e6b4b0d3255bfef95601890afd80709 ok",
       "surface": "da39a3ee5e6b4b0d3255bfef95601890afd80709",
       "language": "en",
-      "label": null
+      "expectedEntities": [],
+      "forcedExpectedEntities": []
     },
     {
       "expectation": "keep",
@@ -894,7 +1409,8 @@
       "text": "md5 9e107d9d372bb6826bd81d3542a419d6 ok",
       "surface": "9e107d9d372bb6826bd81d3542a419d6",
       "language": "en",
-      "label": null
+      "expectedEntities": [],
+      "forcedExpectedEntities": []
     },
     {
       "expectation": "keep",
@@ -902,7 +1418,8 @@
       "text": "token QWNtZSBBIHJlcG9ydA== expired",
       "surface": "QWNtZSBBIHJlcG9ydA==",
       "language": "en",
-      "label": null
+      "expectedEntities": [],
+      "forcedExpectedEntities": []
     },
     {
       "expectation": "keep",
@@ -910,7 +1427,8 @@
       "text": "Faktura INV-2024-0042 je splatná.",
       "surface": "INV-2024-0042",
       "language": "cs",
-      "label": null
+      "expectedEntities": [],
+      "forcedExpectedEntities": []
     },
     {
       "expectation": "keep",
@@ -918,7 +1436,8 @@
       "text": "Kód ACM3A-77 je neplatný.",
       "surface": "ACM3A-77",
       "language": "cs",
-      "label": null
+      "expectedEntities": [],
+      "forcedExpectedEntities": []
     },
     {
       "expectation": "keep",
@@ -926,7 +1445,8 @@
       "text": "order zeta9f3c21 shipped",
       "surface": "zeta9f3c21",
       "language": "en",
-      "label": null
+      "expectedEntities": [],
+      "forcedExpectedEntities": []
     },
     {
       "expectation": "keep",
@@ -934,7 +1454,8 @@
       "text": "ref ORB1S-55 closed",
       "surface": "ORB1S-55",
       "language": "en",
-      "label": null
+      "expectedEntities": [],
+      "forcedExpectedEntities": []
     },
     {
       "expectation": "keep",
@@ -942,7 +1463,8 @@
       "text": "SKU ZT4471Z out of stock",
       "surface": "ZT4471Z",
       "language": "en",
-      "label": null
+      "expectedEntities": [],
+      "forcedExpectedEntities": []
     },
     {
       "expectation": "keep",
@@ -950,7 +1472,8 @@
       "text": "variable acmeA_total reset",
       "surface": "acmeA_total",
       "language": "en",
-      "label": null
+      "expectedEntities": [],
+      "forcedExpectedEntities": []
     },
     {
       "expectation": "keep",
@@ -958,7 +1481,8 @@
       "text": "before ⟦Zeta⟧ after",
       "surface": "⟦Zeta⟧",
       "language": "en",
-      "label": null
+      "expectedEntities": [],
+      "forcedExpectedEntities": []
     },
     {
       "expectation": "redact",
@@ -966,7 +1490,13 @@
       "text": "before Zeta after",
       "surface": "Zeta",
       "language": "en",
-      "label": "organization"
+      "expectedEntities": [
+        {
+          "start": 7,
+          "end": 11,
+          "label": "organization"
+        }
+      ]
     },
     {
       "expectation": "keep",
@@ -974,7 +1504,8 @@
       "text": "insert {{clause_ref}} here",
       "surface": "{{clause_ref}}",
       "language": "en",
-      "label": null
+      "expectedEntities": [],
+      "forcedExpectedEntities": []
     },
     {
       "expectation": "keep",
@@ -982,7 +1513,8 @@
       "text": "see <<token:zeta9>> below",
       "surface": "<<token:zeta9>>",
       "language": "en",
-      "label": null
+      "expectedEntities": [],
+      "forcedExpectedEntities": []
     },
     {
       "expectation": "keep",
@@ -990,7 +1522,8 @@
       "text": "text [[[__token_id_3__]]] text",
       "surface": "[[[__token_id_3__]]]",
       "language": "en",
-      "label": null
+      "expectedEntities": [],
+      "forcedExpectedEntities": []
     },
     {
       "expectation": "keep",
@@ -998,7 +1531,8 @@
       "text": "section %%ACMEA_SECTION%% end",
       "surface": "%%ACMEA_SECTION%%",
       "language": "en",
-      "label": null
+      "expectedEntities": [],
+      "forcedExpectedEntities": []
     },
     {
       "expectation": "keep",
@@ -1006,7 +1540,8 @@
       "text": "This clause applies to both parties.",
       "surface": "clause",
       "language": "en",
-      "label": null
+      "expectedEntities": [],
+      "forcedExpectedEntities": []
     },
     {
       "expectation": "keep",
@@ -1014,7 +1549,8 @@
       "text": "One acre of land was sold.",
       "surface": "acre",
       "language": "en",
-      "label": null
+      "expectedEntities": [],
+      "forcedExpectedEntities": []
     },
     {
       "expectation": "keep",
@@ -1022,7 +1558,8 @@
       "text": "They came early.",
       "surface": "came",
       "language": "en",
-      "label": null
+      "expectedEntities": [],
+      "forcedExpectedEntities": []
     },
     {
       "expectation": "keep",
@@ -1030,7 +1567,8 @@
       "text": "Treatment for acne is covered.",
       "surface": "acne",
       "language": "en",
-      "label": null
+      "expectedEntities": [],
+      "forcedExpectedEntities": []
     },
     {
       "expectation": "keep",
@@ -1038,7 +1576,8 @@
       "text": "Use a marker on page two.",
       "surface": "marker",
       "language": "en",
-      "label": null
+      "expectedEntities": [],
+      "forcedExpectedEntities": []
     },
     {
       "expectation": "keep",
@@ -1046,7 +1585,8 @@
       "text": "A stable orbit was reached.",
       "surface": "orbit",
       "language": "en",
-      "label": null
+      "expectedEntities": [],
+      "forcedExpectedEntities": []
     },
     {
       "expectation": "keep",
@@ -1054,7 +1594,8 @@
       "text": "The zebra crossing is closed.",
       "surface": "zebra",
       "language": "en",
-      "label": null
+      "expectedEntities": [],
+      "forcedExpectedEntities": []
     },
     {
       "expectation": "keep",
@@ -1062,7 +1603,8 @@
       "text": "Meta fields are optional.",
       "surface": "Meta",
       "language": "en",
-      "label": null
+      "expectedEntities": [],
+      "forcedExpectedEntities": []
     },
     {
       "expectation": "keep",
@@ -1070,7 +1612,8 @@
       "text": "The data room opens Monday.",
       "surface": "data",
       "language": "en",
-      "label": null
+      "expectedEntities": [],
+      "forcedExpectedEntities": []
     },
     {
       "expectation": "keep",
@@ -1078,7 +1621,8 @@
       "text": "Akce a smlouva jsou v příloze.",
       "surface": "Akce a",
       "language": "cs",
-      "label": null
+      "expectedEntities": [],
+      "forcedExpectedEntities": []
     },
     {
       "expectation": "keep",
@@ -1086,7 +1630,8 @@
       "text": "Beta verze vyjde v pondělí.",
       "surface": "Beta verze",
       "language": "cs",
-      "label": null
+      "expectedEntities": [],
+      "forcedExpectedEntities": []
     },
     {
       "expectation": "keep",
@@ -1094,7 +1639,8 @@
       "text": "Nová smlouva nahrazuje starou.",
       "surface": "Nová",
       "language": "cs",
-      "label": null
+      "expectedEntities": [],
+      "forcedExpectedEntities": []
     },
     {
       "expectation": "keep",
@@ -1102,7 +1648,8 @@
       "text": "Nováček nastoupil v pondělí.",
       "surface": "Nováček",
       "language": "cs",
-      "label": null
+      "expectedEntities": [],
+      "forcedExpectedEntities": []
     },
     {
       "expectation": "keep",
@@ -1110,7 +1657,8 @@
       "text": "Novátor získal cenu.",
       "surface": "Novátor",
       "language": "cs",
-      "label": null
+      "expectedEntities": [],
+      "forcedExpectedEntities": []
     },
     {
       "expectation": "keep",
@@ -1118,7 +1666,8 @@
       "text": "Na orbitu vyletěla družice.",
       "surface": "orbitu",
       "language": "cs",
-      "label": null
+      "expectedEntities": [],
+      "forcedExpectedEntities": []
     },
     {
       "expectation": "keep",
@@ -1126,7 +1675,8 @@
       "text": "Žena podala návrh.",
       "surface": "Žena",
       "language": "cs",
-      "label": null
+      "expectedEntities": [],
+      "forcedExpectedEntities": []
     },
     {
       "expectation": "keep",
@@ -1134,7 +1684,8 @@
       "text": "Prajem šťastnú cestu.",
       "surface": "šťastnú",
       "language": "sk",
-      "label": null
+      "expectedEntities": [],
+      "forcedExpectedEntities": []
     },
     {
       "expectation": "keep",
@@ -1142,7 +1693,8 @@
       "text": "Bol to šťastný deň.",
       "surface": "šťastný",
       "language": "sk",
-      "label": null
+      "expectedEntities": [],
+      "forcedExpectedEntities": []
     },
     {
       "expectation": "keep",
@@ -1150,7 +1702,8 @@
       "text": "Kováč opravil bránu.",
       "surface": "Kováč",
       "language": "sk",
-      "label": null
+      "expectedEntities": [],
+      "forcedExpectedEntities": []
     },
     {
       "expectation": "keep",
@@ -1158,7 +1711,8 @@
       "text": "Marže činí deset procent.",
       "surface": "Marže",
       "language": "cs",
-      "label": null
+      "expectedEntities": [],
+      "forcedExpectedEntities": []
     },
     {
       "expectation": "keep",
@@ -1166,7 +1720,8 @@
       "text": "Obec vydala rozhodnutí.",
       "surface": "Obec",
       "language": "cs",
-      "label": null
+      "expectedEntities": [],
+      "forcedExpectedEntities": []
     },
     {
       "expectation": "keep",
@@ -1174,7 +1729,14 @@
       "text": "Acme A signed the deal.",
       "surface": "signed",
       "language": "en",
-      "label": null
+      "expectedEntities": [
+        {
+          "start": 0,
+          "end": 6,
+          "label": "organization"
+        }
+      ],
+      "forcedExpectedEntities": []
     },
     {
       "expectation": "keep",
@@ -1182,7 +1744,14 @@
       "text": "Zeta podepsala smlouvu.",
       "surface": "podepsala",
       "language": "cs",
-      "label": null
+      "expectedEntities": [
+        {
+          "start": 0,
+          "end": 4,
+          "label": "organization"
+        }
+      ],
+      "forcedExpectedEntities": []
     },
     {
       "expectation": "keep",
@@ -1190,7 +1759,14 @@
       "text": "Orbis schválil návrh.",
       "surface": "schválil",
       "language": "cs",
-      "label": null
+      "expectedEntities": [
+        {
+          "start": 0,
+          "end": 5,
+          "label": "organization"
+        }
+      ],
+      "forcedExpectedEntities": []
     },
     {
       "expectation": "keep",
@@ -1198,7 +1774,14 @@
       "text": "Novákovi zaslal dopis.",
       "surface": "zaslal",
       "language": "cs",
-      "label": null
+      "expectedEntities": [
+        {
+          "start": 0,
+          "end": 9,
+          "label": "person"
+        }
+      ],
+      "forcedExpectedEntities": []
     },
     {
       "expectation": "keep",
@@ -1206,7 +1789,14 @@
       "text": "Marie Dvořáková uvedla, že nesouhlasí.",
       "surface": "uvedla",
       "language": "cs",
-      "label": null
+      "expectedEntities": [
+        {
+          "start": 0,
+          "end": 18,
+          "label": "person"
+        }
+      ],
+      "forcedExpectedEntities": []
     },
     {
       "expectation": "keep",
@@ -1214,7 +1804,14 @@
       "text": "Beta Trading s.r.o. dodala zboží.",
       "surface": "dodala",
       "language": "cs",
-      "label": null
+      "expectedEntities": [
+        {
+          "start": 0,
+          "end": 19,
+          "label": "organization"
+        }
+      ],
+      "forcedExpectedEntities": []
     },
     {
       "expectation": "keep",
@@ -1222,7 +1819,14 @@
       "text": "Harriet Wellbourne confirmed receipt.",
       "surface": "confirmed",
       "language": "en",
-      "label": null
+      "expectedEntities": [
+        {
+          "start": 0,
+          "end": 18,
+          "label": "person"
+        }
+      ],
+      "forcedExpectedEntities": []
     },
     {
       "expectation": "keep",
@@ -1230,7 +1834,14 @@
       "text": "Ľubomír Šťastný uviedol dôvody.",
       "surface": "uviedol",
       "language": "sk",
-      "label": null
+      "expectedEntities": [
+        {
+          "start": 0,
+          "end": 20,
+          "label": "person"
+        }
+      ],
+      "forcedExpectedEntities": []
     },
     {
       "expectation": "keep",
@@ -1238,7 +1849,14 @@
       "text": "Smlouvu uzavřela Acme A.",
       "surface": "uzavřela",
       "language": "cs",
-      "label": null
+      "expectedEntities": [
+        {
+          "start": 18,
+          "end": 24,
+          "label": "organization"
+        }
+      ],
+      "forcedExpectedEntities": []
     },
     {
       "expectation": "keep",
@@ -1246,7 +1864,14 @@
       "text": "Countersigned Zeta.",
       "surface": "Countersigned",
       "language": "en",
-      "label": null
+      "expectedEntities": [
+        {
+          "start": 14,
+          "end": 18,
+          "label": "organization"
+        }
+      ],
+      "forcedExpectedEntities": []
     }
   ],
   "forcedValues": [
@@ -1260,7 +1885,13 @@
       "text": "organization 5f0c2a9e-7b1d-4c3a-9e8f-1a2b3c4d5e6f archived",
       "surface": "5f0c2a9e-7b1d-4c3a-9e8f-1a2b3c4d5e6f",
       "language": "en",
-      "label": "registration number"
+      "expectedEntities": [
+        {
+          "start": 13,
+          "end": 49,
+          "label": "registration number"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -1268,7 +1899,13 @@
       "text": "scope c3a91f04-6d2e-4b8a-a1f7-0e9d8c7b6a51 closed",
       "surface": "c3a91f04-6d2e-4b8a-a1f7-0e9d8c7b6a51",
       "language": "en",
-      "label": "registration number"
+      "expectedEntities": [
+        {
+          "start": 6,
+          "end": 42,
+          "label": "registration number"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -1276,7 +1913,13 @@
       "text": "ORG 5F0C2A9E-7B1D-4C3A-9E8F-1A2B3C4D5E6F ARCHIVED",
       "surface": "5F0C2A9E-7B1D-4C3A-9E8F-1A2B3C4D5E6F",
       "language": "en",
-      "label": "registration number"
+      "expectedEntities": [
+        {
+          "start": 4,
+          "end": 40,
+          "label": "registration number"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -1284,7 +1927,13 @@
       "text": "GET /orgs/5f0c2a9e-7b1d-4c3a-9e8f-1a2b3c4d5e6f/files",
       "surface": "5f0c2a9e-7b1d-4c3a-9e8f-1a2b3c4d5e6f",
       "language": "en",
-      "label": "registration number"
+      "expectedEntities": [
+        {
+          "start": 10,
+          "end": 46,
+          "label": "registration number"
+        }
+      ]
     },
     {
       "expectation": "redact",
@@ -1292,7 +1941,13 @@
       "text": "{\"scope\":\"c3a91f04-6d2e-4b8a-a1f7-0e9d8c7b6a51\"}",
       "surface": "c3a91f04-6d2e-4b8a-a1f7-0e9d8c7b6a51",
       "language": "en",
-      "label": "registration number"
+      "expectedEntities": [
+        {
+          "start": 10,
+          "end": 46,
+          "label": "registration number"
+        }
+      ]
     },
     {
       "expectation": "keep",
@@ -1300,7 +1955,7 @@
       "text": "organization 5f0c2a9e-7b1d-4c3a-9e8f-1a2b3c4d5e6a archived",
       "surface": "5f0c2a9e-7b1d-4c3a-9e8f-1a2b3c4d5e6a",
       "language": "en",
-      "label": null
+      "expectedEntities": []
     },
     {
       "expectation": "keep",
@@ -1308,7 +1963,7 @@
       "text": "organization 5f0c2a9e-7b1d-4c3a-9e8f-1a2b3c4d5eaa archived",
       "surface": "5f0c2a9e-7b1d-4c3a-9e8f-1a2b3c4d5eaa",
       "language": "en",
-      "label": null
+      "expectedEntities": []
     },
     {
       "expectation": "keep",
@@ -1316,7 +1971,7 @@
       "text": "scope c3a91f04-6d2e-4b8a-a1f7-0e9d8c7b6a5 closed",
       "surface": "c3a91f04-6d2e-4b8a-a1f7-0e9d8c7b6a5",
       "language": "en",
-      "label": null
+      "expectedEntities": []
     },
     {
       "expectation": "keep",
@@ -1324,7 +1979,7 @@
       "text": "row 1b2c3d4e-5f60-4718-9a2b-3c4d5e6f7081 updated",
       "surface": "1b2c3d4e-5f60-4718-9a2b-3c4d5e6f7081",
       "language": "en",
-      "label": null
+      "expectedEntities": []
     },
     {
       "expectation": "keep",
@@ -1332,7 +1987,7 @@
       "text": "row 5f0c2a9e7b1d4c3a updated",
       "surface": "5f0c2a9e7b1d4c3a",
       "language": "en",
-      "label": null
+      "expectedEntities": []
     },
     {
       "expectation": "keep",
@@ -1340,7 +1995,13 @@
       "text": "organization 5f0c2a9e-7b1d-4c3a-9e8f-1a2b3c4d5e6f archived",
       "surface": "archived",
       "language": "en",
-      "label": null
+      "expectedEntities": [
+        {
+          "start": 13,
+          "end": 49,
+          "label": "registration number"
+        }
+      ]
     },
     {
       "expectation": "keep",
@@ -1348,7 +2009,13 @@
       "text": "scope c3a91f04-6d2e-4b8a-a1f7-0e9d8c7b6a51 closed",
       "surface": "closed",
       "language": "en",
-      "label": null
+      "expectedEntities": [
+        {
+          "start": 6,
+          "end": 42,
+          "label": "registration number"
+        }
+      ]
     },
     {
       "expectation": "keep",
@@ -1356,7 +2023,13 @@
       "text": "Workspace c3a91f04-6d2e-4b8a-a1f7-0e9d8c7b6a51, then the report.",
       "surface": "then",
       "language": "en",
-      "label": null
+      "expectedEntities": [
+        {
+          "start": 10,
+          "end": 46,
+          "label": "registration number"
+        }
+      ]
     }
   ]
 }

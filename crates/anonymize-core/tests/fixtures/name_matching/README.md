@@ -21,16 +21,24 @@ inside `⟦…⟧`, with zero false positives allowed. Its `marker-control` pair
 requires an exact hit on the same name in the same sentence without brackets;
 both cases must pass, so marker suppression cannot pass vacuously.
 
-Recall requires a gazetteer entity with the expected label and exactly the
-labeled byte range, with no overlapping entity extending outside it. Partial matches, even several
-that collectively remove the name, do not count. Any overlap with a keep
-surface is a false positive. Every must-redact case additionally contributes
-a negative word check to `adjacent-word`: all resolved entities are checked
-against the nearest preceding and following Unicode word ranges, including
-separate neighboring entities. Swallowing a neighboring word also fails
-recall. `span-extent` separately scores all overreach, including punctuation, so punctuation cannot relax the
-adjacent-word ceiling. Offsets must remain valid UTF-8
-boundaries. A scoring test rejects substring and overextended matchers.
+Every case declares its complete `expectedEntities` list of UTF-8 byte spans
+and labels. Adjacent-word keep cases include the name or forced identifier
+elsewhere in the sentence; identifier-shaped and ordinary-word keep cases
+expect no entities. Replayed keep cases declare a separate
+`forcedExpectedEntities` list for the forced-value profile.
+
+Scoring compares the complete resolved entity multiset (span, label and
+gazetteer source). Missing, extra, duplicate, partial or mislabelled entities
+fail the case's class, including false positives far from the annotated
+surface. The corpus configures the redact operator for each gazetteer label.
+An independent oracle replaces each expected span with the configured redact
+string and copies every intervening byte. The produced redacted text must
+match this output exactly, preserving Unicode, newlines, CRLF and non-breaking
+spaces outside expected spans. Empty expected sets require byte-identical
+output. Unit tests reject incorrect entity sets, unchanged source text and
+corrupted context. The complete oracle replaces the derived adjacent-word
+checks on redact cases and the separate span-extent metric; adjacent-word
+keep fixtures retain their own class.
 
 `thresholds.json` stores class floors and ceilings as integer numerators with
 fixed denominators, avoiding rounded percentages. Bounds were measured on the
