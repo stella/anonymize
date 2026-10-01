@@ -11,3 +11,5 @@ Improve gazetteer name matching for short names and template placeholders.
 - Inside template placeholders `<<…>>`, `{{…}}` and `[[…]]`, a name glued
   to digits or joined to a numbered field (`<<token:zeta9>>`) is not
   matched; a plain name inside them (`[[Jan Novák]]`) still is.
+- A gazetteer entry that is also a common word (`Mark`, `Will`, `Grant`) is
+  always redacted where it stands as its own token, for every label.

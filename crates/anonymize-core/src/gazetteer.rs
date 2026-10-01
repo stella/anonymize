@@ -1747,82 +1747,64 @@ const MARKER_DELIMITERS: [(&str, &str, MarkerKind); 4] = [
   ("[[", "]]", MarkerKind::Template),
 ];
 
-/// Balanced markers, in one pass: the outermost opaque markers (also those
-/// nested in a template, so `[[⟦Zeta⟧]]` stays suppressed) and the
-/// outermost templates, each list sorted and disjoint. An opaque marker never
-/// contains whitespace; a template may, but never a line break, so a
-/// delimiter still open there is dropped and suppresses nothing after it. A
-/// closing delimiter without an open one is ignored.
+/// Balanced markers by kind. Each kind is scanned on its own, so an opaque
+/// marker nested in a template stays suppressed (`[[⟦Zeta⟧]]`) and a
+/// template delimiter never hides an opaque marker around it.
 fn markers(text: &str) -> Markers {
-  let mut markers = Markers::default();
-  if !MARKER_DELIMITERS
-    .iter()
-    .any(|(open, _, _)| text.contains(open))
-  {
-    return markers;
+  Markers {
+    opaque: marker_spans(text, MarkerKind::Opaque),
+    template: marker_spans(text, MarkerKind::Template),
   }
-  let mut open = Vec::<(usize, usize)>::new();
-  // Open delimiters per kind, so whitespace and closings stay O(1)
-  // amortized however many delimiters stay open on a line.
-  let mut open_opaque = 0_usize;
-  let mut open_template = 0_usize;
-  let kind_of = |delimiter: usize| {
+}
+
+/// Outermost balanced markers of one kind, in one pass, sorted and
+/// disjoint. An opaque marker never contains whitespace; a template may, but
+/// never a line break, so a delimiter still open there is dropped and
+/// suppresses nothing after it. A closing delimiter that does not close the
+/// innermost open one is ignored.
+fn marker_spans(text: &str, kind: MarkerKind) -> Vec<(usize, usize)> {
+  let delimiters = || {
     MARKER_DELIMITERS
-      .get(delimiter)
-      .map_or(MarkerKind::Opaque, |(_, _, kind)| *kind)
+      .iter()
+      .filter(move |(_, _, delimiter_kind)| *delimiter_kind == kind)
   };
+  let mut spans = Vec::new();
+  if !delimiters().any(|(opener, _, _)| text.contains(opener)) {
+    return spans;
+  }
+  let mut open = Vec::<(&str, usize)>::new();
   let mut index = 0_usize;
   while let Some(rest) = text.get(index..) {
     let Some(ch) = rest.chars().next() else {
       break;
     };
-    if is_line_break(ch) {
+    let closes_all = match kind {
+      MarkerKind::Opaque => ch.is_whitespace(),
+      MarkerKind::Template => is_line_break(ch),
+    };
+    if closes_all {
       open.clear();
-      open_opaque = 0;
-      open_template = 0;
-    } else if ch.is_whitespace() && open_opaque > 0 {
-      open.retain(|(delimiter, _)| kind_of(*delimiter) != MarkerKind::Opaque);
-      open_opaque = 0;
     }
-    let closing = open.last().copied().and_then(|(delimiter, _)| {
-      MARKER_DELIMITERS
-        .get(delimiter)
-        .filter(|(_, closer, _)| rest.starts_with(closer))
-        .map(|(_, closer, _)| closer.len())
-    });
-    if let Some(len) = closing {
-      if let Some((delimiter, start)) = open.pop() {
-        // Record a marker unless one of its kind still encloses it.
-        let (still_open, list) = match kind_of(delimiter) {
-          MarkerKind::Opaque => (&mut open_opaque, &mut markers.opaque),
-          MarkerKind::Template => (&mut open_template, &mut markers.template),
-        };
-        *still_open = still_open.saturating_sub(1);
-        if *still_open == 0 {
-          list.push((start, index));
-        }
+    if let Some((closer, start)) = open.last().copied()
+      && rest.starts_with(closer)
+    {
+      open.pop();
+      if open.is_empty() {
+        spans.push((start, index));
       }
-      index = index.saturating_add(len);
+      index = index.saturating_add(closer.len());
       continue;
     }
-    let opening = MARKER_DELIMITERS
-      .iter()
-      .enumerate()
-      .find(|(_, (opener, _, _))| rest.starts_with(opener));
-    if let Some((delimiter, (opener, _, kind))) = opening {
-      match kind {
-        MarkerKind::Opaque => open_opaque = open_opaque.saturating_add(1),
-        MarkerKind::Template => {
-          open_template = open_template.saturating_add(1);
-        }
-      }
-      open.push((delimiter, index));
+    if let Some((opener, closer, _)) =
+      delimiters().find(|(opener, _, _)| rest.starts_with(opener))
+    {
+      open.push((closer, index));
       index = index.saturating_add(opener.len());
       continue;
     }
     index = index.saturating_add(ch.len_utf8());
   }
-  markers
+  spans
 }
 
 /// Marker spans by kind, each sorted and disjoint.
@@ -3056,13 +3038,21 @@ mod tests {
 
     #[test]
     fn fuzz_marker_oracle_matches_production(
-      text in "[⟦⟧a \t\n\r\u{00a0}]{0,128}",
+      text in "[⟦⟧<>{}\\[\\]a \t\n\r\u{00a0}\u{2028}]{0,128}",
     ) {
-      let expected = markers(&text)
-        .into_iter()
-        .map(|(start, close)| (start, close.saturating_add('⟧'.len_utf8())))
+      let found = markers(&text);
+      let opaque = found
+        .opaque
+        .iter()
+        .map(|(start, close)| (*start, close.saturating_add('⟧'.len_utf8())))
         .collect::<Vec<_>>();
-      prop_assert_eq!(fuzz_policy::marker_ranges(&text), expected);
+      prop_assert_eq!(fuzz_policy::marker_ranges(&text), opaque);
+      let templates = found
+        .template
+        .iter()
+        .map(|(start, close)| (*start, close.saturating_add(2)))
+        .collect::<Vec<_>>();
+      prop_assert_eq!(fuzz_policy::template_ranges(&text), templates);
     }
 
     #[test]
@@ -3083,7 +3073,11 @@ mod tests {
       // Structured envelopes ensure numeric glue, joined segments, markers,
       // and their interactions are exercised alongside arbitrary Unicode.
       let arbitrary = characters.into_iter().collect::<String>();
-      for text in [arbitrary, format!("⟦a1b2-1234{identifier}1234-a1b2⟧")] {
+      for text in [
+        arbitrary,
+        format!("⟦a1b2-1234{identifier}1234-a1b2⟧"),
+        format!("<<a1b2:{identifier}>> [[{identifier}]]"),
+      ] {
         let offsets = text.char_indices().map(|(offset, _)| offset)
           .chain(std::iter::once(text.len())).collect::<Vec<_>>();
         let first = offsets[left.checked_rem(offsets.len()).unwrap()];
@@ -3091,10 +3085,15 @@ mod tests {
         let (start, end) = (first.min(second), first.max(second));
         let guard = Guard::new(&text);
         prop_assert_eq!(fuzz_policy::edges_are_free(&text, start, end), guard.edges_are_free(start, end));
-        prop_assert_eq!(fuzz_policy::in_marker(&text, start, end), guard.in_marker(start, end));
-        prop_assert_eq!(fuzz_policy::touches_identifier(&text, start, end) || fuzz_policy::in_marker(&text, start, end), guard.in_identifier(start, end));
+        prop_assert_eq!(fuzz_policy::in_marker(&text, start, end), encloses(&guard.markers.opaque, start, end));
+        prop_assert_eq!(
+          fuzz_policy::touches_identifier(&text, start, end)
+            || fuzz_policy::in_marker(&text, start, end)
+            || fuzz_policy::in_template_field(&text, start, end),
+          guard.in_identifier(start, end)
+        );
         let mut joined_guard = Guard::new(&text);
-        joined_guard.markers.clear();
+        joined_guard.markers = Markers::default();
         prop_assert_eq!(fuzz_policy::touches_identifier(&text, start, end), joined_guard.in_identifier(start, end));
       }
     }
