@@ -1,0 +1,202 @@
+{
+  "deny-list/adjacent-word": {
+    "maximum_false_positives": 0,
+    "metric": "false-positives",
+    "total": 10
+  },
+  "deny-list/bracketed-id": {
+    "maximum_false_positives": 1,
+    "metric": "false-positives",
+    "total": 4
+  },
+  "deny-list/case": {
+    "metric": "recall",
+    "minimum_exact_hits": 7,
+    "total": 7
+  },
+  "deny-list/context-whitespace": {
+    "metric": "recall",
+    "minimum_exact_hits": 4,
+    "total": 4
+  },
+  "deny-list/diacritics-added": {
+    "metric": "recall",
+    "minimum_exact_hits": 5,
+    "total": 5
+  },
+  "deny-list/diacritics-dropped": {
+    "metric": "recall",
+    "minimum_exact_hits": 8,
+    "total": 8
+  },
+  "deny-list/exact": {
+    "metric": "recall",
+    "minimum_exact_hits": 10,
+    "total": 11
+  },
+  "deny-list/guard-control": {
+    "metric": "recall",
+    "minimum_exact_hits": 24,
+    "total": 24
+  },
+  "deny-list/hash": {
+    "maximum_false_positives": 0,
+    "metric": "false-positives",
+    "total": 4
+  },
+  "deny-list/hex": {
+    "maximum_false_positives": 0,
+    "metric": "false-positives",
+    "total": 5
+  },
+  "deny-list/id-code": {
+    "maximum_false_positives": 0,
+    "metric": "false-positives",
+    "total": 6
+  },
+  "deny-list/inflected": {
+    "metric": "recall",
+    "minimum_exact_hits": 13,
+    "total": 13
+  },
+  "deny-list/inflected-diacritics-dropped": {
+    "metric": "recall",
+    "minimum_exact_hits": 7,
+    "total": 7
+  },
+  "deny-list/language-exclusion": {
+    "metric": "false-positives",
+    "maximum_false_positives": 0,
+    "total": 15
+  },
+  "deny-list/language-scope": {
+    "maximum_false_positives": 0,
+    "metric": "false-positives",
+    "total": 151
+  },
+  "deny-list/legal-form-variant": {
+    "metric": "recall",
+    "minimum_exact_hits": 10,
+    "total": 11
+  },
+  "deny-list/marker-control": {
+    "metric": "recall",
+    "minimum_exact_hits": 1,
+    "total": 1
+  },
+  "deny-list/marker-suppression": {
+    "metric": "false-positives",
+    "maximum_false_positives": 0,
+    "total": 1
+  },
+  "deny-list/multi-entity": {
+    "metric": "recall",
+    "minimum_exact_hits": 5,
+    "total": 5
+  },
+  "deny-list/ordinary-word": {
+    "maximum_false_positives": 0,
+    "metric": "false-positives",
+    "total": 21
+  },
+  "deny-list/per-label-operator": {
+    "metric": "recall",
+    "minimum_exact_hits": 2,
+    "total": 2
+  },
+  "deny-list/split": {
+    "metric": "recall",
+    "minimum_exact_hits": 9,
+    "total": 9
+  },
+  "deny-list/typo-1": {
+    "metric": "recall",
+    "minimum_exact_hits": 6,
+    "total": 7
+  },
+  "deny-list/typo-2": {
+    "metric": "recall",
+    "minimum_exact_hits": 6,
+    "total": 6
+  },
+  "deny-list/uuid": {
+    "maximum_false_positives": 0,
+    "metric": "false-positives",
+    "total": 4
+  },
+  "forced/adjacent-word": {
+    "maximum_false_positives": 0,
+    "metric": "false-positives",
+    "total": 10
+  },
+  "forced/bracketed-id": {
+    "maximum_false_positives": 0,
+    "metric": "false-positives",
+    "total": 4
+  },
+  "forced/forced-adjacent-word": {
+    "maximum_false_positives": 0,
+    "metric": "false-positives",
+    "total": 3
+  },
+  "forced/forced-case": {
+    "metric": "recall",
+    "minimum_exact_hits": 1,
+    "total": 1
+  },
+  "forced/forced-embedded": {
+    "metric": "recall",
+    "minimum_exact_hits": 2,
+    "total": 2
+  },
+  "forced/forced-exact": {
+    "metric": "recall",
+    "minimum_exact_hits": 2,
+    "total": 2
+  },
+  "forced/forced-near-miss": {
+    "maximum_false_positives": 0,
+    "metric": "false-positives",
+    "total": 3
+  },
+  "forced/forced-other-id": {
+    "maximum_false_positives": 0,
+    "metric": "false-positives",
+    "total": 2
+  },
+  "forced/hash": {
+    "maximum_false_positives": 0,
+    "metric": "false-positives",
+    "total": 4
+  },
+  "forced/hex": {
+    "maximum_false_positives": 0,
+    "metric": "false-positives",
+    "total": 5
+  },
+  "forced/id-code": {
+    "maximum_false_positives": 0,
+    "metric": "false-positives",
+    "total": 6
+  },
+  "forced/language-scope": {
+    "maximum_false_positives": 0,
+    "metric": "false-positives",
+    "total": 68
+  },
+  "forced/marker-suppression": {
+    "metric": "false-positives",
+    "maximum_false_positives": 0,
+    "total": 1
+  },
+  "forced/ordinary-word": {
+    "maximum_false_positives": 0,
+    "metric": "false-positives",
+    "total": 21
+  },
+  "forced/uuid": {
+    "maximum_false_positives": 0,
+    "metric": "false-positives",
+    "total": 4
+  }
+}
