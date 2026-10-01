@@ -16,7 +16,7 @@
 //! markers), does not. A span extends only over a following legal form.
 
 use std::cell::Cell;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
 
 use unicode_normalization::char::{decompose_canonical, is_combining_mark};
 
@@ -72,6 +72,11 @@ const MAX_FUZZY_PATTERN_CHARS: usize = 64;
 /// Largest edit distance any fuzzy entry allows.
 const MAX_FUZZY_DISTANCE: usize = 2;
 
+/// Most fuzzy entries one fallback span is compared with. Entries beyond it
+/// share a deletion variant with the span and so lie within a few edits of
+/// the entries already checked.
+const MAX_FALLBACK_CANDIDATES: usize = 256;
+
 /// Edit distance a fuzzy gazetteer pattern for `term` allows, if any. Entries
 /// with digits are identifiers and match only exactly.
 #[must_use]
@@ -92,8 +97,11 @@ pub fn gazetteer_fuzzy_distance(term: &str) -> Option<u8> {
 pub(crate) struct PreparedGazetteerMatchData {
   slice: PatternSlice,
   rows: Vec<GazetteerRow>,
-  /// Fuzzy rows by folded letter count, for re-checking a token-aligned span.
-  fuzzy_by_letters: BTreeMap<usize, Vec<usize>>,
+  /// Fuzzy rows by every string reachable from their folded letters with at
+  /// most their edit distance in deletions. Two strings within distance `k`
+  /// share such a string, so re-checking a span costs a bounded number of
+  /// lookups instead of a scan of same-length entries.
+  fuzzy_deletions: HashMap<Vec<char>, Vec<usize>>,
   sequences: SequenceTrie,
   legal_forms: Vec<LegalFormSuffix>,
 }
@@ -193,7 +201,7 @@ impl PreparedGazetteerMatchData {
     let mut prepared = Self {
       slice,
       rows: Vec::with_capacity(patterns.len()),
-      fuzzy_by_letters: BTreeMap::new(),
+      fuzzy_deletions: HashMap::new(),
       sequences: SequenceTrie::new(data.inflection),
       legal_forms,
     };
@@ -238,12 +246,19 @@ impl PreparedGazetteerMatchData {
           });
         }
       };
-      if let RowKind::Fuzzy { folded, .. } = &kind {
-        prepared
-          .fuzzy_by_letters
-          .entry(folded.len())
-          .or_default()
-          .push(prepared.rows.len());
+      if let RowKind::Fuzzy {
+        folded,
+        max_distance,
+      } = &kind
+      {
+        let row = prepared.rows.len();
+        for variant in deletion_variants(folded, *max_distance) {
+          prepared
+            .fuzzy_deletions
+            .entry(variant)
+            .or_default()
+            .push(row);
+        }
       }
       prepared.rows.push(GazetteerRow { label, kind });
     }
@@ -408,7 +423,7 @@ impl PreparedGazetteerMatchData {
           && guard.fuzzy_span_is_whole_words(span.0, span.1)
           && !guard.in_identifier(span.0, span.1)
         {
-          self.push_fuzzy_rows(text, span, &mut fuzzy);
+          self.push_fuzzy_rows(guard, span, &mut fuzzy);
         }
       }
     }
@@ -437,24 +452,37 @@ impl PreparedGazetteerMatchData {
     Ok(entities)
   }
 
-  /// Fuzzy entries within their edit distance of `text[start..end]`.
-  /// Entries more than the largest distance longer or shorter are skipped by
-  /// the length index.
+  /// Fuzzy entries within their edit distance of `text[start..end]`, found
+  /// through the deletion index: at most a fixed number of lookups for a
+  /// span of bounded length, and at most [`MAX_FALLBACK_CANDIDATES`] distance
+  /// checks.
   fn push_fuzzy_rows<'a>(
     &'a self,
-    text: &str,
+    guard: &Guard<'_>,
     (start, end): (usize, usize),
     hits: &mut Vec<Hit<'a>>,
   ) {
-    let folded = fold_word_chars(text.get(start..end).unwrap_or_default());
-    let lengths = folded.len().saturating_sub(MAX_FUZZY_DISTANCE)
-      ..=folded.len().saturating_add(MAX_FUZZY_DISTANCE);
-    for row in self
-      .fuzzy_by_letters
-      .range(lengths)
-      .flat_map(|(_, rows)| rows)
-      .filter_map(|row| self.rows.get(*row))
+    if self.fuzzy_deletions.is_empty() {
+      return;
+    }
+    let folded =
+      fold_word_chars(guard.text.get(start..end).unwrap_or_default());
+    if folded.len() > MAX_FUZZY_PATTERN_CHARS.saturating_add(MAX_FUZZY_DISTANCE)
     {
+      return;
+    }
+    let mut candidates = Vec::new();
+    for variant in deletion_variants(&folded, MAX_FUZZY_DISTANCE) {
+      guard.count_fuzzy_step();
+      for row in self.fuzzy_deletions.get(&variant).into_iter().flatten() {
+        if candidates.len() < MAX_FALLBACK_CANDIDATES
+          && !candidates.contains(row)
+        {
+          candidates.push(*row);
+        }
+      }
+    }
+    for row in candidates.iter().filter_map(|row| self.rows.get(*row)) {
       let RowKind::Fuzzy {
         folded: entry,
         max_distance,
@@ -462,6 +490,7 @@ impl PreparedGazetteerMatchData {
       else {
         continue;
       };
+      guard.count_fuzzy_step();
       if edit_distance(&folded, entry) <= *max_distance {
         hits.push(Hit {
           start,
@@ -1020,6 +1049,27 @@ fn token_aligned(
   Some((grown_start, grown_end))
 }
 
+/// Every string reachable from `letters` by deleting at most `max` of them,
+/// `letters` included.
+fn deletion_variants(letters: &[char], max: usize) -> HashSet<Vec<char>> {
+  let mut variants = HashSet::from([letters.to_vec()]);
+  let mut frontier = vec![letters.to_vec()];
+  for _ in 0..max {
+    let mut next = Vec::new();
+    for variant in &frontier {
+      for index in 0..variant.len() {
+        let mut shorter = variant.clone();
+        shorter.remove(index);
+        if variants.insert(shorter.clone()) {
+          next.push(shorter);
+        }
+      }
+    }
+    frontier = next;
+  }
+  variants
+}
+
 /// Token-aligned spans near a rejected fuzzy window: each edge either widened
 /// to the whole token it cuts into or narrowed to the nearest token boundary
 /// inside the window. At most four spans, each found within the window plus
@@ -1077,6 +1127,8 @@ struct Guard<'t> {
   markers: Vec<(usize, usize)>,
   /// Characters the scans have looked at, for scaling tests.
   visits: Cell<usize>,
+  /// Deletion lookups and distance checks of the fuzzy fallback.
+  fuzzy_steps: Cell<usize>,
 }
 
 impl<'t> Guard<'t> {
@@ -1085,7 +1137,14 @@ impl<'t> Guard<'t> {
       text,
       markers: markers(text),
       visits: Cell::new(0),
+      fuzzy_steps: Cell::new(0),
     }
+  }
+
+  fn count_fuzzy_step(&self) {
+    self
+      .fuzzy_steps
+      .set(self.fuzzy_steps.get().saturating_add(1));
   }
 
   fn visit<I: Iterator<Item = char>>(
@@ -1965,6 +2024,65 @@ mod tests {
       engine_found(&entries[..1], "Signed by WintermteX today.")
         .iter()
         .any(|hit| hit == "WintermteX")
+    );
+  }
+
+  #[test]
+  fn fuzzy_fallback_cost_does_not_grow_with_unrelated_entries() {
+    const ENTRIES: u32 = 3_000;
+    const WINDOWS: usize = 2_000;
+    // Deletion variants of a 10-letter span (1 + 10 + 45) plus a few
+    // distance checks, per span, up to four spans per window.
+    const MAX_STEPS_PER_WINDOW: usize = 4 * 64;
+    // Unrelated 8-letter names: `b` followed by the base-26 digits of the
+    // index, padded with `q`.
+    let terms = (0..ENTRIES)
+      .map(|index| {
+        let mut name = String::from("B");
+        let mut rest = index;
+        for _ in 0..7 {
+          let digit = u8::try_from(rest.checked_rem(26).unwrap()).unwrap();
+          name.push(char::from(b'a'.saturating_add(digit)));
+          rest = rest.checked_div(26).unwrap();
+        }
+        name
+      })
+      .collect::<Vec<_>>();
+    let entries = terms
+      .iter()
+      .map(|term| Entry {
+        term,
+        label: PERSON,
+        fuzzy_distance: Some(1),
+      })
+      .collect::<Vec<_>>();
+    let (prepared, _) = prepare(&entries);
+    let fuzzy_pattern = u32::try_from(terms.len()).unwrap();
+    // Each `zzzzzzzzzX` token yields a window that cuts into it.
+    let text = "zzzzzzzzzX ".repeat(WINDOWS);
+    let hits = (0..WINDOWS)
+      .map(|window| {
+        let start = u32::try_from(window.checked_mul(11).unwrap()).unwrap();
+        SearchMatch::Fuzzy {
+          pattern: fuzzy_pattern,
+          start,
+          end: start.saturating_add(8),
+          distance: 1,
+        }
+      })
+      .collect::<Vec<_>>();
+    let guard = Guard::new(&text);
+    assert!(
+      prepared
+        .detect_with_guard(&hits, &guard)
+        .unwrap()
+        .is_empty()
+    );
+    let steps = guard.fuzzy_steps.get();
+    assert!(steps >= WINDOWS, "the fallback ran for every window: {steps}");
+    assert!(
+      steps <= WINDOWS.saturating_mul(MAX_STEPS_PER_WINDOW),
+      "{steps} fallback steps for {WINDOWS} windows"
     );
   }
 
