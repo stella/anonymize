@@ -84,10 +84,12 @@ pub(super) fn build_gazetteer_data(
   let terms = build_search_terms(gazetteer);
   let mut labels = Vec::with_capacity(terms.len());
   let mut is_fuzzy = Vec::with_capacity(terms.len());
+  let mut row_terms = Vec::with_capacity(terms.len());
   // Pass 1: exact literals for every term.
-  for (_, label) in &terms {
+  for (term, label) in &terms {
     labels.push(label.clone());
     is_fuzzy.push(false);
+    row_terms.push(term.clone());
   }
   // Pass 2: fuzzy patterns for terms long enough.
   for (term, label) in &terms {
@@ -96,12 +98,14 @@ pub(super) fn build_gazetteer_data(
     }
     labels.push(label.clone());
     is_fuzzy.push(true);
+    row_terms.push(term.clone());
   }
   Ok(Some(BindingGazetteerMatchData {
     labels,
     is_fuzzy,
     legal_form_suffixes: gazetteer_legal_form_suffixes()?,
     inflection: inflection(ctx),
+    terms: row_terms,
   }))
 }
 

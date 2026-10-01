@@ -392,6 +392,7 @@ pub struct JsGazetteerMatchData {
   pub is_fuzzy: Vec<bool>,
   pub legal_form_suffixes: Vec<String>,
   pub inflection: String,
+  pub terms: Vec<String>,
 }
 
 #[napi(object)]

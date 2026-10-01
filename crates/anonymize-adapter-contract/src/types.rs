@@ -97,6 +97,10 @@ pub struct BindingGazetteerMatchData {
   /// unscoped assembly would choose.
   #[serde(default)]
   pub inflection: BindingGazetteerInflection,
+  /// Entry text per row; absent in older configs, which take it from the
+  /// search patterns.
+  #[serde(default)]
+  pub terms: Vec<String>,
 }
 
 #[derive(

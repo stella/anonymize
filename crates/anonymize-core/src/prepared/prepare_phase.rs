@@ -278,16 +278,21 @@ struct PreparedMatchMetadata {
   countries: Option<PreparedCountryMatchData>,
 }
 
-/// The search patterns of `slice`, which must lie inside `patterns`.
+/// The search patterns of `slice`, or `None` for a config prepared from
+/// artifacts alone, which carries no literal patterns.
 fn slice_patterns(
   patterns: &[SearchPattern],
   slice: PatternSlice,
-) -> Result<&[SearchPattern]> {
+) -> Result<Option<&[SearchPattern]>> {
+  if patterns.is_empty() {
+    return Ok(None);
+  }
   let range = usize::try_from(slice.start)
     .ok()
     .zip(usize::try_from(slice.end).ok());
   range
     .and_then(|(start, end)| patterns.get(start..end))
+    .map(Some)
     .ok_or_else(|| Error::StaticDataLengthMismatch {
       field: "literal_patterns",
       expected: usize::try_from(slice.end).unwrap_or(usize::MAX),

@@ -33,6 +33,8 @@ const ENTRIES: &[(&str, &str, &[&str])] = &[
   ("Wintermute", PERSON, &[]),
   ("Gamma Holding s. r. o.", ORGANIZATION, &[]),
   ("Omega Stav k.s.", ORGANIZATION, &[]),
+  ("@álîce", PERSON, &[]),
+  ("C++", ORGANIZATION, &[]),
   (FORCED_ID, IDENTIFIER, &[]),
 ];
 
@@ -43,6 +45,7 @@ enum Class {
   LegalForm,
   CaseAndOrder,
   Typo,
+  Punctuated,
   BesideNumbers,
   OrdinaryWords,
   IdShapes,
@@ -50,12 +53,13 @@ enum Class {
 }
 
 impl Class {
-  const ALL: [Self; 9] = [
+  const ALL: [Self; 10] = [
     Self::Diacritics,
     Self::Inflection,
     Self::LegalForm,
     Self::CaseAndOrder,
     Self::Typo,
+    Self::Punctuated,
     Self::BesideNumbers,
     Self::OrdinaryWords,
     Self::IdShapes,
@@ -157,6 +161,12 @@ const CASES: &[Case] = &[
   // Typos in long names.
   hit(Class::Typo, "Smluvní strana Beta Tradng s.r.o. souhlasí.", "Beta Tradng s.r.o."),
   hit(Class::Typo, "The memo names Wintermite as the sender.", "Wintermite"),
+  // Entries spelled with edge punctuation, folded like any other.
+  hit(Class::Punctuated, "Napište @alice dnes.", "@alice"),
+  hit(Class::Punctuated, "Napište @Álîce dnes.", "@Álîce"),
+  miss(Class::Punctuated, "Přišla alice dnes.", "alice"),
+  hit(Class::Punctuated, "Píšeme v C++ dnes.", "C++"),
+  miss(Class::Punctuated, "Plán C platí.", "C"),
   // Names next to numbers, years, and words in references, emails, URLs,
   // handles, and file names.
   spans(Class::BesideNumbers, "Smlouva Acme/2024 platí.", "Acme/2024", "Acme"),
@@ -302,6 +312,7 @@ fn configs_without_the_newer_gazetteer_fields_still_load() {
     .expect("gazetteer data should be present");
   gazetteer.remove("legal_form_suffixes");
   gazetteer.remove("inflection");
+  gazetteer.remove("terms");
   let binding: BindingPreparedSearchConfig = serde_json::from_value(json)
     .expect("a config without the newer fields should deserialize");
   let engine = PreparedEngine::new(
