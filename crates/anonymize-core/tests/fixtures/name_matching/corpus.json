@@ -1,0 +1,1050 @@
+{
+  "entries": [
+    {
+      "id": "corpus-entry-1",
+      "canonical": "Acme A",
+      "label": "organization",
+      "variants": [],
+      "workspaceId": "corpus-workspace",
+      "createdAt": 0,
+      "source": "manual"
+    },
+    {
+      "id": "corpus-entry-2",
+      "canonical": "Zeta",
+      "label": "organization",
+      "variants": [],
+      "workspaceId": "corpus-workspace",
+      "createdAt": 0,
+      "source": "manual"
+    },
+    {
+      "id": "corpus-entry-3",
+      "canonical": "Orbis",
+      "label": "organization",
+      "variants": [],
+      "workspaceId": "corpus-workspace",
+      "createdAt": 0,
+      "source": "manual"
+    },
+    {
+      "id": "corpus-entry-4",
+      "canonical": "Beta Trading s.r.o.",
+      "label": "organization",
+      "variants": [],
+      "workspaceId": "corpus-workspace",
+      "createdAt": 0,
+      "source": "manual"
+    },
+    {
+      "id": "corpus-entry-5",
+      "canonical": "Horská stavební a.s.",
+      "label": "organization",
+      "variants": [],
+      "workspaceId": "corpus-workspace",
+      "createdAt": 0,
+      "source": "manual"
+    },
+    {
+      "id": "corpus-entry-6",
+      "canonical": "Lipová Invest spol. s r.o.",
+      "label": "organization",
+      "variants": [],
+      "workspaceId": "corpus-workspace",
+      "createdAt": 0,
+      "source": "manual"
+    },
+    {
+      "id": "corpus-entry-7",
+      "canonical": "Northfield Analytics Ltd",
+      "label": "organization",
+      "variants": [],
+      "workspaceId": "corpus-workspace",
+      "createdAt": 0,
+      "source": "manual"
+    },
+    {
+      "id": "corpus-entry-8",
+      "canonical": "Tatranská energetika, a. s.",
+      "label": "organization",
+      "variants": [],
+      "workspaceId": "corpus-workspace",
+      "createdAt": 0,
+      "source": "manual"
+    },
+    {
+      "id": "corpus-entry-9",
+      "canonical": "Marie Dvořáková",
+      "label": "person",
+      "variants": [],
+      "workspaceId": "corpus-workspace",
+      "createdAt": 0,
+      "source": "manual"
+    },
+    {
+      "id": "corpus-entry-10",
+      "canonical": "Tomáš Kubíček",
+      "label": "person",
+      "variants": [],
+      "workspaceId": "corpus-workspace",
+      "createdAt": 0,
+      "source": "manual"
+    },
+    {
+      "id": "corpus-entry-11",
+      "canonical": "Ľubomír Šťastný",
+      "label": "person",
+      "variants": [],
+      "workspaceId": "corpus-workspace",
+      "createdAt": 0,
+      "source": "manual"
+    },
+    {
+      "id": "corpus-entry-12",
+      "canonical": "Zuzana Kováčová",
+      "label": "person",
+      "variants": [],
+      "workspaceId": "corpus-workspace",
+      "createdAt": 0,
+      "source": "manual"
+    },
+    {
+      "id": "corpus-entry-13",
+      "canonical": "Harriet Wellbourne",
+      "label": "person",
+      "variants": [],
+      "workspaceId": "corpus-workspace",
+      "createdAt": 0,
+      "source": "manual"
+    },
+    {
+      "id": "corpus-entry-14",
+      "canonical": "Novák",
+      "label": "person",
+      "variants": [],
+      "workspaceId": "corpus-workspace",
+      "createdAt": 0,
+      "source": "manual"
+    }
+  ],
+  "cases": [
+    {
+      "expectation": "redact",
+      "kind": "exact",
+      "text": "Smlouvu podepsala společnost Beta Trading s.r.o. dne 3. 5.",
+      "surface": "Beta Trading s.r.o."
+    },
+    {
+      "expectation": "redact",
+      "kind": "exact",
+      "text": "Za kupujícího jednala Marie Dvořáková.",
+      "surface": "Marie Dvořáková"
+    },
+    {
+      "expectation": "redact",
+      "kind": "exact",
+      "text": "Návrh doručil partner Acme A včas.",
+      "surface": "Acme A"
+    },
+    {
+      "expectation": "redact",
+      "kind": "exact",
+      "text": "Dodavatelem zůstává Zeta.",
+      "surface": "Zeta"
+    },
+    {
+      "expectation": "redact",
+      "kind": "exact",
+      "text": "The report from Orbis arrived late.",
+      "surface": "Orbis"
+    },
+    {
+      "expectation": "redact",
+      "kind": "exact",
+      "text": "Signed for and on behalf of Northfield Analytics Ltd.",
+      "surface": "Northfield Analytics Ltd"
+    },
+    {
+      "expectation": "redact",
+      "kind": "exact",
+      "text": "Witnessed by Harriet Wellbourne.",
+      "surface": "Harriet Wellbourne"
+    },
+    {
+      "expectation": "redact",
+      "kind": "exact",
+      "text": "Odvolanie podal Ľubomír Šťastný.",
+      "surface": "Ľubomír Šťastný"
+    },
+    {
+      "expectation": "redact",
+      "kind": "exact",
+      "text": "Pan Novák s návrhem souhlasil.",
+      "surface": "Novák"
+    },
+    {
+      "expectation": "redact",
+      "kind": "exact",
+      "text": "Odberateľom je Tatranská energetika, a. s.",
+      "surface": "Tatranská energetika, a. s."
+    },
+    {
+      "expectation": "redact",
+      "kind": "exact",
+      "text": "Stavbu provedla Horská stavební a.s.",
+      "surface": "Horská stavební a.s."
+    },
+    {
+      "expectation": "redact",
+      "kind": "case",
+      "text": "PRODÁVAJÍCÍ: BETA TRADING S.R.O.",
+      "surface": "BETA TRADING S.R.O."
+    },
+    {
+      "expectation": "redact",
+      "kind": "case",
+      "text": "kontakt: marie dvořáková",
+      "surface": "marie dvořáková"
+    },
+    {
+      "expectation": "redact",
+      "kind": "case",
+      "text": "PARTNER: ACME A",
+      "surface": "ACME A"
+    },
+    {
+      "expectation": "redact",
+      "kind": "case",
+      "text": "dodavatel zeta potvrdil",
+      "surface": "zeta"
+    },
+    {
+      "expectation": "redact",
+      "kind": "case",
+      "text": "CLIENT: ORBIS",
+      "surface": "ORBIS"
+    },
+    {
+      "expectation": "redact",
+      "kind": "case",
+      "text": "cc: harriet wellbourne",
+      "surface": "harriet wellbourne"
+    },
+    {
+      "expectation": "redact",
+      "kind": "case",
+      "text": "ŽALOBCE: NOVÁK",
+      "surface": "NOVÁK"
+    },
+    {
+      "expectation": "redact",
+      "kind": "diacritics-dropped",
+      "text": "Za kupujiciho Marie Dvorakova.",
+      "surface": "Marie Dvorakova"
+    },
+    {
+      "expectation": "redact",
+      "kind": "diacritics-dropped",
+      "text": "Jednatel Tomas Kubicek podepsal.",
+      "surface": "Tomas Kubicek"
+    },
+    {
+      "expectation": "redact",
+      "kind": "diacritics-dropped",
+      "text": "Odvolanie podal Lubomir Stastny.",
+      "surface": "Lubomir Stastny"
+    },
+    {
+      "expectation": "redact",
+      "kind": "diacritics-dropped",
+      "text": "Splnomocnenkyna Zuzana Kovacova.",
+      "surface": "Zuzana Kovacova"
+    },
+    {
+      "expectation": "redact",
+      "kind": "diacritics-dropped",
+      "text": "Stavbu provedla Horska stavebni a.s. vcas.",
+      "surface": "Horska stavebni a.s."
+    },
+    {
+      "expectation": "redact",
+      "kind": "diacritics-dropped",
+      "text": "Investorem je Lipova Invest spol. s r.o. od roku 2020.",
+      "surface": "Lipova Invest spol. s r.o."
+    },
+    {
+      "expectation": "redact",
+      "kind": "diacritics-dropped",
+      "text": "Pan Novak s navrhem souhlasil.",
+      "surface": "Novak"
+    },
+    {
+      "expectation": "redact",
+      "kind": "diacritics-dropped",
+      "text": "Odberatelom je Tatranska energetika, a. s.",
+      "surface": "Tatranska energetika, a. s."
+    },
+    {
+      "expectation": "redact",
+      "kind": "diacritics-added",
+      "text": "Klient Orbís zaplatil.",
+      "surface": "Orbís"
+    },
+    {
+      "expectation": "redact",
+      "kind": "diacritics-added",
+      "text": "Dodavatelem je Zéta.",
+      "surface": "Zéta"
+    },
+    {
+      "expectation": "redact",
+      "kind": "diacritics-added",
+      "text": "Společnost Béta Trading s.r.o. odpověděla.",
+      "surface": "Béta Trading s.r.o."
+    },
+    {
+      "expectation": "redact",
+      "kind": "diacritics-added",
+      "text": "Partner Acmé A potvrdil.",
+      "surface": "Acmé A"
+    },
+    {
+      "expectation": "redact",
+      "kind": "diacritics-added",
+      "text": "Signed by Hárriet Wellbourne.",
+      "surface": "Hárriet Wellbourne"
+    },
+    {
+      "expectation": "redact",
+      "kind": "typo-1",
+      "text": "Witnessed by Harriet Welbourne.",
+      "surface": "Harriet Welbourne"
+    },
+    {
+      "expectation": "redact",
+      "kind": "typo-1",
+      "text": "Prodávající Beta Tradinq s.r.o. souhlasí.",
+      "surface": "Beta Tradinq s.r.o."
+    },
+    {
+      "expectation": "redact",
+      "kind": "typo-1",
+      "text": "Prepared by Northfield Analytic Ltd.",
+      "surface": "Northfield Analytic Ltd"
+    },
+    {
+      "expectation": "redact",
+      "kind": "typo-1",
+      "text": "Za kupujícího Marie Dvořákvá.",
+      "surface": "Marie Dvořákvá"
+    },
+    {
+      "expectation": "redact",
+      "kind": "typo-1",
+      "text": "Jednatel Tomáš Kubíšek podepsal.",
+      "surface": "Tomáš Kubíšek"
+    },
+    {
+      "expectation": "redact",
+      "kind": "typo-1",
+      "text": "Splnomocnenkyňa Zuzanna Kováčová.",
+      "surface": "Zuzanna Kováčová"
+    },
+    {
+      "expectation": "redact",
+      "kind": "typo-1",
+      "text": "Klient Orbys zaplatil.",
+      "surface": "Orbys"
+    },
+    {
+      "expectation": "redact",
+      "kind": "typo-2",
+      "text": "Witnessed by Hariet Welbourne.",
+      "surface": "Hariet Welbourne"
+    },
+    {
+      "expectation": "redact",
+      "kind": "typo-2",
+      "text": "Prodávající Bta Tradng s.r.o. souhlasí.",
+      "surface": "Bta Tradng s.r.o."
+    },
+    {
+      "expectation": "redact",
+      "kind": "typo-2",
+      "text": "Prepared by Northfeld Analytcs Ltd.",
+      "surface": "Northfeld Analytcs Ltd"
+    },
+    {
+      "expectation": "redact",
+      "kind": "typo-2",
+      "text": "Za kupujícího Mare Dvořákvá.",
+      "surface": "Mare Dvořákvá"
+    },
+    {
+      "expectation": "redact",
+      "kind": "typo-2",
+      "text": "Splnomocnenkyňa Zuzana Kováčovová.",
+      "surface": "Zuzana Kováčovová"
+    },
+    {
+      "expectation": "redact",
+      "kind": "typo-2",
+      "text": "Investorem je Lipová Invst spl. s r.o.",
+      "surface": "Lipová Invst spl. s r.o."
+    },
+    {
+      "expectation": "redact",
+      "kind": "inflected",
+      "text": "Dopis byl zaslán panu Novákovi.",
+      "surface": "Novákovi"
+    },
+    {
+      "expectation": "redact",
+      "kind": "inflected",
+      "text": "Žaloba proti panu Nováka byla podána.",
+      "surface": "Nováka"
+    },
+    {
+      "expectation": "redact",
+      "kind": "inflected",
+      "text": "Jednal jsem s panem Novákem.",
+      "surface": "Novákem"
+    },
+    {
+      "expectation": "redact",
+      "kind": "inflected",
+      "text": "Plnou moc udělila Marii Dvořákové.",
+      "surface": "Marii Dvořákové"
+    },
+    {
+      "expectation": "redact",
+      "kind": "inflected",
+      "text": "Jednal jsem s Marií Dvořákovou.",
+      "surface": "Marií Dvořákovou"
+    },
+    {
+      "expectation": "redact",
+      "kind": "inflected",
+      "text": "Podpis Tomáše Kubíčka chybí.",
+      "surface": "Tomáše Kubíčka"
+    },
+    {
+      "expectation": "redact",
+      "kind": "inflected",
+      "text": "Zaslali jsme to Tomášovi Kubíčkovi.",
+      "surface": "Tomášovi Kubíčkovi"
+    },
+    {
+      "expectation": "redact",
+      "kind": "inflected",
+      "text": "Rozsudok proti Ľubomírovi Šťastnému.",
+      "surface": "Ľubomírovi Šťastnému"
+    },
+    {
+      "expectation": "redact",
+      "kind": "inflected",
+      "text": "Návrh Zuzany Kováčovej bol zamietnutý.",
+      "surface": "Zuzany Kováčovej"
+    },
+    {
+      "expectation": "redact",
+      "kind": "inflected",
+      "text": "Stretli sme sa so Zuzanou Kováčovou.",
+      "surface": "Zuzanou Kováčovou"
+    },
+    {
+      "expectation": "redact",
+      "kind": "inflected",
+      "text": "Faktura od Horské stavební a.s. dorazila.",
+      "surface": "Horské stavební a.s."
+    },
+    {
+      "expectation": "redact",
+      "kind": "inflected",
+      "text": "Smlouva s Horskou stavební a.s. platí.",
+      "surface": "Horskou stavební a.s."
+    },
+    {
+      "expectation": "redact",
+      "kind": "inflected",
+      "text": "Zmluva s Tatranskou energetikou, a. s. platí.",
+      "surface": "Tatranskou energetikou, a. s."
+    },
+    {
+      "expectation": "redact",
+      "kind": "inflected-diacritics-dropped",
+      "text": "Dopis byl zaslan panu Novakovi.",
+      "surface": "Novakovi"
+    },
+    {
+      "expectation": "redact",
+      "kind": "inflected-diacritics-dropped",
+      "text": "Jednal jsem s panem Novakem.",
+      "surface": "Novakem"
+    },
+    {
+      "expectation": "redact",
+      "kind": "inflected-diacritics-dropped",
+      "text": "Plnou moc udelila Marii Dvorakove.",
+      "surface": "Marii Dvorakove"
+    },
+    {
+      "expectation": "redact",
+      "kind": "inflected-diacritics-dropped",
+      "text": "Podpis Tomase Kubicka chybi.",
+      "surface": "Tomase Kubicka"
+    },
+    {
+      "expectation": "redact",
+      "kind": "inflected-diacritics-dropped",
+      "text": "Rozsudok proti Lubomirovi Stastnemu.",
+      "surface": "Lubomirovi Stastnemu"
+    },
+    {
+      "expectation": "redact",
+      "kind": "inflected-diacritics-dropped",
+      "text": "Navrh Zuzany Kovacovej bol zamietnuty.",
+      "surface": "Zuzany Kovacovej"
+    },
+    {
+      "expectation": "redact",
+      "kind": "inflected-diacritics-dropped",
+      "text": "Faktura od Horske stavebni a.s. dorazila.",
+      "surface": "Horske stavebni a.s."
+    },
+    {
+      "expectation": "redact",
+      "kind": "legal-form-variant",
+      "text": "Prodávající: Beta Trading, s.r.o.",
+      "surface": "Beta Trading, s.r.o."
+    },
+    {
+      "expectation": "redact",
+      "kind": "legal-form-variant",
+      "text": "Prodávající: Beta Trading s. r. o.",
+      "surface": "Beta Trading s. r. o."
+    },
+    {
+      "expectation": "redact",
+      "kind": "legal-form-variant",
+      "text": "Prodávající: Beta Trading, s. r. o.",
+      "surface": "Beta Trading, s. r. o."
+    },
+    {
+      "expectation": "redact",
+      "kind": "legal-form-variant",
+      "text": "Prodávající: Beta Trading spol. s r.o.",
+      "surface": "Beta Trading spol. s r.o."
+    },
+    {
+      "expectation": "redact",
+      "kind": "legal-form-variant",
+      "text": "Prodávající je Beta Trading.",
+      "surface": "Beta Trading"
+    },
+    {
+      "expectation": "redact",
+      "kind": "legal-form-variant",
+      "text": "Zhotovitel: Horská stavební, a.s.",
+      "surface": "Horská stavební, a.s."
+    },
+    {
+      "expectation": "redact",
+      "kind": "legal-form-variant",
+      "text": "Zhotovitel: Horská stavební a. s.",
+      "surface": "Horská stavební a. s."
+    },
+    {
+      "expectation": "redact",
+      "kind": "legal-form-variant",
+      "text": "Investor: Lipová Invest s.r.o.",
+      "surface": "Lipová Invest s.r.o."
+    },
+    {
+      "expectation": "redact",
+      "kind": "legal-form-variant",
+      "text": "Investor: Lipová Invest, spol. s r. o.",
+      "surface": "Lipová Invest, spol. s r. o."
+    },
+    {
+      "expectation": "redact",
+      "kind": "legal-form-variant",
+      "text": "Odberateľ: Tatranská energetika a.s.",
+      "surface": "Tatranská energetika a.s."
+    },
+    {
+      "expectation": "redact",
+      "kind": "legal-form-variant",
+      "text": "Prepared by Northfield Analytics Limited.",
+      "surface": "Northfield Analytics Limited"
+    },
+    {
+      "expectation": "redact",
+      "kind": "split",
+      "text": "Za kupujícího Marie\nDvořáková.",
+      "surface": "Marie\nDvořáková"
+    },
+    {
+      "expectation": "redact",
+      "kind": "split",
+      "text": "Za kupujícího Marie  Dvořáková.",
+      "surface": "Marie  Dvořáková"
+    },
+    {
+      "expectation": "redact",
+      "kind": "split",
+      "text": "Za kupujícího Marie Dvořáková.",
+      "surface": "Marie Dvořáková"
+    },
+    {
+      "expectation": "redact",
+      "kind": "split",
+      "text": "Za kupujícího Dvořáková, Marie.",
+      "surface": "Dvořáková, Marie"
+    },
+    {
+      "expectation": "redact",
+      "kind": "split",
+      "text": "Prodávající Beta\nTrading s.r.o. souhlasí.",
+      "surface": "Beta\nTrading s.r.o."
+    },
+    {
+      "expectation": "redact",
+      "kind": "split",
+      "text": "Prodávající Beta  Trading s.r.o. souhlasí.",
+      "surface": "Beta  Trading s.r.o."
+    },
+    {
+      "expectation": "redact",
+      "kind": "split",
+      "text": "Witnessed by Harriet\tWellbourne.",
+      "surface": "Harriet\tWellbourne"
+    },
+    {
+      "expectation": "redact",
+      "kind": "split",
+      "text": "Partner Acme A potvrdil.",
+      "surface": "Acme A"
+    },
+    {
+      "expectation": "redact",
+      "kind": "split",
+      "text": "Jednatel Tomáš\r\nKubíček podepsal.",
+      "surface": "Tomáš\r\nKubíček"
+    },
+    {
+      "expectation": "keep",
+      "kind": "hex",
+      "text": "commit 3f2acfeca1b04d2e9c7a5b6d8e0f1a2b merged",
+      "surface": "3f2acfeca1b04d2e9c7a5b6d8e0f1a2b"
+    },
+    {
+      "expectation": "keep",
+      "kind": "hex",
+      "text": "build acme0a1b2c3d4e5f ready",
+      "surface": "acme0a1b2c3d4e5f"
+    },
+    {
+      "expectation": "keep",
+      "kind": "hex",
+      "text": "pointer 0xacbe12ef freed",
+      "surface": "0xacbe12ef"
+    },
+    {
+      "expectation": "keep",
+      "kind": "hex",
+      "text": "blob deadbeefacfe0042 stored",
+      "surface": "deadbeefacfe0042"
+    },
+    {
+      "expectation": "keep",
+      "kind": "hex",
+      "text": "seed ACFE00A1 used",
+      "surface": "ACFE00A1"
+    },
+    {
+      "expectation": "keep",
+      "kind": "uuid",
+      "text": "request 9b1d0c3e-acfe-4ca1-8b2e-5c7a0a1b2c3d failed",
+      "surface": "9b1d0c3e-acfe-4ca1-8b2e-5c7a0a1b2c3d"
+    },
+    {
+      "expectation": "keep",
+      "kind": "uuid",
+      "text": "row acee4f1b-0c2d-4e5f-9a8b-7c6d5e4f3a2b updated",
+      "surface": "acee4f1b-0c2d-4e5f-9a8b-7c6d5e4f3a2b"
+    },
+    {
+      "expectation": "keep",
+      "kind": "uuid",
+      "text": "file 0d8f6a2c-acde-4b7e-8f01-ac3ea1b2c3d4 uploaded",
+      "surface": "0d8f6a2c-acde-4b7e-8f01-ac3ea1b2c3d4"
+    },
+    {
+      "expectation": "keep",
+      "kind": "uuid",
+      "text": "dokument 7e4b9c1a-2f3d-4a5b-b6c7-d8e9f0a1b2c3 nahrán",
+      "surface": "7e4b9c1a-2f3d-4a5b-b6c7-d8e9f0a1b2c3"
+    },
+    {
+      "expectation": "keep",
+      "kind": "hash",
+      "text": "sha256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 ok",
+      "surface": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "expectation": "keep",
+      "kind": "hash",
+      "text": "sha1 da39a3ee5e6b4b0d3255bfef95601890afd80709 ok",
+      "surface": "da39a3ee5e6b4b0d3255bfef95601890afd80709"
+    },
+    {
+      "expectation": "keep",
+      "kind": "hash",
+      "text": "md5 9e107d9d372bb6826bd81d3542a419d6 ok",
+      "surface": "9e107d9d372bb6826bd81d3542a419d6"
+    },
+    {
+      "expectation": "keep",
+      "kind": "hash",
+      "text": "token QWNtZSBBIHJlcG9ydA== expired",
+      "surface": "QWNtZSBBIHJlcG9ydA=="
+    },
+    {
+      "expectation": "keep",
+      "kind": "id-code",
+      "text": "Faktura INV-2024-0042 je splatná.",
+      "surface": "INV-2024-0042"
+    },
+    {
+      "expectation": "keep",
+      "kind": "id-code",
+      "text": "Kód ACM3A-77 je neplatný.",
+      "surface": "ACM3A-77"
+    },
+    {
+      "expectation": "keep",
+      "kind": "id-code",
+      "text": "order zeta9f3c21 shipped",
+      "surface": "zeta9f3c21"
+    },
+    {
+      "expectation": "keep",
+      "kind": "id-code",
+      "text": "ref ORB1S-55 closed",
+      "surface": "ORB1S-55"
+    },
+    {
+      "expectation": "keep",
+      "kind": "id-code",
+      "text": "SKU ZT4471Z out of stock",
+      "surface": "ZT4471Z"
+    },
+    {
+      "expectation": "keep",
+      "kind": "id-code",
+      "text": "variable acmeA_total reset",
+      "surface": "acmeA_total"
+    },
+    {
+      "expectation": "keep",
+      "kind": "bracketed-id",
+      "text": "before ⟦token-acfe-01⟧ after",
+      "surface": "⟦token-acfe-01⟧"
+    },
+    {
+      "expectation": "keep",
+      "kind": "bracketed-id",
+      "text": "insert {{clause_ref}} here",
+      "surface": "{{clause_ref}}"
+    },
+    {
+      "expectation": "keep",
+      "kind": "bracketed-id",
+      "text": "see <<token:zeta9>> below",
+      "surface": "<<token:zeta9>>"
+    },
+    {
+      "expectation": "keep",
+      "kind": "bracketed-id",
+      "text": "text [[[__token_id_3__]]] text",
+      "surface": "[[[__token_id_3__]]]"
+    },
+    {
+      "expectation": "keep",
+      "kind": "bracketed-id",
+      "text": "section %%ACMEA_SECTION%% end",
+      "surface": "%%ACMEA_SECTION%%"
+    },
+    {
+      "expectation": "keep",
+      "kind": "ordinary-word",
+      "text": "This clause applies to both parties.",
+      "surface": "clause"
+    },
+    {
+      "expectation": "keep",
+      "kind": "ordinary-word",
+      "text": "One acre of land was sold.",
+      "surface": "acre"
+    },
+    {
+      "expectation": "keep",
+      "kind": "ordinary-word",
+      "text": "They came early.",
+      "surface": "came"
+    },
+    {
+      "expectation": "keep",
+      "kind": "ordinary-word",
+      "text": "Treatment for acne is covered.",
+      "surface": "acne"
+    },
+    {
+      "expectation": "keep",
+      "kind": "ordinary-word",
+      "text": "Use a marker on page two.",
+      "surface": "marker"
+    },
+    {
+      "expectation": "keep",
+      "kind": "ordinary-word",
+      "text": "A stable orbit was reached.",
+      "surface": "orbit"
+    },
+    {
+      "expectation": "keep",
+      "kind": "ordinary-word",
+      "text": "The zebra crossing is closed.",
+      "surface": "zebra"
+    },
+    {
+      "expectation": "keep",
+      "kind": "ordinary-word",
+      "text": "Meta fields are optional.",
+      "surface": "Meta"
+    },
+    {
+      "expectation": "keep",
+      "kind": "ordinary-word",
+      "text": "The data room opens Monday.",
+      "surface": "data"
+    },
+    {
+      "expectation": "keep",
+      "kind": "ordinary-word",
+      "text": "Akce a smlouva jsou v příloze.",
+      "surface": "Akce a"
+    },
+    {
+      "expectation": "keep",
+      "kind": "ordinary-word",
+      "text": "Beta verze vyjde v pondělí.",
+      "surface": "Beta verze"
+    },
+    {
+      "expectation": "keep",
+      "kind": "ordinary-word",
+      "text": "Nová smlouva nahrazuje starou.",
+      "surface": "Nová"
+    },
+    {
+      "expectation": "keep",
+      "kind": "ordinary-word",
+      "text": "Nováček nastoupil v pondělí.",
+      "surface": "Nováček"
+    },
+    {
+      "expectation": "keep",
+      "kind": "ordinary-word",
+      "text": "Novátor získal cenu.",
+      "surface": "Novátor"
+    },
+    {
+      "expectation": "keep",
+      "kind": "ordinary-word",
+      "text": "Na orbitu vyletěla družice.",
+      "surface": "orbitu"
+    },
+    {
+      "expectation": "keep",
+      "kind": "ordinary-word",
+      "text": "Žena podala návrh.",
+      "surface": "Žena"
+    },
+    {
+      "expectation": "keep",
+      "kind": "ordinary-word",
+      "text": "Prajem šťastnú cestu.",
+      "surface": "šťastnú"
+    },
+    {
+      "expectation": "keep",
+      "kind": "ordinary-word",
+      "text": "Bol to šťastný deň.",
+      "surface": "šťastný"
+    },
+    {
+      "expectation": "keep",
+      "kind": "ordinary-word",
+      "text": "Kováč opravil bránu.",
+      "surface": "Kováč"
+    },
+    {
+      "expectation": "keep",
+      "kind": "ordinary-word",
+      "text": "Marže činí deset procent.",
+      "surface": "Marže"
+    },
+    {
+      "expectation": "keep",
+      "kind": "ordinary-word",
+      "text": "Obec vydala rozhodnutí.",
+      "surface": "Obec"
+    },
+    {
+      "expectation": "keep",
+      "kind": "adjacent-word",
+      "text": "Acme A signed the deal.",
+      "surface": "signed"
+    },
+    {
+      "expectation": "keep",
+      "kind": "adjacent-word",
+      "text": "Zeta podepsala smlouvu.",
+      "surface": "podepsala"
+    },
+    {
+      "expectation": "keep",
+      "kind": "adjacent-word",
+      "text": "Orbis schválil návrh.",
+      "surface": "schválil"
+    },
+    {
+      "expectation": "keep",
+      "kind": "adjacent-word",
+      "text": "Novákovi zaslal dopis.",
+      "surface": "zaslal"
+    },
+    {
+      "expectation": "keep",
+      "kind": "adjacent-word",
+      "text": "Marie Dvořáková uvedla, že nesouhlasí.",
+      "surface": "uvedla"
+    },
+    {
+      "expectation": "keep",
+      "kind": "adjacent-word",
+      "text": "Beta Trading s.r.o. dodala zboží.",
+      "surface": "dodala"
+    },
+    {
+      "expectation": "keep",
+      "kind": "adjacent-word",
+      "text": "Harriet Wellbourne confirmed receipt.",
+      "surface": "confirmed"
+    },
+    {
+      "expectation": "keep",
+      "kind": "adjacent-word",
+      "text": "Ľubomír Šťastný uviedol dôvody.",
+      "surface": "uviedol"
+    },
+    {
+      "expectation": "keep",
+      "kind": "adjacent-word",
+      "text": "Smlouvu uzavřela Acme A.",
+      "surface": "uzavřela"
+    },
+    {
+      "expectation": "keep",
+      "kind": "adjacent-word",
+      "text": "Countersigned Zeta.",
+      "surface": "Countersigned"
+    }
+  ],
+  "forcedValues": [
+    "5f0c2a9e-7b1d-4c3a-9e8f-1a2b3c4d5e6f",
+    "c3a91f04-6d2e-4b8a-a1f7-0e9d8c7b6a51"
+  ],
+  "forcedCases": [
+    {
+      "expectation": "redact",
+      "kind": "forced-exact",
+      "text": "organization 5f0c2a9e-7b1d-4c3a-9e8f-1a2b3c4d5e6f archived",
+      "surface": "5f0c2a9e-7b1d-4c3a-9e8f-1a2b3c4d5e6f"
+    },
+    {
+      "expectation": "redact",
+      "kind": "forced-exact",
+      "text": "scope c3a91f04-6d2e-4b8a-a1f7-0e9d8c7b6a51 closed",
+      "surface": "c3a91f04-6d2e-4b8a-a1f7-0e9d8c7b6a51"
+    },
+    {
+      "expectation": "redact",
+      "kind": "forced-case",
+      "text": "ORG 5F0C2A9E-7B1D-4C3A-9E8F-1A2B3C4D5E6F ARCHIVED",
+      "surface": "5F0C2A9E-7B1D-4C3A-9E8F-1A2B3C4D5E6F"
+    },
+    {
+      "expectation": "redact",
+      "kind": "forced-embedded",
+      "text": "GET /orgs/5f0c2a9e-7b1d-4c3a-9e8f-1a2b3c4d5e6f/files",
+      "surface": "5f0c2a9e-7b1d-4c3a-9e8f-1a2b3c4d5e6f"
+    },
+    {
+      "expectation": "redact",
+      "kind": "forced-embedded",
+      "text": "{\"scope\":\"c3a91f04-6d2e-4b8a-a1f7-0e9d8c7b6a51\"}",
+      "surface": "c3a91f04-6d2e-4b8a-a1f7-0e9d8c7b6a51"
+    },
+    {
+      "expectation": "keep",
+      "kind": "forced-near-miss",
+      "text": "organization 5f0c2a9e-7b1d-4c3a-9e8f-1a2b3c4d5e6a archived",
+      "surface": "5f0c2a9e-7b1d-4c3a-9e8f-1a2b3c4d5e6a"
+    },
+    {
+      "expectation": "keep",
+      "kind": "forced-near-miss",
+      "text": "organization 5f0c2a9e-7b1d-4c3a-9e8f-1a2b3c4d5eaa archived",
+      "surface": "5f0c2a9e-7b1d-4c3a-9e8f-1a2b3c4d5eaa"
+    },
+    {
+      "expectation": "keep",
+      "kind": "forced-near-miss",
+      "text": "scope c3a91f04-6d2e-4b8a-a1f7-0e9d8c7b6a5 closed",
+      "surface": "c3a91f04-6d2e-4b8a-a1f7-0e9d8c7b6a5"
+    },
+    {
+      "expectation": "keep",
+      "kind": "forced-other-id",
+      "text": "row 1b2c3d4e-5f60-4718-9a2b-3c4d5e6f7081 updated",
+      "surface": "1b2c3d4e-5f60-4718-9a2b-3c4d5e6f7081"
+    },
+    {
+      "expectation": "keep",
+      "kind": "forced-other-id",
+      "text": "row 5f0c2a9e7b1d4c3a updated",
+      "surface": "5f0c2a9e7b1d4c3a"
+    },
+    {
+      "expectation": "keep",
+      "kind": "forced-adjacent-word",
+      "text": "organization 5f0c2a9e-7b1d-4c3a-9e8f-1a2b3c4d5e6f archived",
+      "surface": "archived"
+    },
+    {
+      "expectation": "keep",
+      "kind": "forced-adjacent-word",
+      "text": "scope c3a91f04-6d2e-4b8a-a1f7-0e9d8c7b6a51 closed",
+      "surface": "closed"
+    },
+    {
+      "expectation": "keep",
+      "kind": "forced-adjacent-word",
+      "text": "Workspace c3a91f04-6d2e-4b8a-a1f7-0e9d8c7b6a51, then the report.",
+      "surface": "then"
+    }
+  ]
+}
