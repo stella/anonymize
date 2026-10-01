@@ -8,7 +8,7 @@ use stella_anonymize_core::assemble::{
   GazetteerEntry, GazetteerSource, PipelineConfig, StandaloneStreetDetection,
 };
 
-pub fn engine(
+pub(super) fn engine(
   entries: &[String],
   language: &str,
 ) -> Result<PreparedEngine, String> {

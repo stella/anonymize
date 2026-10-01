@@ -208,7 +208,7 @@ fn glue_is_free(glue: &[char], edge: Option<char>) -> bool {
     && glue.iter().skip(1).all(|character| character.is_numeric())
 }
 
-pub fn exercise(data: &[u8]) {
+pub(super) fn exercise(data: &[u8]) {
   // Arbitrary bytes become synthetic text before any offsets are measured.
   // Preserve valid chunks and replace each invalid sequence with one marker.
   let mut input = String::new();
