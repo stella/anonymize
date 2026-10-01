@@ -1,9 +1,7 @@
 # Fuzzing the anonymize core
 
-Coverage-guided fuzz targets for the boundary-sensitive parts of
-`stella-anonymize-core`: the artifact decoder and search normalization. These
-are the surfaces that take adversarial bytes or text and do offset / codepoint
-math, so a regression there is exactly the class of bug examples miss.
+Coverage-guided fuzz targets for boundary-sensitive parts of the anonymization
+pipeline: artifact decoding, search normalization, and gazetteer matching.
 
 This crate is its **own workspace** (empty `[workspace]` in `Cargo.toml`) so it
 stays out of the main `--workspace` build and the strict release lints, and so
@@ -21,6 +19,26 @@ its nightly-only sanitizer dependencies never touch the default build.
 | ----------------- | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
 | `artifact_decode` | `SearchIndexArtifacts::from_bytes` | Any byte slice returns `Ok` or a typed `Err`, never panics / indexes OOB / slices a codepoint. Accepted input round-trips through `to_bytes`. |
 | `normalize_text`  | `normalize_for_search`             | Never panics on any UTF-8; output is a fixed point (idempotent).                                                                              |
+| `gazetteer_match` | assembled `PreparedEngine`          | Bounded arbitrary entries and text preserve UTF-8 and range safety, whole-word spans, and protection of synthetic opaque envelopes.          |
+
+The gazetteer target reuses `crates/anonymize-core/tests/support/gazetteer.rs`
+and `crates/anonymize-core/tests/support/gazetteer_fuzz.rs` to exercise the
+assembled engine path. The integration property file calls the same driver for
+stable, sanitizer-free smoke inputs. It checks the matcher’s edge rule: a
+name may touch plain numeric glue and underscores, while alphabetic glue and
+mixed identifier segments are rejected. Common combining marks count as word
+interior; scripts written without spaces do not. This is a character-level
+oracle, not full Unicode segmentation. The integration property checks UAX
+word boundaries for spaced Latin-name contexts where those definitions agree. Arbitrary `⟦...⟧` spans are protected,
+and manufactured identifier compounds are protected as subranges inside URL,
+email, UUID, hex, underscore, and bracketed contexts; ordinary URL/domain and
+email text remains eligible. A manufactured plain term must be found on every
+run. Caller-specified identifiers may match exactly in full; partial overlaps
+remain invalid. Fixtures use synthetic strings.
+
+Input is bounded to 768 bytes: the first four newline-separated fields become
+entries (up to 40 characters each), and the remaining fields form host text
+(up to 512 characters).
 
 ## Running
 
@@ -30,6 +48,9 @@ cargo +nightly fuzz run artifact_decode -- -max_total_time=30
 
 # Longer campaign:
 cargo +nightly fuzz run normalize_text -- -max_total_time=600
+
+# Gazetteer spans stay bounded, whole-word, and outside synthetic opaque tokens.
+cargo +nightly fuzz run gazetteer_match -- -max_total_time=600
 ```
 
 List targets with `cargo +nightly fuzz list`.
