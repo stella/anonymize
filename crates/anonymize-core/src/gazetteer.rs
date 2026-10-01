@@ -72,11 +72,6 @@ const MAX_FUZZY_PATTERN_CHARS: usize = 64;
 /// Largest edit distance any fuzzy entry allows.
 const MAX_FUZZY_DISTANCE: usize = 2;
 
-/// Most fuzzy entries one fallback span is compared with. Entries beyond it
-/// share a deletion variant with the span and so lie within a few edits of
-/// the entries already checked.
-const MAX_FALLBACK_CANDIDATES: usize = 256;
-
 /// Edit distance a fuzzy gazetteer pattern for `term` allows, if any. Entries
 /// with digits are identifiers and match only exactly.
 #[must_use]
@@ -231,11 +226,13 @@ impl PreparedGazetteerMatchData {
           folded: fold_word_chars(term),
           // An automatic distance follows the same length scale as the
           // assembled patterns; short entries then accept folded hits only.
+          // A caller-supplied distance is capped at the supported maximum.
           max_distance: usize::from(
             distance
               .or_else(|| gazetteer_fuzzy_distance(term))
               .unwrap_or(0),
-          ),
+          )
+          .min(MAX_FUZZY_DISTANCE),
         },
         _ => {
           return Err(Error::InvalidStaticData {
@@ -250,6 +247,9 @@ impl PreparedGazetteerMatchData {
         folded,
         max_distance,
       } = &kind
+        // The fuzzy engine accepts no longer pattern, so longer entries have
+        // no fuzzy windows to re-check.
+        && folded.len() <= MAX_FUZZY_PATTERN_CHARS
       {
         let row = prepared.rows.len();
         for variant in deletion_variants(folded, *max_distance) {
@@ -453,9 +453,9 @@ impl PreparedGazetteerMatchData {
   }
 
   /// Fuzzy entries within their edit distance of `text[start..end]`, found
-  /// through the deletion index: at most a fixed number of lookups for a
-  /// span of bounded length, and at most [`MAX_FALLBACK_CANDIDATES`] distance
-  /// checks.
+  /// through the deletion index: a fixed number of lookups for a span of
+  /// bounded length, and one distance check per entry that shares a
+  /// deletion variant with the span.
   fn push_fuzzy_rows<'a>(
     &'a self,
     guard: &Guard<'_>,
@@ -471,17 +471,22 @@ impl PreparedGazetteerMatchData {
     {
       return;
     }
-    let mut candidates = Vec::new();
+    // Every row sharing a deletion variant is checked, in row order, so the
+    // result is complete and does not depend on hash iteration order.
+    let mut candidates = Vec::<usize>::new();
     for variant in deletion_variants(&folded, MAX_FUZZY_DISTANCE) {
       guard.count_fuzzy_step();
-      for row in self.fuzzy_deletions.get(&variant).into_iter().flatten() {
-        if candidates.len() < MAX_FALLBACK_CANDIDATES
-          && !candidates.contains(row)
-        {
-          candidates.push(*row);
-        }
-      }
+      candidates.extend(
+        self
+          .fuzzy_deletions
+          .get(&variant)
+          .into_iter()
+          .flatten()
+          .copied(),
+      );
     }
+    candidates.sort_unstable();
+    candidates.dedup();
     for row in candidates.iter().filter_map(|row| self.rows.get(*row)) {
       let RowKind::Fuzzy {
         folded: entry,
@@ -2079,11 +2084,86 @@ mod tests {
         .is_empty()
     );
     let steps = guard.fuzzy_steps.get();
-    assert!(steps >= WINDOWS, "the fallback ran for every window: {steps}");
+    assert!(
+      steps >= WINDOWS,
+      "the fallback ran for every window: {steps}"
+    );
     assert!(
       steps <= WINDOWS.saturating_mul(MAX_STEPS_PER_WINDOW),
       "{steps} fallback steps for {WINDOWS} windows"
     );
+  }
+
+  /// A fuzzy window over `text[start..end]` that its own entry rejects, so
+  /// the fallback re-checks the span against every fuzzy entry.
+  fn fallback_texts(
+    prepared: &PreparedGazetteerMatchData,
+    pattern: u32,
+    text: &str,
+  ) -> Vec<(String, String)> {
+    let hit = SearchMatch::Fuzzy {
+      pattern,
+      start: 0,
+      end: u32::try_from(text.len()).unwrap(),
+      distance: 1,
+    };
+    prepared
+      .detect(&[hit], text)
+      .unwrap()
+      .into_iter()
+      .map(|entity| (entity.text, entity.label))
+      .collect()
+  }
+
+  #[test]
+  fn fuzzy_fallback_checks_every_entry_sharing_a_variant_in_order() {
+    // 300 entries within two edits of `Wintermute`, all sharing the
+    // variant `wintermu`; only the last one is an organization.
+    let mut terms = vec![String::from("Zzzzzzzzzz")];
+    for first in 'a'..='z' {
+      for second in 'a'..='z' {
+        if terms.len() <= 300 {
+          terms.push(format!("Wintermu{first}{second}"));
+        }
+      }
+    }
+    let entries = terms
+      .iter()
+      .enumerate()
+      .map(|(index, term)| Entry {
+        term,
+        label: if index == 300 { ORGANIZATION } else { PERSON },
+        fuzzy_distance: Some(2),
+      })
+      .collect::<Vec<_>>();
+    let pattern = u32::try_from(entries.len()).unwrap();
+    let first = fallback_texts(&prepare(&entries).0, pattern, "Wintermute");
+    assert!(
+      first
+        .iter()
+        .any(|(text, label)| text == "Wintermute" && label == ORGANIZATION),
+      "{first:?}"
+    );
+    // A fresh build hashes differently; the output must not change.
+    let second = fallback_texts(&prepare(&entries).0, pattern, "Wintermute");
+    assert_eq!(first, second);
+  }
+
+  #[test]
+  fn caller_fuzzy_distances_are_capped() {
+    let term = "Abcdefghijklmnopqrstuvwxyzabcd";
+    let entries = [Entry {
+      term,
+      label: PERSON,
+      fuzzy_distance: Some(15),
+    }];
+    let (prepared, _) = prepare(&entries);
+    // One-letter-deletion and two-letter-deletion variants of 30 letters.
+    assert!(prepared.fuzzy_deletions.len() <= 1 + 30 + 435);
+    assert!(prepared.rows.iter().all(|row| match &row.kind {
+      RowKind::Fuzzy { max_distance, .. } => *max_distance <= 2,
+      RowKind::Exact => true,
+    }));
   }
 
   #[test]
