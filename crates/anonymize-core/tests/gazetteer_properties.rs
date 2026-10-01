@@ -22,34 +22,41 @@ mod properties {
   use std::ops::Range;
 
   use proptest::prelude::*;
+  use proptest::sample;
   use proptest::test_runner::{FileFailurePersistence, RngSeed, TestRunner};
-  use proptest::{collection, sample};
   use serde::Deserialize;
   use stella_anonymize_core::{OperatorConfig, PreparedEngine};
   use unicode_segmentation::UnicodeSegmentation;
 
   const PROPERTY_CASES: u32 = 128;
 
-  fn short_entry() -> impl Strategy<Value = String> {
-    prop_oneof![
-      sample::select(vec!["Zy", "Dab", "Luma", "Velomír", "Žilora", "Ľunora"])
-        .prop_map(str::to_owned),
-      (
-        sample::select(vec!["Luma", "Bex", "Mivo"]),
-        sample::select(vec!["Labs", "s.r.o.", "a.s.", "GmbH", "Ltd"])
-      )
-        .prop_map(|(name, suffix)| format!("{name} {suffix}")),
-    ]
-  }
+  const SINGLE_ENTRIES: [&str; 6] =
+    ["Zy", "Dab", "Luma", "Velomír", "Žilora", "Ľunora"];
+  const COMPOUND_NAMES: [&str; 3] = ["Luma", "Bex", "Mivo"];
+  const COMPOUND_SUFFIXES: [&str; 5] =
+    ["Labs", "s.r.o.", "a.s.", "GmbH", "Ltd"];
+  const LEGAL_NAMES: [&str; 2] = ["Luma", "Mivo"];
+  const LEGAL_SUFFIXES: [&str; 6] =
+    ["s.r.o.", "s. r. o.", "a.s.", "a. s.", "GmbH", "Ltd"];
+  const SHORT_ENTRY_COUNT: usize =
+    SINGLE_ENTRIES.len() + COMPOUND_NAMES.len() * COMPOUND_SUFFIXES.len();
 
-  fn single_entry() -> impl Strategy<Value = String> {
-    sample::select(vec!["Zy", "Dab", "Luma", "Velomír", "Žilora", "Ľunora"])
-      .prop_map(str::to_owned)
-  }
-
-  fn deny_list() -> impl Strategy<Value = Vec<String>> {
-    collection::btree_set(short_entry(), 1..5)
-      .prop_map(|entries| entries.into_iter().collect())
+  fn short_entries() -> Vec<String> {
+    let mut entries = SINGLE_ENTRIES
+      .into_iter()
+      .map(str::to_owned)
+      .collect::<Vec<_>>();
+    for name in COMPOUND_NAMES {
+      for suffix in COMPOUND_SUFFIXES {
+        entries.push(format!("{name} {suffix}"));
+      }
+    }
+    assert_eq!(
+      entries.len(),
+      SHORT_ENTRY_COUNT,
+      "all declared short entries must expand"
+    );
+    entries
   }
 
   fn boundaries(text: &str) -> BTreeSet<usize> {
@@ -172,10 +179,16 @@ mod properties {
     words: Vec<String>,
   }
 
-  fn non_match_case() -> impl Strategy<Value = (String, String)> {
+  struct NonMatchCases {
+    cases: Vec<(String, String)>,
+    declared_count: usize,
+  }
+
+  fn non_match_cases() -> NonMatchCases {
     let entries: Vec<OrdinaryWords> =
       serde_json::from_str(include_str!("fixtures/gazetteer/en.json")).unwrap();
-    let pairs = entries
+    let declared_count = entries.iter().map(|entry| entry.words.len()).sum();
+    let cases = entries
       .into_iter()
       .flat_map(|entry| {
         entry
@@ -184,45 +197,87 @@ mod properties {
           .map(move |word| (entry.canonical.clone(), word))
       })
       .collect::<Vec<_>>();
-    (sample::select(pairs), any::<bool>()).prop_map(|((entry, word), upper)| {
-      (entry, if upper { word.to_uppercase() } else { word })
+    assert_eq!(
+      cases.len(),
+      declared_count,
+      "all declared ordinary-word rows must expand"
+    );
+    NonMatchCases {
+      cases,
+      declared_count,
+    }
+  }
+
+  fn property_runner() -> TestRunner {
+    TestRunner::new(ProptestConfig {
+      cases: PROPERTY_CASES,
+      rng_seed: RngSeed::Fixed(0x6761_7a65_7474_6565),
+      source_file: Some(file!()),
+      failure_persistence: Some(Box::new(FileFailurePersistence::WithSource(
+        "proptest-regressions",
+      ))),
+      ..ProptestConfig::default()
     })
   }
 
-  proptest! {
-    #![proptest_config(ProptestConfig {
-      cases: PROPERTY_CASES,
-      rng_seed: RngSeed::Fixed(0x6761_7a65_7474_6565),
-      failure_persistence: Some(Box::new(FileFailurePersistence::WithSource("proptest-regressions"))),
-      ..ProptestConfig::default()
-    })]
+  #[test]
+  fn p1_opaque_tokens_are_preserved() {
+    let entries = SINGLE_ENTRIES.map(str::to_owned);
+    let prepared = entries
+      .iter()
+      .map(|entry| {
+        (
+          entry,
+          gazetteer::engine(std::slice::from_ref(entry), "cs").unwrap(),
+        )
+      })
+      .collect::<Vec<_>>();
+    property_runner()
+      .run(&"a1[a-f0-9]{6}", |hex| {
+        let mut exercised = 0;
+        for (entry, engine) in &prepared {
+          let mut text = format!("{entry} archived ");
+          let mut protected = Vec::new();
+          for token in opaque_tokens(entry, &hex) {
+            let start = text.len();
+            text.push_str(&token);
+            protected.push(start..text.len());
+            write!(text, " reviewed {entry} archived ").unwrap();
+          }
+          let actual = spans(engine, &text);
+          prop_assert!(
+            actual.contains(&(0..entry.len())),
+            "real hit must exist"
+          );
+          for span in actual {
+            prop_assert!(
+              protected.iter().all(|token| disjoint(&span, token)),
+              "span overlaps opaque token"
+            );
+          }
+          exercised += 1;
+        }
+        prop_assert_eq!(exercised, SINGLE_ENTRIES.len());
+        Ok(())
+      })
+      .unwrap();
+  }
 
-    #[test]
-    fn p1_opaque_tokens_are_preserved(entry in single_entry(), hex in "a1[a-f0-9]{6}") {
-      let engine = gazetteer::engine(std::slice::from_ref(&entry), "cs").unwrap();
-      let mut text = format!("{entry} archived ");
-      let mut protected = Vec::new();
-      for token in opaque_tokens(&entry, &hex) {
-        let start = text.len();
-        text.push_str(&token);
-        protected.push(start..text.len());
-        write!(text, " reviewed {entry} archived ").unwrap();
-      }
-      let actual = spans(&engine, &text);
-      prop_assert!(actual.contains(&(0..entry.len())), "real hit must exist");
-      for span in actual {
-        prop_assert!(protected.iter().all(|token| disjoint(&span, token)), "span overlaps opaque token");
-      }
-    }
-
-    // These Latin-name hosts use UAX word boundaries. Numeric glue, underscores,
-    // and substring matches in unspaced scripts follow the wider edge contract
-    // exercised by the shared fuzz driver and its accepted-neighbour smoke cases.
-    #[test]
-    fn p2_spaced_latin_names_follow_unicode_word_boundaries(entries in deny_list(), separator in sample::select(vec![" ", ", ", "\n", "\u{a0}", "🦀"])) {
-      let engine = gazetteer::engine(&entries, "cs").unwrap();
-      let text = entries.iter().map(|entry| format!("archived{separator}{entry}{separator}reviewed x{entry}y e\u{301} Ελληνικά Кирилица 界"))
+  // These Latin-name hosts use UAX word boundaries. Numeric glue, underscores,
+  // and substring matches in unspaced scripts follow the wider edge contract
+  // exercised by the shared fuzz driver and its accepted-neighbour smoke cases.
+  #[test]
+  fn p2_spaced_latin_names_follow_unicode_word_boundaries() {
+    let entries = short_entries();
+    let engine = gazetteer::engine(&entries, "cs").unwrap();
+    property_runner().run(&sample::select(vec![" ", ", ", "\n", "\u{a0}", "🦀"]), |separator| {
+      let mut exercised = 0;
+      let text = entries.iter().map(|entry| {
+        exercised += 1;
+        format!("archived{separator}{entry}{separator}reviewed x{entry}y e\u{301} Ελληνικά Кирилица 界")
+      })
         .collect::<Vec<_>>().join(separator);
+      prop_assert_eq!(exercised, SHORT_ENTRY_COUNT);
       let boundaries = boundaries(&text);
       let actual = spans(&engine, &text);
       prop_assert!(!actual.is_empty(), "real hits must exist");
@@ -230,54 +285,167 @@ mod properties {
         prop_assert!(text.get(span.clone()).is_some());
         prop_assert!(boundaries.contains(&span.start) && boundaries.contains(&span.end));
       }
-    }
+      Ok(())
+    }).unwrap();
+  }
 
-    #[test]
-    fn p3_hits_do_not_swallow_adjacent_words(entry in short_entry(), prefix in sample::select(vec!["archived", "reviewed", "completed"]), next in sample::select(vec!["documents", "yesterday", "carefully"])) {
-      let engine = gazetteer::engine(std::slice::from_ref(&entry), "cs").unwrap();
-      let text = format!("{prefix} {entry} {next} tomorrow");
-      let start = prefix.len() + 1;
-      prop_assert!(exact_hit(&spans(&engine, &text), &(start..start + entry.len())));
-    }
+  #[test]
+  fn p3_hits_do_not_swallow_adjacent_words() {
+    let entries = short_entries();
+    let prepared = entries
+      .iter()
+      .map(|entry| {
+        (
+          entry,
+          gazetteer::engine(std::slice::from_ref(entry), "cs").unwrap(),
+        )
+      })
+      .collect::<Vec<_>>();
+    property_runner()
+      .run(
+        &(
+          sample::select(vec!["archived", "reviewed", "completed"]),
+          sample::select(vec!["documents", "yesterday", "carefully"]),
+        ),
+        |(prefix, next)| {
+          let mut exercised = 0;
+          for (entry, engine) in &prepared {
+            let text = format!("{prefix} {entry} {next} tomorrow");
+            let start = prefix.len() + 1;
+            prop_assert!(exact_hit(
+              &spans(engine, &text),
+              &(start..start + entry.len())
+            ));
+            exercised += 1;
+          }
+          prop_assert_eq!(exercised, SHORT_ENTRY_COUNT);
+          Ok(())
+        },
+      )
+      .unwrap();
+  }
 
-    #[test]
-    fn p3_only_legal_suffixes_extend_a_hit(
-      entry in sample::select(vec!["Luma", "Mivo"]),
-      suffix in sample::select(vec!["s.r.o.", "s. r. o.", "a.s.", "a. s.", "GmbH", "Ltd"]),
-      next in sample::select(vec!["documents", "yesterday", "carefully"]),
-    ) {
-      let canonical = format!("{entry} s.r.o.");
-      let engine = gazetteer::engine(&[canonical], "cs").unwrap();
-      let surface = format!("{entry} {suffix}");
-      let text = format!("archived {surface} {next} tomorrow");
-      let actual = spans(&engine, &text);
-      prop_assert!(exact_hit(&actual, &(9..9 + surface.len())), "actual spans: {:?}", actual);
-    }
+  #[test]
+  fn p3_only_legal_suffixes_extend_a_hit() {
+    let prepared = LEGAL_NAMES
+      .into_iter()
+      .map(|entry| {
+        let canonical = format!("{entry} s.r.o.");
+        (entry, gazetteer::engine(&[canonical], "cs").unwrap())
+      })
+      .collect::<Vec<_>>();
+    property_runner()
+      .run(
+        &sample::select(vec!["documents", "yesterday", "carefully"]),
+        |next| {
+          let mut exercised = 0;
+          for (entry, engine) in &prepared {
+            for suffix in LEGAL_SUFFIXES {
+              let surface = format!("{entry} {suffix}");
+              let text = format!("archived {surface} {next} tomorrow");
+              let actual = spans(engine, &text);
+              prop_assert!(
+                exact_hit(&actual, &(9..9 + surface.len())),
+                "actual spans: {:?}",
+                actual
+              );
+              exercised += 1;
+            }
+          }
+          prop_assert_eq!(exercised, LEGAL_NAMES.len() * LEGAL_SUFFIXES.len());
+          Ok(())
+        },
+      )
+      .unwrap();
+  }
 
-    // Short names have insufficient evidence for unconstrained fuzzy matches.
-    // Longer names may accept typos: this property intentionally does not ban them.
-    #[test]
-    fn p4_short_names_do_not_match_ordinary_neighbours((entry, word) in non_match_case(), padding in 0usize..4) {
-      let engine = gazetteer::engine(&[entry], "en").unwrap();
-      let text = format!("{} {word} {}", "archived ".repeat(padding), "reviewed ".repeat(padding));
-      prop_assert!(spans(&engine, &text).is_empty());
+  // Short names have insufficient evidence for unconstrained fuzzy matches.
+  // Longer names may accept typos: this property intentionally does not ban them.
+  #[test]
+  fn p4_short_names_do_not_match_ordinary_neighbours() {
+    let matrix = non_match_cases();
+    let mut engines = BTreeMap::new();
+    for (entry, _) in &matrix.cases {
+      engines.entry(entry.clone()).or_insert_with(|| {
+        gazetteer::engine(std::slice::from_ref(entry), "en").unwrap()
+      });
     }
+    let prepared = matrix
+      .cases
+      .iter()
+      .map(|(entry, word)| (entry, word, engines.get(entry).unwrap()))
+      .collect::<Vec<_>>();
+    property_runner()
+      .run(&(0usize..4), |padding| {
+        let mut exercised = 0;
+        for (entry, word, engine) in &prepared {
+          for surface in [(*word).clone(), word.to_uppercase()] {
+            let text = format!(
+              "{} {surface} {}",
+              "archived ".repeat(padding),
+              "reviewed ".repeat(padding)
+            );
+            prop_assert!(
+              spans(engine, &text).is_empty(),
+              "ordinary-word fixture: {entry}/{surface}"
+            );
+            exercised += 1;
+          }
+        }
+        prop_assert_eq!(exercised, matrix.declared_count * 2);
+        Ok(())
+      })
+      .unwrap();
+  }
 
-    #[test]
-    fn p6_redaction_is_stable_and_entry_order_independent(entries in deny_list()) {
-      let text = format!("[ORGANIZATION_72] {} [ORGANIZATION_73]", entries.join(" reviewed "));
-      let engine = gazetteer::engine(&entries, "cs").unwrap();
-      let first = engine.redact_static_entities(&text, &OperatorConfig::default()).unwrap();
-      prop_assert!(!first.resolved_entities.is_empty(), "real hits must exist");
-      let second = engine.redact_static_entities(&first.redaction.redacted_text, &OperatorConfig::default()).unwrap();
-      prop_assert_eq!(&first.redaction.redacted_text, &second.redaction.redacted_text);
-      prop_assert!(second.resolved_entities.is_empty(), "placeholders must not be detected");
-      let mut reversed = entries;
-      reversed.reverse();
-      let reordered = gazetteer::engine(&reversed, "cs").unwrap()
-        .redact_static_entities(&text, &OperatorConfig::default()).unwrap();
-      prop_assert_eq!(first.redaction, reordered.redaction);
-    }
+  #[test]
+  fn p6_redaction_is_stable_and_entry_order_independent() {
+    let entries = short_entries();
+    let engine = gazetteer::engine(&entries, "cs").unwrap();
+    let mut reversed = entries.clone();
+    reversed.reverse();
+    let reordered_engine = gazetteer::engine(&reversed, "cs").unwrap();
+    property_runner()
+      .run(
+        &sample::select(vec![" reviewed ", " archived ", "\n"]),
+        |separator| {
+          let mut exercised = 0;
+          let mut text = "[ORGANIZATION_72] ".to_owned();
+          for entry in &entries {
+            write!(text, "{entry}{separator}").unwrap();
+            exercised += 1;
+          }
+          text.push_str("[ORGANIZATION_73]");
+          prop_assert_eq!(exercised, SHORT_ENTRY_COUNT);
+          let first = engine
+            .redact_static_entities(&text, &OperatorConfig::default())
+            .unwrap();
+          prop_assert!(
+            !first.resolved_entities.is_empty(),
+            "real hits must exist"
+          );
+          let second = engine
+            .redact_static_entities(
+              &first.redaction.redacted_text,
+              &OperatorConfig::default(),
+            )
+            .unwrap();
+          prop_assert_eq!(
+            &first.redaction.redacted_text,
+            &second.redaction.redacted_text
+          );
+          prop_assert!(
+            second.resolved_entities.is_empty(),
+            "placeholders must not be detected"
+          );
+          let reordered = reordered_engine
+            .redact_static_entities(&text, &OperatorConfig::default())
+            .unwrap();
+          prop_assert_eq!(first.redaction, reordered.redaction);
+          Ok(())
+        },
+      )
+      .unwrap();
   }
 
   #[test]
@@ -299,15 +467,7 @@ mod properties {
         (form, engines.get(&(*language, entry.clone())).unwrap())
       })
       .collect::<Vec<_>>();
-    let mut runner = TestRunner::new(ProptestConfig {
-      cases: PROPERTY_CASES,
-      rng_seed: RngSeed::Fixed(0x6761_7a65_7474_6565),
-      source_file: Some(file!()),
-      failure_persistence: Some(Box::new(FileFailurePersistence::WithSource(
-        "proptest-regressions",
-      ))),
-      ..ProptestConfig::default()
-    });
+    let mut runner = property_runner();
     runner
       .run(&sample::select(vec!["", "archived ", "🦀 "]), |left| {
         let mut exercised = 0;
@@ -416,6 +576,12 @@ mod properties {
       ordered_redact(&["Luma", "Luma Labs"]),
       ordered_redact(&["Luma Labs", "Luma"])
     );
+  }
+
+  #[test]
+  fn fuzz_oracle_handles_marker_fragment_entries_and_numeric_glue() {
+    gazetteer_fuzz::exercise("⟦dead\na\nb\nc\n⟦dead⟧".as_bytes());
+    gazetteer_fuzz::exercise(b"a\nb\nc\nd\ndead1234-a1b2 a1b2-1234dead");
   }
 
   #[test]

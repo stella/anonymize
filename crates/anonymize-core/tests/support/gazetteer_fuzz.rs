@@ -2,11 +2,10 @@
 //! Fixed opaque envelopes keep the privacy invariant meaningful with empty
 //! fuzz input or input that contains no useful gazetteer term.
 
-use unicode_normalization::char::is_combining_mark;
+#[path = "gazetteer_policy.rs"]
+mod gazetteer_policy;
 
-mod gazetteer_markers;
-
-use gazetteer_markers::marker_ranges;
+use gazetteer_policy::{edges_are_free, in_marker, touches_identifier};
 
 use super::gazetteer;
 
@@ -20,18 +19,6 @@ const ID_COMPOUND: &str = "a1b2-dead-c3d4";
 
 fn bounded_chars(value: &str, limit: usize) -> String {
   value.chars().take(limit).collect()
-}
-
-fn is_word_interior(character: char) -> bool {
-  !is_unspaced_script(character)
-    && (character.is_alphanumeric() || is_combining_mark(character))
-}
-
-fn is_unspaced_script(character: char) -> bool {
-  matches!(u32::from(character),
-    0x0E00..=0x0EFF | 0x1000..=0x109F | 0x1780..=0x17FF
-    | 0x3040..=0x30FF | 0x3400..=0x4DBF | 0x4E00..=0x9FFF
-    | 0xAC00..=0xD7AF | 0xF900..=0xFAFF | 0x20000..=0x323AF)
 }
 
 fn append_opaque_envelopes(text: &mut String) -> Vec<(usize, usize)> {
@@ -62,121 +49,6 @@ fn append_opaque_envelopes(text: &mut String) -> Vec<(usize, usize)> {
   ranges
 }
 
-fn is_identifier_segment(segment: &str) -> bool {
-  let length = segment.chars().count();
-  let has_digit = segment.chars().any(|character| character.is_ascii_digit());
-  let hex = length >= 4
-    && has_digit
-    && segment
-      .chars()
-      .all(|character| character.is_ascii_hexdigit())
-    && segment
-      .chars()
-      .any(|character| character.is_ascii_alphabetic());
-  let base64 = length >= 12
-    && has_digit
-    && segment.chars().any(char::is_uppercase)
-    && segment.chars().any(char::is_lowercase);
-  hex || base64
-}
-
-const fn is_compound_joiner(character: char) -> bool {
-  matches!(
-    character,
-    '-' | '_' | '.' | '/' | '+' | '=' | ':' | '@' | '#' | '\\'
-  )
-}
-
-#[derive(Clone, Copy)]
-enum Edge {
-  Start(usize),
-  End(usize),
-}
-
-fn adjacent_identifier_segment(text: &str, edge: Edge) -> Option<String> {
-  match edge {
-    Edge::Start(edge) => {
-      let head = text.get(..edge)?;
-      let mut chars = head.chars().rev().peekable();
-      if !chars
-        .peek()
-        .is_some_and(|character| is_compound_joiner(*character))
-      {
-        return None;
-      }
-      while chars
-        .peek()
-        .is_some_and(|character| is_compound_joiner(*character))
-      {
-        chars.next();
-      }
-      let segment = chars
-        .take_while(|character| is_word_interior(*character))
-        .collect::<String>();
-      (!segment.is_empty()).then_some(segment)
-    }
-    Edge::End(edge) => {
-      let tail = text.get(edge..)?;
-      let mut chars = tail.chars().peekable();
-      if !chars
-        .peek()
-        .is_some_and(|character| is_compound_joiner(*character))
-      {
-        return None;
-      }
-      while chars
-        .peek()
-        .is_some_and(|character| is_compound_joiner(*character))
-      {
-        chars.next();
-      }
-      let segment = chars
-        .take_while(|character| is_word_interior(*character))
-        .collect::<String>();
-      (!segment.is_empty()).then_some(segment)
-    }
-  }
-}
-
-fn touches_identifier(text: &str, start: usize, end: usize) -> bool {
-  adjacent_identifier_segment(text, Edge::Start(start))
-    .is_some_and(|value| is_identifier_segment(&value))
-    || adjacent_identifier_segment(text, Edge::End(end))
-      .is_some_and(|value| is_identifier_segment(&value))
-}
-
-fn edges_are_free(text: &str, start: usize, end: usize) -> bool {
-  let span = text.get(start..end).unwrap_or_default();
-  let first = span.chars().next();
-  let last = span.chars().next_back();
-  let left = text
-    .get(..start)
-    .unwrap_or_default()
-    .chars()
-    .rev()
-    .take_while(|character| is_word_interior(*character))
-    .collect::<Vec<_>>();
-  let right = text
-    .get(end..)
-    .unwrap_or_default()
-    .chars()
-    .take_while(|character| is_word_interior(*character))
-    .collect::<Vec<_>>();
-  glue_is_free(&left, first) && glue_is_free(&right, last)
-}
-
-fn glue_is_free(glue: &[char], edge: Option<char>) -> bool {
-  let Some(first) = glue.first() else {
-    return true;
-  };
-  if !edge.is_some_and(is_word_interior) {
-    return true;
-  }
-  edge.is_some_and(char::is_alphabetic)
-    && first.is_numeric()
-    && glue.iter().skip(1).all(|character| character.is_numeric())
-}
-
 pub(super) fn exercise(data: &[u8]) {
   // Arbitrary bytes become synthetic text before any offsets are measured.
   // Preserve valid chunks and replace each invalid sequence with one marker.
@@ -192,7 +64,11 @@ pub(super) fn exercise(data: &[u8]) {
     .by_ref()
     .take(MAX_ENTRIES)
     .map(|chunk| bounded_chars(chunk, MAX_ENTRY_CHARS))
-    .filter(|chunk| !chunk.is_empty())
+    .filter(|chunk| {
+      // Marker-bearing caller literals have special exact-match semantics,
+      // outside this oracle's protected-token input contract.
+      !chunk.is_empty() && !chunk.contains(['⟦', '⟧'])
+    })
     .collect::<Vec<_>>();
   let remaining_text = chunks.collect::<Vec<_>>().join("\n");
   let mut text = bounded_chars(&remaining_text, MAX_TEXT_CHARS);
@@ -203,8 +79,7 @@ pub(super) fn exercise(data: &[u8]) {
   let hit_start = text.len();
   text.push_str(HIT_TERM);
   let hit_end = text.len();
-  let mut protected = marker_ranges(&text);
-  protected.extend(append_opaque_envelopes(&mut text));
+  let protected = append_opaque_envelopes(&mut text);
   let engine = gazetteer::engine(&entries, "cs")
     .unwrap_or_else(|error| panic!("bounded synthetic config failed: {error}"));
   let entities = engine
@@ -246,7 +121,7 @@ pub(super) fn exercise(data: &[u8]) {
       "gazetteer span overlaps a protected opaque token"
     );
     assert!(
-      !touches_identifier(&text, start, end),
+      !in_marker(&text, start, end) && !touches_identifier(&text, start, end),
       "gazetteer span is joined to an identifier segment"
     );
   }
