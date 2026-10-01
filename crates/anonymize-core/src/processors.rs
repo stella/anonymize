@@ -106,6 +106,12 @@ pub struct GazetteerMatchData {
   /// Which inflected forms of an entry's words also match.
   #[serde(default)]
   pub inflection: GazetteerInflection,
+  /// Entry text per row. When empty it is read from the gazetteer slice's
+  /// search patterns; when both exist they must agree. Carrying it lets a
+  /// config prepared from artifacts alone, without literal patterns, keep
+  /// its gazetteer.
+  #[serde(default)]
+  pub terms: Vec<String>,
 }
 
 /// Inflected forms a gazetteer entry's words may take besides their folded
@@ -1577,7 +1583,7 @@ pub fn process_gazetteer_matches(
   data: &GazetteerMatchData,
   patterns: &[SearchPattern],
 ) -> Result<Vec<PipelineEntity>> {
-  PreparedGazetteerMatchData::new(data.clone(), slice, patterns)?
+  PreparedGazetteerMatchData::new(data.clone(), slice, Some(patterns))?
     .detect(matches, full_text)
 }
 

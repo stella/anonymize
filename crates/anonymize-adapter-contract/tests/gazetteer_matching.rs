@@ -312,6 +312,7 @@ fn configs_without_the_newer_gazetteer_fields_still_load() {
     .expect("gazetteer data should be present");
   gazetteer.remove("legal_form_suffixes");
   gazetteer.remove("inflection");
+  gazetteer.remove("terms");
   let binding: BindingPreparedSearchConfig = serde_json::from_value(json)
     .expect("a config without the newer fields should deserialize");
   let engine = PreparedEngine::new(

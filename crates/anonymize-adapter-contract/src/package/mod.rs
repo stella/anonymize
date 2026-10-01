@@ -1156,6 +1156,7 @@ mod tests {
           is_fuzzy: vec![false],
           legal_form_suffixes: Vec::new(),
           inflection: BindingGazetteerInflection::None,
+          terms: Vec::new(),
         }),
         country_data: None,
         ..package_test_config()

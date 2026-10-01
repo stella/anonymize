@@ -249,11 +249,16 @@ impl PreparedGazetteerMatchData {
   pub(crate) fn new(
     data: GazetteerMatchData,
     slice: PatternSlice,
-    patterns: &[SearchPattern],
+    patterns: Option<&[SearchPattern]>,
   ) -> Result<Self> {
     validate_length("gazetteer_data.labels", slice, data.labels.len())?;
     validate_length("gazetteer_data.is_fuzzy", slice, data.is_fuzzy.len())?;
-    validate_length("gazetteer patterns", slice, patterns.len())?;
+    if !data.terms.is_empty() {
+      validate_length("gazetteer_data.terms", slice, data.terms.len())?;
+    }
+    if let Some(patterns) = patterns {
+      validate_length("gazetteer patterns", slice, patterns.len())?;
+    }
     let legal_forms = data
       .legal_form_suffixes
       .iter()
@@ -262,47 +267,43 @@ impl PreparedGazetteerMatchData {
       .collect::<Vec<_>>();
     let mut prepared = Self {
       slice,
-      rows: Vec::with_capacity(patterns.len()),
+      rows: Vec::with_capacity(data.labels.len()),
       fuzzy_deletions: HashMap::new(),
       fuzzy_shape: FuzzyShape::default(),
       sequences: SequenceTrie::new(data.inflection),
       legal_forms,
     };
-    for (index, ((label, is_fuzzy), pattern)) in data
-      .labels
-      .into_iter()
-      .zip(data.is_fuzzy)
-      .zip(patterns)
-      .enumerate()
+    for (index, (label, is_fuzzy)) in
+      data.labels.into_iter().zip(data.is_fuzzy).enumerate()
     {
-      let kind = match (is_fuzzy, pattern) {
+      let pattern = patterns.and_then(|patterns| patterns.get(index));
+      let term = row_term(index, data.terms.get(index), pattern)?;
+      let kind = match (is_fuzzy, pattern, term) {
         (
           false,
-          SearchPattern::Literal(term)
-          | SearchPattern::LiteralWithOptions { pattern: term, .. },
+          None
+          | Some(
+            SearchPattern::Literal(_)
+            | SearchPattern::LiteralWithOptions { .. },
+          ),
+          term,
         ) => {
-          prepared.add_sequences(term, &label);
+          // An artifact-only config from before entry text was carried
+          // keeps its exact search hits; only folded matching needs text.
+          if let Some(term) = term {
+            prepared.add_sequences(term, &label);
+          }
           RowKind::Exact
         }
-        (
-          true,
-          SearchPattern::Fuzzy {
-            pattern: term,
-            distance,
-          },
-        ) => RowKind::Fuzzy {
-          folded: fold_word_chars(term),
-          words: tokenize(term).len(),
-          // An automatic distance follows the same length scale as the
-          // assembled patterns; short entries then accept folded hits only.
-          // A caller-supplied distance is capped at the supported maximum.
-          max_distance: usize::from(
-            distance
-              .or_else(|| gazetteer_fuzzy_distance(term))
-              .unwrap_or(0),
-          )
-          .min(MAX_FUZZY_DISTANCE),
-        },
+        (true, None, Some(term)) => fuzzy_row(term, None),
+        (true, Some(SearchPattern::Fuzzy { distance, .. }), Some(term)) => {
+          fuzzy_row(term, *distance)
+        }
+        (true, None, None) => {
+          return Err(Error::MissingStaticData {
+            field: "gazetteer_data.terms",
+          });
+        }
         _ => {
           return Err(Error::InvalidStaticData {
             field: "gazetteer_data.is_fuzzy",
@@ -312,7 +313,7 @@ impl PreparedGazetteerMatchData {
           });
         }
       };
-      let term_chars = pattern_text(pattern).chars().count();
+      let term_chars = term.map_or(0, |term| term.chars().count());
       if let RowKind::Fuzzy {
         folded,
         max_distance,
@@ -1388,6 +1389,40 @@ fn without_contained<'a>(
     .collect()
 }
 
+/// The entry text of gazetteer row `index`: the data's own term, or the
+/// text of its search pattern, if either exists. When both exist they must
+/// agree.
+fn row_term<'t>(
+  index: usize,
+  term: Option<&'t String>,
+  pattern: Option<&'t SearchPattern>,
+) -> Result<Option<&'t str>> {
+  match (term, pattern.map(pattern_text)) {
+    (Some(term), Some(text)) if term != text => Err(Error::InvalidStaticData {
+      field: "gazetteer_data.terms",
+      reason: format!("row {index} differs from its search pattern"),
+    }),
+    (Some(term), _) => Ok(Some(term)),
+    (None, text) => Ok(text),
+  }
+}
+
+/// A fuzzy row for `term`. An automatic distance follows the same length
+/// scale as the assembled patterns, so short entries accept folded hits
+/// only; a caller-supplied distance is capped at the supported maximum.
+fn fuzzy_row(term: &str, distance: Option<u8>) -> RowKind {
+  RowKind::Fuzzy {
+    folded: fold_word_chars(term),
+    words: tokenize(term).len(),
+    max_distance: usize::from(
+      distance
+        .or_else(|| gazetteer_fuzzy_distance(term))
+        .unwrap_or(0),
+    )
+    .min(MAX_FUZZY_DISTANCE),
+  }
+}
+
 /// The entry text a gazetteer search pattern carries.
 fn pattern_text(pattern: &SearchPattern) -> &str {
   match pattern {
@@ -1801,9 +1836,10 @@ mod tests {
         .map(|form| (*form).to_owned())
         .collect(),
       inflection,
+      terms: Vec::new(),
     };
     (
-      PreparedGazetteerMatchData::new(data, slice, &patterns).unwrap(),
+      PreparedGazetteerMatchData::new(data, slice, Some(&patterns)).unwrap(),
       terms,
     )
   }
@@ -2172,6 +2208,7 @@ mod tests {
       is_fuzzy: vec![true, true],
       legal_form_suffixes: Vec::new(),
       inflection: GazetteerInflection::CzechSlovak,
+      terms: Vec::new(),
     };
     let patterns = ["Wintermute", "Acme"].map(|term| SearchPattern::Fuzzy {
       pattern: term.to_owned(),
@@ -2180,7 +2217,7 @@ mod tests {
     let prepared = PreparedGazetteerMatchData::new(
       data,
       PatternSlice { start: 0, end: 2 },
-      &patterns,
+      Some(&patterns),
     )
     .unwrap();
     let fuzzy = |pattern: u32, text: &str, end: usize| {
@@ -2772,12 +2809,33 @@ mod tests {
   }
 
   #[test]
+  fn carried_terms_must_agree_with_their_patterns() {
+    let data = GazetteerMatchData {
+      labels: vec![ORGANIZATION.to_owned()],
+      is_fuzzy: vec![false],
+      legal_form_suffixes: Vec::new(),
+      inflection: GazetteerInflection::CzechSlovak,
+      terms: vec!["Other".to_owned()],
+    };
+    let literal = [SearchPattern::Literal("Acme".to_owned())];
+    let slice = PatternSlice { start: 0, end: 1 };
+    assert!(matches!(
+      PreparedGazetteerMatchData::new(data, slice, Some(&literal)),
+      Err(Error::InvalidStaticData {
+        field: "gazetteer_data.terms",
+        ..
+      })
+    ));
+  }
+
+  #[test]
   fn row_kinds_must_match_their_patterns() {
     let data = GazetteerMatchData {
       labels: vec![ORGANIZATION.to_owned()],
       is_fuzzy: vec![false],
       legal_form_suffixes: Vec::new(),
       inflection: GazetteerInflection::CzechSlovak,
+      terms: Vec::new(),
     };
     let fuzzy = [SearchPattern::Fuzzy {
       pattern: "Acme".to_owned(),
@@ -2785,9 +2843,10 @@ mod tests {
     }];
     let slice = PatternSlice { start: 0, end: 1 };
     assert!(
-      PreparedGazetteerMatchData::new(data.clone(), slice, &fuzzy).is_err()
+      PreparedGazetteerMatchData::new(data.clone(), slice, Some(&fuzzy))
+        .is_err()
     );
-    assert!(PreparedGazetteerMatchData::new(data, slice, &[]).is_err());
+    assert!(PreparedGazetteerMatchData::new(data, slice, Some(&[])).is_err());
   }
 
   const SAMPLE_NAMES: &[&str] = &[

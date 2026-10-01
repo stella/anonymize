@@ -91,6 +91,7 @@ const BASE_CONFIG = {
     is_fuzzy: [false, true],
     legal_form_suffixes: [],
     inflection: "none",
+    terms: ["Acme", "Fuzztown"],
   },
   country_data: {
     labels: ["country"],
