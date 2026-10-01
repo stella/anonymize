@@ -15,8 +15,8 @@
 //! joined to an identifier-shaped segment (hex, UUID parts, base64 runs, `⟦…⟧`
 //! markers), does not. A span extends only over a following legal form.
 
-use std::cell::Cell;
-use std::collections::{HashMap, HashSet};
+use std::cell::{Cell, RefCell};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use unicode_normalization::char::{decompose_canonical, is_combining_mark};
 
@@ -69,6 +69,9 @@ const MIN_TWO_EDIT_LETTERS: usize = 10;
 /// Longest pattern, in chars, the fuzzy engine accepts.
 const MAX_FUZZY_PATTERN_CHARS: usize = 64;
 
+/// Largest edit distance any fuzzy entry allows.
+const MAX_FUZZY_DISTANCE: usize = 2;
+
 /// Edit distance a fuzzy gazetteer pattern for `term` allows, if any. Entries
 /// with digits are identifiers and match only exactly.
 #[must_use]
@@ -89,6 +92,14 @@ pub fn gazetteer_fuzzy_distance(term: &str) -> Option<u8> {
 pub(crate) struct PreparedGazetteerMatchData {
   slice: PatternSlice,
   rows: Vec<GazetteerRow>,
+  /// Fuzzy rows by every string reachable from their folded letters with at
+  /// most their edit distance in deletions. Two strings within distance `k`
+  /// share such a string, so re-checking a span costs a bounded number of
+  /// lookups instead of a scan of same-length entries.
+  fuzzy_deletions: HashMap<Vec<char>, Vec<usize>>,
+  /// Lengths of the fuzzy entries, bounding the spans re-checked around a
+  /// fuzzy window.
+  fuzzy_shape: FuzzyShape,
   sequences: SequenceTrie,
   legal_forms: Vec<LegalFormSuffix>,
 }
@@ -105,6 +116,8 @@ enum RowKind {
   Fuzzy {
     folded: Vec<char>,
     max_distance: usize,
+    /// Word count of the entry; see [`token_count_fits`].
+    words: usize,
   },
 }
 
@@ -188,6 +201,8 @@ impl PreparedGazetteerMatchData {
     let mut prepared = Self {
       slice,
       rows: Vec::with_capacity(patterns.len()),
+      fuzzy_deletions: HashMap::new(),
+      fuzzy_shape: FuzzyShape::default(),
       sequences: SequenceTrie::new(data.inflection),
       legal_forms,
     };
@@ -215,13 +230,16 @@ impl PreparedGazetteerMatchData {
           },
         ) => RowKind::Fuzzy {
           folded: fold_word_chars(term),
+          words: tokenize(term).len(),
           // An automatic distance follows the same length scale as the
           // assembled patterns; short entries then accept folded hits only.
+          // A caller-supplied distance is capped at the supported maximum.
           max_distance: usize::from(
             distance
               .or_else(|| gazetteer_fuzzy_distance(term))
               .unwrap_or(0),
-          ),
+          )
+          .min(MAX_FUZZY_DISTANCE),
         },
         _ => {
           return Err(Error::InvalidStaticData {
@@ -232,6 +250,28 @@ impl PreparedGazetteerMatchData {
           });
         }
       };
+      let term_chars = pattern_text(pattern).chars().count();
+      if let RowKind::Fuzzy {
+        folded,
+        max_distance,
+        ..
+      } = &kind
+        // The fuzzy engine accepts no longer pattern, so longer entries have
+        // no fuzzy windows to re-check.
+        && folded.len() <= MAX_FUZZY_PATTERN_CHARS
+      {
+        let row = prepared.rows.len();
+        prepared
+          .fuzzy_shape
+          .add(term_chars, folded.len(), *max_distance);
+        for variant in deletion_variants(folded, *max_distance) {
+          prepared
+            .fuzzy_deletions
+            .entry(variant)
+            .or_default()
+            .push(row);
+        }
+      }
       prepared.rows.push(GazetteerRow { label, kind });
     }
     Ok(prepared)
@@ -357,6 +397,8 @@ impl PreparedGazetteerMatchData {
     let exact_spans = SpanIndex::new(&exact);
 
     let mut fuzzy = Vec::new();
+    let mut anchored = HashSet::new();
+    let mut checked = HashSet::new();
     for found in matches {
       let Some(GazetteerRow {
         label,
@@ -364,35 +406,61 @@ impl PreparedGazetteerMatchData {
           RowKind::Fuzzy {
             folded,
             max_distance,
+            words,
           },
       }) = self.row(found.pattern())
       else {
         continue;
       };
       let (start, end) = trim_fuzzy_span(text, byte_span(text, found)?);
-      if exact_spans.overlaps(start, end)
-        || !guard.fuzzy_span_is_whole_words(start, end)
-        || guard.in_identifier(start, end)
-      {
-        continue;
-      }
       let surface = text.get(start..end).unwrap_or_default();
-      if edit_distance(&fold_word_chars(surface), folded) > *max_distance {
-        continue;
+      if !exact_spans.contains(start, end)
+        && guard.fuzzy_span_is_whole_words(start, end)
+        && !guard.in_identifier(start, end)
+        && token_count_fits(tokenize(surface).len(), *words)
+        && edit_distance(&fold_word_chars(surface), folded) <= *max_distance
+      {
+        fuzzy.push(Hit {
+          start,
+          end,
+          label,
+          score: FUZZY_SCORE,
+        });
       }
-      fuzzy.push(Hit {
-        start,
-        end,
-        label,
-        score: FUZZY_SCORE,
-      });
+      // The engine keeps one non-overlapping window per region across all
+      // fuzzy patterns, so any window, accepted or not, may hide another
+      // entry's match that starts inside it (`WintermteX`, `Wintermute Y`).
+      // Re-check the token-aligned spans anchored in the window against the
+      // fuzzy entries through the deletion index.
+      if anchored.insert((start, end)) {
+        for candidate in anchored_spans(text, start, end, &self.fuzzy_shape) {
+          let (span_start, span_end) = candidate.span;
+          if checked.insert(candidate.span)
+            && !exact_spans.contains(span_start, span_end)
+            && guard.fuzzy_span_is_whole_words(span_start, span_end)
+            && !guard.in_identifier(span_start, span_end)
+          {
+            self.push_fuzzy_rows(guard, candidate, &mut fuzzy);
+          }
+        }
+      }
     }
+    let fuzzy = without_contained(fuzzy, &exact);
 
     let mut seen = HashSet::new();
     let mut entities =
       Vec::with_capacity(exact.len().saturating_add(fuzzy.len()));
     for hit in exact.into_iter().chain(fuzzy) {
-      let legal_form_end = self.legal_form_end(text, hit.end);
+      // Every emitted span must close any dotted chain it ends or starts
+      // in (`s.r.o` inside `s.r.o.y`); fall back to the unextended span,
+      // then drop the hit.
+      let extended = self
+        .legal_form_end(text, hit.end)
+        .filter(|end| dotted_edges_close(text, hit.start, *end));
+      if extended.is_none() && !dotted_edges_close(text, hit.start, hit.end) {
+        continue;
+      }
+      let legal_form_end = extended;
       let end = legal_form_end.unwrap_or(hit.end);
       if !seen.insert((hit.start, end, hit.label)) {
         continue;
@@ -410,6 +478,89 @@ impl PreparedGazetteerMatchData {
       entities.push(entity);
     }
     Ok(entities)
+  }
+
+  /// Fuzzy entries within their edit distance of `text[start..end]`, found
+  /// through the deletion index: a fixed number of lookups for a span of
+  /// bounded length, and one distance check per entry that shares a
+  /// deletion variant with the span.
+  fn push_fuzzy_rows<'a>(
+    &'a self,
+    guard: &Guard<'_>,
+    candidate: AnchoredSpan,
+    hits: &mut Vec<Hit<'a>>,
+  ) {
+    let AnchoredSpan {
+      span: (start, end),
+      folded,
+      tokens,
+      distance,
+    } = candidate;
+    if self.fuzzy_deletions.is_empty()
+      || folded.len()
+        > MAX_FUZZY_PATTERN_CHARS.saturating_add(MAX_FUZZY_DISTANCE)
+    {
+      return;
+    }
+    // Names recur through a document: look each spelling up once.
+    let key = (folded, tokens, distance);
+    let known = guard.fuzzy_memo.borrow().get(&key).cloned();
+    let rows = known.unwrap_or_else(|| {
+      let rows = self.fuzzy_rows_for(guard, &key);
+      guard.fuzzy_memo.borrow_mut().insert(key, rows.clone());
+      rows
+    });
+    for row in rows.iter().filter_map(|row| self.rows.get(*row)) {
+      hits.push(Hit {
+        start,
+        end,
+        label: &row.label,
+        score: FUZZY_SCORE,
+      });
+    }
+  }
+
+  /// Rows of fuzzy entries that `folded` (a span of `tokens` tokens)
+  /// matches, in row order.
+  fn fuzzy_rows_for(
+    &self,
+    guard: &Guard<'_>,
+    (folded, tokens, distance): &FuzzyMemoKey,
+  ) -> Vec<usize> {
+    // Every row sharing a deletion variant is checked, in row order, so the
+    // result is complete and does not depend on hash iteration order.
+    let mut candidates = Vec::<usize>::new();
+    for variant in deletion_variants(folded, *distance) {
+      guard.count_fuzzy_step();
+      candidates.extend(
+        self
+          .fuzzy_deletions
+          .get(&variant)
+          .into_iter()
+          .flatten()
+          .copied(),
+      );
+    }
+    candidates.sort_unstable();
+    candidates.dedup();
+    candidates.retain(|row| {
+      let Some(GazetteerRow {
+        kind:
+          RowKind::Fuzzy {
+            folded: entry,
+            max_distance,
+            words,
+          },
+        ..
+      }) = self.rows.get(*row)
+      else {
+        return false;
+      };
+      guard.count_fuzzy_step();
+      token_count_fits(*tokens, *words)
+        && edit_distance(folded, entry) <= *max_distance
+    });
+    candidates
   }
 
   fn sequence_hits(&self, text: &str) -> Vec<Hit<'_>> {
@@ -605,7 +756,7 @@ struct Walk<'t> {
 }
 
 /// Exact spans sorted by start with running maximum ends, so a fuzzy hit
-/// checks overlap in logarithmic time.
+/// checks containment in logarithmic time.
 struct SpanIndex {
   starts: Vec<usize>,
   max_ends: Vec<usize>,
@@ -632,12 +783,13 @@ impl SpanIndex {
     }
   }
 
-  fn overlaps(&self, start: usize, end: usize) -> bool {
-    let opened_before_end = self.starts.partition_point(|open| *open < end);
-    opened_before_end
+  /// Whether one span covers `start..end` entirely.
+  fn contains(&self, start: usize, end: usize) -> bool {
+    let opened_by_start = self.starts.partition_point(|open| *open <= start);
+    opened_by_start
       .checked_sub(1)
       .and_then(|last| self.max_ends.get(last))
-      .is_some_and(|max_end| *max_end > start)
+      .is_some_and(|max_end| *max_end >= end)
   }
 }
 
@@ -721,7 +873,14 @@ fn separator_marks(gap: &str) -> Vec<char> {
 /// break.
 fn observed_separator(gap: &str) -> Option<(String, usize)> {
   let chars = gap.chars().count();
-  let line_breaks = gap.chars().filter(|ch| is_line_break(*ch)).count();
+  // `\r\n` is one line break, as are a lone `\r` or `\n`.
+  let line_breaks = gap
+    .char_indices()
+    .filter(|(index, ch)| {
+      is_line_break(*ch)
+        && !(*ch == '\n' && previous_char(gap, *index) == Some('\r'))
+    })
+    .count();
   (chars > 0 && line_breaks <= 1)
     .then(|| (separator_marks(gap).into_iter().collect(), chars))
 }
@@ -919,6 +1078,275 @@ fn next_char(text: &str, offset: usize) -> Option<char> {
   text.get(offset..).and_then(|tail| tail.chars().next())
 }
 
+/// Lengths of the fuzzy entries: folded letter count -> largest edit
+/// distance among entries of that length, and the longest entry in chars.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+struct FuzzyShape {
+  distances: BTreeMap<usize, usize>,
+  max_chars: usize,
+}
+
+impl FuzzyShape {
+  fn add(&mut self, chars: usize, letters: usize, distance: usize) {
+    let known = self.distances.entry(letters).or_insert(0);
+    *known = (*known).max(distance);
+    self.max_chars = self.max_chars.max(chars.saturating_add(distance));
+  }
+
+  /// The largest edit distance of an entry `letters` could match, if any.
+  fn distance_for(&self, letters: usize) -> Option<usize> {
+    self
+      .distances
+      .range(
+        letters.saturating_sub(MAX_FUZZY_DISTANCE)
+          ..=letters.saturating_add(MAX_FUZZY_DISTANCE),
+      )
+      .filter(|(length, distance)| length.abs_diff(letters) <= **distance)
+      .map(|(_, distance)| *distance)
+      .max()
+  }
+}
+
+/// Token-aligned spans a fuzzy window may stand for, with the edit distance
+/// to look them up with. The engine drops a window that starts inside a
+/// kept one, and a dropped window reaches at most the longest fuzzy entry
+/// past its start; spans therefore start at a token start from the token
+/// the window opens in up to that length past its end, and are at most that
+/// long. Only spans some fuzzy entry's length allows are kept, so the work
+/// per window is bounded by the longest entry.
+fn anchored_spans(
+  text: &str,
+  start: usize,
+  end: usize,
+  shape: &FuzzyShape,
+) -> Vec<AnchoredSpan> {
+  let mut spans = Vec::new();
+  if shape.distances.is_empty() {
+    return spans;
+  }
+  let reach = shape.max_chars;
+  let back = text
+    .get(..start)
+    .unwrap_or_default()
+    .chars()
+    .rev()
+    .take(reach)
+    .take_while(|ch| is_word_char(*ch))
+    .map(char::len_utf8)
+    .sum::<usize>();
+  let from = start.saturating_sub(back);
+  let window = window_tokens(text, from, end, reach);
+  let last_start_char = window.end_char.saturating_add(reach);
+  for (first, opening) in window.tokens.iter().enumerate() {
+    if opening.char_start > last_start_char {
+      break;
+    }
+    let mut folded = Vec::new();
+    for (tokens, closing) in window.tokens.iter().skip(first).enumerate() {
+      if closing.char_end.saturating_sub(opening.char_start) > reach {
+        break;
+      }
+      folded.extend_from_slice(&closing.folded);
+      if let Some(distance) = shape.distance_for(folded.len()) {
+        spans.push(AnchoredSpan {
+          span: (opening.start, closing.end),
+          folded: folded.clone(),
+          tokens: tokens.saturating_add(1),
+          distance,
+        });
+      }
+    }
+  }
+  spans
+}
+
+/// A token-aligned span re-checked around a fuzzy window.
+struct AnchoredSpan {
+  span: (usize, usize),
+  /// Folded letters of the span.
+  folded: Vec<char>,
+  tokens: usize,
+  /// Edit distance to look the span up with.
+  distance: usize,
+}
+
+/// A token near a fuzzy window, with byte offsets into the document and
+/// char offsets from the window's scan origin.
+struct WindowToken {
+  start: usize,
+  end: usize,
+  char_start: usize,
+  char_end: usize,
+  folded: Vec<char>,
+}
+
+struct WindowTokens {
+  tokens: Vec<WindowToken>,
+  /// Char offset of the window end from the scan origin.
+  end_char: usize,
+}
+
+/// Tokens from `from` up to twice `reach` chars past `end`, in one bounded
+/// pass.
+fn window_tokens(
+  text: &str,
+  from: usize,
+  end: usize,
+  reach: usize,
+) -> WindowTokens {
+  let tail = text.get(from..).unwrap_or_default();
+  let mut tokens = Vec::new();
+  let mut end_char = None::<usize>;
+  let mut open = None::<(usize, usize)>;
+  let mut chars = 0_usize;
+  // Byte offset where the scan stops; a token still open there ends there.
+  let mut scan_end = tail.len();
+  let reach = reach.saturating_mul(2);
+  let token = |(start, char_start): (usize, usize),
+               (stop, char_end): (usize, usize)| {
+    WindowToken {
+      start: from.saturating_add(start),
+      end: from.saturating_add(stop),
+      char_start,
+      char_end,
+      folded: fold_word_chars(tail.get(start..stop).unwrap_or_default()),
+    }
+  };
+  for (offset, ch) in tail.char_indices() {
+    if end_char.is_none() && from.saturating_add(offset) >= end {
+      end_char = Some(chars);
+    }
+    if end_char.is_some_and(|at| chars > at.saturating_add(reach)) {
+      scan_end = offset;
+      break;
+    }
+    match (is_word_char(ch), open) {
+      (true, None) => open = Some((offset, chars)),
+      (false, Some(opening)) => {
+        tokens.push(token(opening, (offset, chars)));
+        open = None;
+      }
+      _ => {}
+    }
+    chars = chars.saturating_add(1);
+  }
+  if let Some(opening) = open {
+    tokens.push(token(opening, (scan_end, chars)));
+  }
+  WindowTokens {
+    tokens,
+    end_char: end_char.unwrap_or(chars),
+  }
+}
+
+/// Fuzzy hits without those another hit of the same label covers: where
+/// matches overlap, the longest one stands.
+fn without_contained<'a>(
+  fuzzy: Vec<Hit<'a>>,
+  exact: &[Hit<'a>],
+) -> Vec<Hit<'a>> {
+  let mut all = exact
+    .iter()
+    .map(|hit| (hit.start, hit.end, hit.label))
+    .chain(fuzzy.iter().map(|hit| (hit.start, hit.end, hit.label)))
+    .collect::<Vec<_>>();
+  // Longest first among equal starts.
+  all.sort_unstable_by(|left, right| {
+    left
+      .2
+      .cmp(right.2)
+      .then(left.0.cmp(&right.0))
+      .then(right.1.cmp(&left.1))
+  });
+  let mut covering = HashSet::new();
+  let mut current_label = None::<&str>;
+  let mut reach = 0_usize;
+  let mut previous = None::<(usize, usize)>;
+  for (start, end, label) in all {
+    if current_label != Some(label) {
+      current_label = Some(label);
+      reach = 0;
+      previous = None;
+    }
+    if end <= reach && previous != Some((start, end)) {
+      covering.insert((start, end, label));
+    }
+    reach = reach.max(end);
+    previous = Some((start, end));
+  }
+  fuzzy
+    .into_iter()
+    .filter(|hit| !covering.contains(&(hit.start, hit.end, hit.label)))
+    .collect()
+}
+
+/// The entry text a gazetteer search pattern carries.
+fn pattern_text(pattern: &SearchPattern) -> &str {
+  match pattern {
+    SearchPattern::Literal(text)
+    | SearchPattern::LiteralWithOptions { pattern: text, .. }
+    | SearchPattern::Fuzzy { pattern: text, .. }
+    | SearchPattern::Regex(text)
+    | SearchPattern::RegexWithOptions { pattern: text, .. } => text,
+  }
+}
+
+/// Whether the span's first and last whitespace-free parts are whole: a part
+/// that holds a dot (a dotted abbreviation such as `s.r.o` or `a.s.`) must
+/// not continue with a word character or a dot and a word character
+/// outside the span, as in `s.r.o.y`. Without a dot the joiner rules of
+/// [`Guard::in_identifier`] apply (`acme.cz` keeps `acme`).
+fn dotted_edges_close(text: &str, start: usize, end: usize) -> bool {
+  let span = text.get(start..end).unwrap_or_default();
+  let last = span.rsplit(char::is_whitespace).next().unwrap_or_default();
+  let first = span.split(char::is_whitespace).next().unwrap_or_default();
+  let open_after = last.contains('.')
+    && continues_chain(text.get(end..).unwrap_or_default().chars());
+  let open_before = first.contains('.')
+    && continues_chain(text.get(..start).unwrap_or_default().chars().rev());
+  !(open_after || open_before)
+}
+
+/// Whether `chars`, read away from a span, continue a word or a dotted
+/// chain: a word character, or a dot and a word character.
+fn continues_chain(chars: impl Iterator<Item = char>) -> bool {
+  let mut chars = chars.peekable();
+  match chars.next() {
+    Some(ch) if is_word_char(ch) => true,
+    Some('.') => chars.peek().copied().is_some_and(is_word_char),
+    _ => false,
+  }
+}
+
+/// Whether a fuzzy span of `tokens` tokens may stand for an entry of `words`
+/// words: as many, or one fewer when a typo joins two words. A span with
+/// more tokens would let the edit budget absorb a neighbouring short word
+/// (`Harriet a` for `Harriet`).
+const fn token_count_fits(tokens: usize, words: usize) -> bool {
+  tokens <= words && tokens.saturating_add(1) >= words
+}
+
+/// Every string reachable from `letters` by deleting at most `max` of them,
+/// `letters` included.
+fn deletion_variants(letters: &[char], max: usize) -> HashSet<Vec<char>> {
+  let mut variants = HashSet::from([letters.to_vec()]);
+  let mut frontier = vec![letters.to_vec()];
+  for _ in 0..max {
+    let mut next = Vec::new();
+    for variant in &frontier {
+      for index in 0..variant.len() {
+        let mut shorter = variant.clone();
+        shorter.remove(index);
+        if variants.insert(shorter.clone()) {
+          next.push(shorter);
+        }
+      }
+    }
+    frontier = next;
+  }
+  variants
+}
+
 /// A fuzzy window may open on the separator before a name (` Beta Tradng`);
 /// drop leading non-word and trailing whitespace characters.
 fn trim_fuzzy_span(text: &str, (start, end): (usize, usize)) -> (usize, usize) {
@@ -936,28 +1364,34 @@ fn trim_fuzzy_span(text: &str, (start, end): (usize, usize)) -> (usize, usize) {
 /// glue, joiners, and one joined segment.
 struct Guard<'t> {
   text: &'t str,
-  /// Whitespace-free runs that contain a marker bracket, sorted by start.
-  bracket_runs: Vec<BracketRun>,
+  /// Outermost balanced `⟦…⟧` markers, sorted and disjoint.
+  markers: Vec<(usize, usize)>,
   /// Characters the scans have looked at, for scaling tests.
   visits: Cell<usize>,
+  /// Deletion lookups and distance checks of the fuzzy fallback.
+  fuzzy_steps: Cell<usize>,
+  /// Fuzzy rows already found for a folded spelling.
+  fuzzy_memo: RefCell<HashMap<FuzzyMemoKey, Vec<usize>>>,
 }
 
-/// A whitespace-free run of text with its first `⟦` and last `⟧`.
-#[derive(Clone, Copy, Debug)]
-struct BracketRun {
-  start: usize,
-  end: usize,
-  first_open: Option<usize>,
-  last_close: Option<usize>,
-}
+/// Folded letters, token count, and lookup distance of a re-checked span.
+type FuzzyMemoKey = (Vec<char>, usize, usize);
 
 impl<'t> Guard<'t> {
   fn new(text: &'t str) -> Self {
     Self {
       text,
-      bracket_runs: bracket_runs(text),
+      markers: markers(text),
       visits: Cell::new(0),
+      fuzzy_steps: Cell::new(0),
+      fuzzy_memo: RefCell::new(HashMap::new()),
     }
+  }
+
+  fn count_fuzzy_step(&self) {
+    self
+      .fuzzy_steps
+      .set(self.fuzzy_steps.get().saturating_add(1));
   }
 
   fn visit<I: Iterator<Item = char>>(
@@ -1012,70 +1446,41 @@ impl<'t> Guard<'t> {
       .is_some_and(|segment| is_identifier_segment(&segment))
   }
 
-  /// A `⟦` precedes the span and a `⟧` follows it without whitespace in
-  /// between: two binary searches over the indexed bracket runs.
+  /// Whether a balanced `⟦…⟧` marker encloses the span: one binary search
+  /// over the indexed markers.
   fn in_marker(&self, start: usize, end: usize) -> bool {
-    let opened = previous_char(self.text, start)
-      .filter(|ch| !ch.is_whitespace())
-      .and_then(|_| self.bracket_run(start.saturating_sub(1)))
-      .and_then(|run| run.first_open)
-      .is_some_and(|open| open < start);
-    let closed = next_char(self.text, end)
-      .filter(|ch| !ch.is_whitespace())
-      .and_then(|_| self.bracket_run(end))
-      .and_then(|run| run.last_close)
-      .is_some_and(|close| close >= end);
-    opened && closed
-  }
-
-  /// The bracket run containing byte `position`, if any.
-  fn bracket_run(&self, position: usize) -> Option<BracketRun> {
-    let after = self
-      .bracket_runs
-      .partition_point(|run| run.start <= position);
-    after
+    let opened_before = self.markers.partition_point(|(open, _)| *open < start);
+    opened_before
       .checked_sub(1)
-      .and_then(|index| self.bracket_runs.get(index))
-      .filter(|run| position < run.end)
-      .copied()
+      .and_then(|index| self.markers.get(index))
+      .is_some_and(|(_, close)| *close >= end)
   }
 }
 
-/// Whitespace-free runs containing `⟦` or `⟧`, in one pass over the text.
-fn bracket_runs(text: &str) -> Vec<BracketRun> {
-  let mut runs = Vec::new();
-  if !text.contains(['⟦', '⟧']) {
-    return runs;
+/// Outermost balanced `⟦…⟧` markers as `(open, close)` byte offsets, in one
+/// pass. Markers never contain whitespace, so whitespace drops any bracket
+/// still open; a `⟧` without an open `⟦` is ignored.
+fn markers(text: &str) -> Vec<(usize, usize)> {
+  let mut markers = Vec::new();
+  if !text.contains('⟦') {
+    return markers;
   }
-  let mut current: Option<BracketRun> = None;
+  let mut open = Vec::new();
   for (index, ch) in text.char_indices() {
-    if ch.is_whitespace() {
-      if let Some(run) = current.take()
-        && (run.first_open.is_some() || run.last_close.is_some())
-      {
-        runs.push(BracketRun { end: index, ..run });
+    match ch {
+      '⟦' => open.push(index),
+      '⟧' => {
+        if let Some(start) = open.pop()
+          && open.is_empty()
+        {
+          markers.push((start, index));
+        }
       }
-      continue;
-    }
-    let run = current.get_or_insert(BracketRun {
-      start: index,
-      end: text.len(),
-      first_open: None,
-      last_close: None,
-    });
-    if ch == '⟦' && run.first_open.is_none() {
-      run.first_open = Some(index);
-    }
-    if ch == '⟧' {
-      run.last_close = Some(index);
+      _ if ch.is_whitespace() => open.clear(),
+      _ => {}
     }
   }
-  if let Some(run) = current
-    && (run.first_open.is_some() || run.last_close.is_some())
-  {
-    runs.push(run);
-  }
-  runs
+  markers
 }
 
 fn glue_is_free(
@@ -1779,6 +2184,442 @@ mod tests {
   }
 
   #[test]
+  fn markers_enclose_only_their_own_content() {
+    let entries = [exact("Acme", ORGANIZATION)];
+    assert_eq!(found(&entries, "⟦field-1⟧Acme⟦field-2⟧"), ["Acme"]);
+    assert_eq!(found(&entries, "x ⟦a⟦b⟧Acme⟧ y").len(), 0);
+    assert_eq!(found(&entries, "x ⟦Acme⟧⟧ y").len(), 0);
+    assert_eq!(found(&entries, "x Acme⟧ ⟦y"), ["Acme"]);
+    assert_eq!(found(&entries, "x ⟦Acme y⟧"), ["Acme"]);
+  }
+
+  #[test]
+  fn windows_line_endings_count_as_one_break() {
+    let entries = [exact("Marie Dvořáková", PERSON)];
+    for text in [
+      "Marie\nDvořáková podepsala.",
+      "Marie\r\nDvořáková podepsala.",
+      "Marie\rDvořáková podepsala.",
+    ] {
+      assert_eq!(found(&entries, text).len(), 1, "{text:?}");
+    }
+    assert!(found(&entries, "Marie\r\n\r\nDvořáková").is_empty());
+  }
+
+  /// Hits the real search index reports for `entries`, with the options the
+  /// assembler uses for gazetteer patterns.
+  fn engine_hits(entries: &[Entry<'_>], text: &str) -> Vec<SearchMatch> {
+    let mut patterns = entries
+      .iter()
+      .map(|entry| SearchPattern::LiteralWithOptions {
+        pattern: entry.term.to_owned(),
+        case_insensitive: None,
+        whole_words: Some(false),
+      })
+      .collect::<Vec<_>>();
+    patterns.extend(entries.iter().filter_map(|entry| {
+      entry.fuzzy_distance.map(|distance| SearchPattern::Fuzzy {
+        pattern: entry.term.to_owned(),
+        distance: Some(distance),
+      })
+    }));
+    let options = crate::search::SearchOptions {
+      literal: crate::search::LiteralSearchOptions {
+        case_insensitive: true,
+        whole_words: false,
+      },
+      fuzzy: crate::search::FuzzySearchOptions {
+        case_insensitive: true,
+        whole_words: false,
+        normalize_diacritics: true,
+      },
+      ..crate::search::SearchOptions::default()
+    };
+    crate::search::SearchIndex::new(patterns, options)
+      .unwrap()
+      .find_iter(text)
+      .unwrap()
+  }
+
+  fn engine_found(entries: &[Entry<'_>], text: &str) -> Vec<String> {
+    let (prepared, _) = prepare(entries);
+    prepared
+      .detect(&engine_hits(entries, text), text)
+      .unwrap()
+      .into_iter()
+      .map(|entity| entity.text)
+      .collect()
+  }
+
+  fn fuzzy_entry(term: &str) -> Entry<'_> {
+    Entry {
+      term,
+      label: PERSON,
+      fuzzy_distance: gazetteer_fuzzy_distance(term),
+    }
+  }
+
+  #[test]
+  fn overlapping_fuzzy_windows_do_not_hide_a_match() {
+    let entries = [fuzzy_entry("Wintermte"), fuzzy_entry("WintermteY")];
+    assert!(
+      engine_found(&entries, "Signed by WintermteX today.")
+        .iter()
+        .any(|hit| hit == "WintermteX")
+    );
+    assert!(
+      engine_found(&entries[..1], "Signed by WintermteX today.")
+        .iter()
+        .any(|hit| hit == "WintermteX")
+    );
+  }
+
+  #[test]
+  fn fuzzy_fallback_cost_does_not_grow_with_unrelated_entries() {
+    const ENTRIES: u32 = 3_000;
+    const WINDOWS: usize = 2_000;
+    // Deletion variants of a 9-letter span at distance 1 (1 + 9) plus a few
+    // distance checks, per span, for the few spans near each window.
+    const MAX_STEPS_PER_WINDOW: usize = 4 * 64;
+    // Unrelated 8-letter names: `b` followed by the base-26 digits of the
+    // index, padded with `q`.
+    let terms = (0..ENTRIES)
+      .map(|index| {
+        let mut name = String::from("B");
+        let mut rest = index;
+        for _ in 0..7 {
+          let digit = u8::try_from(rest.checked_rem(26).unwrap()).unwrap();
+          name.push(char::from(b'a'.saturating_add(digit)));
+          rest = rest.checked_div(26).unwrap();
+        }
+        name
+      })
+      .collect::<Vec<_>>();
+    let entries = terms
+      .iter()
+      .map(|term| Entry {
+        term,
+        label: PERSON,
+        fuzzy_distance: Some(1),
+      })
+      .collect::<Vec<_>>();
+    let (prepared, _) = prepare(&entries);
+    let fuzzy_pattern = u32::try_from(terms.len()).unwrap();
+    // Each distinct `Z…X` token, one letter longer than the entries, yields
+    // a window that cuts into it.
+    let text = (0..WINDOWS)
+      .map(|window| {
+        let mut token = String::from("Z");
+        let mut rest = window;
+        for _ in 0..7 {
+          let digit = u8::try_from(rest.checked_rem(26).unwrap()).unwrap();
+          token.push(char::from(b'a'.saturating_add(digit)));
+          rest = rest.checked_div(26).unwrap();
+        }
+        token.push_str("X ");
+        token
+      })
+      .collect::<String>();
+    let hits = (0..WINDOWS)
+      .map(|window| {
+        let start = u32::try_from(window.checked_mul(10).unwrap()).unwrap();
+        SearchMatch::Fuzzy {
+          pattern: fuzzy_pattern,
+          start,
+          end: start.saturating_add(8),
+          distance: 1,
+        }
+      })
+      .collect::<Vec<_>>();
+    let guard = Guard::new(&text);
+    assert!(
+      prepared
+        .detect_with_guard(&hits, &guard)
+        .unwrap()
+        .is_empty()
+    );
+    let steps = guard.fuzzy_steps.get();
+    assert!(
+      steps >= WINDOWS,
+      "the fallback ran for every window: {steps}"
+    );
+    assert!(
+      steps <= WINDOWS.saturating_mul(MAX_STEPS_PER_WINDOW),
+      "{steps} fallback steps for {WINDOWS} windows"
+    );
+  }
+
+  /// A fuzzy window over `text[start..end]` that its own entry rejects, so
+  /// the fallback re-checks the span against every fuzzy entry.
+  fn fallback_texts(
+    prepared: &PreparedGazetteerMatchData,
+    pattern: u32,
+    text: &str,
+  ) -> Vec<(String, String)> {
+    let hit = SearchMatch::Fuzzy {
+      pattern,
+      start: 0,
+      end: u32::try_from(text.len()).unwrap(),
+      distance: 1,
+    };
+    prepared
+      .detect(&[hit], text)
+      .unwrap()
+      .into_iter()
+      .map(|entity| (entity.text, entity.label))
+      .collect()
+  }
+
+  #[test]
+  fn fuzzy_fallback_checks_every_entry_sharing_a_variant_in_order() {
+    // 300 entries within two edits of `Wintermute`, all sharing the
+    // variant `wintermu`; only the last one is an organization.
+    let mut terms = vec![String::from("Zzzzzzzzzz")];
+    for first in 'a'..='z' {
+      for second in 'a'..='z' {
+        if terms.len() <= 300 {
+          terms.push(format!("Wintermu{first}{second}"));
+        }
+      }
+    }
+    let entries = terms
+      .iter()
+      .enumerate()
+      .map(|(index, term)| Entry {
+        term,
+        label: if index == 300 { ORGANIZATION } else { PERSON },
+        fuzzy_distance: Some(2),
+      })
+      .collect::<Vec<_>>();
+    let pattern = u32::try_from(entries.len()).unwrap();
+    let first = fallback_texts(&prepare(&entries).0, pattern, "Wintermute");
+    assert!(
+      first
+        .iter()
+        .any(|(text, label)| text == "Wintermute" && label == ORGANIZATION),
+      "{first:?}"
+    );
+    // A fresh build hashes differently; the output must not change.
+    let second = fallback_texts(&prepare(&entries).0, pattern, "Wintermute");
+    assert_eq!(first, second);
+  }
+
+  #[test]
+  fn caller_fuzzy_distances_are_capped() {
+    let term = "Abcdefghijklmnopqrstuvwxyzabcd";
+    let entries = [Entry {
+      term,
+      label: PERSON,
+      fuzzy_distance: Some(15),
+    }];
+    let (prepared, _) = prepare(&entries);
+    // One-letter-deletion and two-letter-deletion variants of 30 letters.
+    assert!(prepared.fuzzy_deletions.len() <= 1 + 30 + 435);
+    assert!(prepared.rows.iter().all(|row| match &row.kind {
+      RowKind::Fuzzy { max_distance, .. } => *max_distance <= 2,
+      RowKind::Exact => true,
+    }));
+  }
+
+  #[test]
+  fn a_shorter_accepted_match_does_not_hide_a_longer_one() {
+    let entries = [fuzzy_entry("Wintermute"), fuzzy_entry("Wintermute X")];
+    let found = engine_found(&entries, "Signed by Wintermute Y today.");
+    assert!(found.iter().any(|hit| hit == "Wintermute Y"), "{found:?}");
+    // The exact `Wintermute` hit stays inside it for resolution to merge.
+    assert!(
+      found
+        .iter()
+        .all(|hit| "Wintermute Y".starts_with(hit.as_str())),
+      "{found:?}"
+    );
+  }
+
+  #[test]
+  fn window_tokens_stop_within_their_reach() {
+    let text = format!("Acme {}", "x".repeat(100_000));
+    let window = window_tokens(&text, 0, 4, 10);
+    assert!(
+      window.tokens.iter().all(|token| token.end <= 40),
+      "{:?}",
+      window
+        .tokens
+        .iter()
+        .map(|token| token.end)
+        .collect::<Vec<_>>()
+    );
+  }
+
+  #[test]
+  fn recovered_fuzzy_spans_do_not_absorb_a_short_word() {
+    let entries = [fuzzy_entry("Wintermute"), fuzzy_entry("Wintermutes")];
+    let found = engine_found(&entries, "Wintermute a Novák podepsali.");
+    assert!(found.iter().all(|hit| hit == "Wintermute"), "{found:?}");
+  }
+
+  #[test]
+  fn spans_never_end_inside_a_dotted_chain() {
+    let entries = [fuzzy_entry("Luma s.r.o.")];
+    let text = "archived Luma s.r.o. reviewed xLuma s.r.o.y e\u{301} konec";
+    let found = engine_found(&entries, text);
+    assert_eq!(found, ["Luma s.r.o."], "{text:?}");
+  }
+
+  /// Word boundaries per UAX #29.
+  fn word_boundaries(text: &str) -> HashSet<usize> {
+    use unicode_segmentation::UnicodeSegmentation;
+    let mut boundaries = HashSet::from([0, text.len()]);
+    for (start, segment) in text.split_word_bound_indices() {
+      boundaries.insert(start);
+      boundaries.insert(start.saturating_add(segment.len()));
+    }
+    boundaries
+  }
+
+  /// Byte offsets the gazetteer covers in `text` for `entries`.
+  fn coverage(entries: &[Entry<'_>], text: &str) -> Vec<bool> {
+    let (prepared, _) = prepare(entries);
+    let mut covered = vec![false; text.len()];
+    for entity in prepared.detect(&engine_hits(entries, text), text).unwrap() {
+      let start = usize::try_from(entity.start).unwrap();
+      let end = usize::try_from(entity.end).unwrap();
+      for slot in covered.iter_mut().take(end).skip(start) {
+        *slot = true;
+      }
+    }
+    covered
+  }
+
+  /// Entry spellings derived from a base name: itself, a near duplicate, a
+  /// prefix extension, and a multiword extension.
+  fn derived_entry(
+    base: &str,
+    kind: usize,
+    letter: char,
+    word: &str,
+  ) -> String {
+    match kind % 4 {
+      0 => base.to_owned(),
+      1 => {
+        let mut chars = base.chars().collect::<Vec<_>>();
+        if let Some(last) = chars.last_mut() {
+          *last = letter;
+        }
+        chars.into_iter().collect()
+      }
+      2 => format!("{base}{letter}"),
+      _ => format!("{base} {word}"),
+    }
+  }
+
+  /// A document spelling of `entry`: as written, with a letter appended or
+  /// replaced or dropped, or followed by another word.
+  fn perturbed(entry: &str, kind: usize, letter: char, word: &str) -> String {
+    let chars = entry.chars().collect::<Vec<_>>();
+    match kind % 5 {
+      0 => entry.to_owned(),
+      1 => format!("{entry}{letter}"),
+      2 => chars
+        .iter()
+        .take(chars.len().saturating_sub(1))
+        .chain(std::iter::once(&letter))
+        .collect(),
+      3 => chars.iter().skip(1).collect(),
+      _ => format!("{entry} {word}"),
+    }
+  }
+
+  proptest! {
+    #![proptest_config(ProptestConfig {
+      cases: 256,
+      rng_seed: RngSeed::Fixed(0x636f_7665_7261_6765),
+      failure_persistence: None,
+      ..ProptestConfig::default()
+    })]
+
+    #[test]
+    fn spaced_spans_sit_on_unicode_word_boundaries(
+      names in prop::collection::vec(
+        prop_oneof![
+          prop::sample::select(vec!["Zy", "Dab", "Luma", "Velomír", "Žilora", "Ľunora"])
+            .prop_map(str::to_owned),
+          (
+            prop::sample::select(vec!["Luma", "Bex", "Mivo", "Wintermute"]),
+            prop::sample::select(vec!["Labs", "s.r.o.", "a.s.", "GmbH", "Ltd"]),
+          )
+            .prop_map(|(name, suffix)| format!("{name} {suffix}")),
+        ],
+        1..4,
+      ),
+      separator in prop::sample::select(vec![" ", ", ", "\n", "\u{a0}", "\u{1f980}"]),
+    ) {
+      let entries = names.iter().map(|name| fuzzy_entry(name)).collect::<Vec<_>>();
+      let text = names
+        .iter()
+        .map(|name| format!("archived{separator}{name}{separator}reviewed x{name}y e\u{301} Ελληνικά 界"))
+        .collect::<Vec<_>>()
+        .join(separator);
+      let boundaries = word_boundaries(&text);
+      let (prepared, _) = prepare(&entries);
+      let entities = prepared.detect(&engine_hits(&entries, &text), &text).unwrap();
+      prop_assert!(!entities.is_empty());
+      for entity in entities {
+        let start = usize::try_from(entity.start).unwrap();
+        let end = usize::try_from(entity.end).unwrap();
+        prop_assert!(
+          boundaries.contains(&start) && boundaries.contains(&end),
+          "{:?} at {start}..{end} in {text:?}",
+          entity.text
+        );
+      }
+    }
+
+    #[test]
+    fn adding_entries_never_reduces_coverage(
+      bases in prop::collection::vec("[A-Z][a-z]{3,9}", 1..3),
+      derivations in prop::collection::vec(
+        (any::<usize>(), any::<usize>(), "[a-z]", "[A-Z][a-z]{1,5}"),
+        1..5,
+      ),
+      spellings in prop::collection::vec(
+        (any::<usize>(), any::<usize>(), "[a-z]", "[a-z]{1,6}"),
+        1..5,
+      ),
+    ) {
+      let mut terms = Vec::new();
+      for (base, kind, letter, word) in &derivations {
+        let base = &bases[base.checked_rem(bases.len()).unwrap()];
+        let letter = letter.chars().next().unwrap();
+        let term = derived_entry(base, *kind, letter, word);
+        if !terms.contains(&term) {
+          terms.push(term);
+        }
+      }
+      let text = spellings
+        .iter()
+        .map(|(entry, kind, letter, word)| {
+          let entry = &terms[entry.checked_rem(terms.len()).unwrap()];
+          perturbed(entry, *kind, letter.chars().next().unwrap(), word)
+        })
+        .collect::<Vec<_>>()
+        .join(" a ");
+      let text = format!("Ref {text} konec.");
+      let all = terms.iter().map(|term| fuzzy_entry(term)).collect::<Vec<_>>();
+      let together = coverage(&all, &text);
+      for entry in &all {
+        let alone = coverage(std::slice::from_ref(entry), &text);
+        for (offset, (single, joint)) in alone.iter().zip(&together).enumerate() {
+          prop_assert!(
+            !single || *joint,
+            "{:?} alone covers byte {offset} of {text:?}, all of {terms:?} do not",
+            entry.term
+          );
+        }
+      }
+    }
+  }
+
+  #[test]
   fn separators_accept_whitespace_and_their_own_punctuation() {
     let entries = [exact("A.B. & Co Holding", ORGANIZATION)];
     for text in [
@@ -2002,8 +2843,32 @@ mod tests {
         .collect::<Vec<_>>();
       let start = query_start;
       let end = query_start.saturating_add(query_len);
-      let linear = hits.iter().any(|hit| start < hit.end && end > hit.start);
-      prop_assert_eq!(SpanIndex::new(&hits).overlaps(start, end), linear);
+      let linear = hits.iter().any(|hit| hit.start <= start && end <= hit.end);
+      prop_assert_eq!(SpanIndex::new(&hits).contains(start, end), linear);
+    }
+
+    #[test]
+    fn a_longer_near_duplicate_entry_never_removes_a_match(
+      name in "[A-Z][a-z]{5,10}",
+      extra in "[a-z]{1,2}",
+      typo in 0_usize..4,
+      glued in "[a-z]?",
+    ) {
+      let surface = match typo {
+        0 => name.clone(),
+        1 => format!("{name}{glued}"),
+        2 => name.chars().skip(1).collect::<String>(),
+        _ => format!("{}x", name.chars().take(name.chars().count().saturating_sub(1)).collect::<String>()),
+      };
+      let text = format!("Podpis {surface} dnes.");
+      let longer = format!("{name}{extra}");
+      let alone = [fuzzy_entry(&name)];
+      let both = [fuzzy_entry(&name), fuzzy_entry(&longer)];
+      let found_alone = engine_found(&alone, &text);
+      let found_both = engine_found(&both, &text);
+      for hit in &found_alone {
+        prop_assert!(found_both.contains(hit), "{text:?}: {found_alone:?} vs {found_both:?}");
+      }
     }
 
     #[test]
