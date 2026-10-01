@@ -1,0 +1,2820 @@
+{
+  "entries": [
+    {
+      "id": "corpus-entry-1",
+      "canonical": "Acme A",
+      "label": "organization",
+      "variants": [],
+      "workspaceId": "corpus-workspace",
+      "createdAt": 0,
+      "source": "manual"
+    },
+    {
+      "id": "corpus-entry-2",
+      "canonical": "Zeta",
+      "label": "organization",
+      "variants": [],
+      "workspaceId": "corpus-workspace",
+      "createdAt": 0,
+      "source": "manual"
+    },
+    {
+      "id": "corpus-entry-3",
+      "canonical": "Orbis",
+      "label": "organization",
+      "variants": [],
+      "workspaceId": "corpus-workspace",
+      "createdAt": 0,
+      "source": "manual"
+    },
+    {
+      "id": "corpus-entry-4",
+      "canonical": "Beta Trading s.r.o.",
+      "label": "organization",
+      "variants": [],
+      "workspaceId": "corpus-workspace",
+      "createdAt": 0,
+      "source": "manual"
+    },
+    {
+      "id": "corpus-entry-5",
+      "canonical": "Velmorská stavební a.s.",
+      "label": "organization",
+      "variants": [],
+      "workspaceId": "corpus-workspace",
+      "createdAt": 0,
+      "source": "manual"
+    },
+    {
+      "id": "corpus-entry-6",
+      "canonical": "Brimová Invest spol. s r.o.",
+      "label": "organization",
+      "variants": [],
+      "workspaceId": "corpus-workspace",
+      "createdAt": 0,
+      "source": "manual"
+    },
+    {
+      "id": "corpus-entry-7",
+      "canonical": "Northfield Analytics Ltd",
+      "label": "organization",
+      "variants": [],
+      "workspaceId": "corpus-workspace",
+      "createdAt": 0,
+      "source": "manual"
+    },
+    {
+      "id": "corpus-entry-8",
+      "canonical": "Zelvanská energetika, a. s.",
+      "label": "organization",
+      "variants": [],
+      "workspaceId": "corpus-workspace",
+      "createdAt": 0,
+      "source": "manual"
+    },
+    {
+      "id": "corpus-entry-9",
+      "canonical": "Marie Dvořáková",
+      "label": "person",
+      "variants": [],
+      "workspaceId": "corpus-workspace",
+      "createdAt": 0,
+      "source": "manual"
+    },
+    {
+      "id": "corpus-entry-10",
+      "canonical": "Tomáš Kubíček",
+      "label": "person",
+      "variants": [],
+      "workspaceId": "corpus-workspace",
+      "createdAt": 0,
+      "source": "manual"
+    },
+    {
+      "id": "corpus-entry-11",
+      "canonical": "Ľubomír Šťastný",
+      "label": "person",
+      "variants": [],
+      "workspaceId": "corpus-workspace",
+      "createdAt": 0,
+      "source": "manual"
+    },
+    {
+      "id": "corpus-entry-12",
+      "canonical": "Zuzana Kováčová",
+      "label": "person",
+      "variants": [],
+      "workspaceId": "corpus-workspace",
+      "createdAt": 0,
+      "source": "manual"
+    },
+    {
+      "id": "corpus-entry-13",
+      "canonical": "Harriet Wellbourne",
+      "label": "person",
+      "variants": [],
+      "workspaceId": "corpus-workspace",
+      "createdAt": 0,
+      "source": "manual"
+    },
+    {
+      "id": "corpus-entry-14",
+      "canonical": "Novák",
+      "label": "person",
+      "variants": [],
+      "workspaceId": "corpus-workspace",
+      "createdAt": 0,
+      "source": "manual"
+    },
+    {
+      "id": "corpus-entry-17",
+      "canonical": "Nerava++",
+      "label": "organization",
+      "variants": [],
+      "workspaceId": "corpus-workspace",
+      "createdAt": 0,
+      "source": "manual"
+    },
+    {
+      "id": "corpus-entry-18",
+      "canonical": "@Brivola",
+      "label": "person",
+      "variants": [],
+      "workspaceId": "corpus-workspace",
+      "createdAt": 0,
+      "source": "manual"
+    },
+    {
+      "id": "corpus-entry-acfe",
+      "canonical": "Acfe",
+      "label": "organization",
+      "variants": [],
+      "workspaceId": "corpus-workspace",
+      "createdAt": 0,
+      "source": "manual"
+    }
+  ],
+  "cases": [
+    {
+      "expectation": "redact",
+      "kind": "exact",
+      "text": "Smlouvu podepsala společnost Beta Trading s.r.o. dne 3. 5.",
+      "surface": "Beta Trading s.r.o.",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 30,
+          "end": 49,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "exact",
+      "text": "Za kupujícího jednala Marie Dvořáková.",
+      "surface": "Marie Dvořáková",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 24,
+          "end": 42,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "exact",
+      "text": "Návrh doručil partner Acme A včas.",
+      "surface": "Acme A",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 24,
+          "end": 30,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "exact",
+      "text": "Dodavatelem zůstává Zeta.",
+      "surface": "Zeta",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 23,
+          "end": 27,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "exact",
+      "text": "The report from Orbis arrived late.",
+      "surface": "Orbis",
+      "language": "en",
+      "expectedEntities": [
+        {
+          "start": 16,
+          "end": 21,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "exact",
+      "text": "Signed for and on behalf of Northfield Analytics Ltd.",
+      "surface": "Northfield Analytics Ltd",
+      "language": "en",
+      "expectedEntities": [
+        {
+          "start": 28,
+          "end": 52,
+          "label": "organization"
+        }
+      ],
+      "knownFailure": {
+        "entities": [
+          {
+            "end": 53,
+            "label": "organization",
+            "start": 28
+          }
+        ],
+        "redactedText": "Signed for and on behalf of [REDACTED]"
+      }
+    },
+    {
+      "expectation": "redact",
+      "kind": "exact",
+      "text": "Witnessed by Harriet Wellbourne.",
+      "surface": "Harriet Wellbourne",
+      "language": "en",
+      "expectedEntities": [
+        {
+          "start": 13,
+          "end": 31,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "exact",
+      "text": "Odvolanie podal Ľubomír Šťastný.",
+      "surface": "Ľubomír Šťastný",
+      "language": "sk",
+      "expectedEntities": [
+        {
+          "start": 16,
+          "end": 36,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "exact",
+      "text": "Pan Novák s návrhem souhlasil.",
+      "surface": "Novák",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 4,
+          "end": 10,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "exact",
+      "text": "Odberateľom je Zelvanská energetika, a. s.",
+      "surface": "Zelvanská energetika, a. s.",
+      "language": "sk",
+      "expectedEntities": [
+        {
+          "start": 16,
+          "end": 44,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "exact",
+      "text": "Stavbu provedla Velmorská stavební a.s.",
+      "surface": "Velmorská stavební a.s.",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 16,
+          "end": 41,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "case",
+      "text": "PRODÁVAJÍCÍ: BETA TRADING S.R.O.",
+      "surface": "BETA TRADING S.R.O.",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 16,
+          "end": 35,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "case",
+      "text": "kontakt: marie dvořáková",
+      "surface": "marie dvořáková",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 9,
+          "end": 27,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "case",
+      "text": "PARTNER: ACME A",
+      "surface": "ACME A",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 9,
+          "end": 15,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "case",
+      "text": "dodavatel zeta potvrdil",
+      "surface": "zeta",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 10,
+          "end": 14,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "case",
+      "text": "CLIENT: ORBIS",
+      "surface": "ORBIS",
+      "language": "en",
+      "expectedEntities": [
+        {
+          "start": 8,
+          "end": 13,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "case",
+      "text": "cc: harriet wellbourne",
+      "surface": "harriet wellbourne",
+      "language": "en",
+      "expectedEntities": [
+        {
+          "start": 4,
+          "end": 22,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "case",
+      "text": "ŽALOBCE: NOVÁK",
+      "surface": "NOVÁK",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 10,
+          "end": 16,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "diacritics-dropped",
+      "text": "Za kupujiciho Marie Dvorakova.",
+      "surface": "Marie Dvorakova",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 14,
+          "end": 29,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "diacritics-dropped",
+      "text": "Jednatel Tomas Kubicek podepsal.",
+      "surface": "Tomas Kubicek",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 9,
+          "end": 22,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "diacritics-dropped",
+      "text": "Odvolanie podal Lubomir Stastny.",
+      "surface": "Lubomir Stastny",
+      "language": "sk",
+      "expectedEntities": [
+        {
+          "start": 16,
+          "end": 31,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "diacritics-dropped",
+      "text": "Splnomocnenkyna Zuzana Kovacova.",
+      "surface": "Zuzana Kovacova",
+      "language": "sk",
+      "expectedEntities": [
+        {
+          "start": 16,
+          "end": 31,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "diacritics-dropped",
+      "text": "Stavbu provedla Velmorska stavebni a.s. vcas.",
+      "surface": "Velmorska stavebni a.s.",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 16,
+          "end": 39,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "diacritics-dropped",
+      "text": "Investorem je Brimova Invest spol. s r.o. od roku 2020.",
+      "surface": "Brimova Invest spol. s r.o.",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 14,
+          "end": 41,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "diacritics-dropped",
+      "text": "Pan Novak s navrhem souhlasil.",
+      "surface": "Novak",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 4,
+          "end": 9,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "diacritics-dropped",
+      "text": "Odberatelom je Zelvanska energetika, a. s.",
+      "surface": "Zelvanska energetika, a. s.",
+      "language": "sk",
+      "expectedEntities": [
+        {
+          "start": 15,
+          "end": 42,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "diacritics-added",
+      "text": "Klient Orbís zaplatil.",
+      "surface": "Orbís",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 7,
+          "end": 13,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "diacritics-added",
+      "text": "Dodavatelem je Zéta.",
+      "surface": "Zéta",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 15,
+          "end": 20,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "diacritics-added",
+      "text": "Společnost Béta Trading s.r.o. odpověděla.",
+      "surface": "Béta Trading s.r.o.",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 12,
+          "end": 32,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "diacritics-added",
+      "text": "Partner Acmé A potvrdil.",
+      "surface": "Acmé A",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 8,
+          "end": 15,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "diacritics-added",
+      "text": "Signed by Hárriet Wellbourne.",
+      "surface": "Hárriet Wellbourne",
+      "language": "en",
+      "expectedEntities": [
+        {
+          "start": 10,
+          "end": 29,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "typo-1",
+      "text": "Witnessed by Harriet Welbourne.",
+      "surface": "Harriet Welbourne",
+      "language": "en",
+      "expectedEntities": [
+        {
+          "start": 13,
+          "end": 30,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "typo-1",
+      "text": "Prodávající Beta Tradinq s.r.o. souhlasí.",
+      "surface": "Beta Tradinq s.r.o.",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 15,
+          "end": 34,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "typo-1",
+      "text": "Prepared by Northfield Analytic Ltd.",
+      "surface": "Northfield Analytic Ltd",
+      "language": "en",
+      "expectedEntities": [
+        {
+          "start": 12,
+          "end": 35,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "typo-1",
+      "text": "Za kupujícího Marie Dvořákvá.",
+      "surface": "Marie Dvořákvá",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 16,
+          "end": 33,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "typo-1",
+      "text": "Jednatel Tomáš Kubíšek podepsal.",
+      "surface": "Tomáš Kubíšek",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 9,
+          "end": 26,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "typo-1",
+      "text": "Splnomocnenkyňa Zuzanna Kováčová.",
+      "surface": "Zuzanna Kováčová",
+      "language": "sk",
+      "expectedEntities": [
+        {
+          "start": 17,
+          "end": 36,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "typo-1",
+      "text": "Klient Orbys zaplatil.",
+      "surface": "Orbys",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 7,
+          "end": 12,
+          "label": "organization"
+        }
+      ],
+      "knownFailure": {
+        "entities": [],
+        "redactedText": "Klient Orbys zaplatil."
+      }
+    },
+    {
+      "expectation": "redact",
+      "kind": "typo-2",
+      "text": "Witnessed by Hariet Welbourne.",
+      "surface": "Hariet Welbourne",
+      "language": "en",
+      "expectedEntities": [
+        {
+          "start": 13,
+          "end": 29,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "typo-2",
+      "text": "Prodávající Bta Tradng s.r.o. souhlasí.",
+      "surface": "Bta Tradng s.r.o.",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 15,
+          "end": 32,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "typo-2",
+      "text": "Prepared by Northfeld Analytcs Ltd.",
+      "surface": "Northfeld Analytcs Ltd",
+      "language": "en",
+      "expectedEntities": [
+        {
+          "start": 12,
+          "end": 34,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "typo-2",
+      "text": "Za kupujícího Mare Dvořákvá.",
+      "surface": "Mare Dvořákvá",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 16,
+          "end": 32,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "typo-2",
+      "text": "Splnomocnenkyňa Zuzana Kováčovová.",
+      "surface": "Zuzana Kováčovová",
+      "language": "sk",
+      "expectedEntities": [
+        {
+          "start": 17,
+          "end": 37,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "typo-2",
+      "text": "Investorem je Brimová Invst spl. s r.o.",
+      "surface": "Brimová Invst spl. s r.o.",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 14,
+          "end": 40,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "inflected",
+      "text": "Dopis byl zaslán panu Novákovi.",
+      "surface": "Novákovi",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 23,
+          "end": 32,
+          "label": "person"
+        }
+      ],
+      "languageExclusions": ["en"]
+    },
+    {
+      "expectation": "redact",
+      "kind": "inflected",
+      "text": "Žaloba proti panu Nováka byla podána.",
+      "surface": "Nováka",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 19,
+          "end": 26,
+          "label": "person"
+        }
+      ],
+      "languageExclusions": ["en"]
+    },
+    {
+      "expectation": "redact",
+      "kind": "inflected",
+      "text": "Jednal jsem s panem Novákem.",
+      "surface": "Novákem",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 20,
+          "end": 28,
+          "label": "person"
+        }
+      ],
+      "languageExclusions": ["en"]
+    },
+    {
+      "expectation": "redact",
+      "kind": "inflected",
+      "text": "Plnou moc udělila Marii Dvořákové.",
+      "surface": "Marii Dvořákové",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 19,
+          "end": 37,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "inflected",
+      "text": "Jednal jsem s Marií Dvořákovou.",
+      "surface": "Marií Dvořákovou",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 14,
+          "end": 33,
+          "label": "person"
+        }
+      ],
+      "languageExclusions": ["en"]
+    },
+    {
+      "expectation": "redact",
+      "kind": "inflected",
+      "text": "Podpis Tomáše Kubíčka chybí.",
+      "surface": "Tomáše Kubíčka",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 7,
+          "end": 25,
+          "label": "person"
+        }
+      ],
+      "languageExclusions": ["en"]
+    },
+    {
+      "expectation": "redact",
+      "kind": "inflected",
+      "text": "Zaslali jsme to Tomášovi Kubíčkovi.",
+      "surface": "Tomášovi Kubíčkovi",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 16,
+          "end": 38,
+          "label": "person"
+        }
+      ],
+      "languageExclusions": ["en"]
+    },
+    {
+      "expectation": "redact",
+      "kind": "inflected",
+      "text": "Rozsudok proti Ľubomírovi Šťastnému.",
+      "surface": "Ľubomírovi Šťastnému",
+      "language": "sk",
+      "expectedEntities": [
+        {
+          "start": 15,
+          "end": 40,
+          "label": "person"
+        }
+      ],
+      "languageExclusions": ["en"]
+    },
+    {
+      "expectation": "redact",
+      "kind": "inflected",
+      "text": "Návrh Zuzany Kováčovej bol zamietnutý.",
+      "surface": "Zuzany Kováčovej",
+      "language": "sk",
+      "expectedEntities": [
+        {
+          "start": 7,
+          "end": 25,
+          "label": "person"
+        }
+      ],
+      "languageExclusions": ["en"]
+    },
+    {
+      "expectation": "redact",
+      "kind": "inflected",
+      "text": "Stretli sme sa so Zuzanou Kováčovou.",
+      "surface": "Zuzanou Kováčovou",
+      "language": "sk",
+      "expectedEntities": [
+        {
+          "start": 18,
+          "end": 37,
+          "label": "person"
+        }
+      ],
+      "languageExclusions": ["en"]
+    },
+    {
+      "expectation": "redact",
+      "kind": "inflected",
+      "text": "Faktura od Velmorské stavební a.s. dorazila.",
+      "surface": "Velmorské stavební a.s.",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 11,
+          "end": 36,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "inflected",
+      "text": "Smlouva s Velmorskou stavební a.s. platí.",
+      "surface": "Velmorskou stavební a.s.",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 10,
+          "end": 35,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "inflected",
+      "text": "Zmluva s Zelvanskou energetikou, a. s. platí.",
+      "surface": "Zelvanskou energetikou, a. s.",
+      "language": "sk",
+      "expectedEntities": [
+        {
+          "start": 9,
+          "end": 38,
+          "label": "organization"
+        }
+      ],
+      "languageExclusions": ["en"]
+    },
+    {
+      "expectation": "redact",
+      "kind": "inflected-diacritics-dropped",
+      "text": "Dopis byl zaslan panu Novakovi.",
+      "surface": "Novakovi",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 22,
+          "end": 30,
+          "label": "person"
+        }
+      ],
+      "languageExclusions": ["en"]
+    },
+    {
+      "expectation": "redact",
+      "kind": "inflected-diacritics-dropped",
+      "text": "Jednal jsem s panem Novakem.",
+      "surface": "Novakem",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 20,
+          "end": 27,
+          "label": "person"
+        }
+      ],
+      "languageExclusions": ["en"]
+    },
+    {
+      "expectation": "redact",
+      "kind": "inflected-diacritics-dropped",
+      "text": "Plnou moc udelila Marii Dvorakove.",
+      "surface": "Marii Dvorakove",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 18,
+          "end": 33,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "inflected-diacritics-dropped",
+      "text": "Podpis Tomase Kubicka chybi.",
+      "surface": "Tomase Kubicka",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 7,
+          "end": 21,
+          "label": "person"
+        }
+      ],
+      "languageExclusions": ["en"]
+    },
+    {
+      "expectation": "redact",
+      "kind": "inflected-diacritics-dropped",
+      "text": "Rozsudok proti Lubomirovi Stastnemu.",
+      "surface": "Lubomirovi Stastnemu",
+      "language": "sk",
+      "expectedEntities": [
+        {
+          "start": 15,
+          "end": 35,
+          "label": "person"
+        }
+      ],
+      "languageExclusions": ["en"]
+    },
+    {
+      "expectation": "redact",
+      "kind": "inflected-diacritics-dropped",
+      "text": "Navrh Zuzany Kovacovej bol zamietnuty.",
+      "surface": "Zuzany Kovacovej",
+      "language": "sk",
+      "expectedEntities": [
+        {
+          "start": 6,
+          "end": 22,
+          "label": "person"
+        }
+      ],
+      "languageExclusions": ["en"]
+    },
+    {
+      "expectation": "redact",
+      "kind": "inflected-diacritics-dropped",
+      "text": "Faktura od Velmorske stavebni a.s. dorazila.",
+      "surface": "Velmorske stavebni a.s.",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 11,
+          "end": 34,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "legal-form-variant",
+      "text": "Prodávající: Beta Trading, s.r.o.",
+      "surface": "Beta Trading, s.r.o.",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 16,
+          "end": 36,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "legal-form-variant",
+      "text": "Prodávající: Beta Trading s. r. o.",
+      "surface": "Beta Trading s. r. o.",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 16,
+          "end": 37,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "legal-form-variant",
+      "text": "Prodávající: Beta Trading, s. r. o.",
+      "surface": "Beta Trading, s. r. o.",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 16,
+          "end": 38,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "legal-form-variant",
+      "text": "Prodávající: Beta Trading spol. s r.o.",
+      "surface": "Beta Trading spol. s r.o.",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 16,
+          "end": 41,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "legal-form-variant",
+      "text": "Prodávající je Beta Trading.",
+      "surface": "Beta Trading",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 18,
+          "end": 30,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "legal-form-variant",
+      "text": "Zhotovitel: Velmorská stavební, a.s.",
+      "surface": "Velmorská stavební, a.s.",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 12,
+          "end": 38,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "legal-form-variant",
+      "text": "Zhotovitel: Velmorská stavební a. s.",
+      "surface": "Velmorská stavební a. s.",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 12,
+          "end": 38,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "legal-form-variant",
+      "text": "Investor: Brimová Invest s.r.o.",
+      "surface": "Brimová Invest s.r.o.",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 10,
+          "end": 32,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "legal-form-variant",
+      "text": "Investor: Brimová Invest, spol. s r. o.",
+      "surface": "Brimová Invest, spol. s r. o.",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 10,
+          "end": 40,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "legal-form-variant",
+      "text": "Odberateľ: Zelvanská energetika a.s.",
+      "surface": "Zelvanská energetika a.s.",
+      "language": "sk",
+      "expectedEntities": [
+        {
+          "start": 12,
+          "end": 38,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "legal-form-variant",
+      "text": "Prepared by Northfield Analytics Limited.",
+      "surface": "Northfield Analytics Limited",
+      "language": "en",
+      "expectedEntities": [
+        {
+          "start": 12,
+          "end": 40,
+          "label": "organization"
+        }
+      ],
+      "knownFailure": {
+        "entities": [
+          {
+            "end": 32,
+            "label": "organization",
+            "start": 12
+          }
+        ],
+        "redactedText": "Prepared by [REDACTED] Limited."
+      }
+    },
+    {
+      "expectation": "redact",
+      "kind": "split",
+      "text": "Za kupujícího Marie\nDvořáková.",
+      "surface": "Marie\nDvořáková",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 16,
+          "end": 34,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "split",
+      "text": "Za kupujícího Marie  Dvořáková.",
+      "surface": "Marie  Dvořáková",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 16,
+          "end": 35,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "split",
+      "text": "Za kupujícího Marie Dvořáková.",
+      "surface": "Marie Dvořáková",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 16,
+          "end": 35,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "split",
+      "text": "Za kupujícího Dvořáková, Marie.",
+      "surface": "Dvořáková, Marie",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 16,
+          "end": 35,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "split",
+      "text": "Prodávající Beta\nTrading s.r.o. souhlasí.",
+      "surface": "Beta\nTrading s.r.o.",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 15,
+          "end": 34,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "split",
+      "text": "Prodávající Beta  Trading s.r.o. souhlasí.",
+      "surface": "Beta  Trading s.r.o.",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 15,
+          "end": 35,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "split",
+      "text": "Witnessed by Harriet\tWellbourne.",
+      "surface": "Harriet\tWellbourne",
+      "language": "en",
+      "expectedEntities": [
+        {
+          "start": 13,
+          "end": 31,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "split",
+      "text": "Partner Acme A potvrdil.",
+      "surface": "Acme A",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 8,
+          "end": 15,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "split",
+      "text": "Jednatel Tomáš\r\nKubíček podepsal.",
+      "surface": "Tomáš\r\nKubíček",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 9,
+          "end": 27,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "expectation": "keep",
+      "kind": "hex",
+      "text": "commit 3f2acfeca1b04d2e9c7a5b6d8e0f1a2b merged",
+      "surface": "3f2acfeca1b04d2e9c7a5b6d8e0f1a2b",
+      "language": "en",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "suppression",
+        "surface": "acfe",
+        "label": "organization",
+        "context": "before acfe after"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "hex",
+      "text": "build acfe0a1b2c3d4e5f ready",
+      "surface": "acfe0a1b2c3d4e5f",
+      "language": "en",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "suppression",
+        "surface": "acfe",
+        "label": "organization",
+        "context": "before acfe after"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "hex",
+      "text": "pointer 0xacfe12ef freed",
+      "surface": "0xacfe12ef",
+      "language": "en",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "suppression",
+        "surface": "acfe",
+        "label": "organization",
+        "context": "before acfe after"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "hex",
+      "text": "blob deadbeefacfe0042 stored",
+      "surface": "deadbeefacfe0042",
+      "language": "en",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "suppression",
+        "surface": "acfe",
+        "label": "organization",
+        "context": "before acfe after"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "hex",
+      "text": "seed ACFE00A1 used",
+      "surface": "ACFE00A1",
+      "language": "en",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "suppression",
+        "surface": "ACFE",
+        "label": "organization",
+        "context": "before ACFE after"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "uuid",
+      "text": "request 9b1d0c3e-acfe-4ca1-8b2e-5c7a0a1b2c3d failed",
+      "surface": "9b1d0c3e-acfe-4ca1-8b2e-5c7a0a1b2c3d",
+      "language": "en",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "suppression",
+        "surface": "acfe",
+        "label": "organization",
+        "context": "before acfe after"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "uuid",
+      "text": "row acfe4f1b-0c2d-4e5f-9a8b-7c6d5e4f3a2b updated",
+      "surface": "acfe4f1b-0c2d-4e5f-9a8b-7c6d5e4f3a2b",
+      "language": "en",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "suppression",
+        "surface": "acfe",
+        "label": "organization",
+        "context": "before acfe after"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "uuid",
+      "text": "file 0d8f6a2c-acfe-4b7e-8f01-ac3ea1b2c3d4 uploaded",
+      "surface": "0d8f6a2c-acfe-4b7e-8f01-ac3ea1b2c3d4",
+      "language": "en",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "suppression",
+        "surface": "acfe",
+        "label": "organization",
+        "context": "before acfe after"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "uuid",
+      "text": "dokument acfe9c1a-2f3d-4a5b-b6c7-d8e9f0a1b2c3 nahrán",
+      "surface": "acfe9c1a-2f3d-4a5b-b6c7-d8e9f0a1b2c3",
+      "language": "cs",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "suppression",
+        "surface": "acfe",
+        "label": "organization",
+        "context": "before acfe after"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "hash",
+      "text": "sha256 acfec44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 ok",
+      "surface": "acfec44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "language": "en",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "suppression",
+        "surface": "acfe",
+        "label": "organization",
+        "context": "before acfe after"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "hash",
+      "text": "sha1 acfea3ee5e6b4b0d3255bfef95601890afd80709 ok",
+      "surface": "acfea3ee5e6b4b0d3255bfef95601890afd80709",
+      "language": "en",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "suppression",
+        "surface": "acfe",
+        "label": "organization",
+        "context": "before acfe after"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "hash",
+      "text": "md5 acfe7d9d372bb6826bd81d3542a419d6 ok",
+      "surface": "acfe7d9d372bb6826bd81d3542a419d6",
+      "language": "en",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "suppression",
+        "surface": "acfe",
+        "label": "organization",
+        "context": "before acfe after"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "hash",
+      "text": "token AcfeZSBBIHJlcG9ydA== expired",
+      "surface": "AcfeZSBBIHJlcG9ydA==",
+      "language": "en",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "suppression",
+        "surface": "Acfe",
+        "label": "organization",
+        "context": "before Acfe after"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "id-code",
+      "text": "Faktura INV-ACFE-4c1b0042 je splatná.",
+      "surface": "INV-ACFE-4c1b0042",
+      "language": "cs",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "suppression",
+        "surface": "ACFE",
+        "label": "organization",
+        "context": "before ACFE after"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "id-code",
+      "text": "Kód ACFEA-77 je neplatný.",
+      "surface": "ACFEA-77",
+      "language": "cs",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "suppression",
+        "surface": "ACFE",
+        "label": "organization",
+        "context": "before ACFE after"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "id-code",
+      "text": "order zeta9f3c21 shipped",
+      "surface": "zeta9f3c21",
+      "language": "en",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "suppression",
+        "surface": "zeta",
+        "label": "organization",
+        "context": "before zeta after"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "id-code",
+      "text": "ref ACFEA-55 closed",
+      "surface": "ACFEA-55",
+      "language": "en",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "suppression",
+        "surface": "ACFE",
+        "label": "organization",
+        "context": "before ACFE after"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "id-code",
+      "text": "SKU ACFE71Z out of stock",
+      "surface": "ACFE71Z",
+      "language": "en",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "suppression",
+        "surface": "ACFE",
+        "label": "organization",
+        "context": "before ACFE after"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "id-code",
+      "text": "variable acfeA_total reset",
+      "surface": "acfeA_total",
+      "language": "en",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "suppression",
+        "surface": "acfe",
+        "label": "organization",
+        "context": "before acfe after"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "marker-suppression",
+      "text": "before ⟦Zeta⟧ after",
+      "surface": "⟦Zeta⟧",
+      "language": "en",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "suppression",
+        "surface": "Zeta",
+        "label": "organization",
+        "context": "before Zeta after"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "redact",
+      "kind": "marker-control",
+      "text": "before Zeta after",
+      "surface": "Zeta",
+      "language": "en",
+      "expectedEntities": [
+        {
+          "start": 7,
+          "end": 11,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "keep",
+      "kind": "bracketed-id",
+      "text": "insert {{Acfe_4c1b}} here",
+      "surface": "{{Acfe_4c1b}}",
+      "language": "en",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "suppression",
+        "surface": "Acfe",
+        "label": "organization",
+        "context": "before Acfe after"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "bracketed-id",
+      "text": "see <<token:zeta9>> below",
+      "surface": "<<token:zeta9>>",
+      "language": "en",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "knownFailure": {
+        "entities": [
+          {
+            "end": 17,
+            "label": "organization",
+            "start": 12
+          }
+        ],
+        "redactedText": "see <<token:[REDACTED]>> below"
+      },
+      "negativeCheck": {
+        "type": "suppression",
+        "surface": "zeta",
+        "label": "organization",
+        "context": "before zeta after"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "bracketed-id",
+      "text": "text [[[__Acfe_4c1b_3__]]] text",
+      "surface": "[[[__Acfe_4c1b_3__]]]",
+      "language": "en",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "suppression",
+        "surface": "Acfe",
+        "label": "organization",
+        "context": "before Acfe after"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "bracketed-id",
+      "text": "section %%ACFE_4c1b_SECTION%% end",
+      "surface": "%%ACFE_4c1b_SECTION%%",
+      "language": "en",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "suppression",
+        "surface": "ACFE",
+        "label": "organization",
+        "context": "before ACFE after"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "ordinary-word",
+      "text": "This clause applies to both parties.",
+      "surface": "clause",
+      "language": "en",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "Similar text is not a configured gazetteer surface."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "ordinary-word",
+      "text": "One acre of land was sold.",
+      "surface": "acre",
+      "language": "en",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "Similar text is not a configured gazetteer surface."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "ordinary-word",
+      "text": "They came early.",
+      "surface": "came",
+      "language": "en",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "Similar text is not a configured gazetteer surface."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "ordinary-word",
+      "text": "Treatment for acne is covered.",
+      "surface": "acne",
+      "language": "en",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "Similar text is not a configured gazetteer surface."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "ordinary-word",
+      "text": "Use a marker on page two.",
+      "surface": "marker",
+      "language": "en",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "Similar text is not a configured gazetteer surface."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "ordinary-word",
+      "text": "A stable orbit was reached.",
+      "surface": "orbit",
+      "language": "en",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "Similar text is not a configured gazetteer surface."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "ordinary-word",
+      "text": "The zebra crossing is closed.",
+      "surface": "zebra",
+      "language": "en",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "Similar text is not a configured gazetteer surface."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "ordinary-word",
+      "text": "Meta fields are optional.",
+      "surface": "Meta",
+      "language": "en",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "Similar text is not a configured gazetteer surface."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "ordinary-word",
+      "text": "The data room opens Monday.",
+      "surface": "data",
+      "language": "en",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "Similar text is not a configured gazetteer surface."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "ordinary-word",
+      "text": "Akce a smlouva jsou v příloze.",
+      "surface": "Akce a",
+      "language": "cs",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "Similar text is not a configured gazetteer surface."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "ordinary-word",
+      "text": "Beta verze vyjde v pondělí.",
+      "surface": "Beta verze",
+      "language": "cs",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "Similar text is not a configured gazetteer surface."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "ordinary-word",
+      "text": "Nová smlouva nahrazuje starou.",
+      "surface": "Nová",
+      "language": "cs",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "Similar text is not a configured gazetteer surface."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "ordinary-word",
+      "text": "Nováček nastoupil v pondělí.",
+      "surface": "Nováček",
+      "language": "cs",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "Similar text is not a configured gazetteer surface."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "ordinary-word",
+      "text": "Novátor získal cenu.",
+      "surface": "Novátor",
+      "language": "cs",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "Similar text is not a configured gazetteer surface."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "ordinary-word",
+      "text": "Na orbitu vyletěla družice.",
+      "surface": "orbitu",
+      "language": "cs",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "Similar text is not a configured gazetteer surface."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "ordinary-word",
+      "text": "Žena podala návrh.",
+      "surface": "Žena",
+      "language": "cs",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "Similar text is not a configured gazetteer surface."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "ordinary-word",
+      "text": "Prajem šťastnú cestu.",
+      "surface": "šťastnú",
+      "language": "sk",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "Similar text is not a configured gazetteer surface."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "ordinary-word",
+      "text": "Bol to šťastný deň.",
+      "surface": "šťastný",
+      "language": "sk",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "Similar text is not a configured gazetteer surface."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "ordinary-word",
+      "text": "Kováč opravil bránu.",
+      "surface": "Kováč",
+      "language": "sk",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "Similar text is not a configured gazetteer surface."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "ordinary-word",
+      "text": "Marže činí deset procent.",
+      "surface": "Marže",
+      "language": "cs",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "Similar text is not a configured gazetteer surface."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "ordinary-word",
+      "text": "Obec vydala rozhodnutí.",
+      "surface": "Obec",
+      "language": "cs",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "Similar text is not a configured gazetteer surface."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "adjacent-word",
+      "text": "Acme A signed the deal.",
+      "surface": "signed",
+      "language": "en",
+      "expectedEntities": [
+        {
+          "start": 0,
+          "end": 6,
+          "label": "organization"
+        }
+      ],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "context"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "adjacent-word",
+      "text": "Zeta podepsala smlouvu.",
+      "surface": "podepsala",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 0,
+          "end": 4,
+          "label": "organization"
+        }
+      ],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "context"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "adjacent-word",
+      "text": "Orbis schválil návrh.",
+      "surface": "schválil",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 0,
+          "end": 5,
+          "label": "organization"
+        }
+      ],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "context"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "adjacent-word",
+      "text": "Novákovi zaslal dopis.",
+      "surface": "zaslal",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 0,
+          "end": 9,
+          "label": "person"
+        }
+      ],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "context"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "adjacent-word",
+      "text": "Marie Dvořáková uvedla, že nesouhlasí.",
+      "surface": "uvedla",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 0,
+          "end": 18,
+          "label": "person"
+        }
+      ],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "context"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "adjacent-word",
+      "text": "Beta Trading s.r.o. dodala zboží.",
+      "surface": "dodala",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 0,
+          "end": 19,
+          "label": "organization"
+        }
+      ],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "context"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "adjacent-word",
+      "text": "Harriet Wellbourne confirmed receipt.",
+      "surface": "confirmed",
+      "language": "en",
+      "expectedEntities": [
+        {
+          "start": 0,
+          "end": 18,
+          "label": "person"
+        }
+      ],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "context"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "adjacent-word",
+      "text": "Ľubomír Šťastný uviedol dôvody.",
+      "surface": "uviedol",
+      "language": "sk",
+      "expectedEntities": [
+        {
+          "start": 0,
+          "end": 20,
+          "label": "person"
+        }
+      ],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "context"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "adjacent-word",
+      "text": "Smlouvu uzavřela Acme A.",
+      "surface": "uzavřela",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 18,
+          "end": 24,
+          "label": "organization"
+        }
+      ],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "context"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "adjacent-word",
+      "text": "Countersigned Zeta.",
+      "surface": "Countersigned",
+      "language": "en",
+      "expectedEntities": [
+        {
+          "start": 14,
+          "end": 18,
+          "label": "organization"
+        }
+      ],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "context"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "redact",
+      "kind": "context-whitespace",
+      "text": "lead\r\nAcme A\r\nend",
+      "surface": "Acme A",
+      "language": "en",
+      "expectedEntities": [
+        {
+          "start": 6,
+          "end": 12,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "context-whitespace",
+      "text": "lead Zeta end",
+      "surface": "Zeta",
+      "language": "en",
+      "expectedEntities": [
+        {
+          "start": 6,
+          "end": 10,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "context-whitespace",
+      "text": "před\tMarie Dvořáková\tpoté",
+      "surface": "Marie Dvořáková",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 6,
+          "end": 24,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "context-whitespace",
+      "text": "lead\n\nAcme A\n\nend",
+      "surface": "Acme A",
+      "language": "en",
+      "expectedEntities": [
+        {
+          "start": 6,
+          "end": 12,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "multi-entity",
+      "text": "Acme A signed; Zeta countersigned.",
+      "surface": "Acme A",
+      "language": "en",
+      "expectedEntities": [
+        {
+          "start": 0,
+          "end": 6,
+          "label": "organization"
+        },
+        {
+          "start": 15,
+          "end": 19,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "multi-entity",
+      "text": "Zeta; Acme A; Zeta.",
+      "surface": "Acme A",
+      "language": "en",
+      "expectedEntities": [
+        {
+          "start": 0,
+          "end": 4,
+          "label": "organization"
+        },
+        {
+          "start": 6,
+          "end": 12,
+          "label": "organization"
+        },
+        {
+          "start": 14,
+          "end": 18,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "multi-entity",
+      "text": "Marie Dvořáková; Zeta.",
+      "surface": "Marie Dvořáková",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 0,
+          "end": 18,
+          "label": "person"
+        },
+        {
+          "start": 20,
+          "end": 24,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "multi-entity",
+      "text": "Acme A;Zeta.",
+      "surface": "Acme A",
+      "language": "en",
+      "expectedEntities": [
+        {
+          "start": 0,
+          "end": 6,
+          "label": "organization"
+        },
+        {
+          "start": 7,
+          "end": 11,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "per-label-operator",
+      "text": "Before Zeta then Marie Dvořáková after.",
+      "surface": "Marie Dvořáková",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 7,
+          "end": 11,
+          "label": "organization"
+        },
+        {
+          "start": 17,
+          "end": 35,
+          "label": "person"
+        }
+      ],
+      "operators": {
+        "organization": "keep",
+        "person": "redact"
+      }
+    },
+    {
+      "expectation": "redact",
+      "kind": "per-label-operator",
+      "text": "Before Zeta then Marie Dvořáková after.",
+      "surface": "Marie Dvořáková",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 7,
+          "end": 11,
+          "label": "organization"
+        },
+        {
+          "start": 17,
+          "end": 35,
+          "label": "person"
+        }
+      ],
+      "operators": {
+        "organization": "redact",
+        "person": "keep"
+      }
+    },
+    {
+      "expectation": "redact",
+      "kind": "multi-entity",
+      "text": "Nerava++@Brivola",
+      "surface": "Nerava++",
+      "language": "en",
+      "expectedEntities": [
+        {
+          "start": 0,
+          "end": 8,
+          "label": "organization"
+        },
+        {
+          "start": 8,
+          "end": 16,
+          "label": "person"
+        }
+      ]
+    }
+  ],
+  "forcedValues": [
+    "5f0c2a9e-7b1d-4c3a-9e8f-1a2b3c4d5e6f",
+    "c3a91f04-6d2e-4b8a-a1f7-0e9d8c7b6a51"
+  ],
+  "forcedCases": [
+    {
+      "expectation": "redact",
+      "kind": "forced-exact",
+      "text": "organization 5f0c2a9e-7b1d-4c3a-9e8f-1a2b3c4d5e6f archived",
+      "surface": "5f0c2a9e-7b1d-4c3a-9e8f-1a2b3c4d5e6f",
+      "language": "en",
+      "expectedEntities": [
+        {
+          "start": 13,
+          "end": 49,
+          "label": "registration number"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "forced-exact",
+      "text": "scope c3a91f04-6d2e-4b8a-a1f7-0e9d8c7b6a51 closed",
+      "surface": "c3a91f04-6d2e-4b8a-a1f7-0e9d8c7b6a51",
+      "language": "en",
+      "expectedEntities": [
+        {
+          "start": 6,
+          "end": 42,
+          "label": "registration number"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "forced-case",
+      "text": "ORG 5F0C2A9E-7B1D-4C3A-9E8F-1A2B3C4D5E6F ARCHIVED",
+      "surface": "5F0C2A9E-7B1D-4C3A-9E8F-1A2B3C4D5E6F",
+      "language": "en",
+      "expectedEntities": [
+        {
+          "start": 4,
+          "end": 40,
+          "label": "registration number"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "forced-embedded",
+      "text": "GET /orgs/5f0c2a9e-7b1d-4c3a-9e8f-1a2b3c4d5e6f/files",
+      "surface": "5f0c2a9e-7b1d-4c3a-9e8f-1a2b3c4d5e6f",
+      "language": "en",
+      "expectedEntities": [
+        {
+          "start": 10,
+          "end": 46,
+          "label": "registration number"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "forced-embedded",
+      "text": "{\"scope\":\"c3a91f04-6d2e-4b8a-a1f7-0e9d8c7b6a51\"}",
+      "surface": "c3a91f04-6d2e-4b8a-a1f7-0e9d8c7b6a51",
+      "language": "en",
+      "expectedEntities": [
+        {
+          "start": 10,
+          "end": 46,
+          "label": "registration number"
+        }
+      ]
+    },
+    {
+      "expectation": "keep",
+      "kind": "forced-near-miss",
+      "text": "organization 5f0c2a9e-7b1d-4c3a-9e8f-1a2b3c4d5e6a archived",
+      "surface": "5f0c2a9e-7b1d-4c3a-9e8f-1a2b3c4d5e6a",
+      "language": "en",
+      "expectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "The surface is not either exact configured UUID."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "forced-near-miss",
+      "text": "organization 5f0c2a9e-7b1d-4c3a-9e8f-1a2b3c4d5eaa archived",
+      "surface": "5f0c2a9e-7b1d-4c3a-9e8f-1a2b3c4d5eaa",
+      "language": "en",
+      "expectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "The surface is not either exact configured UUID."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "forced-near-miss",
+      "text": "scope c3a91f04-6d2e-4b8a-a1f7-0e9d8c7b6a5 closed",
+      "surface": "c3a91f04-6d2e-4b8a-a1f7-0e9d8c7b6a5",
+      "language": "en",
+      "expectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "The surface is not either exact configured UUID."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "forced-other-id",
+      "text": "row 1b2c3d4e-5f60-4718-9a2b-3c4d5e6f7081 updated",
+      "surface": "1b2c3d4e-5f60-4718-9a2b-3c4d5e6f7081",
+      "language": "en",
+      "expectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "The surface is not either exact configured UUID."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "forced-other-id",
+      "text": "row 5f0c2a9e7b1d4c3a updated",
+      "surface": "5f0c2a9e7b1d4c3a",
+      "language": "en",
+      "expectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "The surface is not either exact configured UUID."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "forced-adjacent-word",
+      "text": "organization 5f0c2a9e-7b1d-4c3a-9e8f-1a2b3c4d5e6f archived",
+      "surface": "archived",
+      "language": "en",
+      "expectedEntities": [
+        {
+          "start": 13,
+          "end": 49,
+          "label": "registration number"
+        }
+      ],
+      "negativeCheck": {
+        "type": "context"
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "forced-adjacent-word",
+      "text": "scope c3a91f04-6d2e-4b8a-a1f7-0e9d8c7b6a51 closed",
+      "surface": "closed",
+      "language": "en",
+      "expectedEntities": [
+        {
+          "start": 6,
+          "end": 42,
+          "label": "registration number"
+        }
+      ],
+      "negativeCheck": {
+        "type": "context"
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "forced-adjacent-word",
+      "text": "Workspace c3a91f04-6d2e-4b8a-a1f7-0e9d8c7b6a51, then the report.",
+      "surface": "then",
+      "language": "en",
+      "expectedEntities": [
+        {
+          "start": 10,
+          "end": 46,
+          "label": "registration number"
+        }
+      ],
+      "negativeCheck": {
+        "type": "context"
+      }
+    }
+  ]
+}
