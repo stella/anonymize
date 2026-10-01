@@ -1500,11 +1500,16 @@ fn uppercase_ratio_at_least(upper_count: usize, letter_count: usize) -> bool {
   upper / total >= ALL_CAPS_LINE_RATIO
 }
 
+/// Entities the caller asked for by name: custom deny-list and regex hits,
+/// and gazetteer hits. A caller's own entry is an explicit instruction, so
+/// prose heuristics (person stopwords such as `Mark` or `Will`, role
+/// phrases, trailing nouns) never discard it.
 const fn is_caller_owned(entity: &PipelineEntity) -> bool {
-  matches!(
-    entity.source_detail,
-    Some(SourceDetail::CustomDenyList | SourceDetail::CustomRegex)
-  )
+  matches!(entity.source, DetectionSource::Gazetteer)
+    || matches!(
+      entity.source_detail,
+      Some(SourceDetail::CustomDenyList | SourceDetail::CustomRegex)
+    )
 }
 
 #[cfg(test)]

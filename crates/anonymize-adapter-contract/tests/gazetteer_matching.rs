@@ -9,7 +9,9 @@ use stella_anonymize_adapter_contract::{
   prepared_search_config_from_binding,
 };
 use stella_anonymize_core::assemble::{GazetteerEntry, PipelineConfig};
-use stella_anonymize_core::{DetectionSource, PipelineEntity, PreparedEngine};
+use stella_anonymize_core::{
+  DetectionSource, OperatorConfig, PipelineEntity, PreparedEngine,
+};
 
 const PERSON: &str = "person";
 const ORGANIZATION: &str = "organization";
@@ -36,6 +38,9 @@ const ENTRIES: &[(&str, &str, &[&str])] = &[
   ("@álîce", PERSON, &[]),
   ("C++", ORGANIZATION, &[]),
   ("Jan Novák", PERSON, &[]),
+  ("Mark", PERSON, &[]),
+  ("Will", PERSON, &[]),
+  ("Grant", PERSON, &[]),
   (FORCED_ID, IDENTIFIER, &[]),
 ];
 
@@ -48,6 +53,7 @@ enum Class {
   Typo,
   Punctuated,
   Templates,
+  CommonWordNames,
   BesideNumbers,
   OrdinaryWords,
   IdShapes,
@@ -55,7 +61,7 @@ enum Class {
 }
 
 impl Class {
-  const ALL: [Self; 11] = [
+  const ALL: [Self; 12] = [
     Self::Diacritics,
     Self::Inflection,
     Self::LegalForm,
@@ -63,6 +69,7 @@ impl Class {
     Self::Typo,
     Self::Punctuated,
     Self::Templates,
+    Self::CommonWordNames,
     Self::BesideNumbers,
     Self::OrdinaryWords,
     Self::IdShapes,
@@ -179,6 +186,12 @@ const CASES: &[Case] = &[
   hit(Class::Templates, "Šablona {{Acme}} zde.", "Acme"),
   hit(Class::Templates, "Šablona <<Novák>> zde.", "Novák"),
   hit(Class::Templates, "Odkaz [[Orbis]] zde.", "Orbis"),
+  // Person entries that are also common words, scored on the resolved
+  // (redacted) output: an exact entry is always redacted.
+  hit(Class::CommonWordNames, "Hello Mark there.", "Mark"),
+  hit(Class::CommonWordNames, "Ask Will now.", "Will"),
+  hit(Class::CommonWordNames, "Grant signed the deal.", "Grant"),
+  hit(Class::CommonWordNames, "Smlouvu podepsal Mark dnes.", "Mark"),
   // Names next to numbers, years, and words in references, emails, URLs,
   // handles, and file names.
   spans(Class::BesideNumbers, "Smlouva Acme/2024 platí.", "Acme/2024", "Acme"),
@@ -357,6 +370,22 @@ fn czech_slovak_forms_follow_the_pipeline_language() {
   }
 }
 
+/// Gazetteer entities a case is scored on: the detector output, or for
+/// [`Class::CommonWordNames`] the resolved entities that survive into the
+/// redaction.
+fn case_entities(engine: &PreparedEngine, case: &Case) -> Vec<PipelineEntity> {
+  if case.class != Class::CommonWordNames {
+    return gazetteer_entities(engine, case.text);
+  }
+  engine
+    .redact_static_entities(case.text, &OperatorConfig::default())
+    .expect("redaction should succeed")
+    .resolved_entities
+    .into_iter()
+    .filter(|entity| entity.source == DetectionSource::Gazetteer)
+    .collect()
+}
+
 fn gazetteer_entities(
   engine: &PreparedEngine,
   text: &str,
@@ -387,14 +416,14 @@ fn case_covered(engine: &PreparedEngine, case: &Case) -> bool {
     return false;
   };
   let (name_start, name_end) = byte_range(case.text, name);
-  gazetteer_entities(engine, case.text)
+  case_entities(engine, case)
     .iter()
     .any(|entity| entity.start <= name_start && entity.end >= name_end)
 }
 
 /// Outcome of one case: `true` when the gazetteer behaved as labeled.
 fn case_passes(engine: &PreparedEngine, case: &Case) -> bool {
-  let entities = gazetteer_entities(engine, case.text);
+  let entities = case_entities(engine, case);
   let (probe_start, probe_end) = byte_range(case.text, case.probe);
   let overlapping: Vec<&PipelineEntity> = entities
     .iter()
