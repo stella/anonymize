@@ -15,6 +15,7 @@
 //! joined to an identifier-shaped segment (hex, UUID parts, base64 runs, `⟦…⟧`
 //! markers), does not. A span extends only over a following legal form.
 
+use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
 
 use unicode_normalization::char::{decompose_canonical, is_combining_mark};
@@ -325,6 +326,15 @@ impl PreparedGazetteerMatchData {
     matches: &[SearchMatch],
     text: &str,
   ) -> Result<Vec<PipelineEntity>> {
+    self.detect_with_guard(matches, &Guard::new(text))
+  }
+
+  fn detect_with_guard(
+    &self,
+    matches: &[SearchMatch],
+    guard: &Guard<'_>,
+  ) -> Result<Vec<PipelineEntity>> {
+    let text = guard.text;
     let mut exact = self.sequence_hits(text);
     for found in matches {
       let Some(row) = self.row(found.pattern()) else {
@@ -334,7 +344,7 @@ impl PreparedGazetteerMatchData {
         continue;
       }
       let (start, end) = byte_span(text, found)?;
-      if edges_are_free(text, start, end) {
+      if guard.edges_are_free(start, end) {
         exact.push(Hit {
           start,
           end,
@@ -343,7 +353,7 @@ impl PreparedGazetteerMatchData {
         });
       }
     }
-    exact.retain(|hit| !in_identifier(text, hit.start, hit.end));
+    exact.retain(|hit| !guard.in_identifier(hit.start, hit.end));
     let exact_spans = SpanIndex::new(&exact);
 
     let mut fuzzy = Vec::new();
@@ -361,8 +371,8 @@ impl PreparedGazetteerMatchData {
       };
       let (start, end) = trim_fuzzy_span(text, byte_span(text, found)?);
       if exact_spans.overlaps(start, end)
-        || !fuzzy_span_is_whole_words(text, start, end)
-        || in_identifier(text, start, end)
+        || !guard.fuzzy_span_is_whole_words(start, end)
+        || guard.in_identifier(start, end)
       {
         continue;
       }
@@ -909,20 +919,163 @@ fn next_char(text: &str, offset: usize) -> Option<char> {
   text.get(offset..).and_then(|tail| tail.chars().next())
 }
 
-/// Whether the span's edges sit on token boundaries. Digits glued to a letter
-/// edge are allowed (`Acme2024`, `novak2`); letters, or digit runs mixed with
-/// letters (`acme0a1b`), are not.
-fn edges_are_free(text: &str, start: usize, end: usize) -> bool {
-  let head = text.get(..start).unwrap_or_default();
-  let tail = text.get(end..).unwrap_or_default();
-  let span = text.get(start..end).unwrap_or_default();
-  glue_is_free(
-    head.chars().rev().take_while(|ch| is_word_char(*ch)),
-    span.chars().next(),
-  ) && glue_is_free(
-    tail.chars().take_while(|ch| is_word_char(*ch)),
-    span.chars().next_back(),
-  )
+/// A fuzzy window may open on the separator before a name (` Beta Tradng`);
+/// drop leading non-word and trailing whitespace characters.
+fn trim_fuzzy_span(text: &str, (start, end): (usize, usize)) -> (usize, usize) {
+  let window = text.get(start..end).unwrap_or_default();
+  let trimmed_start = window.trim_start_matches(|ch: char| !is_word_char(ch));
+  let trimmed = trimmed_start.trim_end();
+  let start =
+    start.saturating_add(window.len().saturating_sub(trimmed_start.len()));
+  (start, start.saturating_add(trimmed.len()))
+}
+
+/// Neighbourhood checks for candidate spans in one document. `⟦…⟧` marker
+/// runs are indexed once, so no check rescans an unbounded run of text; the
+/// other scans stop at the first character outside the span's own adjacent
+/// glue, joiners, and one joined segment.
+struct Guard<'t> {
+  text: &'t str,
+  /// Whitespace-free runs that contain a marker bracket, sorted by start.
+  bracket_runs: Vec<BracketRun>,
+  /// Characters the scans have looked at, for scaling tests.
+  visits: Cell<usize>,
+}
+
+/// A whitespace-free run of text with its first `⟦` and last `⟧`.
+#[derive(Clone, Copy, Debug)]
+struct BracketRun {
+  start: usize,
+  end: usize,
+  first_open: Option<usize>,
+  last_close: Option<usize>,
+}
+
+impl<'t> Guard<'t> {
+  fn new(text: &'t str) -> Self {
+    Self {
+      text,
+      bracket_runs: bracket_runs(text),
+      visits: Cell::new(0),
+    }
+  }
+
+  fn visit<I: Iterator<Item = char>>(
+    &self,
+    chars: I,
+  ) -> impl Iterator<Item = char> {
+    chars.inspect(|_| self.visits.set(self.visits.get().saturating_add(1)))
+  }
+
+  /// Whether the span's edges sit on token boundaries. Digits glued to a
+  /// letter edge are allowed (`Acme2024`, `novak2`); letters, or digit runs
+  /// mixed with letters (`acme0a1b`), are not.
+  fn edges_are_free(&self, start: usize, end: usize) -> bool {
+    let head = self.text.get(..start).unwrap_or_default();
+    let tail = self.text.get(end..).unwrap_or_default();
+    let span = self.text.get(start..end).unwrap_or_default();
+    glue_is_free(
+      self
+        .visit(head.chars().rev())
+        .take_while(|ch| is_word_char(*ch)),
+      span.chars().next(),
+    ) && glue_is_free(
+      self.visit(tail.chars()).take_while(|ch| is_word_char(*ch)),
+      span.chars().next_back(),
+    )
+  }
+
+  /// Fuzzy windows are rejected, not grown, when they cut into a token.
+  fn fuzzy_span_is_whole_words(&self, start: usize, end: usize) -> bool {
+    next_char(self.text, start).is_some_and(is_word_char)
+      && previous_char(self.text, end).is_some_and(|ch| !ch.is_whitespace())
+      && self.edges_are_free(start, end)
+  }
+
+  /// Whether the span belongs to an identifier: it sits inside a `⟦…⟧`
+  /// marker, or a compound joiner links it to an identifier-shaped segment
+  /// (`9b1d0c3e-acfe-4c1b`). Plain numbers, years, and words next to a name
+  /// (`Acme/2024`, `Novák-1`, `acme.cz`) do not count.
+  fn in_identifier(&self, start: usize, end: usize) -> bool {
+    let head = self.text.get(..start).unwrap_or_default();
+    let tail = self.text.get(end..).unwrap_or_default();
+    self.in_marker(start, end)
+      || joined_segment(
+        self
+          .visit(head.chars().rev())
+          .skip_while(|ch| is_word_char(*ch)),
+      )
+      .is_some_and(|segment| is_identifier_segment(&segment))
+      || joined_segment(
+        self.visit(tail.chars()).skip_while(|ch| is_word_char(*ch)),
+      )
+      .is_some_and(|segment| is_identifier_segment(&segment))
+  }
+
+  /// A `⟦` precedes the span and a `⟧` follows it without whitespace in
+  /// between: two binary searches over the indexed bracket runs.
+  fn in_marker(&self, start: usize, end: usize) -> bool {
+    let opened = previous_char(self.text, start)
+      .filter(|ch| !ch.is_whitespace())
+      .and_then(|_| self.bracket_run(start.saturating_sub(1)))
+      .and_then(|run| run.first_open)
+      .is_some_and(|open| open < start);
+    let closed = next_char(self.text, end)
+      .filter(|ch| !ch.is_whitespace())
+      .and_then(|_| self.bracket_run(end))
+      .and_then(|run| run.last_close)
+      .is_some_and(|close| close >= end);
+    opened && closed
+  }
+
+  /// The bracket run containing byte `position`, if any.
+  fn bracket_run(&self, position: usize) -> Option<BracketRun> {
+    let after = self
+      .bracket_runs
+      .partition_point(|run| run.start <= position);
+    after
+      .checked_sub(1)
+      .and_then(|index| self.bracket_runs.get(index))
+      .filter(|run| position < run.end)
+      .copied()
+  }
+}
+
+/// Whitespace-free runs containing `⟦` or `⟧`, in one pass over the text.
+fn bracket_runs(text: &str) -> Vec<BracketRun> {
+  let mut runs = Vec::new();
+  if !text.contains(['⟦', '⟧']) {
+    return runs;
+  }
+  let mut current: Option<BracketRun> = None;
+  for (index, ch) in text.char_indices() {
+    if ch.is_whitespace() {
+      if let Some(run) = current.take()
+        && (run.first_open.is_some() || run.last_close.is_some())
+      {
+        runs.push(BracketRun { end: index, ..run });
+      }
+      continue;
+    }
+    let run = current.get_or_insert(BracketRun {
+      start: index,
+      end: text.len(),
+      first_open: None,
+      last_close: None,
+    });
+    if ch == '⟦' && run.first_open.is_none() {
+      run.first_open = Some(index);
+    }
+    if ch == '⟧' {
+      run.last_close = Some(index);
+    }
+  }
+  if let Some(run) = current
+    && (run.first_open.is_some() || run.last_close.is_some())
+  {
+    runs.push(run);
+  }
+  runs
 }
 
 fn glue_is_free(
@@ -939,47 +1092,6 @@ fn glue_is_free(
   edge.is_some_and(char::is_alphabetic)
     && first.is_numeric()
     && glue.all(char::is_numeric)
-}
-
-/// A fuzzy window may open on the separator before a name (` Beta Tradng`);
-/// drop leading non-word and trailing whitespace characters.
-fn trim_fuzzy_span(text: &str, (start, end): (usize, usize)) -> (usize, usize) {
-  let window = text.get(start..end).unwrap_or_default();
-  let trimmed_start = window.trim_start_matches(|ch: char| !is_word_char(ch));
-  let trimmed = trimmed_start.trim_end();
-  let start =
-    start.saturating_add(window.len().saturating_sub(trimmed_start.len()));
-  (start, start.saturating_add(trimmed.len()))
-}
-
-/// Fuzzy windows are rejected, not grown, when they cut into a token.
-fn fuzzy_span_is_whole_words(text: &str, start: usize, end: usize) -> bool {
-  next_char(text, start).is_some_and(is_word_char)
-    && previous_char(text, end).is_some_and(|ch| !ch.is_whitespace())
-    && edges_are_free(text, start, end)
-}
-
-/// Whether the span belongs to an identifier: it sits inside a `⟦…⟧` marker,
-/// or a compound joiner links it to an identifier-shaped segment
-/// (`9b1d0c3e-acfe-4c1b`). Plain numbers, years, and words next to a name
-/// (`Acme/2024`, `Novák-1`, `acme.cz`) do not count.
-fn in_identifier(text: &str, start: usize, end: usize) -> bool {
-  let head = text.get(..start).unwrap_or_default();
-  let tail = text.get(end..).unwrap_or_default();
-  let in_marker = head
-    .chars()
-    .rev()
-    .take_while(|ch| !ch.is_whitespace())
-    .any(|ch| ch == '⟦')
-    && tail
-      .chars()
-      .take_while(|ch| !ch.is_whitespace())
-      .any(|ch| ch == '⟧');
-  in_marker
-    || joined_segment(head.chars().rev().skip_while(|ch| is_word_char(*ch)))
-      .is_some_and(|segment| is_identifier_segment(&segment))
-    || joined_segment(tail.chars().skip_while(|ch| is_word_char(*ch)))
-      .is_some_and(|segment| is_identifier_segment(&segment))
 }
 
 /// The word run behind one or more compound joiners at the start of `chars`.
@@ -1637,6 +1749,33 @@ mod tests {
     let hits = prepared.sequences.hits(&text, &mut steps);
     assert_eq!(hits.len(), PAIRS);
     assert!(steps <= MAX_STEPS, "{steps} trie steps for {TOKENS} tokens");
+  }
+
+  #[test]
+  fn whitespace_free_runs_are_checked_in_linear_time() {
+    const NAMES: usize = 20_000;
+    // `Acme,` per name: five chars.
+    const TEXT_CHARS: usize = 100_000;
+    const MAX_VISITS: usize = 300_000;
+    let entries = [exact("Acme", ORGANIZATION)];
+    let (prepared, terms) = prepare(&entries);
+    for text in [
+      "Acme,".repeat(NAMES),
+      format!("⟦{}", "Acme,".repeat(NAMES)),
+      format!("{}⟧", "Acme,".repeat(NAMES)),
+    ] {
+      let hits = literal_hits(&text, &terms, entries.len());
+      let guard = Guard::new(&text);
+      let entities = prepared.detect_with_guard(&hits, &guard).unwrap();
+      assert_eq!(entities.len(), NAMES);
+      assert!(
+        guard.visits.get() <= MAX_VISITS,
+        "{} chars visited for {TEXT_CHARS} chars",
+        guard.visits.get()
+      );
+    }
+    let marked = format!("x ⟦{}⟧ y", "Acme,".repeat(NAMES));
+    assert!(found(&entries, &marked).is_empty());
   }
 
   #[test]
