@@ -90,6 +90,7 @@ const BASE_CONFIG = {
     labels: ["organization", "address"],
     is_fuzzy: [false, true],
     legal_form_suffixes: [],
+    inflection: "none",
   },
   country_data: {
     labels: ["country"],

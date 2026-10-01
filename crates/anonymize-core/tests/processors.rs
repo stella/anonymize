@@ -3,9 +3,9 @@
 use stella_anonymize_core::{
   CountryMatchData, CountryVariant, DenyListFilterData, DenyListMatchData,
   DenyListPatternMeta, DenyListPatternMetaSet, DetectionSource, Error,
-  GazetteerMatchData, PatternSlice, PipelineEntity, RegexMatchMeta,
-  SearchMatch, SearchPattern, SigningPlaceGuardData, SourceDetail,
-  process_country_matches, process_deny_list_matches,
+  GazetteerInflection, GazetteerMatchData, PatternSlice, PipelineEntity,
+  RegexMatchMeta, SearchMatch, SearchPattern, SigningPlaceGuardData,
+  SourceDetail, process_country_matches, process_deny_list_matches,
   process_gazetteer_matches, process_regex_matches,
 };
 
@@ -733,6 +733,7 @@ fn gazetteer_processor_extends_exact_matches_and_drops_overlapping_fuzzy() {
     labels: vec![String::from("organization"), String::from("organization")],
     is_fuzzy: vec![false, true],
     legal_form_suffixes: vec![String::from("s.r.o.")],
+    inflection: GazetteerInflection::None,
   };
   let patterns = [
     gazetteer_literal("Acme"),
@@ -771,6 +772,7 @@ fn gazetteer_processor_emits_non_overlapping_fuzzy_matches() {
     labels: vec![String::from("organization")],
     is_fuzzy: vec![true],
     legal_form_suffixes: Vec::new(),
+    inflection: GazetteerInflection::None,
   };
   let patterns = [SearchPattern::Fuzzy {
     pattern: String::from("Wintermute"),
@@ -796,6 +798,7 @@ fn gazetteer_processor_rejects_pattern_kinds_that_disagree_with_rows() {
     labels: vec![String::from("organization")],
     is_fuzzy: vec![true],
     legal_form_suffixes: Vec::new(),
+    inflection: GazetteerInflection::None,
   };
 
   let error = process_gazetteer_matches(

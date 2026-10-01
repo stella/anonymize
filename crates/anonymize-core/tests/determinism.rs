@@ -13,9 +13,9 @@
 mod support;
 
 use stella_anonymize_core::{
-  GazetteerMatchData, LiteralSearchOptions, OperatorConfig, PatternSlice,
-  PreparedEngine, PreparedEngineSlices, RegexMatchMeta, RegexSearchOptions,
-  SearchOptions, SearchPattern,
+  GazetteerInflection, GazetteerMatchData, LiteralSearchOptions,
+  OperatorConfig, PatternSlice, PreparedEngine, PreparedEngineSlices,
+  RegexMatchMeta, RegexSearchOptions, SearchOptions, SearchPattern,
 };
 use support::prepared_config;
 
@@ -64,6 +64,7 @@ fn multi_detector_engine() -> PreparedEngine {
       labels: vec![String::from("organization")],
       is_fuzzy: vec![false],
       legal_form_suffixes: vec![String::from("s.r.o.")],
+      inflection: GazetteerInflection::None,
     }),
     country_data: None,
     hotword_data: None,

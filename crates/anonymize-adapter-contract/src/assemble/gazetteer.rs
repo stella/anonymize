@@ -9,35 +9,36 @@
 use std::collections::HashMap;
 
 use stella_anonymize_core::assemble::{AssembleError, GazetteerEntry};
+use stella_anonymize_core::gazetteer_fuzzy_distance;
 
 use super::AssembleContext;
+use super::language::language_config_matches;
 use super::legal_forms::gazetteer_legal_form_suffixes;
 use super::search_pattern::{fuzzy_pattern, literal_with_options};
-use crate::{BindingGazetteerMatchData, BindingSearchPattern};
+use crate::{
+  BindingGazetteerInflection, BindingGazetteerMatchData, BindingSearchPattern,
+};
 
-/// Fewer letters than this match only exactly (after folding and declension):
-/// one edit turns a short name into an ordinary word (`Acme` -> `acne`).
-const MIN_FUZZY_LETTERS: usize = 6;
-
-/// Terms with at least this many letters tolerate two edits; shorter fuzzy
-/// terms tolerate one.
-const MIN_TWO_EDIT_LETTERS: usize = 10;
-
-/// Longest pattern, in chars, the fuzzy engine accepts.
-const MAX_FUZZY_PATTERN_CHARS: usize = 64;
-
-/// Edit distance of the fuzzy pattern for `term`, if it gets one. Terms with
-/// digits are identifiers and match only exactly.
+/// Edit distance of the fuzzy pattern for `term`, if it gets one; the core
+/// owns the length scale so automatic distances resolve the same way.
 fn fuzzy_distance(term: &str) -> Option<u32> {
-  if term.chars().any(char::is_numeric)
-    || term.chars().count() > MAX_FUZZY_PATTERN_CHARS
-  {
-    return None;
-  }
-  match term.chars().filter(|ch| ch.is_alphabetic()).count() {
-    letters if letters < MIN_FUZZY_LETTERS => None,
-    letters if letters < MIN_TWO_EDIT_LETTERS => Some(1),
-    _ => Some(2),
+  gazetteer_fuzzy_distance(term).map(u32::from)
+}
+
+/// Languages whose case forms and surname derivations the core applies to
+/// entry words.
+const CZECH_SLOVAK_LANGUAGES: [&str; 2] = ["cs", "sk"];
+
+/// Czech/Slovak forms apply when either language is in the content scope.
+/// No configured scope means every language, so the forms stay on.
+fn inflection(ctx: &AssembleContext<'_>) -> BindingGazetteerInflection {
+  let in_scope = CZECH_SLOVAK_LANGUAGES.iter().any(|language| {
+    language_config_matches(language, ctx.content_languages.as_deref())
+  });
+  if in_scope {
+    BindingGazetteerInflection::CzechSlovak
+  } else {
+    BindingGazetteerInflection::None
   }
 }
 
@@ -100,6 +101,7 @@ pub(super) fn build_gazetteer_data(
     labels,
     is_fuzzy,
     legal_form_suffixes: gazetteer_legal_form_suffixes()?,
+    inflection: inflection(ctx),
   }))
 }
 

@@ -102,6 +102,21 @@ pub struct GazetteerMatchData {
   pub is_fuzzy: Vec<bool>,
   /// Legal-form suffixes, longest first, that may follow a matched name.
   pub legal_form_suffixes: Vec<String>,
+  /// Which inflected forms of an entry's words also match.
+  pub inflection: GazetteerInflection,
+}
+
+/// Inflected forms a gazetteer entry's words may take besides their folded
+/// spelling, chosen from the pipeline's content languages.
+#[derive(
+  Clone, Copy, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum GazetteerInflection {
+  /// Only the entry's own words, folded for case and diacritics.
+  None,
+  /// Czech and Slovak case forms and surname derivations as well.
+  CzechSlovak,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]

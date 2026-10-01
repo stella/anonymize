@@ -213,7 +213,7 @@
     },
     {
       "name": "gazetteer-fuzzy",
-      "packageDigest": "4ee7c8a41b2c416c2fe12b43c914ec00108facfc2bc8c9761e167878fa40c3f6",
+      "packageDigest": "ee955ac8579c638c2e4b8de0b7c97346bd13dd4b44db226d2fdfeea0a6c34252",
       "hasDictionaries": false,
       "gazetteerCount": 1
     },
