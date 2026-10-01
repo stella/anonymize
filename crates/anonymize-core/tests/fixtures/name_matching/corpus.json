@@ -38,7 +38,7 @@
     },
     {
       "id": "corpus-entry-5",
-      "canonical": "Horská stavební a.s.",
+      "canonical": "Velmorská stavební a.s.",
       "label": "organization",
       "variants": [],
       "workspaceId": "corpus-workspace",
@@ -47,7 +47,7 @@
     },
     {
       "id": "corpus-entry-6",
-      "canonical": "Lipová Invest spol. s r.o.",
+      "canonical": "Brimová Invest spol. s r.o.",
       "label": "organization",
       "variants": [],
       "workspaceId": "corpus-workspace",
@@ -65,7 +65,7 @@
     },
     {
       "id": "corpus-entry-8",
-      "canonical": "Tatranská energetika, a. s.",
+      "canonical": "Zelvanská energetika, a. s.",
       "label": "organization",
       "variants": [],
       "workspaceId": "corpus-workspace",
@@ -185,14 +185,14 @@
     {
       "expectation": "redact",
       "kind": "exact",
-      "text": "Odberateľom je Tatranská energetika, a. s.",
-      "surface": "Tatranská energetika, a. s."
+      "text": "Odberateľom je Zelvanská energetika, a. s.",
+      "surface": "Zelvanská energetika, a. s."
     },
     {
       "expectation": "redact",
       "kind": "exact",
-      "text": "Stavbu provedla Horská stavební a.s.",
-      "surface": "Horská stavební a.s."
+      "text": "Stavbu provedla Velmorská stavební a.s.",
+      "surface": "Velmorská stavební a.s."
     },
     {
       "expectation": "redact",
@@ -263,14 +263,14 @@
     {
       "expectation": "redact",
       "kind": "diacritics-dropped",
-      "text": "Stavbu provedla Horska stavebni a.s. vcas.",
-      "surface": "Horska stavebni a.s."
+      "text": "Stavbu provedla Velmorska stavebni a.s. vcas.",
+      "surface": "Velmorska stavebni a.s."
     },
     {
       "expectation": "redact",
       "kind": "diacritics-dropped",
-      "text": "Investorem je Lipova Invest spol. s r.o. od roku 2020.",
-      "surface": "Lipova Invest spol. s r.o."
+      "text": "Investorem je Brimova Invest spol. s r.o. od roku 2020.",
+      "surface": "Brimova Invest spol. s r.o."
     },
     {
       "expectation": "redact",
@@ -281,8 +281,8 @@
     {
       "expectation": "redact",
       "kind": "diacritics-dropped",
-      "text": "Odberatelom je Tatranska energetika, a. s.",
-      "surface": "Tatranska energetika, a. s."
+      "text": "Odberatelom je Zelvanska energetika, a. s.",
+      "surface": "Zelvanska energetika, a. s."
     },
     {
       "expectation": "redact",
@@ -389,8 +389,8 @@
     {
       "expectation": "redact",
       "kind": "typo-2",
-      "text": "Investorem je Lipová Invst spl. s r.o.",
-      "surface": "Lipová Invst spl. s r.o."
+      "text": "Investorem je Brimová Invst spl. s r.o.",
+      "surface": "Brimová Invst spl. s r.o."
     },
     {
       "expectation": "redact",
@@ -455,20 +455,20 @@
     {
       "expectation": "redact",
       "kind": "inflected",
-      "text": "Faktura od Horské stavební a.s. dorazila.",
-      "surface": "Horské stavební a.s."
+      "text": "Faktura od Velmorské stavební a.s. dorazila.",
+      "surface": "Velmorské stavební a.s."
     },
     {
       "expectation": "redact",
       "kind": "inflected",
-      "text": "Smlouva s Horskou stavební a.s. platí.",
-      "surface": "Horskou stavební a.s."
+      "text": "Smlouva s Velmorskou stavební a.s. platí.",
+      "surface": "Velmorskou stavební a.s."
     },
     {
       "expectation": "redact",
       "kind": "inflected",
-      "text": "Zmluva s Tatranskou energetikou, a. s. platí.",
-      "surface": "Tatranskou energetikou, a. s."
+      "text": "Zmluva s Zelvanskou energetikou, a. s. platí.",
+      "surface": "Zelvanskou energetikou, a. s."
     },
     {
       "expectation": "redact",
@@ -509,8 +509,8 @@
     {
       "expectation": "redact",
       "kind": "inflected-diacritics-dropped",
-      "text": "Faktura od Horske stavebni a.s. dorazila.",
-      "surface": "Horske stavebni a.s."
+      "text": "Faktura od Velmorske stavebni a.s. dorazila.",
+      "surface": "Velmorske stavebni a.s."
     },
     {
       "expectation": "redact",
@@ -545,32 +545,32 @@
     {
       "expectation": "redact",
       "kind": "legal-form-variant",
-      "text": "Zhotovitel: Horská stavební, a.s.",
-      "surface": "Horská stavební, a.s."
+      "text": "Zhotovitel: Velmorská stavební, a.s.",
+      "surface": "Velmorská stavební, a.s."
     },
     {
       "expectation": "redact",
       "kind": "legal-form-variant",
-      "text": "Zhotovitel: Horská stavební a. s.",
-      "surface": "Horská stavební a. s."
+      "text": "Zhotovitel: Velmorská stavební a. s.",
+      "surface": "Velmorská stavební a. s."
     },
     {
       "expectation": "redact",
       "kind": "legal-form-variant",
-      "text": "Investor: Lipová Invest s.r.o.",
-      "surface": "Lipová Invest s.r.o."
+      "text": "Investor: Brimová Invest s.r.o.",
+      "surface": "Brimová Invest s.r.o."
     },
     {
       "expectation": "redact",
       "kind": "legal-form-variant",
-      "text": "Investor: Lipová Invest, spol. s r. o.",
-      "surface": "Lipová Invest, spol. s r. o."
+      "text": "Investor: Brimová Invest, spol. s r. o.",
+      "surface": "Brimová Invest, spol. s r. o."
     },
     {
       "expectation": "redact",
       "kind": "legal-form-variant",
-      "text": "Odberateľ: Tatranská energetika a.s.",
-      "surface": "Tatranská energetika a.s."
+      "text": "Odberateľ: Zelvanská energetika a.s.",
+      "surface": "Zelvanská energetika a.s."
     },
     {
       "expectation": "redact",

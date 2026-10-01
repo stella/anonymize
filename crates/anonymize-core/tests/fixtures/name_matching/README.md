@@ -24,8 +24,8 @@ adjacent-word ceiling. Offsets must remain valid UTF-8
 boundaries. A scoring test rejects substring and overextended matchers.
 
 `thresholds.json` stores class floors and ceilings as integer numerators with
-fixed denominators, avoiding rounded percentages. Bounds were measured on
-`3598acf007`; class ceilings retain that implementation’s behavior for
+fixed denominators, avoiding rounded percentages. Bounds were measured on the
+matcher this suite ships with; class ceilings retain its behavior for
 compounds with plain word or number segments. Measured classes must equal
 the declared classes, and case counts must equal the denominators. Review
 fixture and threshold changes together; do not lower bounds to accommodate a
