@@ -135,12 +135,13 @@ fn exact_hit(
   range: &Range<u32>,
   label: &str,
 ) -> bool {
-  entities.iter().any(|entity| {
-    entity.start == range.start
-      && entity.end == range.end
-      && entity.label == label
-      && entity.source == DetectionSource::Gazetteer
-  }) && !overreaches(entities, range)
+  !entities.is_empty()
+    && entities.iter().all(|entity| {
+      entity.start == range.start
+        && entity.end == range.end
+        && entity.label == label
+        && entity.source == DetectionSource::Gazetteer
+    })
 }
 
 fn overreaches(entities: &[PipelineEntity], range: &Range<u32>) -> bool {
@@ -455,6 +456,23 @@ fn exact_span_scoring_rejects_substrings_and_swallowed_neighbors()
     !exact_hit(&[span(5, 10), span(3, 17)], &expected, "person"),
     "exact candidate cannot hide overreach"
   );
+  for distant_context in [span(0, 4), span(22, 27)] {
+    let entities = [span(10, 15), distant_context];
+    let name_range = 10..15;
+    assert!(
+      !overreaches(&entities, &name_range)
+        && !swallows_word(
+          &entities,
+          &name_range,
+          "lead near Alice signs later"
+        )?,
+      "distant context must exercise the gap beyond existing extent checks"
+    );
+    assert!(
+      !exact_hit(&entities, &name_range, "person"),
+      "a context entity two words away must fail the case's recall class"
+    );
+  }
   assert!(
     !exact_hit(&[span(5, 7), span(7, 10)], &expected, "person"),
     "partial spans cannot masquerade as an exact hit"
