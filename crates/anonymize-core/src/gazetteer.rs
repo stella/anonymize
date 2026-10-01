@@ -3,8 +3,9 @@
 //! Three candidate sources feed one acceptance policy:
 //!
 //! - word sequences: each entry is split at prepare time into words folded for
-//!   case and diacritics, together with their declined forms, and matched
-//!   token by token, so inflected and diacritic-free spellings match;
+//!   case and diacritics, plus their Czech/Slovak forms when those languages
+//!   are in scope, and indexed in a trie keyed by word, so inflected and
+//!   diacritic-free spellings match and same-prefix entries share one walk;
 //! - exact literal hits from the search index, kept only on token boundaries;
 //! - fuzzy hits, kept only when they start and end on token boundaries and
 //!   stay within the pattern's edit distance after folding.
@@ -20,7 +21,9 @@ use unicode_normalization::char::{decompose_canonical, is_combining_mark};
 
 use crate::declension::{expand_name_declensions, expand_surname_derivations};
 use crate::labels::PERSON_LABEL;
-use crate::processors::{GazetteerMatchData, PatternSlice};
+use crate::processors::{
+  GazetteerInflection, GazetteerMatchData, PatternSlice,
+};
 use crate::resolution::{DetectionSource, PipelineEntity, SourceDetail};
 use crate::search::SearchPattern;
 use crate::types::{Error, Result, SearchMatch};
@@ -49,12 +52,38 @@ const MIN_HEX_SEGMENT_CHARS: usize = 4;
 /// Shortest mixed-case alphanumeric run read as a base64 segment.
 const MIN_BASE64_SEGMENT_CHARS: usize = 12;
 
+/// Fewer letters than this match only exactly (after folding and declension):
+/// one edit turns a short name into an ordinary word (`Acme` -> `acne`).
+const MIN_FUZZY_LETTERS: usize = 6;
+
+/// Entries with at least this many letters tolerate two edits; shorter fuzzy
+/// entries tolerate one.
+const MIN_TWO_EDIT_LETTERS: usize = 10;
+
+/// Longest pattern, in chars, the fuzzy engine accepts.
+const MAX_FUZZY_PATTERN_CHARS: usize = 64;
+
+/// Edit distance a fuzzy gazetteer pattern for `term` allows, if any. Entries
+/// with digits are identifiers and match only exactly.
+#[must_use]
+pub fn gazetteer_fuzzy_distance(term: &str) -> Option<u8> {
+  if term.chars().any(char::is_numeric)
+    || term.chars().count() > MAX_FUZZY_PATTERN_CHARS
+  {
+    return None;
+  }
+  match term.chars().filter(|ch| ch.is_alphabetic()).count() {
+    letters if letters < MIN_FUZZY_LETTERS => None,
+    letters if letters < MIN_TWO_EDIT_LETTERS => Some(1),
+    _ => Some(2),
+  }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct PreparedGazetteerMatchData {
   slice: PatternSlice,
   rows: Vec<GazetteerRow>,
-  sequences: Vec<WordSequence>,
-  first_words: HashMap<String, Vec<usize>>,
+  sequences: SequenceTrie,
   legal_forms: Vec<LegalFormSuffix>,
 }
 
@@ -73,13 +102,29 @@ enum RowKind {
   },
 }
 
-/// One spelling order of one entry: the accepted folded forms of each word
-/// and the separators allowed between consecutive words.
+/// Entry word sequences in a trie keyed by interned words. Every folded
+/// spelling of a word (declined forms included) maps to that word, so a
+/// document token costs one spelling lookup per trie step, however many
+/// entries share the prefix.
 #[derive(Clone, Debug, Eq, PartialEq)]
-struct WordSequence {
-  label: String,
-  words: Vec<HashSet<String>>,
+struct SequenceTrie {
+  inflection: GazetteerInflection,
+  /// Folded spelling -> words it spells.
+  spellings: HashMap<String, Vec<usize>>,
+  /// Lowercased entry word -> interned word id.
+  words: HashMap<String, usize>,
   gaps: Vec<GapRule>,
+  nodes: Vec<TrieNode>,
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+struct TrieNode {
+  /// Labels of the entries that end here.
+  labels: Vec<String>,
+  /// `(gap, word)` -> child; the gap is `None` from the root.
+  children: HashMap<(Option<usize>, usize), usize>,
+  /// Distinct gaps leading out of this node.
+  gaps: Vec<usize>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -132,8 +177,7 @@ impl PreparedGazetteerMatchData {
     let mut prepared = Self {
       slice,
       rows: Vec::with_capacity(patterns.len()),
-      sequences: Vec::new(),
-      first_words: HashMap::new(),
+      sequences: SequenceTrie::new(data.inflection),
       legal_forms,
     };
     for (index, ((label, is_fuzzy), pattern)) in data
@@ -156,11 +200,17 @@ impl PreparedGazetteerMatchData {
           true,
           SearchPattern::Fuzzy {
             pattern: term,
-            distance: Some(distance),
+            distance,
           },
         ) => RowKind::Fuzzy {
           folded: fold_word_chars(term),
-          max_distance: usize::from(*distance),
+          // An automatic distance follows the same length scale as the
+          // assembled patterns; short entries then accept folded hits only.
+          max_distance: usize::from(
+            distance
+              .or_else(|| gazetteer_fuzzy_distance(term))
+              .unwrap_or(0),
+          ),
         },
         _ => {
           return Err(Error::InvalidStaticData {
@@ -191,16 +241,12 @@ impl PreparedGazetteerMatchData {
     let reorderable = label == PERSON_LABEL
       && (2..=MAX_REORDERED_PERSON_WORDS).contains(&words.len())
       && !words.iter().any(|word| word.chars().any(char::is_numeric));
-    let forms = words
-      .iter()
-      .map(|word| word_forms(word))
-      .collect::<Vec<_>>();
     if reorderable
       && let (Some((last, leading)), Some(first_gap)) =
-        (forms.split_last(), gaps.first())
+        (words.split_last(), gaps.first())
     {
       // Surname first: `Dvořáková, Marie` for `Marie Dvořáková`.
-      let mut reordered = Vec::with_capacity(forms.len());
+      let mut reordered = Vec::with_capacity(words.len());
       reordered.push(last.clone());
       reordered.extend(leading.iter().cloned());
       let mut reordered_gaps = Vec::with_capacity(gaps.len());
@@ -210,27 +256,9 @@ impl PreparedGazetteerMatchData {
       });
       reordered_gaps
         .extend(gaps.iter().take(gaps.len().saturating_sub(1)).cloned());
-      self.push_sequence(WordSequence {
-        label: label.to_owned(),
-        words: reordered,
-        gaps: reordered_gaps,
-      });
+      self.sequences.insert(&reordered, reordered_gaps, label);
     }
-    self.push_sequence(WordSequence {
-      label: label.to_owned(),
-      words: forms,
-      gaps,
-    });
-  }
-
-  fn push_sequence(&mut self, sequence: WordSequence) {
-    let id = self.sequences.len();
-    if let Some(first) = sequence.words.first() {
-      for form in first {
-        self.first_words.entry(form.clone()).or_default().push(id);
-      }
-    }
-    self.sequences.push(sequence);
+    self.sequences.insert(&words, gaps, label);
   }
 
   /// The entry without a trailing legal form, so `Beta Trading s.r.o.` also
@@ -368,8 +396,82 @@ impl PreparedGazetteerMatchData {
   }
 
   fn sequence_hits(&self, text: &str) -> Vec<Hit<'_>> {
+    self.sequences.hits(text, &mut 0)
+  }
+}
+
+impl SequenceTrie {
+  fn new(inflection: GazetteerInflection) -> Self {
+    Self {
+      inflection,
+      spellings: HashMap::new(),
+      words: HashMap::new(),
+      gaps: Vec::new(),
+      nodes: vec![TrieNode::default()],
+    }
+  }
+
+  fn insert(&mut self, words: &[String], gaps: Vec<GapRule>, label: &str) {
+    let mut node = 0_usize;
+    let mut gaps = gaps.into_iter();
+    for (position, word) in words.iter().enumerate() {
+      let word = self.intern_word(word);
+      let gap = if position == 0 {
+        None
+      } else {
+        gaps.next().map(|gap| self.intern_gap(gap))
+      };
+      let next = self.nodes.len();
+      let Some(current) = self.nodes.get_mut(node) else {
+        return;
+      };
+      let child = *current.children.entry((gap, word)).or_insert(next);
+      if let Some(gap) = gap
+        && !current.gaps.contains(&gap)
+      {
+        current.gaps.push(gap);
+      }
+      if child == next {
+        self.nodes.push(TrieNode::default());
+      }
+      node = child;
+    }
+    if let Some(end) = self.nodes.get_mut(node)
+      && !end.labels.iter().any(|known| known == label)
+    {
+      end.labels.push(label.to_owned());
+    }
+  }
+
+  fn intern_word(&mut self, word: &str) -> usize {
+    let key = word.to_lowercase();
+    if let Some(id) = self.words.get(&key) {
+      return *id;
+    }
+    let id = self.words.len();
+    for form in word_forms(word, self.inflection) {
+      self.spellings.entry(form).or_default().push(id);
+    }
+    self.words.insert(key, id);
+    id
+  }
+
+  fn intern_gap(&mut self, gap: GapRule) -> usize {
+    if let Some(id) = self.gaps.iter().position(|known| *known == gap) {
+      return id;
+    }
+    self.gaps.push(gap);
+    self.gaps.len().saturating_sub(1)
+  }
+
+  fn word_ids(&self, folded: &str) -> &[usize] {
+    self.spellings.get(folded).map_or(&[], Vec::as_slice)
+  }
+
+  /// Every entry span in `text`; `steps` counts trie steps taken.
+  fn hits<'a>(&'a self, text: &str, steps: &mut usize) -> Vec<Hit<'a>> {
     let mut hits = Vec::new();
-    if self.first_words.is_empty() {
+    if self.spellings.is_empty() {
       return hits;
     }
     let tokens = tokenize(text);
@@ -380,23 +482,101 @@ impl PreparedGazetteerMatchData {
           text.get(first.start..first.end).unwrap_or_default(),
           &mut folded,
         );
-        let Some(ids) = self.first_words.get(&folded) else {
-          continue;
-        };
-        for sequence in ids.iter().filter_map(|id| self.sequences.get(*id)) {
-          if let Some(end) = sequence.end(text, &tokens, index, first) {
-            hits.push(Hit {
+        for word in self.word_ids(&folded) {
+          *steps = steps.saturating_add(1);
+          let Some(child) = self.child(0, None, *word) else {
+            continue;
+          };
+          self.walk(
+            Walk {
+              text,
+              tokens: &tokens,
               start: first.start,
-              end,
-              label: &sequence.label,
-              score: EXACT_SCORE,
-            });
-          }
+            },
+            (child, first.end, index.saturating_add(1)),
+            steps,
+            &mut hits,
+          );
         }
       }
     }
     hits
   }
+
+  fn child(
+    &self,
+    node: usize,
+    gap: Option<usize>,
+    word: usize,
+  ) -> Option<usize> {
+    self.nodes.get(node)?.children.get(&(gap, word)).copied()
+  }
+
+  /// Reports entries ending at `node` and follows each gap out of it.
+  /// Depth is bounded by the longest entry.
+  fn walk<'a>(
+    &'a self,
+    walk: Walk<'_>,
+    (node, end, next): (usize, usize, usize),
+    steps: &mut usize,
+    hits: &mut Vec<Hit<'a>>,
+  ) {
+    let Some(current) = self.nodes.get(node) else {
+      return;
+    };
+    for label in &current.labels {
+      hits.push(Hit {
+        start: walk.start,
+        end,
+        label,
+        score: EXACT_SCORE,
+      });
+    }
+    let Some(token) = walk.tokens.get(next) else {
+      return;
+    };
+    let mut folded = String::new();
+    for gap_id in &current.gaps {
+      let Some(gap) = self.gaps.get(*gap_id) else {
+        continue;
+      };
+      // Glued digits between words land in the gap and fail it.
+      for spelling in token.spellings(walk.text) {
+        let accepted = walk
+          .text
+          .get(end..spelling.start)
+          .is_some_and(|between| gap.accepts(between));
+        if !accepted {
+          continue;
+        }
+        fold_into(
+          walk
+            .text
+            .get(spelling.start..spelling.end)
+            .unwrap_or_default(),
+          &mut folded,
+        );
+        for word in self.word_ids(&folded) {
+          *steps = steps.saturating_add(1);
+          if let Some(child) = self.child(node, Some(*gap_id), *word) {
+            self.walk(
+              walk,
+              (child, spelling.end, next.saturating_add(1)),
+              steps,
+              hits,
+            );
+          }
+        }
+      }
+    }
+  }
+}
+
+#[derive(Clone, Copy)]
+struct Walk<'t> {
+  text: &'t str,
+  tokens: &'t [Token],
+  start: usize,
 }
 
 /// Exact spans sorted by start with running maximum ends, so a fuzzy hit
@@ -453,34 +633,6 @@ impl Token {
         end: core_start.saturating_add(core.len()),
       });
     std::iter::once(self).chain(stripped)
-  }
-}
-
-impl WordSequence {
-  /// End of this sequence when its first word is `first`, a spelling of
-  /// `tokens[index]`.
-  fn end(
-    &self,
-    text: &str,
-    tokens: &[Token],
-    index: usize,
-    first: Token,
-  ) -> Option<usize> {
-    let mut end = first.end;
-    let mut folded = String::new();
-    for (offset, (forms, gap)) in
-      self.words.iter().skip(1).zip(&self.gaps).enumerate()
-    {
-      let next = *tokens.get(index.saturating_add(offset).saturating_add(1))?;
-      // Glued digits between words land in the gap and fail it.
-      end = next.spellings(text).find_map(|spelling| {
-        let gap_text = text.get(end..spelling.start)?;
-        fold_into(text.get(spelling.start..spelling.end)?, &mut folded);
-        (gap.accepts(gap_text) && forms.contains(&folded))
-          .then_some(spelling.end)
-      })?;
-    }
-    Some(end)
   }
 }
 
@@ -561,9 +713,17 @@ impl LegalFormSuffix {
 }
 
 /// Splits an entry into words and the separators between them. Entries in
-/// scripts written without spaces stay on the literal path only.
+/// scripts written without spaces, and entries whose edges are punctuation
+/// (`C++`, `@alice`, `.NET`), stay on the literal path only: dropping that
+/// punctuation would let the bare word match.
 fn split_term(term: &str) -> Option<(Vec<String>, Vec<GapRule>)> {
-  if term.chars().any(is_unspaced_script) {
+  let trimmed = term.trim();
+  let significant_edge =
+    |edge: Option<char>| edge.is_some_and(|ch| !is_word_char(ch));
+  if trimmed.chars().any(is_unspaced_script)
+    || significant_edge(trimmed.chars().next())
+    || significant_edge(trimmed.chars().next_back())
+  {
     return None;
   }
   let mut words = Vec::new();
@@ -589,11 +749,14 @@ fn split_term(term: &str) -> Option<(Vec<String>, Vec<GapRule>)> {
   Some((words, gaps))
 }
 
-/// Folded spellings a word may take: itself and, for names of letters, its
-/// Czech/Slovak case forms and the forms derived from a surname.
-fn word_forms(word: &str) -> HashSet<String> {
+/// Folded spellings a word may take: itself and, for names of letters when
+/// Czech or Slovak is in scope, its case forms and the forms derived from a
+/// surname.
+fn word_forms(word: &str, inflection: GazetteerInflection) -> HashSet<String> {
   let mut forms = HashSet::from([fold(word)]);
-  if !word.chars().any(char::is_numeric) {
+  if inflection == GazetteerInflection::CzechSlovak
+    && !word.chars().any(char::is_numeric)
+  {
     forms.extend(
       expand_name_declensions(word)
         .into_iter()
@@ -921,9 +1084,16 @@ mod tests {
   }
 
   /// Exact rows for every entry, then fuzzy rows, as the assembler orders
-  /// them.
+  /// them, with Czech/Slovak forms in scope.
   fn prepare(
     entries: &[Entry<'_>],
+  ) -> (PreparedGazetteerMatchData, Vec<String>) {
+    prepare_with(entries, GazetteerInflection::CzechSlovak)
+  }
+
+  fn prepare_with(
+    entries: &[Entry<'_>],
+    inflection: GazetteerInflection,
   ) -> (PreparedGazetteerMatchData, Vec<String>) {
     let mut labels = Vec::new();
     let mut is_fuzzy = Vec::new();
@@ -962,6 +1132,7 @@ mod tests {
         .iter()
         .map(|form| (*form).to_owned())
         .collect(),
+      inflection,
     };
     (
       PreparedGazetteerMatchData::new(data, slice, &patterns).unwrap(),
@@ -1260,6 +1431,118 @@ mod tests {
     assert!(detect("by Winterbite today", 3, 13).is_empty());
   }
 
+  fn found_with(
+    entries: &[Entry<'_>],
+    inflection: GazetteerInflection,
+    text: &str,
+  ) -> Vec<String> {
+    let (prepared, terms) = prepare_with(entries, inflection);
+    let hits = literal_hits(text, &terms, entries.len());
+    prepared
+      .detect(&hits, text)
+      .unwrap()
+      .into_iter()
+      .map(|entity| entity.text)
+      .collect()
+  }
+
+  #[test]
+  fn czech_slovak_forms_follow_the_language_scope() {
+    let entries = [exact("Ana", PERSON)];
+    assert!(
+      found_with(&entries, GazetteerInflection::None, "Is there any news?")
+        .is_empty()
+    );
+    assert_eq!(
+      found_with(&entries, GazetteerInflection::None, "Ana arrived."),
+      ["Ana"]
+    );
+    assert_eq!(
+      found_with(&entries, GazetteerInflection::None, "ANA, ána"),
+      ["ANA", "ána"]
+    );
+    for surface in ["Aně", "Anou", "Any"] {
+      assert_eq!(
+        found_with(
+          &entries,
+          GazetteerInflection::CzechSlovak,
+          &format!("Patří {surface} dnes."),
+        ),
+        [surface]
+      );
+    }
+  }
+
+  #[test]
+  fn edge_punctuation_stays_part_of_the_entry() {
+    let entries = [exact("C++", ORGANIZATION), exact("@alice", PERSON)];
+    assert!(found(&entries, "Plan C and alice agreed.").is_empty());
+    assert_eq!(found(&entries, "Use C++ today."), ["C++"]);
+    assert_eq!(found(&entries, "Ping @alice today."), ["@alice"]);
+  }
+
+  #[test]
+  fn automatic_fuzzy_distance_follows_the_length_scale() {
+    let data = GazetteerMatchData {
+      labels: vec![PERSON.to_owned(), PERSON.to_owned()],
+      is_fuzzy: vec![true, true],
+      legal_form_suffixes: Vec::new(),
+      inflection: GazetteerInflection::CzechSlovak,
+    };
+    let patterns = ["Wintermute", "Acme"].map(|term| SearchPattern::Fuzzy {
+      pattern: term.to_owned(),
+      distance: None,
+    });
+    let prepared = PreparedGazetteerMatchData::new(
+      data,
+      PatternSlice { start: 0, end: 2 },
+      &patterns,
+    )
+    .unwrap();
+    let fuzzy = |pattern: u32, text: &str, end: usize| {
+      prepared
+        .detect(
+          &[SearchMatch::Fuzzy {
+            pattern,
+            start: 3,
+            end: u32::try_from(end).unwrap(),
+            distance: 1,
+          }],
+          text,
+        )
+        .unwrap()
+        .into_iter()
+        .map(|entity| entity.text)
+        .collect::<Vec<_>>()
+    };
+    assert_eq!(fuzzy(0, "by Wintermte today", 12), ["Wintermte"]);
+    assert!(fuzzy(1, "by acne today", 7).is_empty());
+  }
+
+  #[test]
+  fn same_prefix_entries_share_one_trie_walk() {
+    const ENTRIES: usize = 2_000;
+    // `Acme Holding7` pairs, two tokens each.
+    const PAIRS: usize = 2_500;
+    const TOKENS: usize = 5_000;
+    const MAX_STEPS: usize = 10_000;
+    let terms = (0..ENTRIES)
+      .map(|index| format!("Acme Holding{index}"))
+      .collect::<Vec<_>>();
+    let entries = terms
+      .iter()
+      .map(|term| exact(term, ORGANIZATION))
+      .collect::<Vec<_>>();
+    let (prepared, _) = prepare(&entries);
+    let text = "Acme Holding7 ".repeat(PAIRS);
+    let mut steps = 0_usize;
+    let hits = prepared.sequences.hits(&text, &mut steps);
+    assert_eq!(hits.len(), PAIRS);
+    // A scan of same-prefix entries would take ENTRIES steps per `Acme`; the
+    // trie takes a constant number per token.
+    assert!(steps <= MAX_STEPS, "{steps} trie steps for {TOKENS} tokens");
+  }
+
   #[test]
   fn names_in_unspaced_scripts_keep_matching_as_substrings() {
     assert_eq!(found(&[exact("東京", ORGANIZATION)], "東京都に"), ["東京"]);
@@ -1271,6 +1554,7 @@ mod tests {
       labels: vec![ORGANIZATION.to_owned()],
       is_fuzzy: vec![false],
       legal_form_suffixes: Vec::new(),
+      inflection: GazetteerInflection::CzechSlovak,
     };
     let fuzzy = [SearchPattern::Fuzzy {
       pattern: "Acme".to_owned(),

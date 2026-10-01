@@ -91,6 +91,17 @@ pub struct BindingGazetteerMatchData {
   pub labels: Vec<String>,
   pub is_fuzzy: Vec<bool>,
   pub legal_form_suffixes: Vec<String>,
+  pub inflection: BindingGazetteerInflection,
+}
+
+#[derive(
+  Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum BindingGazetteerInflection {
+  #[default]
+  None,
+  CzechSlovak,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]

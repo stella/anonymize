@@ -8,10 +8,10 @@ use snapshots::diagnostics_snapshot;
 use stella_anonymize_core::{
   DenyListMatchData, DenyListPatternMetaSet, DiagnosticEvent,
   DiagnosticEventKind, DiagnosticPhase, DiagnosticScope, DiagnosticStage,
-  Error, GazetteerMatchData, LiteralSearchOptions, OperatorConfig,
-  PatternSlice, PreparedEngine, PreparedEngineConfig, PreparedEngineSlices,
-  RegexMatchMeta, RegexSearchOptions, SearchEngine, SearchOptions,
-  SearchPattern, StaticRedactionStreamEvent,
+  Error, GazetteerInflection, GazetteerMatchData, LiteralSearchOptions,
+  OperatorConfig, PatternSlice, PreparedEngine, PreparedEngineConfig,
+  PreparedEngineSlices, RegexMatchMeta, RegexSearchOptions, SearchEngine,
+  SearchOptions, SearchPattern, StaticRedactionStreamEvent,
 };
 use support::prepared_config;
 
@@ -90,6 +90,7 @@ fn static_redaction_diagnostics_engine() -> PreparedEngine {
       labels: vec![String::from("organization")],
       is_fuzzy: vec![false],
       legal_form_suffixes: vec![String::from("s.r.o.")],
+      inflection: GazetteerInflection::None,
     }),
     country_data: None,
     hotword_data: None,
@@ -445,6 +446,7 @@ fn engine_reports_prepare_slot_diagnostics() {
       labels: vec![String::from("organization")],
       is_fuzzy: vec![false],
       legal_form_suffixes: vec![String::from("s.r.o.")],
+      inflection: GazetteerInflection::None,
     }),
     ..empty_config(PreparedEngineSlices::default())
   };
