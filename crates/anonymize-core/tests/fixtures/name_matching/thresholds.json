@@ -14,6 +14,11 @@
     "minimum_exact_hits": 7,
     "total": 7
   },
+  "deny-list/context-whitespace": {
+    "metric": "recall",
+    "minimum_exact_hits": 4,
+    "total": 4
+  },
   "deny-list/diacritics-added": {
     "metric": "recall",
     "minimum_exact_hits": 5,
@@ -54,10 +59,15 @@
     "minimum_exact_hits": 7,
     "total": 7
   },
+  "deny-list/language-exclusion": {
+    "metric": "false-positives",
+    "maximum_false_positives": 0,
+    "total": 2
+  },
   "deny-list/language-scope": {
     "maximum_false_positives": 0,
     "metric": "false-positives",
-    "total": 140
+    "total": 151
   },
   "deny-list/legal-form-variant": {
     "metric": "recall",
@@ -74,10 +84,20 @@
     "maximum_false_positives": 0,
     "total": 1
   },
+  "deny-list/multi-entity": {
+    "metric": "recall",
+    "minimum_exact_hits": 5,
+    "total": 5
+  },
   "deny-list/ordinary-word": {
     "maximum_false_positives": 0,
     "metric": "false-positives",
     "total": 21
+  },
+  "deny-list/per-label-operator": {
+    "metric": "recall",
+    "minimum_exact_hits": 2,
+    "total": 2
   },
   "deny-list/split": {
     "metric": "recall",

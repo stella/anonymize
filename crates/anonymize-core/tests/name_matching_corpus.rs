@@ -60,6 +60,11 @@ struct Case {
   expected_entities: Vec<ExpectedEntity>,
   #[serde(rename = "forcedExpectedEntities")]
   forced_expected_entities: Option<Vec<ExpectedEntity>>,
+  #[serde(rename = "knownFailure")]
+  known_failure: Option<KnownFailure>,
+  operators: Option<BTreeMap<String, CorpusOperator>>,
+  #[serde(rename = "languageExclusions")]
+  language_exclusions: Option<Vec<Language>>,
   kind: String,
   text: String,
   surface: String,
@@ -71,6 +76,20 @@ struct ExpectedEntity {
   start: u32,
   end: u32,
   label: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct KnownFailure {
+  entities: Vec<ExpectedEntity>,
+  redacted_text: String,
+}
+
+#[derive(Clone, Copy, Deserialize)]
+#[serde(rename_all = "lowercase")]
+enum CorpusOperator {
+  Redact,
+  Keep,
 }
 
 #[derive(Debug, Deserialize)]
@@ -176,11 +195,14 @@ fn expected_redaction(
       return Err("invalid expected entity".into());
     }
     text.get(start..end).ok_or("invalid expected UTF-8 span")?;
-    if operators.operators.get(&entity.label) != Some(&Operator::Redact) {
-      return Err("corpus oracle requires the redact operator".into());
-    }
     output.push_str(text.get(cursor..start).ok_or("invalid expected gap")?);
-    output.push_str(&operators.redact_string);
+    match operators.operators.get(&entity.label) {
+      Some(Operator::Redact) => output.push_str(&operators.redact_string),
+      Some(Operator::Keep) => {
+        output.push_str(text.get(start..end).ok_or("invalid kept span")?);
+      }
+      _ => return Err("unsupported corpus operator".into()),
+    }
     cursor = end;
   }
   output.push_str(text.get(cursor..).ok_or("invalid expected tail")?);
@@ -194,6 +216,43 @@ fn exact_case(
   expected_text: &str,
 ) -> bool {
   exact_entities(entities, expected) && redacted_text == expected_text
+}
+
+struct KnownFailureCheck<'a> {
+  passed: bool,
+  entities: &'a [PipelineEntity],
+  redacted_text: &'a str,
+  known: Option<&'a KnownFailure>,
+}
+
+fn verify_known_failure(
+  KnownFailureCheck {
+    passed,
+    entities,
+    redacted_text,
+    known,
+  }: KnownFailureCheck<'_>,
+) -> Result<(), Box<dyn Error>> {
+  match (passed, known) {
+    (true, None) => Ok(()),
+    (true, Some(_)) => Err(
+      "pinned failure now passes; remove its pin and tighten the class bound"
+        .into(),
+    ),
+    (false, None) => Err(
+      "unannotated corpus failure; reject regression before updating bounds"
+        .into(),
+    ),
+    (false, Some(pin)) => {
+      if !exact_case(entities, redacted_text, &pin.entities, &pin.redacted_text)
+      {
+        return Err(
+          "pinned failure changed its entities or redacted output".into(),
+        );
+      }
+      Ok(())
+    }
+  }
 }
 
 fn record(
@@ -218,12 +277,33 @@ fn record(
   Ok(())
 }
 
-fn measure(
+fn case_operators(
+  case: &Case,
+  defaults: &OperatorConfig,
+) -> Result<OperatorConfig, Box<dyn Error>> {
+  let mut operators = defaults.clone();
+  if let Some(overrides) = &case.operators {
+    for (label, choice) in overrides {
+      if !operators.operators.contains_key(label) {
+        return Err("operator override must refer to a gazetteer label".into());
+      }
+      operators.operators.insert(
+        label.clone(),
+        match choice {
+          CorpusOperator::Redact => Operator::Redact,
+          CorpusOperator::Keep => Operator::Keep,
+        },
+      );
+    }
+  }
+  Ok(operators)
+}
+
+type ScopedEngines = BTreeMap<Vec<Language>, PreparedEngine>;
+
+fn scoped_engines(
   entries: &[GazetteerEntry],
-  cases: &[(&Case, &[ExpectedEntity])],
-  mode: &str,
-  report: &mut Report,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<ScopedEngines, Box<dyn Error>> {
   let scopes = [
     vec![Language::Cs],
     vec![Language::Sk],
@@ -233,21 +313,100 @@ fn measure(
     vec![Language::Sk, Language::En],
     vec![Language::Cs, Language::Sk, Language::En],
   ];
-  let engines = scopes
+  scopes
     .into_iter()
     .map(|scope| {
       let scoped_engine = engine(entries, &scope)?;
       Ok((scope, scoped_engine))
     })
-    .collect::<Result<BTreeMap<_, _>, Box<dyn Error>>>()?;
-  let operators = OperatorConfig {
+    .collect()
+}
+
+struct LanguageExclusionCheck<'a> {
+  case: &'a Case,
+  engines: &'a ScopedEngines,
+  operators: &'a OperatorConfig,
+  mode: &'a str,
+  report: &'a mut Report,
+}
+
+fn check_language_exclusions(
+  LanguageExclusionCheck {
+    case,
+    engines,
+    operators,
+    mode,
+    report,
+  }: LanguageExclusionCheck<'_>,
+) -> Result<(), Box<dyn Error>> {
+  let Some(exclusions) = &case.language_exclusions else {
+    return Ok(());
+  };
+  if exclusions.is_empty() {
+    return Err("language exclusion list must not be empty".into());
+  }
+  for excluded in exclusions {
+    if *excluded == case.language {
+      return Err("cannot exclude the case's own language".into());
+    }
+    let excluded_engine = engines
+      .get([*excluded].as_slice())
+      .ok_or("missing excluded scope")?;
+    let excluded_result =
+      excluded_engine.redact_static_entities(&case.text, operators)?;
+    let excluded_passed = exact_case(
+      &excluded_result.resolved_entities,
+      &excluded_result.redaction.redacted_text,
+      &[],
+      &case.text,
+    );
+    if !excluded_passed {
+      return Err(
+        format!(
+          "{mode}/{}: excluded language matched or changed text",
+          case.kind
+        )
+        .into(),
+      );
+    }
+    record(
+      report,
+      format!("{mode}/language-exclusion"),
+      Expectation::Keep,
+      excluded_passed,
+    )?;
+  }
+
+  Ok(())
+}
+
+struct ScoredCase<'a> {
+  case: &'a Case,
+  expected: &'a [ExpectedEntity],
+  known_failure: Option<&'a KnownFailure>,
+}
+
+fn measure(
+  entries: &[GazetteerEntry],
+  cases: &[ScoredCase<'_>],
+  mode: &str,
+  report: &mut Report,
+) -> Result<(), Box<dyn Error>> {
+  let engines = scoped_engines(entries)?;
+  let default_operators = OperatorConfig {
     operators: entries
       .iter()
       .map(|entry| (entry.label.clone(), Operator::Redact))
       .collect(),
     ..OperatorConfig::default()
   };
-  for (case, expected) in cases {
+  for ScoredCase {
+    case,
+    expected,
+    known_failure,
+  } in cases
+  {
+    let operators = case_operators(case, &default_operators)?;
     let range = surface_range(case)?;
     let expected_text = expected_redaction(&case.text, expected, &operators)?;
     let surface_expected = expected
@@ -278,6 +437,13 @@ fn measure(
       Expectation::Keep,
       unchanged,
     )?;
+    check_language_exclusions(LanguageExclusionCheck {
+      case,
+      engines: &engines,
+      operators: &operators,
+      mode,
+      report,
+    })?;
     let entities = &result.resolved_entities;
     for entity in entities {
       let start = usize::try_from(entity.start)?;
@@ -298,6 +464,13 @@ fn measure(
       expected,
       &expected_text,
     );
+    verify_known_failure(KnownFailureCheck {
+      passed,
+      entities,
+      redacted_text: &result.redaction.redacted_text,
+      known: *known_failure,
+    })
+    .map_err(|error| format!("{mode}/{}: {error}", case.kind))?;
     record(
       report,
       format!("{mode}/{}", case.kind),
@@ -335,7 +508,11 @@ fn labeled_name_matching_corpus_gate() -> Result<(), Box<dyn Error>> {
     &corpus
       .cases
       .iter()
-      .map(|case| (case, case.expected_entities.as_slice()))
+      .map(|case| ScoredCase {
+        case,
+        expected: &case.expected_entities,
+        known_failure: case.known_failure.as_ref(),
+      })
       .collect::<Vec<_>>(),
     "deny-list",
     &mut report,
@@ -343,7 +520,11 @@ fn labeled_name_matching_corpus_gate() -> Result<(), Box<dyn Error>> {
   let mut forced_cases = corpus
     .forced_cases
     .iter()
-    .map(|case| (case, case.expected_entities.as_slice()))
+    .map(|case| ScoredCase {
+      case,
+      expected: &case.expected_entities,
+      known_failure: case.known_failure.as_ref(),
+    })
     .collect::<Vec<_>>();
   for case in corpus
     .cases
@@ -354,7 +535,11 @@ fn labeled_name_matching_corpus_gate() -> Result<(), Box<dyn Error>> {
       .forced_expected_entities
       .as_deref()
       .ok_or("missing forced replay expectations")?;
-    forced_cases.push((case, expected));
+    forced_cases.push(ScoredCase {
+      case,
+      expected,
+      known_failure: None,
+    });
   }
   measure(&forced_entries, &forced_cases, "forced", &mut report)?;
   check_thresholds(&report, &thresholds)
@@ -556,6 +741,99 @@ fn redaction_scoring_preserves_every_unannotated_byte()
     expected_redaction(text, &[], &operators)?,
     text,
     "empty annotations must preserve all text"
+  );
+  Ok(())
+}
+
+#[test]
+fn tolerated_failures_cannot_drift_or_silently_improve()
+-> Result<(), Box<dyn Error>> {
+  let pin = KnownFailure {
+    entities: vec![],
+    redacted_text: String::from("Alice signed."),
+  };
+  verify_known_failure(KnownFailureCheck {
+    passed: false,
+    entities: &[],
+    redacted_text: "Alice signed.",
+    known: Some(&pin),
+  })?;
+  assert!(
+    verify_known_failure(KnownFailureCheck {
+      passed: false,
+      entities: &[],
+      redacted_text: "Alice signed!",
+      known: Some(&pin)
+    })
+    .is_err(),
+    "changed output must invalidate a pin"
+  );
+  let unexpected = PipelineEntity::detected(
+    6,
+    12,
+    "person",
+    "signed",
+    1.0,
+    DetectionSource::Gazetteer,
+  );
+  assert!(
+    verify_known_failure(KnownFailureCheck {
+      passed: false,
+      entities: &[unexpected],
+      redacted_text: "Alice signed.",
+      known: Some(&pin)
+    })
+    .is_err(),
+    "changed entities must invalidate a pin even when output is identical"
+  );
+  assert!(
+    verify_known_failure(KnownFailureCheck {
+      passed: false,
+      entities: &[],
+      redacted_text: "Alice signed.",
+      known: None
+    })
+    .is_err(),
+    "every tolerated failure must be explicitly pinned"
+  );
+  let improved = verify_known_failure(KnownFailureCheck {
+    passed: true,
+    entities: &[],
+    redacted_text: "[REDACTED] signed.",
+    known: Some(&pin),
+  });
+  assert!(
+    improved.is_err(),
+    "newly passing pinned failure requires a tightened bound"
+  );
+  Ok(())
+}
+
+#[test]
+fn expected_output_honors_per_label_operators() -> Result<(), Box<dyn Error>> {
+  let expected = [
+    ExpectedEntity {
+      start: 0,
+      end: 4,
+      label: String::from("organization"),
+    },
+    ExpectedEntity {
+      start: 5,
+      end: 10,
+      label: String::from("person"),
+    },
+  ];
+  let operators = OperatorConfig {
+    operators: BTreeMap::from([
+      (String::from("organization"), Operator::Keep),
+      (String::from("person"), Operator::Redact),
+    ]),
+    redact_string: String::from("<redacted>"),
+  };
+  let oracle = expected_redaction("Zeta Alice", &expected, &operators)?;
+  assert_eq!(
+    oracle, "Zeta <redacted>",
+    "operator dispatch must preserve kept names and redact only the other label"
   );
   Ok(())
 }

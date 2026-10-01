@@ -30,15 +30,32 @@ expect no entities. Replayed keep cases declare a separate
 Scoring compares the complete resolved entity multiset (span, label and
 gazetteer source). Missing, extra, duplicate, partial or mislabelled entities
 fail the case's class, including false positives far from the annotated
-surface. The corpus configures the redact operator for each gazetteer label.
+surface. The corpus defaults to the redact operator for each gazetteer label;
+per-case label overrides also exercise keep alongside redact.
 An independent oracle replaces each expected span with the configured redact
-string and copies every intervening byte. The produced redacted text must
+string (or retains a kept entity) and copies every intervening byte. The produced redacted text must
 match this output exactly, preserving Unicode, newlines, CRLF and non-breaking
 spaces outside expected spans. Empty expected sets require byte-identical
 output. Unit tests reject incorrect entity sets, unchanged source text and
 corrupted context. The complete oracle replaces the derived adjacent-word
 checks on redact cases and the separate span-extent metric; adjacent-word
 keep fixtures retain their own class.
+
+Every currently tolerated failure declares `knownFailure`: its actual entity
+set and exact redacted output. Unannotated failures and any drift from a pin
+reject the gate regardless of aggregate bounds. A pinned case that starts
+passing also rejects the gate, requiring removal of the pin and a tighter
+class bound. Pins belong to their measurement profile, so a deny-list pin
+never applies to the same keep fixture's forced-value replay.
+
+Dedicated cases preserve CRLF, NBSP, tabs and multiline context before and
+after names. Multi-entity cases cover different lengths, repeated names and
+entities with touching byte ranges. Mixed keep/redact labels check both
+operator dispatch and replacements of different lengths. Czech and Slovak
+inflection cases pair their positive oracle with `languageExclusions: ["en"]`:
+English-only engines must resolve no entities and return unchanged text.
+Czech and Slovak share the matcher inflection policy; these cases test that
+explicit boundary against English, without claiming separate cs/sk policies.
 
 `thresholds.json` stores class floors and ceilings as integer numerators with
 fixed denominators, avoiding rounded percentages. Bounds were measured on the

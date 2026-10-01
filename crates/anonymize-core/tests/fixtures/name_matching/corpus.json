@@ -125,6 +125,24 @@
       "workspaceId": "corpus-workspace",
       "createdAt": 0,
       "source": "manual"
+    },
+    {
+      "id": "corpus-entry-17",
+      "canonical": "Nerava++",
+      "label": "organization",
+      "variants": [],
+      "workspaceId": "corpus-workspace",
+      "createdAt": 0,
+      "source": "manual"
+    },
+    {
+      "id": "corpus-entry-18",
+      "canonical": "@Brivola",
+      "label": "person",
+      "variants": [],
+      "workspaceId": "corpus-workspace",
+      "createdAt": 0,
+      "source": "manual"
     }
   ],
   "cases": [
@@ -210,7 +228,17 @@
           "end": 52,
           "label": "organization"
         }
-      ]
+      ],
+      "knownFailure": {
+        "entities": [
+          {
+            "end": 53,
+            "label": "organization",
+            "start": 28
+          }
+        ],
+        "redactedText": "Signed for and on behalf of [REDACTED]"
+      }
     },
     {
       "expectation": "redact",
@@ -658,7 +686,11 @@
           "end": 12,
           "label": "organization"
         }
-      ]
+      ],
+      "knownFailure": {
+        "entities": [],
+        "redactedText": "Klient Orbys zaplatil."
+      }
     },
     {
       "expectation": "redact",
@@ -756,7 +788,8 @@
           "end": 32,
           "label": "person"
         }
-      ]
+      ],
+      "languageExclusions": ["en"]
     },
     {
       "expectation": "redact",
@@ -854,7 +887,8 @@
           "end": 40,
           "label": "person"
         }
-      ]
+      ],
+      "languageExclusions": ["en"]
     },
     {
       "expectation": "redact",
@@ -1176,7 +1210,17 @@
           "end": 40,
           "label": "organization"
         }
-      ]
+      ],
+      "knownFailure": {
+        "entities": [
+          {
+            "end": 32,
+            "label": "organization",
+            "start": 12
+          }
+        ],
+        "redactedText": "Prepared by [REDACTED] Limited."
+      }
     },
     {
       "expectation": "redact",
@@ -1514,7 +1558,17 @@
       "surface": "<<token:zeta9>>",
       "language": "en",
       "expectedEntities": [],
-      "forcedExpectedEntities": []
+      "forcedExpectedEntities": [],
+      "knownFailure": {
+        "entities": [
+          {
+            "end": 17,
+            "label": "organization",
+            "start": 12
+          }
+        ],
+        "redactedText": "see <<token:[REDACTED]>> below"
+      }
     },
     {
       "expectation": "keep",
@@ -1872,6 +1926,208 @@
         }
       ],
       "forcedExpectedEntities": []
+    },
+    {
+      "expectation": "redact",
+      "kind": "context-whitespace",
+      "text": "lead\r\nAcme A\r\nend",
+      "surface": "Acme A",
+      "language": "en",
+      "expectedEntities": [
+        {
+          "start": 6,
+          "end": 12,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "context-whitespace",
+      "text": "lead Zeta end",
+      "surface": "Zeta",
+      "language": "en",
+      "expectedEntities": [
+        {
+          "start": 6,
+          "end": 10,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "context-whitespace",
+      "text": "před\tMarie Dvořáková\tpoté",
+      "surface": "Marie Dvořáková",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 6,
+          "end": 24,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "context-whitespace",
+      "text": "lead\n\nAcme A\n\nend",
+      "surface": "Acme A",
+      "language": "en",
+      "expectedEntities": [
+        {
+          "start": 6,
+          "end": 12,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "multi-entity",
+      "text": "Acme A signed; Zeta countersigned.",
+      "surface": "Acme A",
+      "language": "en",
+      "expectedEntities": [
+        {
+          "start": 0,
+          "end": 6,
+          "label": "organization"
+        },
+        {
+          "start": 15,
+          "end": 19,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "multi-entity",
+      "text": "Zeta; Acme A; Zeta.",
+      "surface": "Acme A",
+      "language": "en",
+      "expectedEntities": [
+        {
+          "start": 0,
+          "end": 4,
+          "label": "organization"
+        },
+        {
+          "start": 6,
+          "end": 12,
+          "label": "organization"
+        },
+        {
+          "start": 14,
+          "end": 18,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "multi-entity",
+      "text": "Marie Dvořáková; Zeta.",
+      "surface": "Marie Dvořáková",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 0,
+          "end": 18,
+          "label": "person"
+        },
+        {
+          "start": 20,
+          "end": 24,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "multi-entity",
+      "text": "Acme A;Zeta.",
+      "surface": "Acme A",
+      "language": "en",
+      "expectedEntities": [
+        {
+          "start": 0,
+          "end": 6,
+          "label": "organization"
+        },
+        {
+          "start": 7,
+          "end": 11,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "per-label-operator",
+      "text": "Before Zeta then Marie Dvořáková after.",
+      "surface": "Marie Dvořáková",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 7,
+          "end": 11,
+          "label": "organization"
+        },
+        {
+          "start": 17,
+          "end": 35,
+          "label": "person"
+        }
+      ],
+      "operators": {
+        "organization": "keep",
+        "person": "redact"
+      }
+    },
+    {
+      "expectation": "redact",
+      "kind": "per-label-operator",
+      "text": "Before Zeta then Marie Dvořáková after.",
+      "surface": "Marie Dvořáková",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 7,
+          "end": 11,
+          "label": "organization"
+        },
+        {
+          "start": 17,
+          "end": 35,
+          "label": "person"
+        }
+      ],
+      "operators": {
+        "organization": "redact",
+        "person": "keep"
+      }
+    },
+    {
+      "expectation": "redact",
+      "kind": "multi-entity",
+      "text": "Nerava++@Brivola",
+      "surface": "Nerava++",
+      "language": "en",
+      "expectedEntities": [
+        {
+          "start": 0,
+          "end": 8,
+          "label": "organization"
+        },
+        {
+          "start": 8,
+          "end": 16,
+          "label": "person"
+        }
+      ]
     }
   ],
   "forcedValues": [
