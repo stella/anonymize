@@ -51,11 +51,32 @@ never applies to the same keep fixture's forced-value replay.
 Dedicated cases preserve CRLF, NBSP, tabs and multiline context before and
 after names. Multi-entity cases cover different lengths, repeated names and
 entities with touching byte ranges. Mixed keep/redact labels check both
-operator dispatch and replacements of different lengths. Czech and Slovak
-inflection cases pair their positive oracle with `languageExclusions: ["en"]`:
-English-only engines must resolve no entities and return unchanged text.
-Czech and Slovak share the matcher inflection policy; these cases test that
-explicit boundary against English, without claiming separate cs/sk policies.
+operator dispatch and replacements of different lengths. Of the 20 Czech and
+Slovak cases in `inflected` and `inflected-diacritics-dropped`, all 15 that
+produce no English-only match carry `languageExclusions: ["en"]`. Their
+English-only engines must resolve no entities and return unchanged text:
+
+- `inflected` (10): `Novákovi`, `Nováka`, `Novákem`, `Marií Dvořákovou`,
+  `Tomáše Kubíčka`, `Tomášovi Kubíčkovi`, `Ľubomírovi Šťastnému`,
+  `Zuzany Kováčovej`, `Zuzanou Kováčovou`, `Zelvanskou energetikou, a. s.`.
+- `inflected-diacritics-dropped` (5): `Novakovi`, `Novakem`, `Tomase Kubicka`,
+  `Lubomirovi Stastnemu`, `Zuzany Kovacovej`.
+
+The remaining five omit the exclusion because English still supports
+case/diacritics folding and language-neutral fuzzy matching. Each is within
+the corresponding canonical name's two-edit budget:
+
+| Class                          | Surface                    | Folded edits from canonical      |
+| ------------------------------ | -------------------------- | -------------------------------- |
+| `inflected`                    | `Marii Dvořákové`          | 2 from `Marie Dvořáková`         |
+| `inflected-diacritics-dropped` | `Marii Dvorakove`          | 2 from `Marie Dvořáková`         |
+| `inflected`                    | `Velmorské stavební a.s.`  | 1 from `Velmorská stavební a.s.` |
+| `inflected-diacritics-dropped` | `Velmorske stavebni a.s.`  | 1 from `Velmorská stavební a.s.` |
+| `inflected`                    | `Velmorskou stavební a.s.` | 2 from `Velmorská stavební a.s.` |
+
+Czech and Slovak share the matcher inflection policy. These checks enforce
+that morphology boundary against English, without disabling its fuzzy
+matching or claiming separate cs/sk policies.
 
 Every keep fixture declares a tagged `negativeCheck`. Suppression cases
 identify a configured surface inside the guarded region and a neutral context

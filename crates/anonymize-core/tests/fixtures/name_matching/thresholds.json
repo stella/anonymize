@@ -67,7 +67,7 @@
   "deny-list/language-exclusion": {
     "metric": "false-positives",
     "maximum_false_positives": 0,
-    "total": 2
+    "total": 15
   },
   "deny-list/language-scope": {
     "maximum_false_positives": 0,
