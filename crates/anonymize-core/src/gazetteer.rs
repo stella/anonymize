@@ -38,6 +38,11 @@ const MAX_WORD_GAP_CHARS: usize = 4;
 /// Longest whitespace/comma run accepted between a name and its legal form.
 const MAX_LEGAL_FORM_SEPARATOR_CHARS: usize = 3;
 
+/// Separators with up to this many distinct punctuation marks accept every
+/// subset of them (`A. & B.` accepts `A. B.` and `A & B`); longer ones accept
+/// whitespace or the full set only, keeping the per-separator key count small.
+const MAX_SUBSET_PUNCTUATION: usize = 3;
+
 /// Person entries of up to this many words also match surname-first.
 const MAX_REORDERED_PERSON_WORDS: usize = 3;
 
@@ -103,9 +108,10 @@ enum RowKind {
 }
 
 /// Entry word sequences in a trie keyed by interned words. Every folded
-/// spelling of a word (declined forms included) maps to that word, so a
-/// document token costs one spelling lookup per trie step, however many
-/// entries share the prefix.
+/// spelling of a word (declined forms included) maps to that word, and every
+/// separator a gap accepts maps to one interned key, so a document token
+/// costs a bounded number of hash lookups per trie step, however many
+/// entries share the prefix or how many separator spellings they use.
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct SequenceTrie {
   inflection: GazetteerInflection,
@@ -113,7 +119,8 @@ struct SequenceTrie {
   spellings: HashMap<String, Vec<usize>>,
   /// Lowercased entry word -> interned word id.
   words: HashMap<String, usize>,
-  gaps: Vec<GapRule>,
+  /// Separator key (sorted punctuation marks) -> interned key id.
+  gap_keys: HashMap<String, usize>,
   nodes: Vec<TrieNode>,
 }
 
@@ -121,16 +128,18 @@ struct SequenceTrie {
 struct TrieNode {
   /// Labels of the entries that end here.
   labels: Vec<String>,
-  /// `(gap, word)` -> child; the gap is `None` from the root.
-  children: HashMap<(Option<usize>, usize), usize>,
-  /// Distinct gaps leading out of this node.
-  gaps: Vec<usize>,
+  /// Word -> child.
+  children: HashMap<usize, usize>,
+  /// `(separator key, word)` -> longest separator, in chars, accepted
+  /// before that word.
+  separators: HashMap<(usize, usize), usize>,
 }
 
+/// The separators an entry allows between two of its words: whitespace and
+/// any subset of the punctuation it spells there, up to `max_chars`.
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct GapRule {
   punctuation: Vec<char>,
-  comma: bool,
   max_chars: usize,
 }
 
@@ -250,10 +259,7 @@ impl PreparedGazetteerMatchData {
       reordered.push(last.clone());
       reordered.extend(leading.iter().cloned());
       let mut reordered_gaps = Vec::with_capacity(gaps.len());
-      reordered_gaps.push(GapRule {
-        comma: true,
-        ..first_gap.clone()
-      });
+      reordered_gaps.push(first_gap.clone().with_comma());
       reordered_gaps
         .extend(gaps.iter().take(gaps.len().saturating_sub(1)).cloned());
       self.sequences.insert(&reordered, reordered_gaps, label);
@@ -406,7 +412,7 @@ impl SequenceTrie {
       inflection,
       spellings: HashMap::new(),
       words: HashMap::new(),
-      gaps: Vec::new(),
+      gap_keys: HashMap::new(),
       nodes: vec![TrieNode::default()],
     }
   }
@@ -416,20 +422,28 @@ impl SequenceTrie {
     let mut gaps = gaps.into_iter();
     for (position, word) in words.iter().enumerate() {
       let word = self.intern_word(word);
-      let gap = if position == 0 {
-        None
+      let separators = if position == 0 {
+        Vec::new()
       } else {
-        gaps.next().map(|gap| self.intern_gap(gap))
+        gaps
+          .next()
+          .map(|gap| {
+            gap
+              .keys()
+              .into_iter()
+              .map(|key| (self.intern_gap_key(key), gap.max_chars))
+              .collect()
+          })
+          .unwrap_or_default()
       };
       let next = self.nodes.len();
       let Some(current) = self.nodes.get_mut(node) else {
         return;
       };
-      let child = *current.children.entry((gap, word)).or_insert(next);
-      if let Some(gap) = gap
-        && !current.gaps.contains(&gap)
-      {
-        current.gaps.push(gap);
+      let child = *current.children.entry(word).or_insert(next);
+      for (key, max_chars) in separators {
+        let longest = current.separators.entry((key, word)).or_insert(0);
+        *longest = (*longest).max(max_chars);
       }
       if child == next {
         self.nodes.push(TrieNode::default());
@@ -456,12 +470,9 @@ impl SequenceTrie {
     id
   }
 
-  fn intern_gap(&mut self, gap: GapRule) -> usize {
-    if let Some(id) = self.gaps.iter().position(|known| *known == gap) {
-      return id;
-    }
-    self.gaps.push(gap);
-    self.gaps.len().saturating_sub(1)
+  fn intern_gap_key(&mut self, key: String) -> usize {
+    let next = self.gap_keys.len();
+    *self.gap_keys.entry(key).or_insert(next)
   }
 
   fn word_ids(&self, folded: &str) -> &[usize] {
@@ -484,7 +495,7 @@ impl SequenceTrie {
         );
         for word in self.word_ids(&folded) {
           *steps = steps.saturating_add(1);
-          let Some(child) = self.child(0, None, *word) else {
+          let Some(child) = self.child(0, *word) else {
             continue;
           };
           self.walk(
@@ -503,17 +514,14 @@ impl SequenceTrie {
     hits
   }
 
-  fn child(
-    &self,
-    node: usize,
-    gap: Option<usize>,
-    word: usize,
-  ) -> Option<usize> {
-    self.nodes.get(node)?.children.get(&(gap, word)).copied()
+  fn child(&self, node: usize, word: usize) -> Option<usize> {
+    self.nodes.get(node)?.children.get(&word).copied()
   }
 
-  /// Reports entries ending at `node` and follows each gap out of it.
-  /// Depth is bounded by the longest entry.
+  /// Reports entries ending at `node` and follows the next token when the
+  /// separator before it is one an entry allows. Every step is a hash lookup
+  /// on the observed separator and word; depth is bounded by the longest
+  /// entry.
   fn walk<'a>(
     &'a self,
     walk: Walk<'_>,
@@ -535,37 +543,42 @@ impl SequenceTrie {
     let Some(token) = walk.tokens.get(next) else {
       return;
     };
+    if current.separators.is_empty() {
+      return;
+    }
     let mut folded = String::new();
-    for gap_id in &current.gaps {
-      let Some(gap) = self.gaps.get(*gap_id) else {
+    // Glued digits between words land in the separator and fail it.
+    for spelling in token.spellings(walk.text) {
+      let Some((key, chars)) = walk
+        .text
+        .get(end..spelling.start)
+        .and_then(observed_separator)
+      else {
         continue;
       };
-      // Glued digits between words land in the gap and fail it.
-      for spelling in token.spellings(walk.text) {
-        let accepted = walk
+      let Some(key) = self.gap_keys.get(&key) else {
+        continue;
+      };
+      fold_into(
+        walk
           .text
-          .get(end..spelling.start)
-          .is_some_and(|between| gap.accepts(between));
-        if !accepted {
-          continue;
-        }
-        fold_into(
-          walk
-            .text
-            .get(spelling.start..spelling.end)
-            .unwrap_or_default(),
-          &mut folded,
-        );
-        for word in self.word_ids(&folded) {
-          *steps = steps.saturating_add(1);
-          if let Some(child) = self.child(node, Some(*gap_id), *word) {
-            self.walk(
-              walk,
-              (child, spelling.end, next.saturating_add(1)),
-              steps,
-              hits,
-            );
-          }
+          .get(spelling.start..spelling.end)
+          .unwrap_or_default(),
+        &mut folded,
+      );
+      for word in self.word_ids(&folded) {
+        *steps = steps.saturating_add(1);
+        let allowed = current
+          .separators
+          .get(&(*key, *word))
+          .is_some_and(|longest| chars <= *longest);
+        if let (true, Some(child)) = (allowed, self.child(node, *word)) {
+          self.walk(
+            walk,
+            (child, spelling.end, next.saturating_add(1)),
+            steps,
+            hits,
+          );
         }
       }
     }
@@ -638,38 +651,67 @@ impl Token {
 
 impl GapRule {
   fn from_term_gap(gap: &str) -> Self {
-    let mut punctuation = gap
-      .chars()
-      .filter(|ch| !ch.is_whitespace())
-      .map(canonical_punctuation)
-      .collect::<Vec<_>>();
-    punctuation.sort_unstable();
-    punctuation.dedup();
     Self {
-      comma: punctuation.contains(&','),
-      punctuation,
+      punctuation: separator_marks(gap),
       max_chars: gap.chars().count().max(MAX_WORD_GAP_CHARS),
     }
   }
 
-  fn accepts(&self, gap: &str) -> bool {
-    let mut chars = 0_usize;
-    let mut line_breaks = 0_usize;
-    for ch in gap.chars() {
-      chars = chars.saturating_add(1);
-      if is_line_break(ch) {
-        line_breaks = line_breaks.saturating_add(1);
-        continue;
-      }
-      if ch.is_whitespace() || (ch == ',' && self.comma) {
-        continue;
-      }
-      if !self.punctuation.contains(&canonical_punctuation(ch)) {
-        return false;
-      }
+  /// The same separator, also allowing a comma (`Dvořáková, Marie`).
+  fn with_comma(mut self) -> Self {
+    if !self.punctuation.contains(&',') {
+      self.punctuation.push(',');
+      self.punctuation.sort_unstable();
     }
-    chars > 0 && chars <= self.max_chars && line_breaks <= 1
+    self
   }
+
+  /// Keys of the observed separators this rule accepts: whitespace only,
+  /// and each subset of its punctuation (only the full set when it has many
+  /// distinct marks).
+  fn keys(&self) -> Vec<String> {
+    let marks = &self.punctuation;
+    if marks.len() > MAX_SUBSET_PUNCTUATION {
+      return vec![String::new(), marks.iter().collect()];
+    }
+    let subsets = 1_usize.checked_shl(u32::try_from(marks.len()).unwrap_or(0));
+    (0..subsets.unwrap_or(1))
+      .map(|mask| {
+        marks
+          .iter()
+          .enumerate()
+          .filter(|(bit, _)| {
+            1_usize
+              .checked_shl(u32::try_from(*bit).unwrap_or(u32::MAX))
+              .is_some_and(|flag| mask & flag != 0)
+          })
+          .map(|(_, mark)| *mark)
+          .collect()
+      })
+      .collect()
+  }
+}
+
+/// Distinct punctuation marks of a separator, canonicalized and sorted.
+fn separator_marks(gap: &str) -> Vec<char> {
+  let mut marks = gap
+    .chars()
+    .filter(|ch| !ch.is_whitespace())
+    .map(canonical_punctuation)
+    .collect::<Vec<_>>();
+  marks.sort_unstable();
+  marks.dedup();
+  marks
+}
+
+/// The key and length of a separator seen between two document tokens, when
+/// it can join two words of an entry at all: non-empty, at most one line
+/// break.
+fn observed_separator(gap: &str) -> Option<(String, usize)> {
+  let chars = gap.chars().count();
+  let line_breaks = gap.chars().filter(|ch| is_line_break(*ch)).count();
+  (chars > 0 && line_breaks <= 1)
+    .then(|| (separator_marks(gap).into_iter().collect(), chars))
 }
 
 impl LegalFormSuffix {
@@ -683,7 +725,7 @@ impl LegalFormSuffix {
 
   /// Byte length of this legal form at the start of `text`. Spaces may be
   /// added after a dot (`s. r. o.` for `s.r.o.`); the form must end on a
-  /// token boundary.
+  /// token boundary, dotted forms included (`s.r.o.foo` is no legal form).
   fn matched_len(&self, text: &str) -> Option<usize> {
     let mut rest = text.char_indices().peekable();
     let mut consumed = 0_usize;
@@ -706,9 +748,8 @@ impl LegalFormSuffix {
       }
       consumed = index.saturating_add(actual.len_utf8());
     }
-    let ends_in_word = self.chars.last().copied().is_some_and(is_word_char);
     let next_is_word = rest.peek().is_some_and(|(_, ch)| is_word_char(*ch));
-    (consumed > 0 && !(ends_in_word && next_is_word)).then_some(consumed)
+    (consumed > 0 && !next_is_word).then_some(consumed)
   }
 }
 
@@ -1541,6 +1582,57 @@ mod tests {
     // A scan of same-prefix entries would take ENTRIES steps per `Acme`; the
     // trie takes a constant number per token.
     assert!(steps <= MAX_STEPS, "{steps} trie steps for {TOKENS} tokens");
+  }
+
+  #[test]
+  fn same_prefix_entries_with_many_separators_share_one_walk() {
+    const SEPARATORS: [&str; 12] = [
+      "-", "--", "---", "----", ".", "/", "//", "-.", "-/", "./", " & ", "+",
+    ];
+    const ENTRIES: usize = 2_400;
+    const PAIRS: usize = 2_500;
+    const TOKENS: usize = 5_000;
+    const MAX_STEPS: usize = 10_000;
+    let terms = (0..ENTRIES)
+      .map(|index| {
+        let separator =
+          SEPARATORS[index.checked_rem(SEPARATORS.len()).unwrap()];
+        format!("Acme{separator}Holding{index}")
+      })
+      .collect::<Vec<_>>();
+    let entries = terms
+      .iter()
+      .map(|term| exact(term, ORGANIZATION))
+      .collect::<Vec<_>>();
+    let (prepared, _) = prepare(&entries);
+    let text = "Acme Holding7 ".repeat(PAIRS);
+    let mut steps = 0_usize;
+    let hits = prepared.sequences.hits(&text, &mut steps);
+    assert_eq!(hits.len(), PAIRS);
+    assert!(steps <= MAX_STEPS, "{steps} trie steps for {TOKENS} tokens");
+  }
+
+  #[test]
+  fn separators_accept_whitespace_and_their_own_punctuation() {
+    let entries = [exact("A.B. & Co Holding", ORGANIZATION)];
+    for text in [
+      "Firma A.B. & Co Holding dnes",
+      "Firma A B Co Holding dnes",
+      "Firma A. B. & Co Holding dnes",
+      "Firma A.B & Co Holding dnes",
+    ] {
+      assert_eq!(found(&entries, text).len(), 1, "{text}");
+    }
+    assert!(found(&entries, "Firma A/B Co Holding dnes").is_empty());
+  }
+
+  #[test]
+  fn legal_forms_need_a_boundary_after_them() {
+    let entries = [exact("Acme", ORGANIZATION)];
+    assert_eq!(found(&entries, "Acme s.r.o.foo dnes"), ["Acme"]);
+    assert_eq!(found(&entries, "Acme a.s.2024 dnes"), ["Acme"]);
+    assert_eq!(found(&entries, "Acme s.r.o., dnes"), ["Acme s.r.o."]);
+    assert_eq!(found(&entries, "Acme s.r.o./2024"), ["Acme s.r.o."]);
   }
 
   #[test]
