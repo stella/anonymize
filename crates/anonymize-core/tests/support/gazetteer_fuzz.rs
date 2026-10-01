@@ -4,6 +4,10 @@
 
 use unicode_normalization::char::is_combining_mark;
 
+mod gazetteer_markers;
+
+use gazetteer_markers::marker_ranges;
+
 use super::gazetteer;
 
 const MAX_INPUT_BYTES: usize = 768;
@@ -28,23 +32,6 @@ fn is_unspaced_script(character: char) -> bool {
     0x0E00..=0x0EFF | 0x1000..=0x109F | 0x1780..=0x17FF
     | 0x3040..=0x30FF | 0x3400..=0x4DBF | 0x4E00..=0x9FFF
     | 0xAC00..=0xD7AF | 0xF900..=0xFAFF | 0x20000..=0x323AF)
-}
-
-fn marker_ranges(text: &str) -> Vec<(usize, usize)> {
-  let mut ranges = Vec::new();
-  let mut marker_start = None;
-  for (offset, character) in text.char_indices() {
-    if character.is_whitespace() {
-      marker_start = None;
-    } else if character == '⟦' {
-      marker_start = Some(offset);
-    } else if character == '⟧'
-      && let Some(start) = marker_start.take()
-    {
-      ranges.push((start, offset + character.len_utf8()));
-    }
-  }
-  ranges
 }
 
 fn append_opaque_envelopes(text: &mut String) -> Vec<(usize, usize)> {

@@ -1606,6 +1606,10 @@ fn validate_length(
 }
 
 #[cfg(test)]
+#[path = "../tests/support/gazetteer_markers.rs"]
+mod marker_oracle;
+
+#[cfg(test)]
 mod tests {
   #![allow(clippy::expect_used, clippy::indexing_slicing, clippy::unwrap_used)]
 
@@ -2536,6 +2540,17 @@ mod tests {
       failure_persistence: None,
       ..ProptestConfig::default()
     })]
+
+    #[test]
+    fn fuzz_marker_oracle_matches_production(
+      text in "[⟦⟧a \t\n\r\u{00a0}]{0,128}",
+    ) {
+      let expected = markers(&text)
+        .into_iter()
+        .map(|(start, close)| (start, close.saturating_add('⟧'.len_utf8())))
+        .collect::<Vec<_>>();
+      prop_assert_eq!(marker_oracle::marker_ranges(&text), expected);
+    }
 
     #[test]
     fn spaced_spans_sit_on_unicode_word_boundaries(

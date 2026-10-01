@@ -17,12 +17,12 @@ mod properties {
   #[path = "support/gazetteer_fuzz.rs"]
   mod gazetteer_fuzz;
 
-  use std::collections::BTreeSet;
+  use std::collections::{BTreeMap, BTreeSet};
   use std::fmt::Write;
   use std::ops::Range;
 
   use proptest::prelude::*;
-  use proptest::test_runner::{FileFailurePersistence, RngSeed};
+  use proptest::test_runner::{FileFailurePersistence, RngSeed, TestRunner};
   use proptest::{collection, sample};
   use serde::Deserialize;
   use stella_anonymize_core::{OperatorConfig, PreparedEngine};
@@ -133,13 +133,22 @@ mod properties {
       .replace('Ľ', "L")
   }
 
-  fn recall_case() -> impl Strategy<Value = (&'static str, String, String)> {
+  struct RecallCases {
+    cases: Vec<(&'static str, String, String)>,
+    declared_count: usize,
+  }
+
+  fn recall_cases() -> RecallCases {
     let mut cases = Vec::new();
+    let mut declared_count = 0;
     for (language, fixture) in [
       ("cs", include_str!("fixtures/gazetteer/cs.json")),
       ("sk", include_str!("fixtures/gazetteer/sk.json")),
     ] {
-      for entry in serde_json::from_str::<Vec<Inflection>>(fixture).unwrap() {
+      let entries = serde_json::from_str::<Vec<Inflection>>(fixture).unwrap();
+      declared_count +=
+        entries.iter().map(|entry| entry.forms.len()).sum::<usize>() * 3;
+      for entry in entries {
         for form in entry.forms {
           cases.push((language, entry.canonical.clone(), form.clone()));
           cases.push((
@@ -151,7 +160,10 @@ mod properties {
         }
       }
     }
-    sample::select(cases)
+    RecallCases {
+      cases,
+      declared_count,
+    }
   }
 
   #[derive(Deserialize)]
@@ -252,13 +264,6 @@ mod properties {
     }
 
     #[test]
-    fn p5_czech_slovak_declensions_and_diacritics_are_exact((language, entry, form) in recall_case(), left in sample::select(vec!["", "archived ", "🦀 "])) {
-      let engine = gazetteer::engine(&[entry], language).unwrap();
-      let text = format!("{left}{form} reviewed");
-      prop_assert!(exact_hit(&spans(&engine, &text), &(left.len()..left.len() + form.len())));
-    }
-
-    #[test]
     fn p6_redaction_is_stable_and_entry_order_independent(entries in deny_list()) {
       let text = format!("[ORGANIZATION_72] {} [ORGANIZATION_73]", entries.join(" reviewed "));
       let engine = gazetteer::engine(&entries, "cs").unwrap();
@@ -273,6 +278,51 @@ mod properties {
         .redact_static_entities(&text, &OperatorConfig::default()).unwrap();
       prop_assert_eq!(first.redaction, reordered.redaction);
     }
+  }
+
+  #[test]
+  fn p5_czech_slovak_declensions_and_diacritics_are_exact() {
+    let matrix = recall_cases();
+    assert_eq!(matrix.cases.len(), matrix.declared_count);
+    let mut engines = BTreeMap::new();
+    for (language, entry, _) in &matrix.cases {
+      engines
+        .entry((*language, entry.clone()))
+        .or_insert_with(|| {
+          gazetteer::engine(std::slice::from_ref(entry), language).unwrap()
+        });
+    }
+    let prepared_cases = matrix
+      .cases
+      .iter()
+      .map(|(language, entry, form)| {
+        (form, engines.get(&(*language, entry.clone())).unwrap())
+      })
+      .collect::<Vec<_>>();
+    let mut runner = TestRunner::new(ProptestConfig {
+      cases: PROPERTY_CASES,
+      rng_seed: RngSeed::Fixed(0x6761_7a65_7474_6565),
+      source_file: Some(file!()),
+      failure_persistence: Some(Box::new(FileFailurePersistence::WithSource(
+        "proptest-regressions",
+      ))),
+      ..ProptestConfig::default()
+    });
+    runner
+      .run(&sample::select(vec!["", "archived ", "🦀 "]), |left| {
+        let mut exercised = 0;
+        for (form, engine) in &prepared_cases {
+          let text = format!("{left}{form} reviewed");
+          prop_assert!(exact_hit(
+            &spans(engine, &text),
+            &(left.len()..left.len() + form.len())
+          ));
+          exercised += 1;
+        }
+        prop_assert_eq!(exercised, matrix.declared_count);
+        Ok(())
+      })
+      .unwrap();
   }
 
   // Independent wrong implementations are witnesses, never the production matcher.
@@ -366,6 +416,20 @@ mod properties {
       ordered_redact(&["Luma", "Luma Labs"]),
       ordered_redact(&["Luma Labs", "Luma"])
     );
+  }
+
+  #[test]
+  fn fuzz_oracle_accepts_unclosed_outer_marker() {
+    let engine = gazetteer::engine(&["dead".to_owned()], "cs").unwrap();
+    let detected = engine.detect_static_entities("⟦⟦dead⟧").unwrap();
+    assert!(
+      detected
+        .entities
+        .all_entities()
+        .iter()
+        .any(|entity| { entity.start == 6 && entity.end == 10 })
+    );
+    gazetteer_fuzz::exercise("a\nb\nc\nd\n⟦⟦dead⟧".as_bytes());
   }
 
   #[test]
