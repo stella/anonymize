@@ -117,7 +117,8 @@ struct SequenceTrie {
   inflection: GazetteerInflection,
   /// Folded spelling -> words it spells.
   spellings: HashMap<String, Vec<usize>>,
-  /// Lowercased entry word -> interned word id.
+  /// Folded entry word -> interned word id. Words that fold alike
+  /// (`Acḿe`, `Acme`) share one id, so one document token walks one path.
   words: HashMap<String, usize>,
   /// Separator key (sorted punctuation marks) -> interned key id.
   gap_keys: HashMap<String, usize>,
@@ -458,15 +459,16 @@ impl SequenceTrie {
   }
 
   fn intern_word(&mut self, word: &str) -> usize {
-    let key = word.to_lowercase();
-    if let Some(id) = self.words.get(&key) {
-      return *id;
-    }
-    let id = self.words.len();
+    let next = self.words.len();
+    let id = *self.words.entry(fold(word)).or_insert(next);
+    // A word folding like a known one adds its own declined forms (they
+    // depend on its diacritics) to the shared id.
     for form in word_forms(word, self.inflection) {
-      self.spellings.entry(form).or_default().push(id);
+      let ids = self.spellings.entry(form).or_default();
+      if !ids.contains(&id) {
+        ids.push(id);
+      }
     }
-    self.words.insert(key, id);
     id
   }
 
@@ -1598,6 +1600,31 @@ mod tests {
         let separator =
           SEPARATORS[index.checked_rem(SEPARATORS.len()).unwrap()];
         format!("Acme{separator}Holding{index}")
+      })
+      .collect::<Vec<_>>();
+    let entries = terms
+      .iter()
+      .map(|term| exact(term, ORGANIZATION))
+      .collect::<Vec<_>>();
+    let (prepared, _) = prepare(&entries);
+    let text = "Acme Holding7 ".repeat(PAIRS);
+    let mut steps = 0_usize;
+    let hits = prepared.sequences.hits(&text, &mut steps);
+    assert_eq!(hits.len(), PAIRS);
+    assert!(steps <= MAX_STEPS, "{steps} trie steps for {TOKENS} tokens");
+  }
+
+  #[test]
+  fn words_that_fold_alike_share_one_walk() {
+    const ENTRIES: usize = 2_000;
+    const PAIRS: usize = 2_500;
+    const TOKENS: usize = 5_000;
+    const MAX_STEPS: usize = 10_000;
+    let terms = (0..ENTRIES)
+      .map(|index| {
+        let mark = u32::try_from(index.checked_rem(112).unwrap()).unwrap();
+        let mark = char::from_u32(0x0300_u32.saturating_add(mark)).unwrap();
+        format!("Acm{mark}e Holding{index}")
       })
       .collect::<Vec<_>>();
     let entries = terms
