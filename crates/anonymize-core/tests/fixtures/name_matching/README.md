@@ -13,6 +13,11 @@ Forced values are gazetteer entries labeled `registration number`, including
 case-insensitive and embedded occurrences; negative name cases run again with
 only those entries active.
 
+Each of Czech, Slovak and English has five positive forced-identifier cases:
+both configured UUIDs exactly, an uppercase UUID, a UUID embedded in a path,
+and a UUID embedded in JSON. All 15 require exact entities and redaction with
+that language enabled alone, then repeat under every language superset.
+
 Each case declares its language. Scores use that language alone; the
 `language-scope` class requires identical resolved entities and redaction when
 either other language, or both, are enabled. Its divergence ceiling is zero.
@@ -107,3 +112,19 @@ regression. The test prints aggregate counts only, never case text or outputs.
 
 Run `cargo test -p stella-anonymize-core --test name_matching_corpus -- --nocapture`.
 The normal workspace Rust CI test command discovers this integration test.
+
+Suppression controls also replay the seed at its original byte span: replace
+only the surrounding annotated envelope with equal-width spaces, preserve the
+seed and all text outside that envelope, and require the exact entity and
+redacted output. Shared production predicates must reject each unpinned guarded occurrence
+and accept the counterfactual occurrence. Contiguous hex/hash seeds exercise
+candidate edge admission; whole joined segments and marker contents exercise
+identifier suppression after edge admission. The `acfe0a1b2c3d4e5f` regression
+explicitly checks the former, while `9b1d0c3e-acfe-4ca1-8b2e-5c7a0a1b2c3d`
+checks the latter. A neutral match alone cannot satisfy these controls.
+
+The existing `<<token:zeta9>>` accepted failure is eligible under production's
+numeric-glue rule. Its exact entity and redacted output stay pinned; the control
+must not misrepresent it as a suppressed occurrence. Guard rejection is required
+for every unpinned control, and the accepted failure still requires exact recall
+at the counterfactual occurrence. Existing false-positive ceilings are unchanged.

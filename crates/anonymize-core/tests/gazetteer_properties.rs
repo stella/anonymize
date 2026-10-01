@@ -23,7 +23,9 @@ mod properties {
 
   use proptest::prelude::*;
   use proptest::sample;
-  use proptest::test_runner::{FileFailurePersistence, RngSeed, TestRunner};
+  use proptest::test_runner::{
+    FileFailurePersistence, RngSeed, TestCaseResult, TestRunner,
+  };
   use serde::Deserialize;
   use stella_anonymize_core::{OperatorConfig, PreparedEngine};
   use unicode_segmentation::UnicodeSegmentation;
@@ -40,6 +42,7 @@ mod properties {
     ["s.r.o.", "s. r. o.", "a.s.", "a. s.", "GmbH", "Ltd"];
   const SHORT_ENTRY_COUNT: usize =
     SINGLE_ENTRIES.len() + COMPOUND_NAMES.len() * COMPOUND_SUFFIXES.len();
+  const BOUNDARY_SEPARATORS: [&str; 5] = [" ", ", ", "\n", "\u{a0}", "🦀"];
 
   fn short_entries() -> Vec<String> {
     let mut entries = SINGLE_ENTRIES
@@ -81,6 +84,20 @@ mod properties {
       .collect()
   }
 
+  fn detected_spans(engine: &PreparedEngine, text: &str) -> Vec<Range<usize>> {
+    engine
+      .detect_static_entities(text)
+      .unwrap()
+      .entities
+      .all_entities()
+      .into_iter()
+      .map(|entity| {
+        usize::try_from(entity.start).unwrap()
+          ..usize::try_from(entity.end).unwrap()
+      })
+      .collect()
+  }
+
   const fn disjoint(a: &Range<usize>, b: &Range<usize>) -> bool {
     a.end <= b.start || b.end <= a.start
   }
@@ -90,6 +107,44 @@ mod properties {
       && actual
         .iter()
         .all(|span| disjoint(span, expected) || span == expected)
+  }
+
+  fn boundary_fixture(
+    entries: &[String],
+    separator: &str,
+  ) -> (String, Vec<Range<usize>>) {
+    let mut text = String::new();
+    let mut expected = Vec::new();
+    for entry in entries {
+      if !text.is_empty() {
+        text.push_str(separator);
+      }
+      write!(text, "archived{separator}").unwrap();
+      let start = text.len();
+      text.push_str(entry);
+      expected.push(start..text.len());
+      write!(
+        text,
+        "{separator}reviewed x{entry}y e\u{301} Ελληνικά Кирилица 界"
+      )
+      .unwrap();
+    }
+    (text, expected)
+  }
+
+  fn require_boundary_hits(
+    actual: &[Range<usize>],
+    expected: &[Range<usize>],
+  ) -> TestCaseResult {
+    for span in expected {
+      prop_assert!(
+        actual.contains(span),
+        "missing exact standalone span: {:?}; actual spans: {:?}",
+        span,
+        actual
+      );
+    }
+    Ok(())
   }
 
   // Each envelope contains the entry verbatim; digit substitution also exercises
@@ -270,23 +325,50 @@ mod properties {
   fn p2_spaced_latin_names_follow_unicode_word_boundaries() {
     let entries = short_entries();
     let engine = gazetteer::engine(&entries, "cs").unwrap();
-    property_runner().run(&sample::select(vec![" ", ", ", "\n", "\u{a0}", "🦀"]), |separator| {
-      let mut exercised = 0;
-      let text = entries.iter().map(|entry| {
-        exercised += 1;
-        format!("archived{separator}{entry}{separator}reviewed x{entry}y e\u{301} Ελληνικά Кирилица 界")
+    property_runner()
+      .run(&sample::select(BOUNDARY_SEPARATORS.to_vec()), |separator| {
+        let (text, expected) = boundary_fixture(&entries, separator);
+        prop_assert_eq!(expected.len(), SHORT_ENTRY_COUNT);
+        let boundaries = boundaries(&text);
+        // Detection must recall every standalone entry exactly; resolution
+        // separately guarantees that its spans end on Unicode word boundaries.
+        require_boundary_hits(&detected_spans(&engine, &text), &expected)?;
+        let actual = spans(&engine, &text);
+        for span in actual {
+          prop_assert!(text.get(span.clone()).is_some());
+          prop_assert!(
+            boundaries.contains(&span.start) && boundaries.contains(&span.end)
+          );
+        }
+        Ok(())
       })
-        .collect::<Vec<_>>().join(separator);
-      prop_assert_eq!(exercised, SHORT_ENTRY_COUNT);
+      .unwrap();
+  }
+
+  #[test]
+  fn p2_boundary_contract_rejects_dropped_compound_hits() {
+    let entries = short_entries();
+    let engine = gazetteer::engine(&entries, "cs").unwrap();
+    for separator in BOUNDARY_SEPARATORS {
+      let (text, expected) = boundary_fixture(&entries, separator);
+      let actual = detected_spans(&engine, &text);
+      require_boundary_hits(&actual, &expected).unwrap();
+      let dropped = actual
+        .into_iter()
+        .filter(|span| {
+          !expected
+            .iter()
+            .skip(SINGLE_ENTRIES.len())
+            .any(|compound| !disjoint(span, compound))
+        })
+        .collect::<Vec<_>>();
       let boundaries = boundaries(&text);
-      let actual = spans(&engine, &text);
-      prop_assert!(!actual.is_empty(), "real hits must exist");
-      for span in actual {
-        prop_assert!(text.get(span.clone()).is_some());
-        prop_assert!(boundaries.contains(&span.start) && boundaries.contains(&span.end));
-      }
-      Ok(())
-    }).unwrap();
+      assert!(!dropped.is_empty());
+      assert!(dropped.iter().all(|span| {
+        boundaries.contains(&span.start) && boundaries.contains(&span.end)
+      }));
+      assert!(require_boundary_hits(&dropped, &expected).is_err());
+    }
   }
 
   #[test]
@@ -582,6 +664,59 @@ mod properties {
   fn fuzz_oracle_handles_marker_fragment_entries_and_numeric_glue() {
     gazetteer_fuzz::exercise("⟦dead\na\nb\nc\n⟦dead⟧".as_bytes());
     gazetteer_fuzz::exercise(b"a\nb\nc\nd\ndead1234-a1b2 a1b2-1234dead");
+  }
+
+  #[test]
+  fn fuzz_oracle_accepts_normalized_full_identifier_matches() {
+    for canonical in ["A1B2-dead-c3d4", "A1B2‐dead‐c3d4"] {
+      let entries =
+        [canonical, "a", "b", "c", "dead", "NeutralFixture"].map(str::to_owned);
+      let engine = gazetteer::engine(&entries, "cs").unwrap();
+      let text = "a1b2-dead-c3d4";
+      let detected = engine.detect_static_entities(text).unwrap();
+      assert!(
+        detected.entities.all_entities().iter().any(|entity| {
+          entity.start == 0
+            && usize::try_from(entity.end).unwrap() == text.len()
+        }),
+        "normalized full identifier must retain exact detection recall"
+      );
+    }
+    gazetteer_fuzz::exercise(b"A1B2-dead-c3d4\na\nb\nc\n");
+    gazetteer_fuzz::exercise("A1B2‐dead‐c3d4\na\nb\nc\n".as_bytes());
+  }
+
+  #[test]
+  fn fuzz_oracle_accepts_non_joined_identifier_segment_matches() {
+    let entries =
+      ["a1b2", "b", "c", "d", "dead", "NeutralFixture"].map(str::to_owned);
+    let engine = gazetteer::engine(&entries, "cs").unwrap();
+    for text in [
+      "a1b2-dead-c3d4",
+      "https://example.test/path/a1b2-dead-c3d4/end",
+      "neutral+a1b2-dead-c3d4@example.test",
+      "prefix_a1b2-dead-c3d4_suffix",
+      "[a1b2-dead-c3d4]",
+    ] {
+      let start = text.find("a1b2").unwrap();
+      let detected = engine.detect_static_entities(text).unwrap();
+      assert!(
+        detected.entities.all_entities().iter().any(|entity| {
+          usize::try_from(entity.start).unwrap() == start
+            && usize::try_from(entity.end).unwrap() == start + "a1b2".len()
+        }),
+        "non-joined identifier segment must retain exact detection recall"
+      );
+    }
+    assert!(
+      engine
+        .detect_static_entities("⟦a1b2-dead-c3d4⟧")
+        .unwrap()
+        .entities
+        .all_entities()
+        .is_empty()
+    );
+    gazetteer_fuzz::exercise(b"a1b2\nb\nc\nd\n");
   }
 
   #[test]

@@ -20,6 +20,11 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 
 use unicode_normalization::char::{decompose_canonical, is_combining_mark};
 
+#[path = "gazetteer_policy.rs"]
+mod policy;
+
+use policy::{CandidatePolicy, is_unspaced_script, is_word_char};
+
 use crate::declension::{expand_name_declensions, expand_surname_derivations};
 use crate::labels::PERSON_LABEL;
 use crate::processors::{
@@ -46,17 +51,6 @@ const MAX_SUBSET_PUNCTUATION: usize = 3;
 
 /// Person entries of up to this many words also match surname-first.
 const MAX_REORDERED_PERSON_WORDS: usize = 3;
-
-/// Characters that join word runs into one compound (`9b1d0c3e-acfe`,
-/// `novak@acme.cz`, `Acme_v2`).
-const COMPOUND_JOINERS: [char; 10] =
-  ['-', '_', '.', '/', '+', '=', ':', '@', '#', '\\'];
-
-/// Shortest hex run read as an identifier segment (`4c1b`, `9b1d0c3e`).
-const MIN_HEX_SEGMENT_CHARS: usize = 4;
-
-/// Shortest mixed-case alphanumeric run read as a base64 segment.
-const MIN_BASE64_SEGMENT_CHARS: usize = 12;
 
 /// Fewer letters than this match only exactly (after folding and declension):
 /// one edit turns a short name into an ordinary word (`Acme` -> `acne`).
@@ -1113,26 +1107,6 @@ fn tokenize(text: &str) -> Vec<Token> {
   tokens
 }
 
-/// Word characters for token boundaries. Scripts written without spaces never
-/// form tokens, so a name inside them keeps matching as a substring.
-fn is_word_char(ch: char) -> bool {
-  !is_unspaced_script(ch) && (ch.is_alphanumeric() || is_combining_mark(ch))
-}
-
-fn is_unspaced_script(ch: char) -> bool {
-  matches!(u32::from(ch),
-    0x0E00..=0x0EFF // Thai, Lao
-    | 0x1000..=0x109F // Myanmar
-    | 0x1780..=0x17FF // Khmer
-    | 0x3040..=0x30FF // Hiragana, Katakana
-    | 0x3400..=0x4DBF // CJK Extension A
-    | 0x4E00..=0x9FFF // CJK Unified Ideographs
-    | 0xAC00..=0xD7AF // Hangul Syllables
-    | 0xF900..=0xFAFF // CJK Compatibility
-    | 0x20000..=0x323AF // CJK Extensions B-I
-  )
-}
-
 const fn is_line_break(ch: char) -> bool {
   matches!(ch, '\n' | '\r' | '\u{2028}' | '\u{2029}')
 }
@@ -1507,10 +1481,7 @@ fn trim_fuzzy_span(text: &str, (start, end): (usize, usize)) -> (usize, usize) {
 /// glue, joiners, and one joined segment.
 struct Guard<'t> {
   text: &'t str,
-  /// Outermost balanced `⟦…⟧` markers, sorted and disjoint.
-  markers: Vec<(usize, usize)>,
-  /// Characters the scans have looked at, for scaling tests.
-  visits: Cell<usize>,
+  policy: CandidatePolicy<'t>,
   /// Deletion lookups and distance checks of the fuzzy fallback.
   fuzzy_steps: Cell<usize>,
   /// Fuzzy rows already found for a folded spelling.
@@ -1524,8 +1495,7 @@ impl<'t> Guard<'t> {
   fn new(text: &'t str) -> Self {
     Self {
       text,
-      markers: markers(text),
-      visits: Cell::new(0),
+      policy: CandidatePolicy::new(text),
       fuzzy_steps: Cell::new(0),
       fuzzy_memo: RefCell::new(HashMap::new()),
     }
@@ -1537,29 +1507,8 @@ impl<'t> Guard<'t> {
       .set(self.fuzzy_steps.get().saturating_add(1));
   }
 
-  fn visit<I: Iterator<Item = char>>(
-    &self,
-    chars: I,
-  ) -> impl Iterator<Item = char> {
-    chars.inspect(|_| self.visits.set(self.visits.get().saturating_add(1)))
-  }
-
-  /// Whether the span's edges sit on token boundaries. Digits glued to a
-  /// letter edge are allowed (`Acme2024`, `novak2`); letters, or digit runs
-  /// mixed with letters (`acme0a1b`), are not.
   fn edges_are_free(&self, start: usize, end: usize) -> bool {
-    let head = self.text.get(..start).unwrap_or_default();
-    let tail = self.text.get(end..).unwrap_or_default();
-    let span = self.text.get(start..end).unwrap_or_default();
-    glue_is_free(
-      self
-        .visit(head.chars().rev())
-        .take_while(|ch| is_word_char(*ch)),
-      span.chars().next(),
-    ) && glue_is_free(
-      self.visit(tail.chars()).take_while(|ch| is_word_char(*ch)),
-      span.chars().next_back(),
-    )
+    self.policy.edges_are_free(start, end)
   }
 
   /// Fuzzy windows are rejected, not grown, when they cut into a token.
@@ -1569,106 +1518,9 @@ impl<'t> Guard<'t> {
       && self.edges_are_free(start, end)
   }
 
-  /// Whether the span belongs to an identifier: it sits inside a `⟦…⟧`
-  /// marker, or a compound joiner links it to an identifier-shaped segment
-  /// (`9b1d0c3e-acfe-4c1b`). Plain numbers, years, and words next to a name
-  /// (`Acme/2024`, `Novák-1`, `acme.cz`) do not count.
   fn in_identifier(&self, start: usize, end: usize) -> bool {
-    let head = self.text.get(..start).unwrap_or_default();
-    let tail = self.text.get(end..).unwrap_or_default();
-    self.in_marker(start, end)
-      || joined_segment(
-        self
-          .visit(head.chars().rev())
-          .skip_while(|ch| is_word_char(*ch)),
-      )
-      .is_some_and(|segment| is_identifier_segment(&segment))
-      || joined_segment(
-        self.visit(tail.chars()).skip_while(|ch| is_word_char(*ch)),
-      )
-      .is_some_and(|segment| is_identifier_segment(&segment))
+    self.policy.in_identifier(start, end)
   }
-
-  /// Whether a balanced `⟦…⟧` marker encloses the span: one binary search
-  /// over the indexed markers.
-  fn in_marker(&self, start: usize, end: usize) -> bool {
-    let opened_before = self.markers.partition_point(|(open, _)| *open < start);
-    opened_before
-      .checked_sub(1)
-      .and_then(|index| self.markers.get(index))
-      .is_some_and(|(_, close)| *close >= end)
-  }
-}
-
-/// Outermost balanced `⟦…⟧` markers as `(open, close)` byte offsets, in one
-/// pass. Markers never contain whitespace, so whitespace drops any bracket
-/// still open; a `⟧` without an open `⟦` is ignored.
-fn markers(text: &str) -> Vec<(usize, usize)> {
-  let mut markers = Vec::new();
-  if !text.contains('⟦') {
-    return markers;
-  }
-  let mut open = Vec::new();
-  for (index, ch) in text.char_indices() {
-    match ch {
-      '⟦' => open.push(index),
-      '⟧' => {
-        if let Some(start) = open.pop()
-          && open.is_empty()
-        {
-          markers.push((start, index));
-        }
-      }
-      _ if ch.is_whitespace() => open.clear(),
-      _ => {}
-    }
-  }
-  markers
-}
-
-fn glue_is_free(
-  mut glue: impl Iterator<Item = char>,
-  edge: Option<char>,
-) -> bool {
-  let Some(first) = glue.next() else {
-    return true;
-  };
-  // A span ending in punctuation (`Inc.`) does not cut into the next token.
-  if !edge.is_some_and(is_word_char) {
-    return true;
-  }
-  edge.is_some_and(char::is_alphabetic)
-    && first.is_numeric()
-    && glue.all(char::is_numeric)
-}
-
-/// The word run behind one or more compound joiners at the start of `chars`.
-/// The run comes back reversed when `chars` walks backwards; the shape test
-/// does not depend on order.
-fn joined_segment(chars: impl Iterator<Item = char>) -> Option<String> {
-  let mut chars = chars.peekable();
-  let mut joined = false;
-  while chars.next_if(|ch| COMPOUND_JOINERS.contains(ch)).is_some() {
-    joined = true;
-  }
-  let segment = chars.take_while(|ch| is_word_char(*ch)).collect::<String>();
-  (joined && !segment.is_empty()).then_some(segment)
-}
-
-/// Hex with both digits and hex letters (`4c1b`, `9b1d0c3e`), or a long
-/// mixed-case alphanumeric run (`QWNtZUEvb3Ji`).
-fn is_identifier_segment(segment: &str) -> bool {
-  let chars = segment.chars().count();
-  let has_digit = segment.chars().any(|ch| ch.is_ascii_digit());
-  let hex = chars >= MIN_HEX_SEGMENT_CHARS
-    && has_digit
-    && segment.chars().all(|ch| ch.is_ascii_hexdigit())
-    && segment.chars().any(|ch| ch.is_ascii_alphabetic());
-  let base64 = chars >= MIN_BASE64_SEGMENT_CHARS
-    && has_digit
-    && segment.chars().any(char::is_uppercase)
-    && segment.chars().any(char::is_lowercase);
-  hex || base64
 }
 
 fn edit_distance(left: &[char], right: &[char]) -> usize {
@@ -1747,10 +1599,6 @@ fn validate_length(
     actual,
   })
 }
-
-#[cfg(test)]
-#[path = "../tests/support/gazetteer_policy.rs"]
-mod fuzz_policy;
 
 #[cfg(test)]
 mod tests {
@@ -2339,9 +2187,9 @@ mod tests {
       let entities = prepared.detect_with_guard(&hits, &guard).unwrap();
       assert_eq!(entities.len(), NAMES);
       assert!(
-        guard.visits.get() <= MAX_VISITS,
+        guard.policy.visits.get() <= MAX_VISITS,
         "{} chars visited for {TEXT_CHARS} chars",
-        guard.visits.get()
+        guard.policy.visits.get()
       );
     }
     let marked = format!("x ⟦{}⟧ y", "Acme,".repeat(NAMES));
@@ -2698,16 +2546,16 @@ mod tests {
   fn fuzz_joined_identifier_regression_rejects_the_bad_span() {
     let text = "dead1234-a1b2";
     assert!(
-      fuzz_policy::edges_are_free(text, 0, 4),
+      CandidatePolicy::new(text).edges_are_free(0, 4),
       "numeric glue is allowed at a word edge"
     );
     assert!(
-      fuzz_policy::touches_identifier(text, 0, 4),
-      "oracle must reject the partial joined identifier"
+      CandidatePolicy::new(text).in_identifier(0, 4),
+      "joined identifier must reject the partial candidate"
     );
     assert!(
       Guard::new(text).in_identifier(0, 4),
-      "production must agree with the oracle"
+      "guard must reject the partial joined identifier"
     );
   }
 
@@ -2720,61 +2568,32 @@ mod tests {
     })]
 
     #[test]
-    fn fuzz_marker_oracle_matches_production(
-      text in "[⟦⟧a \t\n\r\u{00a0}]{0,128}",
+    fn balanced_marker_envelopes_enclose_only_whitespace_free_payloads(
+      depth in 1_usize..8,
+      before in "[a-z0-9]{0,20}",
+      after in "[a-z0-9]{0,20}",
+      whitespace in prop::sample::select(vec![" ", "\t", "\n", "\r", "\u{a0}"]),
     ) {
-      let expected = markers(&text)
-        .into_iter()
-        .map(|(start, close)| (start, close.saturating_add('⟧'.len_utf8())))
-        .collect::<Vec<_>>();
-      prop_assert_eq!(fuzz_policy::marker_ranges(&text), expected);
-    }
-
-    #[test]
-    fn fuzz_acceptance_predicates_match_production(
-      characters in prop::collection::vec(any::<char>(), 0..80),
-      character in any::<char>(),
-      left in any::<usize>(),
-      right in any::<usize>(),
-      identifier in ".{0,40}",
-      glue in prop::collection::vec(any::<char>(), 0..40),
-      edge in prop::option::of(any::<char>()),
-    ) {
-      prop_assert_eq!(fuzz_policy::glue_is_free(&glue, edge), glue_is_free(glue.into_iter(), edge));
-      prop_assert_eq!(fuzz_policy::is_word_interior(character), is_word_char(character));
-      prop_assert_eq!(fuzz_policy::is_unspaced_script(character), is_unspaced_script(character));
-      prop_assert_eq!(fuzz_policy::is_compound_joiner(character), COMPOUND_JOINERS.contains(&character));
-      prop_assert_eq!(fuzz_policy::is_identifier_segment(&identifier), is_identifier_segment(&identifier));
-      // Structured envelopes ensure numeric glue, joined segments, markers,
-      // and their interactions are exercised alongside arbitrary Unicode.
-      let arbitrary = characters.into_iter().collect::<String>();
-      for text in [arbitrary, format!("⟦a1b2-1234{identifier}1234-a1b2⟧")] {
-        let offsets = text.char_indices().map(|(offset, _)| offset)
-          .chain(std::iter::once(text.len())).collect::<Vec<_>>();
-        let first = offsets[left.checked_rem(offsets.len()).unwrap()];
-        let second = offsets[right.checked_rem(offsets.len()).unwrap()];
-        let (start, end) = (first.min(second), first.max(second));
-        let guard = Guard::new(&text);
-        prop_assert_eq!(fuzz_policy::edges_are_free(&text, start, end), guard.edges_are_free(start, end));
-        prop_assert_eq!(fuzz_policy::in_marker(&text, start, end), guard.in_marker(start, end));
-        prop_assert_eq!(fuzz_policy::touches_identifier(&text, start, end) || fuzz_policy::in_marker(&text, start, end), guard.in_identifier(start, end));
-        let mut joined_guard = Guard::new(&text);
-        joined_guard.markers.clear();
-        prop_assert_eq!(fuzz_policy::touches_identifier(&text, start, end), joined_guard.in_identifier(start, end));
-      }
+      let opening = "⟦".repeat(depth);
+      let closing = "⟧".repeat(depth);
+      let start = opening.len().saturating_add(before.len());
+      let end = start.saturating_add("Acme".len());
+      let balanced = format!("{opening}{before}Acme{after}{closing}");
+      prop_assert!(CandidatePolicy::new(&balanced).in_marker(start, end));
+      let broken = format!("{opening}{before}Acme{whitespace}{after}{closing}");
+      prop_assert!(!CandidatePolicy::new(&broken).in_marker(start, end));
     }
 
     #[test]
     fn fuzz_joined_identifier_predicate_skips_numeric_glue(
       digits in "[0-9]{0,20}",
       segment in "[a-f][0-9][a-f][0-9]{1,12}",
-      joiner in prop::sample::select(COMPOUND_JOINERS.to_vec()),
+      joiner in prop::sample::select(policy::COMPOUND_JOINERS.to_vec()),
     ) {
       for text in [format!("dead{digits}{joiner}{segment}"), format!("{segment}{joiner}{digits}dead")] {
         let start = text.find("dead").unwrap();
         let end = start.checked_add("dead".len()).unwrap();
-        prop_assert!(fuzz_policy::touches_identifier(&text, start, end));
-        prop_assert_eq!(fuzz_policy::touches_identifier(&text, start, end), Guard::new(&text).in_identifier(start, end));
+        prop_assert!(Guard::new(&text).in_identifier(start, end));
       }
     }
 

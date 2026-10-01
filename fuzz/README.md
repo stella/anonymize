@@ -30,14 +30,14 @@ mixed identifier segments are rejected. Unicode Mark characters count as word
 interior; scripts written without spaces do not. This is a character-level
 oracle, not full Unicode segmentation. The integration property checks UAX
 word boundaries for spaced Latin-name contexts where those definitions agree.
-Balanced outermost `⟦...⟧` markers protect their contents,
-and manufactured identifier compounds are protected as subranges inside URL,
-email, UUID, hex, underscore, and bracketed contexts; ordinary URL/domain and
-email text remains eligible. A manufactured plain term must be found on every
-run. Caller-specified identifiers may match exactly in full; partial overlaps
-remain invalid. Fixtures use synthetic strings. The production predicates are
-private; generated core tests compare the test-only oracle with production for word classes,
-boundaries, numeric glue, joined identifiers, marker parsing, and containment.
+Balanced outermost `⟦...⟧` markers protect their contents. The driver
+includes the same production policy source as the matcher for boundaries,
+numeric glue, joined identifiers, and marker containment; there is no mirrored
+acceptance implementation. Arbitrary caller entries may match normalized full
+identifiers or eligible subsegments (for example `a1b2` before the plain `dead`
+segment in `a1b2-dead-c3d4`). Independently, the injected short `dead` seed must
+never match its protected occurrences, and a manufactured plain term must be
+found on every run. Fixtures use synthetic strings.
 
 Input is bounded to 768 bytes: the first four newline-separated fields become
 entries (up to 40 characters each; empty and marker-bearing literals are skipped),
