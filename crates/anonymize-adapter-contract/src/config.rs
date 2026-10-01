@@ -101,6 +101,7 @@ pub fn prepared_search_config_from_binding(
       gazetteer_data: config.gazetteer_data.map(|data| GazetteerMatchData {
         labels: data.labels,
         is_fuzzy: data.is_fuzzy,
+        legal_form_suffixes: data.legal_form_suffixes,
       }),
       country_data: config.country_data.map(country_data_from_binding),
       hotword_data: config.hotword_data.map(hotword_data_from_binding),

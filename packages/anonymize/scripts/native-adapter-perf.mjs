@@ -89,6 +89,7 @@ const BASE_CONFIG = {
   gazetteer_data: {
     labels: ["organization", "address"],
     is_fuzzy: [false, true],
+    legal_form_suffixes: [],
   },
   country_data: {
     labels: ["country"],

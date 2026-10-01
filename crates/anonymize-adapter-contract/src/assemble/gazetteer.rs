@@ -1,30 +1,44 @@
-//! `gazetteer_data`: ports `buildSearchTerms` + `buildGazetteerPatterns`
-//! (`detectors/gazetteer.ts:46`) and the `toNativeGazetteerData` copy
-//! (`build-unified-search.ts:1565`).
+//! `gazetteer_data` and the gazetteer search patterns.
 //!
-//! Emitted whenever `config.enableGazetteer && gazetteerEntries.length > 0`
-//! (`build-unified-search.ts:968`): the gazetteer entries come from the caller,
-//! never a data file.
+//! Emitted whenever `config.enableGazetteer && gazetteerEntries.length > 0`:
+//! the gazetteer entries come from the caller, never a data file. Every term
+//! gets an exact pattern; terms long enough for a typo to stay unambiguous
+//! also get a fuzzy pattern whose distance scales with their length. The core
+//! matches terms as whole words, folded for case and diacritics and declined.
 
 use std::collections::HashMap;
 
-use stella_anonymize_core::assemble::GazetteerEntry;
+use stella_anonymize_core::assemble::{AssembleError, GazetteerEntry};
 
 use super::AssembleContext;
+use super::legal_forms::gazetteer_legal_form_suffixes;
 use super::search_pattern::{fuzzy_pattern, literal_with_options};
 use crate::{BindingGazetteerMatchData, BindingSearchPattern};
 
-/// `MAX_EDIT_DISTANCE` from `detectors/gazetteer.ts`.
-const MAX_EDIT_DISTANCE: u32 = 2;
+/// Fewer letters than this match only exactly (after folding and declension):
+/// one edit turns a short name into an ordinary word (`Acme` -> `acne`).
+const MIN_FUZZY_LETTERS: usize = 6;
 
-/// `MIN_FUZZY_LENGTH` from `detectors/gazetteer.ts`.
-const MIN_FUZZY_LENGTH: usize = 4;
+/// Terms with at least this many letters tolerate two edits; shorter fuzzy
+/// terms tolerate one.
+const MIN_TWO_EDIT_LETTERS: usize = 10;
 
-/// JS `String.prototype.length`: UTF-16 code-unit count, so the fuzzy-length
-/// gate (`term.length < MIN_FUZZY_LENGTH`) ties exactly to the TypeScript
-/// source for astral / non-BMP terms.
-fn utf16_len(value: &str) -> usize {
-  value.encode_utf16().count()
+/// Longest pattern, in chars, the fuzzy engine accepts.
+const MAX_FUZZY_PATTERN_CHARS: usize = 64;
+
+/// Edit distance of the fuzzy pattern for `term`, if it gets one. Terms with
+/// digits are identifiers and match only exactly.
+fn fuzzy_distance(term: &str) -> Option<u32> {
+  if term.chars().any(char::is_numeric)
+    || term.chars().count() > MAX_FUZZY_PATTERN_CHARS
+  {
+    return None;
+  }
+  match term.chars().filter(|ch| ch.is_alphabetic()).count() {
+    letters if letters < MIN_FUZZY_LETTERS => None,
+    letters if letters < MIN_TWO_EDIT_LETTERS => Some(1),
+    _ => Some(2),
+  }
 }
 
 /// Mirrors `buildSearchTerms`: a `Map<term, { label }>` keyed by canonical and
@@ -56,15 +70,15 @@ fn build_search_terms(entries: &[GazetteerEntry]) -> Vec<(String, String)> {
   terms
 }
 
-/// Mirrors `buildGazetteerPatterns` + `toNativeGazetteerData`: exact labels for
-/// every term first (`isFuzzy=false`), then fuzzy labels for terms whose UTF-16
-/// length is at least [`MIN_FUZZY_LENGTH`] (`isFuzzy=true`).
+/// Exact rows for every term first (`is_fuzzy=false`), then fuzzy rows for
+/// terms with a [`fuzzy_distance`] (`is_fuzzy=true`), plus the legal-form
+/// suffixes a matched name may extend over.
 pub(super) fn build_gazetteer_data(
   ctx: &AssembleContext<'_>,
   gazetteer: &[GazetteerEntry],
-) -> Option<BindingGazetteerMatchData> {
+) -> Result<Option<BindingGazetteerMatchData>, AssembleError> {
   if !ctx.config.enable_gazetteer || gazetteer.is_empty() {
-    return None;
+    return Ok(None);
   }
   let terms = build_search_terms(gazetteer);
   let mut labels = Vec::with_capacity(terms.len());
@@ -76,13 +90,17 @@ pub(super) fn build_gazetteer_data(
   }
   // Pass 2: fuzzy patterns for terms long enough.
   for (term, label) in &terms {
-    if utf16_len(term) < MIN_FUZZY_LENGTH {
+    if fuzzy_distance(term).is_none() {
       continue;
     }
     labels.push(label.clone());
     is_fuzzy.push(true);
   }
-  Some(BindingGazetteerMatchData { labels, is_fuzzy })
+  Ok(Some(BindingGazetteerMatchData {
+    labels,
+    is_fuzzy,
+    legal_form_suffixes: gazetteer_legal_form_suffixes()?,
+  }))
 }
 
 /// Whether `buildGazetteerPatterns` would run (gazResult is non-null).
@@ -93,9 +111,9 @@ pub(super) const fn has_gazetteer(
   ctx.config.enable_gazetteer && !gazetteer.is_empty()
 }
 
-/// Mirrors `buildGazetteerPatterns(...).patterns.map(toNativeLiteralPattern)`:
-/// exact `literal-with-options` (wholeWords false) for every term, then a
-/// `fuzzy` pattern (distance 2) for terms at least [`MIN_FUZZY_LENGTH`] long.
+/// Exact `literal-with-options` (wholeWords false; the core checks token
+/// boundaries) for every term, then a `fuzzy` pattern for terms with a
+/// [`fuzzy_distance`].
 pub(super) fn gazetteer_literal_patterns(
   ctx: &AssembleContext<'_>,
   gazetteer: &[GazetteerEntry],
@@ -109,10 +127,9 @@ pub(super) fn gazetteer_literal_patterns(
     patterns.push(literal_with_options(term.clone(), None, Some(false)));
   }
   for (term, _) in &terms {
-    if utf16_len(term) < MIN_FUZZY_LENGTH {
-      continue;
+    if let Some(distance) = fuzzy_distance(term) {
+      patterns.push(fuzzy_pattern(term.clone(), Some(distance)));
     }
-    patterns.push(fuzzy_pattern(term.clone(), Some(MAX_EDIT_DISTANCE)));
   }
   patterns
 }

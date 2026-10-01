@@ -16,10 +16,11 @@ use stella_anonymize_core::assemble::{
   AssembleError, DenyListCategory, Dictionaries, OrderedMap, PipelineConfig,
   parse_data_file, parse_ordered_data_file,
 };
+use stella_anonymize_core::expand_name_declensions;
 
 use super::js::{js_lowercase, lower_sorted_unique, normalize_for_search};
 use super::language::{normalize_language_key, selected_language_keys};
-use super::names::{NameCorpus, expand_name_declensions};
+use super::names::NameCorpus;
 use super::{address, legal_forms};
 use crate::{
   BindingDenyListFilterData, BindingDenyListMatchData,

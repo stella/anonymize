@@ -192,7 +192,7 @@ pub fn assemble_static_search_config(
   // ── Literal-side patterns, options, and slices ──
   let address_seed_data =
     address::build_address_seed_data(&ctx, &address_shared)?;
-  let gazetteer_data = gazetteer::build_gazetteer_data(&ctx, gazetteer);
+  let gazetteer_data = gazetteer::build_gazetteer_data(&ctx, gazetteer)?;
   let country = country::build_country_unit(&ctx)?;
   let literals = build_literals(&LiteralInputs {
     ctx: &ctx,

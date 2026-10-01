@@ -3,12 +3,13 @@ use crate::address_seeds::PreparedAddressSeedData;
 use crate::anchored::PreparedAnchoredSearch;
 use crate::coreference::PreparedCoreferenceData;
 use crate::dates::PreparedDateData;
+use crate::gazetteer::PreparedGazetteerMatchData;
 use crate::hotwords::PreparedHotwordData;
 use crate::legal_forms::PreparedLegalFormData;
 use crate::money::PreparedMonetaryData;
 use crate::name_corpus::PreparedNameCorpusData as PreparedNames;
 use crate::prepared_metadata::{
-  PreparedCountryMatchData, PreparedGazetteerMatchData, PreparedRegexMatchData,
+  PreparedCountryMatchData, PreparedRegexMatchData,
 };
 use crate::processors::{DenyListFilterData, DenyListMatchData};
 use crate::search::SearchIndex;

@@ -289,6 +289,7 @@ export type NativeCountryData = {
 export type NativeGazetteerData = {
   labels: string[];
   is_fuzzy: boolean[];
+  legal_form_suffixes: string[];
 };
 
 export type NativeHotwordRule = {

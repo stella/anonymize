@@ -63,6 +63,7 @@ fn multi_detector_engine() -> PreparedEngine {
     gazetteer_data: Some(GazetteerMatchData {
       labels: vec![String::from("organization")],
       is_fuzzy: vec![false],
+      legal_form_suffixes: vec![String::from("s.r.o.")],
     }),
     country_data: None,
     hotword_data: None,

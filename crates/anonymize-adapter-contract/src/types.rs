@@ -90,6 +90,7 @@ pub struct BindingRegexMatchMeta {
 pub struct BindingGazetteerMatchData {
   pub labels: Vec<String>,
   pub is_fuzzy: Vec<bool>,
+  pub legal_form_suffixes: Vec<String>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]

@@ -670,6 +670,7 @@ fn prepared_engine_runs_normalized_literal_pass() {
     gazetteer_data: Some(GazetteerMatchData {
       labels: vec![String::from("organization")],
       is_fuzzy: vec![false],
+      legal_form_suffixes: vec![String::from("s.r.o.")],
     }),
     country_data: None,
     hotword_data: None,
@@ -1498,6 +1499,7 @@ fn prepared_engine_artifacts_match_direct_prepare() {
     gazetteer_data: Some(GazetteerMatchData {
       labels: vec![String::from("organization")],
       is_fuzzy: vec![false],
+      legal_form_suffixes: vec![String::from("s.r.o.")],
     }),
     country_data: None,
     hotword_data: None,
@@ -1554,6 +1556,7 @@ fn prepared_engine_artifacts_roundtrip_bytes() {
     gazetteer_data: Some(GazetteerMatchData {
       labels: vec![String::from("organization")],
       is_fuzzy: vec![false],
+      legal_form_suffixes: vec![String::from("s.r.o.")],
     }),
     ..empty_config(PreparedEngineSlices::default())
   };
@@ -1659,6 +1662,7 @@ fn prepared_engine_emits_static_detector_entities() {
     gazetteer_data: Some(GazetteerMatchData {
       labels: vec![String::from("organization")],
       is_fuzzy: vec![false],
+      legal_form_suffixes: vec![String::from("s.r.o.")],
     }),
     country_data: Some(turkey_country_match_data()),
     hotword_data: None,
@@ -1693,7 +1697,7 @@ fn prepared_engine_emits_static_detector_entities() {
 }
 
 #[test]
-fn prepared_engine_extends_gazetteer_suffix_in_text_offsets() {
+fn prepared_engine_extends_gazetteer_legal_form_in_text_offsets() {
   let prepared = PreparedEngine::new(prepared_config! {
     literal_patterns: vec![SearchPattern::LiteralWithOptions {
       pattern: String::from("Acme"),
@@ -1714,17 +1718,21 @@ fn prepared_engine_extends_gazetteer_suffix_in_text_offsets() {
     gazetteer_data: Some(GazetteerMatchData {
       labels: vec![String::from("organization")],
       is_fuzzy: vec![false],
+      legal_form_suffixes: vec![String::from("spółka jawna")],
     }),
     ..empty_config(PreparedEngineSlices::default())
   })
   .unwrap();
 
   let result = prepared
-    .redact_static_entities("Acme spółka signed.", &OperatorConfig::default())
+    .redact_static_entities(
+      "Acme spółka jawna signed.",
+      &OperatorConfig::default(),
+    )
     .unwrap();
 
   assert!(result.resolved_entities.iter().any(|entity| {
-    entity.label == "organization" && entity.text == "Acme spółka"
+    entity.label == "organization" && entity.text == "Acme spółka jawna"
   }));
   assert_eq!(result.redaction.redacted_text, "[ORGANIZATION_1] signed.");
 }
@@ -2499,6 +2507,7 @@ fn prepared_engine_redacts_static_entities_end_to_end() {
     gazetteer_data: Some(GazetteerMatchData {
       labels: vec![String::from("organization")],
       is_fuzzy: vec![false],
+      legal_form_suffixes: vec![String::from("s.r.o.")],
     }),
     country_data: Some(turkey_country_match_data()),
     hotword_data: None,

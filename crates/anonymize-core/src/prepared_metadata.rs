@@ -1,6 +1,4 @@
-use crate::processors::{
-  CountryMatchData, GazetteerMatchData, PatternSlice, RegexMatchMeta,
-};
+use crate::processors::{CountryMatchData, PatternSlice, RegexMatchMeta};
 use crate::resolution::SourceDetail;
 use crate::types::{Error, Result};
 use crate::validators::validate_id;
@@ -156,52 +154,6 @@ impl PreparedRegexMatchRow {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct PreparedGazetteerMatchData {
-  slice: PatternSlice,
-  rows: Vec<PreparedGazetteerMatchRow>,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct PreparedGazetteerMatchRow {
-  label: String,
-  is_fuzzy: bool,
-}
-
-impl PreparedGazetteerMatchData {
-  pub(crate) fn new(
-    data: GazetteerMatchData,
-    slice: PatternSlice,
-  ) -> Result<Self> {
-    validate_length("gazetteer_data.labels", slice, data.labels.len())?;
-    validate_length("gazetteer_data.is_fuzzy", slice, data.is_fuzzy.len())?;
-    let rows = data
-      .labels
-      .into_iter()
-      .zip(data.is_fuzzy)
-      .map(|(label, is_fuzzy)| PreparedGazetteerMatchRow { label, is_fuzzy })
-      .collect();
-    Ok(Self { slice, rows })
-  }
-
-  pub(crate) fn get(&self, pattern: u32) -> Option<&PreparedGazetteerMatchRow> {
-    self
-      .slice
-      .local_index(pattern)
-      .and_then(|index| self.rows.get(index))
-  }
-}
-
-impl PreparedGazetteerMatchRow {
-  pub(crate) fn label(&self) -> &str {
-    &self.label
-  }
-
-  pub(crate) const fn is_fuzzy(&self) -> bool {
-    self.is_fuzzy
-  }
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct PreparedCountryMatchData {
   slice: PatternSlice,
   rows: Vec<PreparedCountryMatchRow>,
@@ -290,7 +242,7 @@ mod tests {
   use super::*;
   use crate::processors::{
     CountryVariant, process_prepared_country_matches,
-    process_prepared_gazetteer_matches, process_prepared_regex_matches,
+    process_prepared_regex_matches,
   };
   use crate::types::SearchMatch;
 
@@ -319,21 +271,6 @@ mod tests {
         result.is_ok(),
         has_validator || (!requires_validation && !has_input),
       );
-    }
-
-    #[test]
-    fn gazetteer_preparation_accepts_only_aligned_rows(
-      labels in prop::collection::vec("[a-z]{1,8}", 0..12),
-      flags in prop::collection::vec(any::<bool>(), 0..12),
-    ) {
-      let expected = labels.len();
-      let data = GazetteerMatchData { labels, is_fuzzy: flags.clone() };
-      let slice = PatternSlice {
-        start: 4,
-        end: 4_u32.saturating_add(u32::try_from(expected).unwrap_or(u32::MAX)),
-      };
-      let result = PreparedGazetteerMatchData::new(data, slice);
-      prop_assert_eq!(result.is_ok(), flags.len() == expected);
     }
 
     #[test]
@@ -433,67 +370,6 @@ mod tests {
       let actual = actual
         .into_iter()
         .map(|entity| (entity.label, entity.text, entity.score, entity.source_detail))
-        .collect::<Vec<_>>();
-      prop_assert_eq!(actual, expected);
-    }
-
-    #[test]
-    fn gazetteer_prepared_processing_matches_two_pass_reference(
-      slice_start in 1_u32..100,
-      rows in prop::collection::vec(("[a-z]{1,8}", any::<bool>(), 0_u32..3), 0..12),
-    ) {
-      let slice = PatternSlice {
-        start: slice_start,
-        end: slice_start.saturating_add(u32::try_from(rows.len()).unwrap_or(u32::MAX)),
-      };
-      let has_exact = rows.iter().any(|(_, is_fuzzy, _)| !is_fuzzy);
-      let mut matches = Vec::with_capacity(rows.len());
-      let mut labels = Vec::with_capacity(rows.len());
-      let mut is_fuzzy = Vec::with_capacity(rows.len());
-      let mut expected = rows
-        .iter()
-        .filter(|(_, fuzzy, _)| !fuzzy)
-        .map(|(label, _, _)| label.clone())
-        .collect::<Vec<_>>();
-
-      for (index, (label, fuzzy, distance)) in rows.into_iter().enumerate() {
-        let pattern = slice_start
-          .saturating_add(u32::try_from(index).unwrap_or(u32::MAX));
-        matches.push(if fuzzy {
-          SearchMatch::Fuzzy {
-            pattern,
-            start: 0,
-            end: 4,
-            distance,
-          }
-        } else {
-          SearchMatch::Literal {
-            pattern,
-            start: 0,
-            end: 4,
-          }
-        });
-        if fuzzy && distance > 0 && !has_exact {
-          expected.push(label.clone());
-        }
-        labels.push(label);
-        is_fuzzy.push(fuzzy);
-      }
-
-      let prepared = PreparedGazetteerMatchData::new(
-        GazetteerMatchData { labels, is_fuzzy },
-        slice,
-      );
-      prop_assert!(prepared.is_ok());
-      let actual = prepared
-        .as_ref()
-        .map_err(|error| TestCaseError::fail(error.to_string()))
-        .and_then(|prepared| {
-          process_prepared_gazetteer_matches(&matches, "Acme", prepared)
-            .map_err(|error| TestCaseError::fail(error.to_string()))
-        })?
-        .into_iter()
-        .map(|entity| entity.label)
         .collect::<Vec<_>>();
       prop_assert_eq!(actual, expected);
     }

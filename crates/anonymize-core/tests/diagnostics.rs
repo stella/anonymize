@@ -89,6 +89,7 @@ fn static_redaction_diagnostics_engine() -> PreparedEngine {
     gazetteer_data: Some(GazetteerMatchData {
       labels: vec![String::from("organization")],
       is_fuzzy: vec![false],
+      legal_form_suffixes: vec![String::from("s.r.o.")],
     }),
     country_data: None,
     hotword_data: None,
@@ -443,6 +444,7 @@ fn engine_reports_prepare_slot_diagnostics() {
     gazetteer_data: Some(GazetteerMatchData {
       labels: vec![String::from("organization")],
       is_fuzzy: vec![false],
+      legal_form_suffixes: vec![String::from("s.r.o.")],
     }),
     ..empty_config(PreparedEngineSlices::default())
   };
