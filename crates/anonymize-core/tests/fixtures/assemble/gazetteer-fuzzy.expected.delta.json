@@ -36999,6 +36999,7 @@
       "type": "set",
       "path": ["gazetteer_data"],
       "value": {
+        "inflection": "czech_slovak",
         "is_fuzzy": [false, false, true, true],
         "labels": ["person", "person", "person", "person"],
         "legal_form_suffixes": [

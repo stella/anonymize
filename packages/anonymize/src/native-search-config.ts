@@ -286,10 +286,13 @@ export type NativeCountryData = {
   variants: Array<"name" | "alias" | "alpha3" | "alpha2">;
 };
 
+export type NativeGazetteerInflection = "none" | "czech_slovak";
+
 export type NativeGazetteerData = {
   labels: string[];
   is_fuzzy: boolean[];
   legal_form_suffixes: string[];
+  inflection: NativeGazetteerInflection;
 };
 
 export type NativeHotwordRule = {

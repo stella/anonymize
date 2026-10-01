@@ -223,26 +223,36 @@ const CASES: &[Case] = &[
 ];
 
 fn engine() -> PreparedEngine {
-  let config: PipelineConfig = serde_json::from_str(
-    r#"{
-      "threshold": 0.3,
-      "enableTriggerPhrases": false,
-      "enableRegex": false,
-      "language": "cs",
-      "enableLegalForms": false,
-      "enableNameCorpus": false,
-      "enableDenyList": false,
-      "enableGazetteer": true,
-      "enableCountries": false,
-      "enableConfidenceBoost": false,
-      "enableCoreference": false,
-      "enableZoneClassification": false,
-      "labels": [],
-      "workspaceId": "gazetteer-matching-test"
-    }"#,
-  )
-  .expect("config should deserialize");
-  let gazetteer: Vec<GazetteerEntry> = ENTRIES
+  engine_for(Some("cs"), ENTRIES)
+}
+
+/// A gazetteer-only pipeline over `entries`, scoped to `language` (every
+/// language when `None`).
+fn engine_for(
+  language: Option<&str>,
+  entries: &[(&str, &str, &[&str])],
+) -> PreparedEngine {
+  let mut config = serde_json::json!({
+    "threshold": 0.3,
+    "enableTriggerPhrases": false,
+    "enableRegex": false,
+    "enableLegalForms": false,
+    "enableNameCorpus": false,
+    "enableDenyList": false,
+    "enableGazetteer": true,
+    "enableCountries": false,
+    "enableConfidenceBoost": false,
+    "enableCoreference": false,
+    "enableZoneClassification": false,
+    "labels": [],
+    "workspaceId": "gazetteer-matching-test"
+  });
+  if let (Some(language), Some(object)) = (language, config.as_object_mut()) {
+    object.insert("language".to_owned(), serde_json::json!(language));
+  }
+  let config: PipelineConfig =
+    serde_json::from_value(config).expect("config should deserialize");
+  let gazetteer: Vec<GazetteerEntry> = entries
     .iter()
     .enumerate()
     .map(|(index, (canonical, label, variants))| {
@@ -263,6 +273,34 @@ fn engine() -> PreparedEngine {
   let core = prepared_search_config_from_binding(binding)
     .expect("assembled config should convert");
   PreparedEngine::new(core).expect("pipeline should prepare")
+}
+
+fn gazetteer_texts(engine: &PreparedEngine, text: &str) -> Vec<String> {
+  gazetteer_entities(engine, text)
+    .into_iter()
+    .map(|entity| entity.text)
+    .collect()
+}
+
+#[test]
+fn czech_slovak_forms_follow_the_pipeline_language() {
+  const ANA: &[(&str, &str, &[&str])] = &[("Ana", PERSON, &[])];
+  let english = engine_for(Some("en"), ANA);
+  assert!(gazetteer_texts(&english, "Is there any news?").is_empty());
+  assert_eq!(gazetteer_texts(&english, "Ana arrived."), ["Ana"]);
+  for language in [Some("cs"), Some("sk"), None] {
+    let engine = engine_for(language, ANA);
+    assert_eq!(
+      gazetteer_texts(&engine, "Patří Aně."),
+      ["Aně"],
+      "{language:?}"
+    );
+    assert_eq!(
+      gazetteer_texts(&engine, "Mluvil s Anou."),
+      ["Anou"],
+      "{language:?}"
+    );
+  }
 }
 
 fn gazetteer_entities(

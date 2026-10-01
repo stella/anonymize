@@ -51,6 +51,7 @@ pub use diagnostics::{
   DiagnosticDetail, DiagnosticEvent, DiagnosticEventKind, DiagnosticPhase,
   DiagnosticScope, DiagnosticStage, StaticRedactionDiagnostics,
 };
+pub use gazetteer::gazetteer_fuzzy_distance;
 pub use hotwords::{HotwordRule, HotwordRuleData};
 pub use legal_forms::{LegalFormData, LowercaseBridge};
 pub use money::{
@@ -71,9 +72,9 @@ pub use prepared::{
 };
 pub use processors::{
   CountryMatchData, CountryVariant, DenyListFilterData, DenyListMatchData,
-  DenyListPatternMeta, DenyListPatternMetaSet, GazetteerMatchData,
-  PatternSlice, RegexMatchMeta, SigningPlaceGuardData, StringGroups,
-  process_country_matches, process_deny_list_matches,
+  DenyListPatternMeta, DenyListPatternMetaSet, GazetteerInflection,
+  GazetteerMatchData, PatternSlice, RegexMatchMeta, SigningPlaceGuardData,
+  StringGroups, process_country_matches, process_deny_list_matches,
   process_gazetteer_matches, process_regex_matches,
 };
 pub use redact::{

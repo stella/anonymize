@@ -5,8 +5,11 @@
 Improve gazetteer name matching.
 
 - Match entries as whole words, folded for letter case and diacritics in both
-  directions, including Czech and Slovak case forms, feminine and possessive
-  surname forms, and surname-first person names (`Dvořáková, Marie`).
+  directions, and surname-first person names (`Dvořáková, Marie`). When Czech
+  or Slovak is in the content-language scope (or no scope is set), Czech and
+  Slovak case forms and feminine and possessive surname forms match too.
+- Keep leading and trailing punctuation of an entry (`C++`, `@alice`) part of
+  its match.
 - Match a company entry with or without its legal form, in any spacing or
   comma variant (`s.r.o.`, `s. r. o.`, `spol. s r.o.`, `a. s.`).
 - Accept fuzzy matches only on token boundaries, with an edit distance scaled
