@@ -35,6 +35,7 @@ const ENTRIES: &[(&str, &str, &[&str])] = &[
   ("Omega Stav k.s.", ORGANIZATION, &[]),
   ("@álîce", PERSON, &[]),
   ("C++", ORGANIZATION, &[]),
+  ("Jan Novák", PERSON, &[]),
   (FORCED_ID, IDENTIFIER, &[]),
 ];
 
@@ -46,6 +47,7 @@ enum Class {
   CaseAndOrder,
   Typo,
   Punctuated,
+  Templates,
   BesideNumbers,
   OrdinaryWords,
   IdShapes,
@@ -53,13 +55,14 @@ enum Class {
 }
 
 impl Class {
-  const ALL: [Self; 10] = [
+  const ALL: [Self; 11] = [
     Self::Diacritics,
     Self::Inflection,
     Self::LegalForm,
     Self::CaseAndOrder,
     Self::Typo,
     Self::Punctuated,
+    Self::Templates,
     Self::BesideNumbers,
     Self::OrdinaryWords,
     Self::IdShapes,
@@ -171,6 +174,11 @@ const CASES: &[Case] = &[
   miss(Class::Punctuated, "Přišla alice dnes.", "alice"),
   hit(Class::Punctuated, "Píšeme v C++ dnes.", "C++"),
   miss(Class::Punctuated, "Plán C platí.", "C"),
+  // Names inside template placeholders and wiki links.
+  hit(Class::Templates, "Poznámka [[Jan Novák]] zde.", "Jan Novák"),
+  hit(Class::Templates, "Šablona {{Acme}} zde.", "Acme"),
+  hit(Class::Templates, "Šablona <<Novák>> zde.", "Novák"),
+  hit(Class::Templates, "Odkaz [[Orbis]] zde.", "Orbis"),
   // Names next to numbers, years, and words in references, emails, URLs,
   // handles, and file names.
   spans(Class::BesideNumbers, "Smlouva Acme/2024 platí.", "Acme/2024", "Acme"),

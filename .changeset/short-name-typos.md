@@ -8,5 +8,6 @@ Improve gazetteer name matching for short names and template placeholders.
   matches a one-letter substitution typo (`Orbys`) on a whole token in the
   same case that does not open a sentence. Lowercase words (`orbit`) and
   shorter entries still match only exactly.
-- Template placeholders `<<…>>`, `{{…}}` and `[[…]]` are treated like `⟦…⟧`
-  markers, so a configured name inside them is not matched.
+- Inside template placeholders `<<…>>`, `{{…}}` and `[[…]]`, a name glued
+  to digits or joined to a numbered field (`<<token:zeta9>>`) is not
+  matched; a plain name inside them (`[[Jan Novák]]`) still is.

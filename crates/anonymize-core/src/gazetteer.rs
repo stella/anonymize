@@ -1615,8 +1615,8 @@ fn trim_fuzzy_span(text: &str, (start, end): (usize, usize)) -> (usize, usize) {
 /// glue, joiners, and one joined segment.
 struct Guard<'t> {
   text: &'t str,
-  /// Outermost balanced `⟦…⟧` markers, sorted and disjoint.
-  markers: Vec<(usize, usize)>,
+  /// Outermost balanced markers, sorted and disjoint.
+  markers: Vec<Marker>,
   /// Characters the scans have looked at, for scaling tests.
   visits: Cell<usize>,
   /// Deletion lookups and distance checks of the fuzzy fallback.
@@ -1684,43 +1684,80 @@ impl<'t> Guard<'t> {
   fn in_identifier(&self, start: usize, end: usize) -> bool {
     let head = self.text.get(..start).unwrap_or_default();
     let tail = self.text.get(end..).unwrap_or_default();
-    self.in_marker(start, end)
-      || joined_segment(
-        self
-          .visit(head.chars().rev())
-          .skip_while(|ch| is_word_char(*ch)),
-      )
-      .is_some_and(|segment| is_identifier_segment(&segment))
-      || joined_segment(
-        self.visit(tail.chars()).skip_while(|ch| is_word_char(*ch)),
-      )
-      .is_some_and(|segment| is_identifier_segment(&segment))
+    let before = joined_segment(
+      self
+        .visit(head.chars().rev())
+        .skip_while(|ch| is_word_char(*ch)),
+    );
+    let after = joined_segment(
+      self.visit(tail.chars()).skip_while(|ch| is_word_char(*ch)),
+    );
+    let in_marker = match self.marker_kind(start, end) {
+      Some(MarkerKind::Opaque) => true,
+      // A template placeholder may hold a real name (`[[Orbis]]`,
+      // `<<Novák>>`); only a field built around it (`<<token:zeta9>>`,
+      // `{{acme_01}}`) is an identifier.
+      Some(MarkerKind::Template) => {
+        previous_char(self.text, start).is_some_and(is_word_char)
+          || next_char(self.text, end).is_some_and(is_word_char)
+          || [&before, &after]
+            .into_iter()
+            .flatten()
+            .any(|segment| segment.chars().any(char::is_numeric))
+      }
+      None => false,
+    };
+    in_marker
+      || before.is_some_and(|segment| is_identifier_segment(&segment))
+      || after.is_some_and(|segment| is_identifier_segment(&segment))
   }
 
-  /// Whether a balanced `⟦…⟧` marker encloses the span: one binary search
-  /// over the indexed markers.
-  fn in_marker(&self, start: usize, end: usize) -> bool {
-    let opened_before = self.markers.partition_point(|(open, _)| *open < start);
+  /// The kind of the balanced marker enclosing the span, if any: one binary
+  /// search over the indexed markers.
+  fn marker_kind(&self, start: usize, end: usize) -> Option<MarkerKind> {
+    let opened_before =
+      self.markers.partition_point(|marker| marker.open < start);
     opened_before
       .checked_sub(1)
       .and_then(|index| self.markers.get(index))
-      .is_some_and(|(_, close)| *close >= end)
+      .filter(|marker| marker.close >= end)
+      .map(|marker| marker.kind)
   }
 }
 
-/// Marker delimiters: `⟦…⟧` and the template placeholders `<<…>>`, `{{…}}`
-/// and `[[…]]`.
-const MARKER_DELIMITERS: [(&str, &str); 4] =
-  [("⟦", "⟧"), ("<<", ">>"), ("{{", "}}"), ("[[", "]]")];
+/// What a balanced marker's content is taken to be.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum MarkerKind {
+  /// `⟦…⟧`: an opaque marker; nothing inside it is a name.
+  Opaque,
+  /// `<<…>>`, `{{…}}`, `[[…]]`: a template placeholder or link that may hold
+  /// a name.
+  Template,
+}
 
-/// Outermost balanced markers as `(open, close)` byte offsets, in one pass.
-/// Markers never contain whitespace, so whitespace drops any marker still
-/// open; a closing delimiter without an open one is ignored.
-fn markers(text: &str) -> Vec<(usize, usize)> {
+#[derive(Clone, Copy, Debug)]
+struct Marker {
+  open: usize,
+  close: usize,
+  kind: MarkerKind,
+}
+
+/// Marker delimiters and the kind of marker each opens.
+const MARKER_DELIMITERS: [(&str, &str, MarkerKind); 4] = [
+  ("⟦", "⟧", MarkerKind::Opaque),
+  ("<<", ">>", MarkerKind::Template),
+  ("{{", "}}", MarkerKind::Template),
+  ("[[", "]]", MarkerKind::Template),
+];
+
+/// Outermost balanced markers, in one pass. Markers never contain
+/// whitespace, so whitespace drops any marker still open; a closing
+/// delimiter without an open one is ignored.
+fn markers(text: &str) -> Vec<Marker> {
   let mut markers = Vec::new();
   if !MARKER_DELIMITERS
     .iter()
-    .any(|(open, _)| text.contains(open))
+    .any(|(open, _, _)| text.contains(open))
   {
     return markers;
   }
@@ -1736,24 +1773,29 @@ fn markers(text: &str) -> Vec<(usize, usize)> {
     let opening = MARKER_DELIMITERS
       .iter()
       .enumerate()
-      .find(|(_, (opener, _))| rest.starts_with(opener));
-    let closing = open.last().copied().and_then(|(kind, _)| {
+      .find(|(_, (opener, _, _))| rest.starts_with(opener));
+    let closing = open.last().copied().and_then(|(delimiter, _)| {
       MARKER_DELIMITERS
-        .get(kind)
-        .filter(|(_, closer)| rest.starts_with(closer))
-        .map(|(_, closer)| closer.len())
+        .get(delimiter)
+        .filter(|(_, closer, _)| rest.starts_with(closer))
+        .map(|(_, closer, _)| closer.len())
     });
     if let Some(len) = closing {
-      if let Some((_, start)) = open.pop()
+      if let Some((delimiter, start)) = open.pop()
         && open.is_empty()
+        && let Some((_, _, kind)) = MARKER_DELIMITERS.get(delimiter)
       {
-        markers.push((start, index));
+        markers.push(Marker {
+          open: start,
+          close: index,
+          kind: *kind,
+        });
       }
       index = index.saturating_add(len);
       continue;
     }
-    if let Some((kind, (opener, _))) = opening {
-      open.push((kind, index));
+    if let Some((delimiter, (opener, _, _))) = opening {
+      open.push((delimiter, index));
       index = index.saturating_add(opener.len());
       continue;
     }
@@ -2361,19 +2403,24 @@ mod tests {
   }
 
   #[test]
-  fn template_placeholders_are_markers() {
-    let entries = [exact("Zeta", ORGANIZATION)];
+  fn template_placeholders_keep_names_but_not_identifier_fields() {
+    let entries = [exact("Zeta", ORGANIZATION), exact("Jan Novák", PERSON)];
     for text in [
       "see <<token:zeta9>> below",
-      "see {{zeta}} below",
-      "see [[Zeta]] below",
+      "see {{zeta_01}} below",
+      "see [[Zeta2024]] below",
+      "see ⟦Zeta⟧ below",
     ] {
       assert!(found(&entries, text).is_empty(), "{text}");
     }
     for (text, expected) in [
+      ("see {{Zeta}} below", "Zeta"),
+      ("see <<Zeta>> below", "Zeta"),
+      ("see [[Zeta]] below", "Zeta"),
+      ("see <<token:Zeta>> below", "Zeta"),
+      ("note [[Jan Novák]] here", "Jan Novák"),
       ("see [Zeta] below", "Zeta"),
       ("Pište na zeta9@example.cz.", "zeta"),
-      ("<<a>> Zeta <<b>>", "Zeta"),
     ] {
       assert_eq!(found(&entries, text), [expected], "{text}");
     }

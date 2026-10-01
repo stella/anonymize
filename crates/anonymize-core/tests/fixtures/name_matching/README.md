@@ -86,9 +86,10 @@ classes require this control, and the `guard-control` class requires every
 control to pass. The synthetic four-letter name `Acfe` seeds hex-compatible
 opaque tokens without enabling fuzzy matching for that name. Plain numeric
 or word segments are intentionally permitted by the matcher; bracketed
-identifier fixtures therefore use opaque compound segments or template
-placeholder delimiters (`<<…>>`, `{{…}}`, `[[…]]`, treated like `⟦…⟧`),
-rather than assuming arbitrary brackets suppress names.
+identifier fixtures therefore use opaque compound segments, or a field
+glued to digits inside template delimiters (`<<token:zeta9>>`), rather than
+assuming brackets suppress names: a plain name inside `<<…>>`, `{{…}}` or
+`[[…]]` still matches; only `⟦…⟧` suppresses everything inside it.
 
 Distinct negatives declare why the text is not a configured surface;
 context negatives require expected entities elsewhere in the document.
