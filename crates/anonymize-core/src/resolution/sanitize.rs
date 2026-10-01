@@ -268,7 +268,11 @@ fn should_strip_period(
   if !text.ends_with('.') || known_period_suffix(text) {
     return false;
   }
-  if entity.source == DetectionSource::LegalForm {
+  // Gazetteer extensions already carry evidence of a recognized legal form.
+  if entity.source == DetectionSource::LegalForm
+    || (entity.source == DetectionSource::Gazetteer
+      && entity.source_detail == Some(SourceDetail::GazetteerExtension))
+  {
     return false;
   }
   if entity.label == crate::labels::ADDRESS_LABEL
