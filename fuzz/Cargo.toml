@@ -17,7 +17,10 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
+unicode-normalization = { version = "0.1.25", default-features = false }
+unicode-properties = "0.1.4"
 stella-anonymize-core = { path = "../crates/anonymize-core" }
+stella-anonymize-adapter-contract = { path = "../crates/anonymize-adapter-contract" }
 
 # Detach from the parent workspace so `cargo build --workspace` at the repo root
 # never pulls in the fuzz targets or their nightly-only dependencies.
@@ -36,6 +39,13 @@ bench = false
 [[bin]]
 name = "normalize_text"
 path = "fuzz_targets/normalize_text.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "gazetteer_match"
+path = "fuzz_targets/gazetteer_match.rs"
 test = false
 doc = false
 bench = false

@@ -1,6 +1,6 @@
 {
   "name": "@stll/anonymize-docx",
-  "version": "3.0.1",
+  "version": "3.0.4",
   "description": "Structure-aware DOCX text extraction and rewriting for stella anonymization workflows",
   "type": "module",
   "exports": {
@@ -32,11 +32,11 @@
     "format": "oxfmt ."
   },
   "dependencies": {
-    "@stll/anonymize": "^3.0.1",
+    "@stll/anonymize": "^3.0.4",
     "fflate": "^0.8.3"
   },
   "devDependencies": {
-    "@types/node": "^26.4.1",
+    "@types/node": "^26.6.2",
     "bun-types": "1.4.2",
     "fflate": "^0.8.3",
     "tsdown": "0.23.0",

@@ -1,0 +1,31 @@
+[
+  {
+    "canonical": "Velomír",
+    "forms": [
+      "Velomír",
+      "Velomíra",
+      "Velomírovi",
+      "Velomíra",
+      "Velomírom",
+      "Velomírovi"
+    ]
+  },
+  {
+    "canonical": "Milora",
+    "forms": ["Milora", "Milory", "Milore", "Miloru", "Milorou"]
+  },
+  {
+    "canonical": "Velomír Milora",
+    "forms": [
+      "Velomír Milora",
+      "Velomíra Milory",
+      "Velomírovi Milore",
+      "Velomíra Miloru",
+      "Velomírom Milorou"
+    ]
+  },
+  {
+    "canonical": "Ľunor",
+    "forms": ["Ľunor", "Ľunora", "Ľunorovi", "Ľunora", "Ľunorom", "Ľunorovi"]
+  }
+]

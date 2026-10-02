@@ -297,6 +297,26 @@ pub(super) fn legal_suffixes() -> Vec<String> {
   out
 }
 
+/// Legal forms a gazetteer name may extend over: [`legal_suffixes`] plus
+/// every dotted abbreviation in `legal-forms.json` (`š.p.`, `n.o.`, `S.A.`),
+/// longest first. Undotted long forms (`spolek`, `nadace`) stay out: they are
+/// ordinary words that may follow a name.
+pub(super) fn gazetteer_legal_form_suffixes()
+-> Result<Vec<String>, AssembleError> {
+  let mut seen = HashSet::new();
+  let mut out = Vec::new();
+  for form in legal_suffixes() {
+    push_unique(form, &mut seen, &mut out);
+  }
+  for form in all_legal_suffixes()? {
+    if form.contains('.') {
+      push_unique(form, &mut seen, &mut out);
+    }
+  }
+  sort_longest_first(&mut out);
+  Ok(out)
+}
+
 /// Mirrors `getAllLegalSuffixesSync` (post-warm): flatten `legal-forms.json`
 /// values (first-occurrence dedup), append `LEGAL_SUFFIXES` not already seen,
 /// sort longest-first (stable).

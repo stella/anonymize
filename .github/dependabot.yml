@@ -4,16 +4,18 @@ updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
-      day: "saturday"
-      time: "09:00"
+      interval: "cron"
+      cronjob: "0 3 * * *"
       timezone: "Europe/Prague"
     cooldown:
       default-days: 5
     groups:
-      actions:
+      minor-and-patch:
         patterns:
           - "*"
+        update-types:
+          - "minor"
+          - "patch"
     labels:
       - "📦 dependencies"
     commit-message:
@@ -25,17 +27,19 @@ updates:
     directories:
       - "/"
     schedule:
-      interval: "weekly"
-      day: "saturday"
-      time: "09:00"
+      interval: "cron"
+      cronjob: "0 3 * * *"
       timezone: "Europe/Prague"
     cooldown:
       default-days: 5
     open-pull-requests-limit: 10
     groups:
-      misc:
+      minor-and-patch:
         patterns:
           - "*"
+        update-types:
+          - "minor"
+          - "patch"
     labels:
       - "📦 dependencies"
     commit-message:

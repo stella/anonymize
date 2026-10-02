@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "license": "Apache-2.0",
-  "packageManager": "bun@1.4.1",
+  "packageManager": "bun@1.4.2",
   "workspaces": [
     "packages/*",
     "packages/anonymize/wasm"
@@ -17,8 +17,8 @@
     "lint:oxlint": "bun test oxlint.plugin.test.ts && bun run lint:prepare && bun --bun oxlint -c oxlint.config.ts --deny-warnings --type-aware .",
     "lint:prepare": "bun x tsdown --config packages/anonymize/tsdown.config.ts --no-clean && bun x tsdown --config packages/document-docx/tsdown.config.ts --no-clean",
     "lint:fix": "bun run lint:prepare && bun --bun oxlint -c oxlint.config.ts --type-aware --fix .",
-    "format": "turbo run format && oxfmt . \"!packages/**\" \"!.ai/**\" \"!.agents/**\" \"!.claude/**\" \"!AGENTS.md\" \"!CLAUDE.md\" \"!GEMINI.md\"",
-    "format:check": "turbo run format -- --check && oxfmt --check . \"!packages/**\" \"!.ai/**\" \"!.agents/**\" \"!.claude/**\" \"!AGENTS.md\" \"!CLAUDE.md\" \"!GEMINI.md\"",
+    "format": "turbo run format && oxfmt . \"!packages/**\" \"!.ai/**\" \"!.agents/**\" \"!.claude/**\" \"!AGENTS.md\" \"!GEMINI.md\"",
+    "format:check": "turbo run format -- --check && oxfmt --check . \"!packages/**\" \"!.ai/**\" \"!.agents/**\" \"!.claude/**\" \"!AGENTS.md\" \"!GEMINI.md\"",
     "test": "turbo run test",
     "test:built": "turbo run test --only",
     "rust:fmt": "cargo ci-fmt",
@@ -56,20 +56,20 @@
     "@emnapi/runtime": "1.11.1",
     "@hono/node-server": "2.0.10",
     "emnapi": "1.11.1",
-    "fast-uri": "3.1.6",
+    "fast-uri": "3.1.8",
     "qs": "6.16.0"
   },
   "devDependencies": {
     "@changesets/changelog-github": "^1.0.1",
-    "@changesets/cli": "^3.0.2",
+    "@changesets/cli": "^3.0.3",
     "@stll/anonymize-data": "workspace:*",
     "@stll/oxlint-config": "0.7.0",
     "@stll/typescript-config": "0.6.0",
     "@typescript/native": "npm:typescript@7.0.2",
-    "lefthook": "^2.1.12",
-    "oxfmt": "^0.66.0",
-    "oxlint": "1.81.0",
-    "oxlint-tsgolint": "7.0.2001",
-    "turbo": "^2.10.12"
+    "lefthook": "^2.1.14",
+    "oxfmt": "^0.70.0",
+    "oxlint": "1.85.0",
+    "oxlint-tsgolint": "7.0.2002",
+    "turbo": "^2.11.2"
   }
 }

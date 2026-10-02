@@ -1046,7 +1046,7 @@ mod tests {
     }));
     assert_eq!(
       output_digest(&resolved),
-      "ceca76ca0c2d23ab459a0bc3ec3d532b21ccf00d509479d1b98f33e635713c85",
+      "6e693d836e58a7d8dd111f620502c348c4a074cfd421721c1a42df2514e130a2",
     );
     std::hint::black_box(elapsed);
   }

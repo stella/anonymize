@@ -4,19 +4,18 @@ use smallvec::SmallVec;
 
 use crate::address_seeds::soft_wrapped_us_city_tail;
 use crate::byte_offsets::ByteOffsets;
+use crate::gazetteer::PreparedGazetteerMatchData;
 use crate::prepared_metadata::{
-  PreparedCountryMatchData, PreparedGazetteerMatchData, PreparedRegexMatchData,
+  PreparedCountryMatchData, PreparedRegexMatchData,
 };
 use crate::resolution::{
   DetectionSource, PipelineEntity, ResolutionDocument, SourceDetail,
 };
+use crate::search::SearchPattern;
 use crate::types::{Error, Result, SearchMatch};
 
-const GAZETTEER_EXACT_SCORE: f64 = 0.9;
-const GAZETTEER_FUZZY_SCORE: f64 = 0.85;
 const COUNTRY_SCORE: f64 = 0.95;
 const DENY_LIST_SCORE: f64 = 0.9;
-const MAX_GAZETTEER_PREFIX_OVERSHOOT: u32 = 7;
 const CUSTOM_DENY_LIST_SOURCE: &str = "custom-deny-list";
 const DENY_LIST_SOURCE: &str = "deny-list";
 const CITY_SOURCE: &str = "city";
@@ -101,6 +100,48 @@ impl RegexMatchMeta {
 pub struct GazetteerMatchData {
   pub labels: Vec<String>,
   pub is_fuzzy: Vec<bool>,
+  /// Legal-form suffixes, longest first, that may follow a matched name.
+  #[serde(default)]
+  pub legal_form_suffixes: Vec<String>,
+  /// Which inflected forms of an entry's words also match.
+  #[serde(default)]
+  pub inflection: GazetteerInflection,
+  /// Entry text per row. When empty it is read from the gazetteer slice's
+  /// search patterns; when both exist they must agree. Carrying it lets a
+  /// config prepared from artifacts alone, without literal patterns, keep
+  /// its gazetteer.
+  #[serde(default)]
+  pub terms: Vec<String>,
+  /// Per row, whether a kept `person` label names the row's spelling, so
+  /// person word orders (surname first) match even when the row reports
+  /// another label. Empty (older configs, or no such row) means only rows
+  /// labelled `person`.
+  #[serde(default)]
+  pub person_forms: Vec<bool>,
+}
+
+/// Inflected forms a gazetteer entry's words may take besides their folded
+/// spelling, chosen from the pipeline's content languages.
+///
+/// Configs that predate the field keep every form on, the same as an
+/// unscoped assembly.
+#[derive(
+  Clone,
+  Copy,
+  Debug,
+  Default,
+  Eq,
+  PartialEq,
+  serde::Deserialize,
+  serde::Serialize,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum GazetteerInflection {
+  /// Only the entry's own words, folded for case and diacritics.
+  None,
+  /// Czech and Slovak case forms and surname derivations as well.
+  #[default]
+  CzechSlovak,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
@@ -1539,84 +1580,17 @@ const fn extended_person_score(
   0.5
 }
 
+/// Gazetteer entities for `matches`; `patterns` are the search patterns of
+/// the gazetteer `slice`, in slice order.
 pub fn process_gazetteer_matches(
   matches: &[SearchMatch],
   slice: PatternSlice,
   full_text: &str,
   data: &GazetteerMatchData,
+  patterns: &[SearchPattern],
 ) -> Result<Vec<PipelineEntity>> {
-  let prepared = PreparedGazetteerMatchData::new(data.clone(), slice)?;
-  process_prepared_gazetteer_matches(matches, full_text, &prepared)
-}
-
-pub(crate) fn process_prepared_gazetteer_matches(
-  matches: &[SearchMatch],
-  full_text: &str,
-  data: &PreparedGazetteerMatchData,
-) -> Result<Vec<PipelineEntity>> {
-  let offsets = ByteOffsets::new(full_text);
-  let mut results = Vec::new();
-  let mut exact_spans = Vec::<(u32, u32)>::new();
-
-  for found in matches {
-    let Some(row) = data.get(found.pattern()) else {
-      continue;
-    };
-    if row.is_fuzzy() {
-      continue;
-    }
-    let extended = try_gazetteer_prefix_extension(&offsets, found)?;
-    let (end, text, source_detail) = if let Some(extension) = extended {
-      extension
-    } else {
-      (
-        found.end(),
-        offsets.slice(found.start(), found.end())?,
-        None,
-      )
-    };
-
-    exact_spans.push((found.start(), end));
-    let mut entity = PipelineEntity::detected(
-      found.start(),
-      end,
-      row.label(),
-      text,
-      GAZETTEER_EXACT_SCORE,
-      DetectionSource::Gazetteer,
-    );
-    entity.source_detail = source_detail;
-    results.push(entity);
-  }
-
-  for found in matches {
-    let Some(row) = data.get(found.pattern()) else {
-      continue;
-    };
-    if !row.is_fuzzy() {
-      continue;
-    }
-    if fuzzy_distance(found) == Some(0) {
-      continue;
-    }
-    if exact_spans
-      .iter()
-      .any(|(start, end)| found.start() < *end && found.end() > *start)
-    {
-      continue;
-    }
-
-    results.push(PipelineEntity::detected(
-      found.start(),
-      found.end(),
-      row.label(),
-      offsets.slice(found.start(), found.end())?,
-      GAZETTEER_FUZZY_SCORE,
-      DetectionSource::Gazetteer,
-    ));
-  }
-
-  Ok(results)
+  PreparedGazetteerMatchData::new(data.clone(), slice, Some(patterns))?
+    .detect(matches, full_text)
 }
 
 pub fn process_country_matches(
@@ -2998,48 +2972,6 @@ fn consume_whitespace_no_newline(
     .flatten()
 }
 
-fn try_gazetteer_prefix_extension(
-  offsets: &ByteOffsets<'_>,
-  found: &SearchMatch,
-) -> Result<Option<(u32, String, Option<SourceDetail>)>> {
-  let max_end = offsets
-    .offset_after_utf16_units(found.end(), MAX_GAZETTEER_PREFIX_OVERSHOOT)?;
-  if max_end <= found.end().saturating_add(1) {
-    return Ok(None);
-  }
-
-  let after = offsets.slice(found.end(), max_end)?;
-  if !after.starts_with(' ') {
-    return Ok(None);
-  }
-
-  let suffix_end = next_space_offset_after_initial(&after);
-  if suffix_end <= 1 {
-    return Ok(None);
-  }
-
-  let new_end = found.end().saturating_add(suffix_end);
-  Ok(Some((
-    new_end,
-    offsets.slice(found.start(), new_end)?,
-    Some(SourceDetail::GazetteerExtension),
-  )))
-}
-
-fn next_space_offset_after_initial(text: &str) -> u32 {
-  let mut offset = 0_u32;
-
-  for ch in text.chars() {
-    let width = u32::try_from(ch.len_utf8()).unwrap_or(u32::MAX);
-    if offset > 0 && ch == ' ' {
-      return offset;
-    }
-    offset = offset.saturating_add(width);
-  }
-
-  offset
-}
-
 fn starts_as_proper_noun(
   full_text: &str,
   offsets: &ByteOffsets<'_>,
@@ -3184,13 +3116,6 @@ fn has_supported_hyphenated_person_edge(
   }
 
   Ok(false)
-}
-
-const fn fuzzy_distance(found: &SearchMatch) -> Option<u32> {
-  let SearchMatch::Fuzzy { distance, .. } = found else {
-    return None;
-  };
-  Some(*distance)
 }
 
 #[cfg(test)]

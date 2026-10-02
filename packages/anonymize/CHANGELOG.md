@@ -1,5 +1,77 @@
 # Changelog
 
+## 3.0.4
+
+### Patch Changes
+
+- [#538](https://github.com/stella/anonymize/pull/538) [`da874cc`](https://github.com/stella/anonymize/commit/da874cce51e57fe2532785f1997bcd3557a89757) Thanks [@jan-kubica](https://github.com/jan-kubica)! - A gazetteer spelling given under several labels now takes the first of them
+  that the pipeline searches for (its `labels`, then the labels hotword rules
+  reclassify into them; the alphabetically first without a label filter), so the
+  label no longer depends on entry order and a kept label always wins.
+  Spellings that differ only in case or diacritics count as one for this.
+
+  Exact gazetteer hits and custom deny-list hits are now redacted whatever the
+  pipeline's `threshold`; typo hits keep it. Names glued to Hangul Jamo,
+  halfwidth Katakana, and the other blocks of scripts written without spaces now
+  match like names glued to CJK ideographs.
+
+  A spelling that a kept `person` label names keeps matching surname first
+  (`Smith, John`) when it is reported under another label. Gazetteer data gains a
+  `person_forms` field, so the prepared package schema moves to 16 and prepared
+  packages need rebuilding.
+
+- [#535](https://github.com/stella/anonymize/pull/535) [`9e0ec02`](https://github.com/stella/anonymize/commit/9e0ec02b9b84e882382baf8c8a9c42782f5e2991) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Inside template placeholders `<<…>>`, `{{…}}` and `[[…]]`, a name glued to
+  digits (`[[Zeta2024]]`, `[[McDonald2024]]`, `[[Jan van Dijk2024]]`) is now
+  matched when it is spelled as its gazetteer entry spells it, as a supported
+  inflected form of it (`[[McDonalda2024]]`), or in the same capitalization.
+  Entries in scripts without letter case (`[[محمد2024]]`, `{{東京2024}}`) match
+  on their own spelling. A field spelled otherwise (`<<token:zeta9>>`,
+  `{{acme_01}}`) is still not matched.
+
+- [#537](https://github.com/stella/anonymize/pull/537) [`82b5bb8`](https://github.com/stella/anonymize/commit/82b5bb8f1066fc249346454ea7aa3b871f6007d9) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Inside template placeholders, a gazetteer entry written in Georgian
+  (`[[თბილისი2024]]`) now matches on its own spelling when digits are glued to
+  it, like entries in other scripts without letter case.
+
+## 3.0.3
+
+### Patch Changes
+
+- [#531](https://github.com/stella/anonymize/pull/531) [`722af38`](https://github.com/stella/anonymize/commit/722af38ff0f24acd0f828a794d52d35de938ca96) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Improve gazetteer name matching for short names and template placeholders.
+
+  - A five-letter entry spelled as a proper noun (`Orbis`, `ORBIS`) now also
+    matches a one-letter substitution typo (`Orbys`) on a whole token in the
+    same case that does not open a sentence. Lowercase words (`orbit`) and
+    shorter entries still match only exactly.
+  - Inside template placeholders `<<…>>`, `{{…}}` and `[[…]]`, a name glued
+    to digits or joined to a numbered field (`<<token:zeta9>>`) is not
+    matched; a plain name inside them (`[[Jan Novák]]`) still is.
+  - A gazetteer entry that is also a common word (`Mark`, `Will`, `Grant`) is
+    always redacted where it stands as its own token, for every label.
+
+## 3.0.2
+
+### Patch Changes
+
+- [#526](https://github.com/stella/anonymize/pull/526) [`82d7e81`](https://github.com/stella/anonymize/commit/82d7e81afa83628045e2cd799d0d4aa4c4c561b7) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Improve gazetteer name matching.
+
+  - Match entries as whole words, folded for letter case and diacritics in both
+    directions, and surname-first person names (`Dvořáková, Marie`). When Czech
+    or Slovak is in the content-language scope (or no scope is set), Czech and
+    Slovak case forms and feminine and possessive surname forms match too.
+  - Keep leading and trailing punctuation of an entry (`C++`, `@alice`) part of
+    its match.
+  - Match a company entry with or without its legal form, in any spacing or
+    comma variant (`s.r.o.`, `s. r. o.`, `spol. s r.o.`, `a. s.`).
+  - Accept fuzzy matches only on token boundaries, with an edit distance scaled
+    to the entry's length; entries shorter than six letters and entries with
+    digits match only exactly.
+  - Never match inside identifier-shaped tokens such as hashes, UUID parts,
+    base64 runs, or markers, while names next to numbers, years, or words
+    (`Acme/2024`, `novak2@acme.cz`, `Novak_smlouva_2024.pdf`) still match.
+  - Extend a match only over a following legal form.
+
+  Prepared packages carry a new gazetteer field; rebuild persisted packages.
+
 ## 3.0.1
 
 ### Patch Changes

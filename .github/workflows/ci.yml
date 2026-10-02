@@ -30,7 +30,7 @@ jobs:
           persist-credentials: false
 
       - name: Enforce release intent
-        uses: stella/.github/.github/actions/changeset-policy@fb1e83fbc3fae39902da763ca7b2613090571717 # v1.7.0
+        uses: stella/.github/.github/actions/changeset-policy@2ac805220ed86dcaa154e332e0f3dbbc7b0e8024 # v1.7.1
         with:
           release-paths: |
             Cargo.lock
@@ -275,7 +275,7 @@ jobs:
           )
           tar -czf "$RUNNER_TEMP/ci-build.tar.gz" -- "${outputs[@]}"
       - name: Upload build outputs
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v5
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ci-build
           path: ${{ runner.temp }}/ci-build.tar.gz
@@ -431,7 +431,7 @@ jobs:
           profile: consumer
           cache-scope: build
       - name: Setup minimum supported Node for MCP
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "20.20.2"
           registry-url: https://registry.npmjs.org

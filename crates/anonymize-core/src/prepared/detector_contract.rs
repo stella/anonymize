@@ -4,6 +4,7 @@ use crate::address_seeds::{
   AddressSeedDetection, AddressSeedProcessArgs, PreparedAddressSeedData,
 };
 use crate::diagnostics::{DiagnosticStage, StaticRedactionDiagnostics};
+use crate::gazetteer::PreparedGazetteerMatchData;
 use crate::labels::{
   ADDRESS_LABEL, CREDIT_CARD_NUMBER_LABEL, IDENTITY_CARD_NUMBER_LABEL,
   PASSPORT_NUMBER_LABEL,
@@ -12,13 +13,12 @@ use crate::legal_forms::PreparedLegalFormData;
 use crate::legal_forms::process_legal_form_matches;
 use crate::name_corpus::{NameCorpusDetection, PreparedNameCorpusData};
 use crate::prepared_metadata::{
-  PreparedCountryMatchData, PreparedGazetteerMatchData, PreparedRegexMatchData,
+  PreparedCountryMatchData, PreparedRegexMatchData,
 };
 use crate::processors::{
   DenyListFilterData, DenyListMatchData, PatternSlice,
   process_deny_list_matches_with_field_labels,
-  process_prepared_country_matches, process_prepared_gazetteer_matches,
-  process_prepared_regex_matches,
+  process_prepared_country_matches, process_prepared_regex_matches,
 };
 use crate::resolution::{PipelineEntity, ResolutionDocument};
 use crate::signatures::{
@@ -249,18 +249,15 @@ impl<'a> StaticDetectorContext<'a> {
   }
 
   pub(super) fn gazetteer_is_active(&self) -> Result<bool> {
-    Ok(!self.literal_matches()?.is_empty() && self.gazetteer_data()?.is_some())
+    // Word-sequence matching does not depend on search hits.
+    Ok(self.gazetteer_data()?.is_some())
   }
 
   pub(super) fn detect_gazetteer(&self) -> Result<Vec<PipelineEntity>> {
     let Some(data) = self.gazetteer_data()? else {
       return Ok(Vec::new());
     };
-    process_prepared_gazetteer_matches(
-      self.literal_matches()?,
-      self.full_text()?,
-      data,
-    )
+    data.detect(self.literal_matches()?, self.full_text()?)
   }
 
   pub(super) fn country_is_active(&self) -> Result<bool> {

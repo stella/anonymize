@@ -435,6 +435,10 @@ pub struct JsRegexMatchMeta {
 pub struct JsGazetteerMatchData {
   pub labels: Vec<String>,
   pub is_fuzzy: Vec<bool>,
+  pub legal_form_suffixes: Vec<String>,
+  pub inflection: String,
+  pub terms: Vec<String>,
+  pub person_forms: Option<Vec<bool>>,
 }
 
 #[napi(object)]

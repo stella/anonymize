@@ -268,7 +268,10 @@ fn should_strip_period(
   if !text.ends_with('.') || known_period_suffix(text) {
     return false;
   }
-  if entity.source == DetectionSource::LegalForm {
+  // A gazetteer hit extended over a legal form ends with that form's dot.
+  if entity.source == DetectionSource::LegalForm
+    || entity.source_detail == Some(SourceDetail::GazetteerExtension)
+  {
     return false;
   }
   if entity.label == crate::labels::ADDRESS_LABEL

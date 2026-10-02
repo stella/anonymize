@@ -50,7 +50,7 @@ jobs:
         with:
           bun-version-file: package.json
 
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "22.21.1"
           registry-url: https://registry.npmjs.org
@@ -149,6 +149,11 @@ jobs:
       - name: Verify native sidecar metadata
         run: node .github/tools/check-native-sidecars.mjs
 
+      - name: Name-matching corpus gate
+        # Uses the toolchain pinned in rust-toolchain.toml, like the build
+        # below; this publishing job restores no caches.
+        run: cargo test --locked -p stella-anonymize-core --test name_matching_corpus
+
       - name: Setup browser WebAssembly tools
         uses: ./.github/actions/setup-browser-wasm
 
@@ -216,7 +221,7 @@ jobs:
         with:
           bun-version-file: package.json
 
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "22.21.1"
           registry-url: https://registry.npmjs.org
@@ -296,7 +301,7 @@ jobs:
           echo "tarball=${pack_dir}/${filename}" >> "$GITHUB_OUTPUT"
 
       - name: Upload package tarball
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v5
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ steps.package.outputs.artifact_name }}
           path: ${{ steps.pack.outputs.tarball }}
@@ -328,7 +333,7 @@ jobs:
         with:
           bun-version-file: package.json
 
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "22.21.1"
           registry-url: https://registry.npmjs.org
@@ -393,7 +398,7 @@ jobs:
           echo "tarball=${pack_dir}/${filename}" >> "$GITHUB_OUTPUT"
 
       - name: Upload package tarball
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v5
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ steps.package.outputs.artifact_name }}
           path: ${{ steps.pack.outputs.tarball }}
@@ -418,7 +423,7 @@ jobs:
         with:
           bun-version-file: package.json
 
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "22.21.1"
 
@@ -485,7 +490,7 @@ jobs:
           echo "tarball=$tarball" >> "$GITHUB_OUTPUT"
 
       - name: Upload data package tarball
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v5
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: data-package-stll-anonymize-data
           path: ${{ steps.pack.outputs.tarball }}
@@ -500,7 +505,7 @@ jobs:
         && needs.pack-data.result == 'success'
         && (github.event_name == 'push'
             || inputs.publish_to_npm == true))
-    uses: stella/.github/.github/workflows/npm-artifact-publish.yml@fb1e83fbc3fae39902da763ca7b2613090571717
+    uses: stella/.github/.github/workflows/npm-artifact-publish.yml@636b7841096c8f0cc5a1572077b78768ef8fea42
     with:
       artifact-name: data-package-stll-anonymize-data
       package-name: "@stll/anonymize-data"
@@ -548,7 +553,7 @@ jobs:
         with:
           bun-version-file: package.json
 
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "22.21.1"
 
@@ -635,7 +640,7 @@ jobs:
           ANONYMIZE_PYTHON_WHEEL_PATH="${wheels[0]}" bun run python:wheel
 
       - name: Upload wheel artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v5
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: python-wheel-${{ matrix.target }}
           path: dist/*.whl
@@ -656,7 +661,7 @@ jobs:
       id-token: write # Required only for PyPI trusted publishing.
     steps:
       - name: Prepare exact Python wheel set
-        uses: stella/.github/.github/actions/pypi-publish-hardened@fb1e83fbc3fae39902da763ca7b2613090571717
+        uses: stella/.github/.github/actions/pypi-publish-hardened@636b7841096c8f0cc5a1572077b78768ef8fea42
         with:
           expected-version: ${{ needs.verify.outputs.version }}
           project-name: stella-anonymize-core
@@ -669,7 +674,7 @@ jobs:
           packages-dir: dist
           skip-existing: true
       - name: Verify published PyPI files
-        uses: stella/.github/.github/actions/pypi-publish-hardened/verify@fb1e83fbc3fae39902da763ca7b2613090571717
+        uses: stella/.github/.github/actions/pypi-publish-hardened/verify@636b7841096c8f0cc5a1572077b78768ef8fea42
         with:
           expected-version: ${{ needs.verify.outputs.version }}
           project-name: stella-anonymize-core
@@ -685,7 +690,7 @@ jobs:
         && needs.publish-pypi.result == 'success'
         && (github.event_name == 'push'
             || inputs.publish_to_npm == true))
-    uses: stella/.github/.github/workflows/npm-version-finalize.yml@fb1e83fbc3fae39902da763ca7b2613090571717
+    uses: stella/.github/.github/workflows/npm-version-finalize.yml@636b7841096c8f0cc5a1572077b78768ef8fea42
     with:
       package-files: |
         packages/anonymize/package.json
