@@ -107,10 +107,10 @@ impl AttributeDomain {
 
 #[derive(Clone, Copy, Debug)]
 pub(super) struct AttributeSpec {
-  pub(super) elements: &'static [&'static str],
+  elements: &'static [&'static str],
   /// `None` accepts any parent element.
-  pub(super) parents: Option<&'static [&'static str]>,
-  pub(super) attributes: &'static [&'static str],
+  parents: Option<&'static [&'static str]>,
+  attributes: &'static [&'static str],
   pub(super) domain: AttributeDomain,
 }
 
@@ -198,7 +198,7 @@ const AUTOMATIC_COLOR: AttributeDomain =
   AttributeDomain::Color { automatic: true };
 const NUMBERING_IDENTIFIER: &str = "00000001";
 
-pub(super) const BOOLEAN_WORD_ELEMENTS: &[&str] = &[
+const BOOLEAN_WORD_ELEMENTS: &[&str] = &[
   "adjustRightInd",
   "autoRedefine",
   "b",
@@ -890,7 +890,7 @@ const WORD_SECTION_SPECS: &[AttributeSpec] = &[
   ),
 ];
 
-pub(super) const WORD_ATTRIBUTE_TABLES: &[&[AttributeSpec]] = &[
+const WORD_ATTRIBUTE_TABLES: &[&[AttributeSpec]] = &[
   WORD_VALUE_SPECS,
   WORD_STRUCTURE_SPECS,
   WORD_COLOR_SPECS,
@@ -1130,7 +1130,7 @@ const DRAWING_EFFECT_SPECS: &[AttributeSpec] = &[
   any(&["ligatures"], &["val"], one_of(LIGATURE_VALUES)),
 ];
 
-pub(super) const DRAWING_ATTRIBUTE_TABLES: &[&[AttributeSpec]] = &[
+const DRAWING_ATTRIBUTE_TABLES: &[&[AttributeSpec]] = &[
   DRAWING_COLOR_SPECS,
   DRAWING_SHAPE_SPECS,
   DRAWING_EFFECT_SPECS,
