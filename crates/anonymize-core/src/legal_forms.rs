@@ -1,8 +1,12 @@
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
+use std::ops::Range;
+
+use unicode_normalization::char::is_combining_mark;
 
 use crate::byte_offsets::ByteOffsets;
 use crate::gazetteer::is_unspaced_script;
+use crate::name_joiners::NameJoiner;
 use crate::processors::PatternSlice;
 use crate::resolution::{DetectionSource, PipelineEntity};
 use crate::types::{Result, SearchMatch};
@@ -388,12 +392,12 @@ pub(crate) fn process_legal_form_matches(
       && full_text
         .get(suffix_start..suffix_end)
         .is_some_and(starts_upper);
-    let walker_start =
-      match walk_backward(full_text, effective_suffix_start, data) {
-        Some(start) if start < effective_suffix_start => start,
-        _ if head_starts_name => effective_suffix_start,
-        _ => continue,
-      };
+    let legal_form = effective_suffix_start..candidate_end;
+    let walker_start = match walk_backward(full_text, &legal_form, data) {
+      Some(start) if start < effective_suffix_start => start,
+      _ if head_starts_name => effective_suffix_start,
+      _ => continue,
+    };
 
     // Narrow to the org name before the sentence check. The walker bridges
     // lowercase words (up to MAX_LOWER_BRIDGE) and can reach back over a verb
@@ -594,19 +598,23 @@ fn is_leading_separator(text: &str, suffix_start: usize) -> bool {
   previous_char(text, prev_start).is_none_or(|(_, ch)| !ch.is_alphabetic())
 }
 
+/// The start of the leftmost capitalized name word before `legal_form`, its
+/// institutional complement included.
 fn walk_backward(
   text: &str,
-  suffix_start: usize,
+  legal_form: &Range<usize>,
   data: &PreparedLegalFormData,
 ) -> Option<usize> {
-  let mut pos = suffix_start;
+  let script_changes = enclosed_script_changes(text, legal_form);
+  let mut pos = legal_form.start;
   let mut steps = 0;
   let mut leftmost_cap = None::<usize>;
   let mut lower_bridge_run = 0_usize;
   let mut crossed_soft_wrap = false;
 
   while steps < HEAD_TOKEN_CAP {
-    let Some(token) = token_before(text, pos, steps == 0, data) else {
+    let Some(token) = token_before(text, pos, steps == 0, script_changes, data)
+    else {
       break;
     };
     let crossed_newline = text
@@ -659,7 +667,8 @@ fn walk_backward(
       {
         break;
       }
-      let previous = token_before(text, token.start, false, data);
+      let previous =
+        token_before(text, token.start, false, script_changes, data);
       if is_party_list_connector
         && previous.as_ref().is_some_and(|found| {
           let lower = lowercase_lookup(found.text);
@@ -752,6 +761,7 @@ fn token_before<'a>(
   text: &'a str,
   pos: usize,
   allow_suffix_adjacent_jurisdiction: bool,
+  script_changes: ScriptChanges,
   data: &PreparedLegalFormData,
 ) -> Option<Token<'a>> {
   let possessive_marker_start = possessive_marker_start_before(text, pos);
@@ -802,9 +812,9 @@ fn token_before<'a>(
   // A word glued to the walk position across a script change (`本契約は` in
   // `本契約はAcme`) is another word of the sentence, not of the name.
   if end == pos
-    && let (Some((_, before)), Some((_, after))) =
+    && let (Some((before_start, before)), Some((_, after))) =
       (before, next_char(text, pos))
-    && !same_script_run(before, after)
+    && !script_changes.joins(before_start, before, after)
   {
     return None;
   }
@@ -822,7 +832,7 @@ fn token_before<'a>(
   while let Some((prev_start, ch)) = previous_char(text, start) {
     if ch == '\n'
       || !is_token_char(ch)
-      || next.is_some_and(|next| !same_script_run(ch, next))
+      || next.is_some_and(|next| !script_changes.joins(prev_start, ch, next))
     {
       break;
     }
@@ -1130,8 +1140,99 @@ fn same_script_run(left: char, right: char) -> bool {
   is_unspaced_script(left) == is_unspaced_script(right)
 }
 
+/// Where a backward name scan ends between two adjacent characters.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ScriptChanges {
+  /// At a change between scripts written with and without spaces: the
+  /// change is a word edge (`本契約はVelmora s.r.o.`).
+  End,
+  /// At `opening`, where an opening delimiter ends whose pair closes right
+  /// after the name (`<<Tarsk紫苑 GmbH>>`). The pair bounds the name, so a
+  /// script change inside it does not split the name.
+  Enclosed { opening: usize },
+}
+
+impl ScriptChanges {
+  /// Whether `left`, starting at `left_start`, belongs to the word that
+  /// continues with `right`.
+  fn joins(self, left_start: usize, left: char, right: char) -> bool {
+    match self {
+      Self::End => same_script_run(left, right),
+      Self::Enclosed { opening } => left_start >= opening,
+    }
+  }
+}
+
+/// Delimiter pairs that enclose a name, longest first so `<<` is not read
+/// as a lone `<`.
+const ENCLOSING_DELIMITERS: [(&str, &str); 21] = [
+  ("<<", ">>"),
+  ("{{", "}}"),
+  ("[[", "]]"),
+  ("«", "»"),
+  ("»", "«"),
+  ("‹", "›"),
+  ("›", "‹"),
+  ("„", "“"),
+  ("“", "”"),
+  ("‚", "‘"),
+  ("‘", "’"),
+  ("\"", "\""),
+  ("'", "'"),
+  ("「", "」"),
+  ("『", "』"),
+  ("【", "】"),
+  ("《", "》"),
+  ("〈", "〉"),
+  ("（", "）"),
+  ("(", ")"),
+  ("[", "]"),
+];
+
+/// How the backward scan from `legal_form` ends: at the nearest opening
+/// delimiter on the line when its pair closes right after the legal form and
+/// not in between, at a script change otherwise.
+fn enclosed_script_changes(
+  text: &str,
+  legal_form: &Range<usize>,
+) -> ScriptChanges {
+  let after = text.get(legal_form.end..).unwrap_or_default();
+  let before = text.get(..legal_form.start).unwrap_or_default();
+  let line_start = before
+    .rfind('\n')
+    .map_or(0, |index| index.saturating_add(1));
+  let line = before.get(line_start..).unwrap_or_default();
+  ENCLOSING_DELIMITERS
+    .iter()
+    .find(|(_, close)| after.starts_with(close))
+    .and_then(|(open, close)| {
+      let (index, _) = line
+        .rmatch_indices(open)
+        .find(|(index, _)| !joins_name_word(line, *index, open))?;
+      let opening = index.saturating_add(open.len());
+      let inside = line.get(opening..)?;
+      (open == close || !inside.contains(close)).then(|| {
+        ScriptChanges::Enclosed {
+          opening: line_start.saturating_add(opening),
+        }
+      })
+    })
+    .unwrap_or(ScriptChanges::End)
+}
+
+/// Whether `delimiter` at `index` joins a name word after a letter
+/// (`O'Neil`) instead of opening a quotation.
+fn joins_name_word(line: &str, index: usize, delimiter: &str) -> bool {
+  delimiter.chars().all(|ch| NameJoiner::of(ch).is_some())
+    && previous_char(line, index)
+      .is_some_and(|(_, ch)| ch.is_alphabetic() && !is_unspaced_script(ch))
+}
+
+/// A combining mark belongs to the letter before it (`Tarsk\u{301}`).
 fn is_token_char(ch: char) -> bool {
-  ch.is_alphanumeric() || matches!(ch, '\'' | '’' | '.' | '&' | '-')
+  ch.is_alphanumeric()
+    || is_combining_mark(ch)
+    || matches!(ch, '\'' | '’' | '.' | '&' | '-')
 }
 
 fn is_acceptable_token(token: &str, data: &PreparedLegalFormData) -> bool {
@@ -2218,11 +2319,12 @@ fn is_bare_single_cap_structural_inner_match(
   if !is_bare_single_cap_legal_form(text) {
     return false;
   }
-  token_before(full_text, match_start, false, data).is_some_and(|token| {
-    data
-      .structural_single_cap_prefixes
-      .contains(lowercase_lookup(token.text).as_ref())
-  })
+  token_before(full_text, match_start, false, ScriptChanges::End, data)
+    .is_some_and(|token| {
+      data
+        .structural_single_cap_prefixes
+        .contains(lowercase_lookup(token.text).as_ref())
+    })
 }
 
 fn is_bare_single_cap_legal_form(text: &str) -> bool {
@@ -3222,8 +3324,9 @@ mod tests {
 
   use super::{
     Candidate, CandidateContainmentIndex, LegalFormData, PreparedLegalFormData,
-    PreparedRolePhraseIndex, crosses_sentence_end, drop_overlapping,
-    ends_with_list_suffix, extend_backward, is_roman_legal_suffix,
+    PreparedRolePhraseIndex, ScriptChanges, crosses_sentence_end,
+    drop_overlapping, enclosed_script_changes, ends_with_list_suffix,
+    extend_backward, is_roman_legal_suffix,
     previous_nonempty_line_has_organization_cue, process_legal_form_matches,
     split_embedded_legal_form_list, trim_embedded_legal_form_list_prefix,
     trim_leading_clause, trim_role_head,
@@ -3231,6 +3334,36 @@ mod tests {
   use crate::processors::PatternSlice;
   use crate::types::SearchMatch;
   use proptest::prelude::*;
+
+  /// The scan end for the name before the first ` GmbH` in `text`.
+  fn script_changes(text: &str) -> ScriptChanges {
+    let suffix_start = text.find("GmbH").unwrap();
+    let suffix_end = suffix_start.saturating_add("GmbH".len());
+    enclosed_script_changes(text, &(suffix_start..suffix_end))
+  }
+
+  #[test]
+  fn only_a_delimiter_pair_closing_after_the_name_joins_scripts() {
+    assert_eq!(
+      script_changes("本契約は<<Tarsk紫苑 GmbH>>"),
+      ScriptChanges::Enclosed {
+        opening: "本契約は<<".len()
+      }
+    );
+    // An apostrophe inside a name word is not the opening quote.
+    assert_eq!(
+      script_changes("'O'Neil紫苑 GmbH'"),
+      ScriptChanges::Enclosed { opening: 1 }
+    );
+    for text in [
+      "本契約はTarsk紫苑 GmbH、東京",
+      "本契約は<<Tarsk紫苑 GmbH、東京>>",
+      "「本契約」はTarsk紫苑 GmbH」",
+      "<<本契約\nTarsk紫苑 GmbH>>",
+    ] {
+      assert_eq!(script_changes(text), ScriptChanges::End, "{text}");
+    }
+  }
 
   #[test]
   fn role_phrase_index_returns_the_longest_bounded_prefix() {
@@ -4992,7 +5125,7 @@ mod tests {
       let text = format!("Smith, Jones,{whitespace}&{whitespace}Customer Solutions LLC");
       let suffix_start = text.find("LLC").unwrap();
 
-      prop_assert_eq!(super::walk_backward(&text, suffix_start, &data), Some(0));
+      prop_assert_eq!(super::walk_backward(&text, &(suffix_start..text.len()), &data), Some(0));
     }
 
     #[test]
@@ -5009,7 +5142,7 @@ mod tests {
       let text = format!("Smith, Jones,{whitespace}e{whitespace}Customer Solutions LLC");
       let suffix_start = text.find("LLC").unwrap();
 
-      prop_assert_eq!(super::walk_backward(&text, suffix_start, &data), Some(0));
+      prop_assert_eq!(super::walk_backward(&text, &(suffix_start..text.len()), &data), Some(0));
     }
   }
 
@@ -5022,7 +5155,7 @@ mod tests {
     let suffix_start = text.find("LLC").unwrap();
 
     assert_eq!(
-      super::walk_backward(text, suffix_start, &data),
+      super::walk_backward(text, &(suffix_start..text.len()), &data),
       Some(organization_start)
     );
   }
@@ -5046,7 +5179,7 @@ mod tests {
     ] {
       let suffix_start = text.find("Board").unwrap();
       assert_eq!(
-        super::walk_backward(text, suffix_start, &data),
+        super::walk_backward(text, &(suffix_start..text.len()), &data),
         Some(0),
         "possessive marker should stay inside the name: {text}"
       );
@@ -5054,7 +5187,11 @@ mod tests {
     let unsupported = "Parent&quot;s Board";
     let suffix_start = unsupported.find("Board").unwrap();
     assert_ne!(
-      super::walk_backward(unsupported, suffix_start, &data),
+      super::walk_backward(
+        unsupported,
+        &(suffix_start..unsupported.len()),
+        &data
+      ),
       Some(0)
     );
   }
@@ -5068,9 +5205,12 @@ mod tests {
     let mut czech = connector_test_data();
     czech.clause_noun_heads.insert(String::from("dohoda"));
 
-    assert_eq!(super::walk_backward(text, suffix_start, &english), Some(0));
     assert_eq!(
-      super::walk_backward(text, suffix_start, &czech),
+      super::walk_backward(text, &(suffix_start..text.len()), &english),
+      Some(0)
+    );
+    assert_eq!(
+      super::walk_backward(text, &(suffix_start..text.len()), &czech),
       Some(organization_start)
     );
   }
@@ -5121,7 +5261,7 @@ mod tests {
     let company_start = text.find("HEALTHCARE").expect("company name");
     let suffix_start = text.find("INC").expect("legal form");
     assert_eq!(
-      super::walk_backward(text, suffix_start, &data),
+      super::walk_backward(text, &(suffix_start..text.len()), &data),
       Some(company_start)
     );
     assert_eq!(
