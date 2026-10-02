@@ -242,6 +242,87 @@
       "workspaceId": "corpus-workspace",
       "createdAt": 0,
       "source": "manual"
+    },
+    {
+      "id": "corpus-entry-span-tarsk",
+      "canonical": "Tarsk",
+      "label": "organization",
+      "variants": [],
+      "workspaceId": "corpus-workspace",
+      "createdAt": 0,
+      "source": "manual"
+    },
+    {
+      "id": "corpus-entry-span-fa",
+      "canonical": "زر\u200cگون",
+      "label": "organization",
+      "variants": [],
+      "workspaceId": "corpus-workspace",
+      "createdAt": 0,
+      "source": "manual"
+    },
+    {
+      "id": "corpus-entry-span-he",
+      "canonical": "אורנה",
+      "label": "person",
+      "variants": [],
+      "workspaceId": "corpus-workspace",
+      "createdAt": 0,
+      "source": "manual"
+    },
+    {
+      "id": "corpus-entry-span-zh",
+      "canonical": "王",
+      "label": "person",
+      "variants": [],
+      "workspaceId": "corpus-workspace",
+      "createdAt": 0,
+      "source": "manual"
+    },
+    {
+      "id": "corpus-entry-span-ja-person",
+      "canonical": "山田花子",
+      "label": "person",
+      "variants": [],
+      "workspaceId": "corpus-workspace",
+      "createdAt": 0,
+      "source": "manual"
+    },
+    {
+      "id": "corpus-entry-span-km",
+      "canonical": "សុភា",
+      "label": "person",
+      "variants": [],
+      "workspaceId": "corpus-workspace",
+      "createdAt": 0,
+      "source": "manual"
+    },
+    {
+      "id": "corpus-entry-span-lo",
+      "canonical": "ດາລາ",
+      "label": "person",
+      "variants": [],
+      "workspaceId": "corpus-workspace",
+      "createdAt": 0,
+      "source": "manual"
+    },
+    {
+      "id": "corpus-entry-span-mixed",
+      "canonical": "Tarsk紫苑",
+      "label": "organization",
+      "variants": [],
+      "workspaceId": "corpus-workspace",
+      "createdAt": 0,
+      "source": "manual"
+    },
+    {
+      "id": "corpus-entry-span-al",
+      "canonical": "Al",
+      "label": "person",
+      "variants": [],
+      "workspaceId": "corpus-workspace",
+      "createdAt": 0,
+      "source": "manual"
     }
   ],
   "cases": [
@@ -3839,6 +3920,174 @@
           "start": 11,
           "end": 30,
           "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "span-boundary",
+      "text": "(Zuzana Kova\u0301c\u030cova\u0301)",
+      "surface": "Zuzana Kova\u0301c\u030cova\u0301",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 1,
+          "end": 22,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "span-boundary",
+      "text": "<<Tarsk\u0301>>",
+      "surface": "Tarsk\u0301",
+      "language": "en",
+      "expectedEntities": [
+        {
+          "start": 2,
+          "end": 9,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "span-boundary",
+      "text": "<<Tarsk\u200d>>",
+      "surface": "Tarsk\u200d",
+      "language": "en",
+      "expectedEntities": [
+        {
+          "start": 2,
+          "end": 10,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "span-boundary",
+      "text": "«زر\u200cگون»",
+      "surface": "زر\u200cگون",
+      "language": "en",
+      "expectedEntities": [
+        {
+          "start": 2,
+          "end": 15,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "span-boundary",
+      "text": "חתמה «אורנה», היום.",
+      "surface": "אורנה",
+      "language": "en",
+      "expectedEntities": [
+        {
+          "start": 11,
+          "end": 21,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "span-boundary",
+      "text": "甲方「王」签署。",
+      "surface": "王",
+      "language": "en",
+      "expectedEntities": [
+        {
+          "start": 9,
+          "end": 12,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "span-boundary",
+      "text": "売主【山田花子】は署名。",
+      "surface": "山田花子",
+      "language": "ja",
+      "expectedEntities": [
+        {
+          "start": 9,
+          "end": 21,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "span-boundary",
+      "text": "ឈ្មោះ«សុភា»។",
+      "surface": "សុភា",
+      "language": "en",
+      "expectedEntities": [
+        {
+          "start": 17,
+          "end": 29,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "span-boundary",
+      "text": "ຊື່ດາລາລົງນາມ",
+      "surface": "ດາລາ",
+      "language": "en",
+      "expectedEntities": [
+        {
+          "start": 9,
+          "end": 21,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "span-boundary",
+      "text": "「กมลวรรณ ศรีสุข」ลงนาม",
+      "surface": "กมลวรรณ ศรีสุข",
+      "language": "th",
+      "expectedEntities": [
+        {
+          "start": 3,
+          "end": 43,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "span-boundary",
+      "text": "<<Tarsk紫苑>>签署",
+      "surface": "Tarsk紫苑",
+      "language": "en",
+      "expectedEntities": [
+        {
+          "start": 2,
+          "end": 13,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "span-boundary",
+      "text": "Signed: (Al).",
+      "surface": "Al",
+      "language": "en",
+      "expectedEntities": [
+        {
+          "start": 9,
+          "end": 11,
+          "label": "person"
         }
       ]
     }

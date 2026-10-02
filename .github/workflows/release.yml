@@ -149,10 +149,11 @@ jobs:
       - name: Verify native sidecar metadata
         run: node .github/tools/check-native-sidecars.mjs
 
-      - name: Name-matching corpus gate
+      - name: Name-matching corpus and span-boundary gate
         # Uses the toolchain pinned in rust-toolchain.toml, like the build
-        # below; this publishing job restores no caches.
-        run: cargo test --locked -p stella-anonymize-core --test name_matching_corpus
+        # below; this publishing job restores no caches. The corpus isolates
+        # caller entries; span_boundaries runs the full detector profile.
+        run: cargo test --locked -p stella-anonymize-core --test name_matching_corpus --test span_boundaries
 
       - name: Setup browser WebAssembly tools
         uses: ./.github/actions/setup-browser-wasm

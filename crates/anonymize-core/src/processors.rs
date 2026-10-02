@@ -6,6 +6,7 @@ use unicode_normalization::char::is_combining_mark;
 use crate::address_seeds::soft_wrapped_us_city_tail;
 use crate::byte_offsets::ByteOffsets;
 use crate::gazetteer::{PreparedGazetteerMatchData, is_unspaced_script};
+use crate::name_joiners::NameJoiner;
 use crate::prepared_metadata::{
   PreparedCountryMatchData, PreparedRegexMatchData,
 };
@@ -2419,9 +2420,9 @@ fn read_until_whitespace(
 }
 
 /// The name word that starts `token`: letters and combining marks of a
-/// script written with spaces, joined by inner hyphens and apostrophes
-/// (`Smith-Jones`, `O'Neil`). Punctuation, delimiters (`>>`, `»`, `)`) and
-/// unspaced-script text glued after it are not part of the name.
+/// script written with spaces, joined by inner name joiners (`Smith-Jones`,
+/// `Smith\u{2011}Jones`, `O'Neil`). Punctuation, delimiters (`>>`, `»`,
+/// `)`) and unspaced-script text glued after it are not part of the name.
 fn leading_name_word(token: &str) -> &str {
   let is_name_char = |ch: char| {
     (ch.is_alphabetic() && !is_unspaced_script(ch)) || is_combining_mark(ch)
@@ -2430,7 +2431,7 @@ fn leading_name_word(token: &str) -> &str {
   let mut chars = token.char_indices().peekable();
   while let Some((index, ch)) = chars.next() {
     let joined = end > 0
-      && matches!(ch, '-' | '\u{2010}' | '\'' | '\u{2019}' | '\u{02bc}')
+      && NameJoiner::of(ch).is_some()
       && chars.peek().is_some_and(|(_, next)| is_name_char(*next));
     if !is_name_char(ch) && !joined {
       break;
@@ -4359,6 +4360,25 @@ mod tests {
           && entity.text == "Paul A. Pinkston"),
       "{entities:?}"
     );
+  }
+
+  #[test]
+  fn name_words_continue_across_every_name_joiner() {
+    for (joiner, _) in crate::name_joiners::NAME_JOINERS {
+      let word = format!("Tarsk{joiner}Velmor");
+      assert_eq!(leading_name_word(&format!("{word}.")), word);
+      // A joiner with no name letter after it ends the word, unless it is a
+      // letter itself (MODIFIER LETTER APOSTROPHE).
+      if !joiner.is_alphabetic() {
+        assert_eq!(leading_name_word(&format!("Tarsk{joiner}")), "Tarsk");
+      }
+    }
+    for separator in ['\u{2014}', '"', '\u{201d}', '/'] {
+      assert_eq!(
+        leading_name_word(&format!("Tarsk{separator}Velmor")),
+        "Tarsk"
+      );
+    }
   }
 
   #[test]

@@ -25,6 +25,7 @@ pub(crate) mod labels;
 mod legal_forms;
 mod money;
 mod name_corpus;
+mod name_joiners;
 pub(crate) mod normalize;
 mod placeholders;
 mod prepared;
