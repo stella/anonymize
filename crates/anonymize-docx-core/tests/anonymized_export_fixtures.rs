@@ -3,6 +3,9 @@
 // docx:"MS Word 2007 XML"`). Flat ODT has no font-hint attribute, so the East
 // Asian fixture adds `w:hint="eastAsia"` to its run and passes the package
 // through the same filter again, which keeps the hint.
+//
+// `word-template.docx` is python-docx's default template, a package saved by
+// Microsoft Word, with synthetic text added by `word-template.py`.
 
 use std::io::{Cursor, Read as _};
 
@@ -16,6 +19,8 @@ const NOTES_BULLETS_GRID: &[u8] =
   include_bytes!("fixtures/word-export/notes-bullets-grid.docx");
 const EAST_ASIAN_HINT_GRID: &[u8] =
   include_bytes!("fixtures/word-export/east-asian-hint-grid.docx");
+const WORD_TEMPLATE: &[u8] =
+  include_bytes!("fixtures/word-export/word-template.docx");
 
 fn part_names(
   document: &[u8],
@@ -179,5 +184,80 @@ fn exports_east_asian_font_hint_and_character_grid()
   assert!(styles.contains("w:eastAsia=\"SimSun\""));
 
   assert_metadata_removed(EAST_ASIAN_HINT_GRID, &prepared)?;
+  assert_stable_export(&prepared)
+}
+
+#[test]
+fn exports_word_authored_template_package()
+-> Result<(), Box<dyn std::error::Error>> {
+  let prepared = prepare_docx_anonymized_export(WORD_TEMPLATE)?;
+
+  assert_eq!(
+    part_names(&prepared.document)?,
+    [
+      "[Content_Types].xml",
+      "_rels/.rels",
+      "word/_rels/document.xml.rels",
+      "word/document.xml",
+      "word/numbering.xml",
+      "word/styles.xml",
+      "word/theme/theme1.xml",
+    ]
+  );
+  assert_eq!(prepared.report.removed_part_count, 10);
+  assert_eq!(prepared.report.sanitized_xml_part_count, 7);
+  assert_eq!(
+    block_texts(&prepared),
+    [
+      "Synthetic Title",
+      "Synthetic Heading",
+      "Synthetic body text with ligature fi.",
+      "First synthetic item",
+      "Second synthetic item",
+      "合成テキストの段落です。",
+      "Synthetic cell 00",
+      "Synthetic cell 01",
+      "Synthetic cell 10",
+      "Synthetic cell 11",
+    ]
+  );
+
+  let relationships = part(&prepared.document, "_rels/.rels")?;
+  assert!(
+    !relationships.contains("thumbnail"),
+    "the thumbnail relationship must be removed"
+  );
+  let document = part(&prepared.document, "word/document.xml")?;
+  assert!(document.contains(
+    "<w:rPr><w14:ligatures xmlns:w14=\"http://schemas.microsoft.com/office/word/2010/wordml\" w14:val=\"standardContextual\"/></w:rPr><w:t>ligature fi</w:t>"
+  ));
+  assert!(document.contains(
+    "<w:rPr><w:rFonts w:hint=\"eastAsia\"/></w:rPr><w:t>合成テキストの段落です。</w:t>"
+  ));
+  assert!(document.contains("<w:docGrid w:linePitch=\"360\"/>"));
+  assert!(!document.contains("w:rsid"));
+  let styles = part(&prepared.document, "word/styles.xml")?;
+  assert!(styles.contains(
+    "<w:spacing w:val=\"5\"/><w:kern w:val=\"28\"/><w:sz w:val=\"52\"/>"
+  ));
+  assert!(styles.contains("<w:tblStylePr w:type=\"band1Horz\">"));
+  assert!(styles.contains("<w:tblStylePr w:type=\"swCell\">"));
+  let numbering = part(&prepared.document, "word/numbering.xml")?;
+  assert!(
+    numbering
+      .contains("<w:lvlText w:val=\"\u{f0b7}\"/><w:lvlJc w:val=\"left\"/>")
+  );
+  assert!(numbering.contains(
+    "<w:rFonts w:ascii=\"Symbol\" w:hAnsi=\"Symbol\" w:hint=\"default\"/>"
+  ));
+  let theme = part(&prepared.document, "word/theme/theme1.xml")?;
+  assert!(theme.contains("<a:font script=\"Jpan\" typeface=\"ＭＳ 明朝\"/>"));
+  assert!(theme.contains("<a:satMod val=\"350000\"/>"));
+  assert!(theme.contains(
+    "<a:fillToRect b=\"180000\" l=\"50000\" r=\"50000\" t=\"-80000\"/>"
+  ));
+  assert!(theme.contains("<a:objectDefaults/>"));
+
+  assert_metadata_removed(WORD_TEMPLATE, &prepared)?;
   assert_stable_export(&prepared)
 }

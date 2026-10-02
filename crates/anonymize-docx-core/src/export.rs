@@ -43,12 +43,10 @@ const REMOVED_WORD_PART_SUFFIXES: [&str; 4] = [
   "commentsIds+xml",
   "people+xml",
 ];
-const REMOVED_FORMATTING_WORD_PART_SUFFIXES: [&str; 4] = [
-  "fontTable+xml",
-  "settings+xml",
-  "stylesWithEffects+xml",
-  "webSettings+xml",
-];
+const REMOVED_FORMATTING_WORD_PART_SUFFIXES: [&str; 3] =
+  ["fontTable+xml", "settings+xml", "webSettings+xml"];
+const STYLES_WITH_EFFECTS_CONTENT_TYPE: &str =
+  "application/vnd.ms-word.stylesWithEffects+xml";
 const FORMATTING_WORD_PART_SUFFIXES: [&str; 2] =
   ["numbering+xml", "styles+xml"];
 const REMOVED_RELATIONSHIP_SUFFIXES: [&str; 15] = [
@@ -369,6 +367,7 @@ fn word_suffix(content_type: &str) -> Option<&str> {
 
 fn removed_content_type(content_type: &str) -> bool {
   metadata_content_type(content_type)
+    || content_type == STYLES_WITH_EFFECTS_CONTENT_TYPE
     || content_type.starts_with(OFFICE_WEB_EXTENSION_CONTENT_TYPE_PREFIX)
     || word_suffix(content_type).is_some_and(|suffix| {
       REMOVED_WORD_PART_SUFFIXES.contains(&suffix)
@@ -400,7 +399,6 @@ fn conventional_supported_path(path: &str, content_type: &str) -> bool {
     Some("numbering+xml") => path == "word/numbering.xml",
     Some("settings+xml") => path == "word/settings.xml",
     Some("styles+xml") => path == "word/styles.xml",
-    Some("stylesWithEffects+xml") => path == "word/stylesWithEffects.xml",
     Some("webSettings+xml") => path == "word/webSettings.xml",
     _ if content_type == THEME_CONTENT_TYPE => theme_path(path),
     _ => false,
@@ -877,6 +875,9 @@ fn word_attribute_allowed(node: Node<'_, '_>, name: &str) -> bool {
   {
     return name == "val";
   }
+  if local == "spacing" && name == "val" {
+    return node.parent_element().and_then(word_local) == Some("rPr");
+  }
   if let Some(allowed) = word_layout_attribute_allowed(local, name) {
     return allowed;
   }
@@ -1096,6 +1097,23 @@ const DOCUMENT_GRID_TYPES: &[&str] =
   &["default", "lines", "linesAndChars", "snapToChars"];
 const TEXT_DIRECTION_VALUES: &[&str] =
   &["btLr", "lrTb", "lrTbV", "tbLrV", "tbRl", "tbRlV"];
+const TABLE_STYLE_OVERRIDE_TYPES: &[&str] = &[
+  "band1Horz",
+  "band1Vert",
+  "band2Horz",
+  "band2Vert",
+  "firstCol",
+  "firstRow",
+  "lastCol",
+  "lastRow",
+  "neCell",
+  "nwCell",
+  "seCell",
+  "swCell",
+  "wholeTable",
+];
+// Word caps expanded or condensed character spacing at 1584 points.
+const CHARACTER_SPACING_MAX_TWIPS: u32 = 31_680;
 
 fn boolean_word_value(value: &str) -> bool {
   matches!(value, "0" | "1" | "true" | "false" | "on" | "off")
@@ -1140,6 +1158,12 @@ fn word_attribute_value_allowed(
   }
   if local == "shd" && name == "val" {
     return SHADING_VALUES.contains(&value);
+  }
+  if local == "spacing" && name == "val" {
+    return bounded_number(value, CHARACTER_SPACING_MAX_TWIPS);
+  }
+  if local == "tblStylePr" && name == "type" {
+    return TABLE_STYLE_OVERRIDE_TYPES.contains(&value);
   }
   if local == "vertAlign" && name == "val" {
     return VERTICAL_ALIGNMENT_VALUES.contains(&value);
@@ -1219,6 +1243,25 @@ fn common_font(value: &str) -> bool {
       | "宋体"
       | "等线 Light"
       | "新細明體"
+      | "Calibri Light"
+      | "Cordia New"
+      | "Courier"
+      | "DaunPenh"
+      | "Ebrima"
+      | "Javanese Text"
+      | "Leelawadee UI"
+      | "Microsoft JhengHei"
+      | "Microsoft New Tai Lue"
+      | "Microsoft Tai Le"
+      | "Myanmar Text"
+      | "Nirmala UI"
+      | "Phagspa"
+      | "Segoe UI"
+      | "Vrinda"
+      | "ＭＳ ゴシック"
+      | "ＭＳ 明朝"
+      | "游明朝"
+      | "等线"
   )
 }
 
@@ -1402,6 +1445,9 @@ fn serialize_content_node(
   {
     return serialize_text_outline(node, output);
   }
+  if namespace == WORD_2010_NAMESPACE && node.tag_name().name() == "ligatures" {
+    return serialize_ligatures(node, output);
+  }
   if !WORDPROCESSING_NAMESPACES.contains(&namespace) {
     return Err(unsupported(
       "DOCX content contains an unsupported XML namespace",
@@ -1552,6 +1598,11 @@ fn serialize_formatting_node(
     && node.tag_name().name() == "textOutline"
   {
     return serialize_text_outline(node, output);
+  }
+  if node.tag_name().namespace() == Some(WORD_2010_NAMESPACE)
+    && node.tag_name().name() == "ligatures"
+  {
+    return serialize_ligatures(node, output);
   }
   if word_local(node).is_none() {
     return Err(unsupported(
@@ -1726,6 +1777,19 @@ fn safe_theme_script(value: &str) -> bool {
       | "Uigh"
       | "Viet"
       | "Yiii"
+      | "Java"
+      | "Lisu"
+      | "Nkoo"
+      | "Olck"
+      | "Osma"
+      | "Phag"
+      | "Sora"
+      | "Syre"
+      | "Syrj"
+      | "Syrn"
+      | "Tale"
+      | "Talu"
+      | "Tfng"
   )
 }
 
@@ -1849,16 +1913,19 @@ fn theme_numeric_attribute_allowed(
   value: &str,
 ) -> bool {
   match (local, name) {
-    (
-      "alpha" | "alphaMod" | "alphaOff" | "lumMod" | "lumOff" | "satMod"
-      | "shade" | "tint",
-      "val",
-    )
+    ("alpha" | "alphaOff" | "lumOff" | "shade" | "tint", "val")
     | ("gs", "pos")
     | ("scrgbClr", "r" | "g" | "b") => parsed_i32_in(value, 0, 100_000),
+    // Modulations scale a colour component and may exceed 100%; Office
+    // themes use up to 350%.
+    ("alphaMod" | "lumMod" | "satMod", "val") => {
+      parsed_i32_in(value, 0, 1_000_000)
+    }
     ("ln" | "bevelT", "w") => parsed_i32_in(value, 0, 20_116_800),
+    // Gradient focus rectangles may extend beyond the shape; Office themes
+    // place an edge at 180%.
     ("fillToRect", "l" | "t" | "r" | "b") => {
-      parsed_i32_in(value, -100_000, 100_000)
+      parsed_i32_in(value, -1_000_000, 1_000_000)
     }
     ("lin", "ang") | ("hslClr", "hue" | "sat" | "lum") => {
       parsed_i32_in(value, 0, 21_600_000)
@@ -1888,6 +1955,12 @@ fn canonical_theme_attribute(
   }
   if name == "script" && local == "font" && safe_theme_script(value) {
     return Some(value.to_owned());
+  }
+  if name == "panose"
+    && matches!(local, "latin" | "ea" | "cs" | "font")
+    && fixed_hex(value, &[20])
+  {
+    return Some(value.to_ascii_uppercase());
   }
   if (name == "val" && local == "srgbClr" && fixed_hex(value, &[6]))
     || (name == "lastClr" && local == "sysClr" && fixed_hex(value, &[6]))
@@ -1944,7 +2017,9 @@ fn serialize_theme_node(
     ));
   }
   let local = node.tag_name().name();
-  if local == "extLst" {
+  // Shape, line and text defaults only seed objects inserted later; the
+  // export drops them with extensions instead of classifying their payloads.
+  if matches!(local, "extLst" | "lnDef" | "spDef" | "txDef") {
     return Ok(());
   }
   if !SAFE_THEME_ELEMENTS.contains(&local) {
@@ -2139,6 +2214,58 @@ fn serialize_text_outline(
     }
   }
   close_element(output, content_start, "w14", "textOutline");
+  Ok(())
+}
+
+const LIGATURE_VALUES: &[&str] = &[
+  "none",
+  "standard",
+  "contextual",
+  "historical",
+  "discretional",
+  "standardContextual",
+  "standardHistorical",
+  "contextualHistorical",
+  "standardDiscretional",
+  "contextualDiscretional",
+  "historicalDiscretional",
+  "standardContextualHistorical",
+  "standardContextualDiscretional",
+  "standardHistoricalDiscretional",
+  "contextualHistoricalDiscretional",
+  "all",
+];
+
+fn serialize_ligatures(
+  node: Node<'_, '_>,
+  output: &mut String,
+) -> Result<(), DocxRewriteError> {
+  if node.parent_element().and_then(word_local) != Some("rPr")
+    || node.children().any(|child| {
+      child.is_element()
+        || child.text().is_some_and(|text| !text.trim().is_empty())
+    })
+  {
+    return Err(unsupported("DOCX ligatures must be an empty run property"));
+  }
+  let mut attributes = node.attributes();
+  let value = match (attributes.next(), attributes.next()) {
+    (Some(attribute), None)
+      if attribute.namespace() == Some(WORD_2010_NAMESPACE)
+        && attribute.name() == "val"
+        && LIGATURE_VALUES.contains(&attribute.value()) =>
+    {
+      attribute.value()
+    }
+    _ => {
+      return Err(unsupported("DOCX ligatures have an unsupported value"));
+    }
+  };
+  output.push_str("<w14:ligatures xmlns:w14=\"");
+  output.push_str(WORD_2010_NAMESPACE);
+  output.push_str("\" w14:val=\"");
+  output.push_str(value);
+  output.push_str("\"/>");
   Ok(())
 }
 
@@ -3332,6 +3459,11 @@ mod tests {
     let section = |properties: &str| {
       format!("{}<w:sectPr>{properties}</w:sectPr>", paragraph(""))
     };
+    let ligatures = |attributes: &str| {
+      format!(
+        "<w14:ligatures xmlns:w14=\"{WORD_2010_NAMESPACE}\" {attributes}/>"
+      )
+    };
     for body in [
       section(
         "<w:docGrid w:type=\"linesAndChars\" w:linePitch=\"360\" w:charSpace=\"-1541\"/>",
@@ -3340,6 +3472,9 @@ mod tests {
       section("<w:textDirection w:val=\"tbRl\"/><w:formProt w:val=\"0\"/>"),
       paragraph("<w:vertAlign w:val=\"subscript\"/>"),
       paragraph("<w:rFonts w:hint=\"cs\"/>"),
+      paragraph("<w:spacing w:val=\"-31680\"/>"),
+      paragraph(&ligatures("w14:val=\"standardContextual\"")),
+      paragraph(&ligatures("w14:val=\"none\"")),
     ] {
       prepare_docx_anonymized_export(&ordinary_document(&body)?)?;
     }
@@ -3350,10 +3485,81 @@ mod tests {
       section("<w:textDirection w:val=\"Private\"/>"),
       section("<w:formProt w:val=\"Private\"/>"),
       paragraph("<w:vertAlign w:val=\"Private\"/>"),
+      paragraph("<w:spacing w:val=\"31681\"/>"),
+      paragraph("<w:spacing w:val=\"5pt\"/>"),
+      "<w:p><w:pPr><w:spacing w:val=\"5\"/></w:pPr><w:r><w:t>Alice</w:t></w:r></w:p>"
+        .to_owned(),
+      paragraph(&ligatures("w14:val=\"Private\"")),
+      paragraph(&ligatures("w14:val=\"standard\" w14:extra=\"1\"")),
+      paragraph(&ligatures("w:val=\"standard\"")),
+      format!(
+        "<w:p><w:r><w:t>Alice</w:t></w:r>{}</w:p>",
+        ligatures("w14:val=\"standard\"")
+      ),
     ] {
       assert!(
         prepare_docx_anonymized_export(&ordinary_document(&body)?).is_err(),
         "{body} must be rejected"
+      );
+    }
+    Ok(())
+  }
+
+  #[test]
+  fn formatting_values_accept_only_their_typed_domains()
+  -> Result<(), Box<dyn std::error::Error>> {
+    let styles =
+      HashMap::from([("Grid".to_owned(), "stellaStyle1".to_owned())]);
+    let table_style = |kind: &str| {
+      format!(
+        "<w:styles xmlns:w=\"{WORD}\"><w:style w:type=\"table\" w:styleId=\"Grid\"><w:tblStylePr w:type=\"{kind}\"><w:rPr><w:b/></w:rPr></w:tblStylePr></w:style></w:styles>"
+      )
+    };
+    let styles_type = format!("{WORD_CONTENT}styles+xml");
+    for (kind, accepted) in
+      [("band1Horz", true), ("swCell", true), ("Private", false)]
+    {
+      let result = sanitize_formatting_xml(
+        &table_style(kind),
+        "word/styles.xml",
+        &styles_type,
+        &styles,
+      );
+      assert_eq!(result.is_ok(), accepted, "table style override {kind}");
+    }
+    let theme = |font: &str, color: &str| {
+      format!(
+        "<a:theme xmlns:a=\"{DRAWINGML_NAMESPACE}\" name=\"Office\"><a:themeElements><a:fontScheme name=\"Office\"><a:majorFont>{font}</a:majorFont></a:fontScheme><a:fmtScheme name=\"Office\"><a:fillStyleLst><a:solidFill><a:schemeClr val=\"phClr\">{color}</a:schemeClr></a:solidFill></a:fillStyleLst></a:fmtScheme></a:themeElements><a:objectDefaults><a:spDef><a:spPr/><a:bodyPr/><a:lstStyle/></a:spDef></a:objectDefaults></a:theme>"
+      )
+    };
+    let calibri =
+      "<a:latin typeface=\"Calibri Light\" panose=\"020f0302020204030204\"/>";
+    let accepted = sanitize_formatting_xml(
+      &theme(calibri, "<a:satMod val=\"350000\"/>"),
+      "word/theme/theme1.xml",
+      THEME_CONTENT_TYPE,
+      &HashMap::new(),
+    )?;
+    assert!(accepted.contains("panose=\"020F0302020204030204\""));
+    assert!(accepted.contains("<a:objectDefaults/>"));
+    for (font, color) in [
+      ("<a:latin typeface=\"Calibri\" panose=\"020F05\"/>", ""),
+      (
+        "<a:latin typeface=\"Calibri\" panose=\"PRIVATE0000000000000\"/>",
+        "",
+      ),
+      (calibri, "<a:satMod val=\"1000001\"/>"),
+      (calibri, "<a:lumMod val=\"-1\"/>"),
+    ] {
+      assert!(
+        sanitize_formatting_xml(
+          &theme(font, color),
+          "word/theme/theme1.xml",
+          THEME_CONTENT_TYPE,
+          &HashMap::new(),
+        )
+        .is_err(),
+        "{font}{color} must be rejected"
       );
     }
     Ok(())
