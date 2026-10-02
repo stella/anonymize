@@ -1,5 +1,18 @@
 # Changelog
 
+## 3.0.5
+
+### Patch Changes
+
+- [#540](https://github.com/stella/anonymize/pull/540) [`41eae7b`](https://github.com/stella/anonymize/commit/41eae7b35f1647fab24d0eb6e426b3931bddfe9e) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Redaction spans keep to their entity. In scripts written without spaces
+  (Japanese, Chinese, Korean, Thai, Lao, Khmer, Myanmar) a span stays on the
+  matched characters instead of growing over the surrounding run, and every
+  span starts and ends on a grapheme cluster boundary, so no combining mark is
+  split off. A name or legal-form organization inside delimiters (`<<…>>`,
+  `«…»`, `„…“`, `「…」`, `（…）`, quotes) leaves the closing delimiter in place,
+  and person and legal-form name scans stop where Latin-script text meets an
+  unspaced script.
+
 ## 3.0.4
 
 ### Patch Changes

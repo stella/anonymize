@@ -1,5 +1,12 @@
 # @stll/anonymize-pdf
 
+## 3.0.5
+
+### Patch Changes
+
+- Updated dependencies [[`41eae7b`](https://github.com/stella/anonymize/commit/41eae7b35f1647fab24d0eb6e426b3931bddfe9e)]:
+  - @stll/anonymize@3.0.5
+
 ## 3.0.4
 
 ### Patch Changes
