@@ -204,17 +204,32 @@ fn spelled_words(text: &str) -> impl Iterator<Item = &str> {
     .filter(|word| !word.is_empty())
 }
 
-/// `word` without diacritics, in its own case.
+/// `word` without diacritics, in its own case, transliterated as [`fold`]
+/// does (`McDønałd` spells `McDonald`).
 fn unmarked(word: &str) -> String {
   let mut plain = String::with_capacity(word.len());
   for ch in word.chars() {
     decompose_canonical(ch, |part| {
       if !is_combining_mark(part) {
-        plain.push(part);
+        plain.push(unstroked(part));
       }
     });
   }
   plain
+}
+
+/// The base letter of a letter with a stroke, which has no canonical
+/// decomposition (`ł`, `Đ`, `ø`), in its own case.
+const fn unstroked(ch: char) -> char {
+  match ch {
+    'ł' => 'l',
+    'Ł' => 'L',
+    'đ' => 'd',
+    'Đ' => 'D',
+    'ø' => 'o',
+    'Ø' => 'O',
+    other => other,
+  }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -1349,12 +1364,7 @@ fn fold_into(value: &str, out: &mut String) {
         return;
       }
       for lower in part.to_lowercase() {
-        out.push(match lower {
-          'ł' => 'l',
-          'đ' => 'd',
-          'ø' => 'o',
-          other => other,
-        });
+        out.push(unstroked(lower));
       }
     });
   }
@@ -2745,6 +2755,32 @@ mod tests {
       "note [[hasan علي2024]] here",
     ] {
       assert!(found(&entries, text).is_empty(), "{text}");
+    }
+  }
+
+  #[test]
+  fn template_names_compare_letters_with_strokes_as_fold_does() {
+    for (entry, text, expected) in [
+      ("McDønałd", "see [[McDonald2024]] below", "McDonald"),
+      ("McDØNAŁD", "see [[McDONALD2024]] below", "McDONALD"),
+      ("McDonald", "see [[McDønałd2024]] below", "McDønałd"),
+      (
+        "Đorđe McKay",
+        "note {{Dorde McKay2024}} here",
+        "Dorde McKay",
+      ),
+    ] {
+      assert_eq!(found(&[exact(entry, PERSON)], text), [expected], "{text}");
+      assert_eq!(
+        found(&[exact(entry, PERSON)], &text.replace("2024", "")),
+        [expected]
+      );
+    }
+    for (entry, text) in [
+      ("McDønałd", "see [[mcdonald2024]] below"),
+      ("McDØNAŁD", "see [[McDonald2024]] below"),
+    ] {
+      assert!(found(&[exact(entry, PERSON)], text).is_empty(), "{text}");
     }
   }
 
