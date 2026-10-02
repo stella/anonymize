@@ -2046,7 +2046,7 @@ mod tests {
     WordIdentifiers, canonical_word_attributes, common_font, escape_attribute,
     finalize_docx_anonymized_export, prepare_docx_anonymized_export,
     sanitize_formatting_xml, valid_numbering_label,
-    validate_docx_anonymized_export,
+    validate_docx_anonymized_export, validate_extraction_coverage,
   };
 
   const CONTENT_TYPES: &str =
@@ -2916,6 +2916,57 @@ mod tests {
       assert!(
         prepare_docx_anonymized_export(&source).is_err(),
         "start {start} must be rejected"
+      );
+    }
+    Ok(())
+  }
+
+  #[test]
+  fn rejects_unclassified_text_in_theme_and_text_outline()
+  -> Result<(), Box<dyn std::error::Error>> {
+    let styles =
+      HashMap::from([("Synthetic".to_owned(), "stellaStyle1".to_owned())]);
+    let styles_type = format!("{WORD_CONTENT}styles+xml");
+    for text in [
+      "SyntheticMarker",
+      "<![CDATA[SyntheticMarker]]>",
+      "&#83;yntheticMarker",
+    ] {
+      let theme = format!(
+        "<a:theme xmlns:a=\"{DRAWINGML_NAMESPACE}\" name=\"Office\"><a:themeElements><a:clrScheme name=\"Office\">{text}<a:dk1><a:srgbClr val=\"112233\"/></a:dk1></a:clrScheme></a:themeElements></a:theme>"
+      );
+      let outline = format!(
+        "<w:styles xmlns:w=\"{WORD}\" xmlns:w14=\"{WORD_2010_NAMESPACE}\"><w:style w:type=\"character\" w:styleId=\"Synthetic\"><w:rPr><w14:textOutline><w14:solidFill>{text}<w14:srgbClr w14:val=\"112233\"/></w14:solidFill></w14:textOutline></w:rPr></w:style></w:styles>"
+      );
+      for (xml, path, content_type) in [
+        (theme, "word/theme/theme1.xml", THEME_CONTENT_TYPE),
+        (outline, "word/styles.xml", styles_type.as_str()),
+      ] {
+        let failure =
+          sanitize_formatting_xml(&xml, path, content_type, &styles)
+            .err()
+            .ok_or("drawing text was accepted")?;
+        assert_eq!(
+          failure.code(),
+          DocxRewriteErrorCode::UnsupportedReplacement,
+          "{path} must reject {text}"
+        );
+      }
+    }
+    Ok(())
+  }
+
+  #[test]
+  fn coverage_requires_every_retained_text_node_in_the_extraction()
+  -> Result<(), Box<dyn std::error::Error>> {
+    let prepared = prepare_docx_anonymized_export(&ordinary_document(
+      "<w:p><w:r><w:t>Alice</w:t></w:r><w:r><w:t>Bob</w:t></w:r></w:p>",
+    )?)?;
+    validate_extraction_coverage(&prepared.extraction, 2)?;
+    for count in [1, 3] {
+      assert!(
+        validate_extraction_coverage(&prepared.extraction, count).is_err(),
+        "{count} retained text nodes must not match two extracted segments"
       );
     }
     Ok(())

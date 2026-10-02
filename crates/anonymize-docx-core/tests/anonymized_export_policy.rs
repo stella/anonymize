@@ -330,3 +330,151 @@ fn every_part_is_rewritten_without_surviving_markers() -> TestResult {
   assert_absent(&finalized, "Synthetic")?;
   Ok(())
 }
+
+fn with_part(mut parts: Parts, path: &str, content: &str) -> Parts {
+  parts.retain(|(existing, _)| existing != path);
+  parts.push((path.to_owned(), content.to_owned()));
+  parts
+}
+
+fn edit_part(
+  parts: &Parts,
+  path: &str,
+  edit: impl Fn(&str) -> Option<String>,
+) -> Result<Parts, Box<dyn std::error::Error>> {
+  let mut edited = parts.clone();
+  let (_, content) = edited
+    .iter_mut()
+    .find(|(existing, _)| existing == path)
+    .ok_or_else(|| format!("missing {path}"))?;
+  *content = edit(content).ok_or_else(|| format!("no anchor in {path}"))?;
+  Ok(edited)
+}
+
+fn assert_export_rejects(parts: &Parts, context: &str) -> TestResult {
+  let failure = prepare_docx_anonymized_export(&zip_parts(parts)?)
+    .err()
+    .ok_or_else(|| format!("{context} was accepted"))?;
+  assert_eq!(
+    failure.code(),
+    DocxRewriteErrorCode::UnsupportedReplacement,
+    "{context}"
+  );
+  Ok(())
+}
+
+#[test]
+fn dangling_and_orphaned_relationships_reject() -> TestResult {
+  let package = all_part_package("1", "rId2");
+  let relationships_path = "word/_rels/document.xml.rels";
+  for extra in [
+    relationship("rId8", "header", "header9.xml"),
+    format!("<Relationship Id=\"rId8\" Type=\"{OFFICE_RELS}/header\"/>"),
+  ] {
+    let dangling = edit_part(&package, relationships_path, |xml| {
+      Some(xml.replace("</Relationships>", &format!("{extra}</Relationships>")))
+    })?;
+    assert_export_rejects(&dangling, &extra)?;
+  }
+  let orphan = with_part(
+    package,
+    "word/_rels/header9.xml.rels",
+    &format!(
+      "<Relationships xmlns=\"{PACKAGE_RELS}\">{}</Relationships>",
+      relationship("rId1", "styles", "styles.xml")
+    ),
+  );
+  assert_export_rejects(&orphan, "an orphaned relationships part")
+}
+
+// Each retained part family with an opening tag that may receive a child and
+// an element name that may receive an attribute.
+const FAMILIES: [(&str, &str, &str); 9] = [
+  ("word/document.xml", "<w:body>", "<w:body"),
+  ("word/header1.xml", "<w:r>", "<w:p"),
+  ("word/footnotes.xml", "<w:p>", "<w:p"),
+  ("word/styles.xml", "<w:rPr>", "<w:rPr"),
+  ("word/styles.xml", "<w14:solidFill>", "<w14:solidFill"),
+  ("word/numbering.xml", "<w:pPr>", "<w:pPr"),
+  (
+    "word/theme/theme1.xml",
+    "<a:themeElements>",
+    "<a:themeElements",
+  ),
+  ("word/_rels/document.xml.rels", "\">", "<Relationship "),
+  ("[Content_Types].xml", "\">", "<Override "),
+];
+const UNKNOWN_ATTRIBUTE: &str =
+  " xmlns:x=\"urn:synthetic\" x:marker=\"SyntheticMarker\" ";
+const INJECTED_CHILDREN: [&str; 3] = [
+  "<!--SyntheticMarker-->",
+  "<?synthetic SyntheticMarker?>",
+  "<x:unknown xmlns:x=\"urn:synthetic\">SyntheticMarker</x:unknown>",
+];
+
+#[test]
+fn retained_families_reject_comments_instructions_and_unknown_markup()
+-> TestResult {
+  let package = all_part_package("1", "rId2");
+  for (path, child_anchor, element) in FAMILIES {
+    for child in INJECTED_CHILDREN {
+      let injected = edit_part(&package, path, |xml| {
+        xml.contains(child_anchor).then(|| {
+          xml.replacen(child_anchor, &format!("{child_anchor}{child}"), 1)
+        })
+      })?;
+      assert_export_rejects(&injected, &format!("{child} in {path}"))?;
+    }
+    let injected = edit_part(&package, path, |xml| {
+      xml.contains(element).then(|| {
+        xml.replacen(
+          element,
+          &format!("{}{UNKNOWN_ATTRIBUTE}", element.trim_end()),
+          1,
+        )
+      })
+    })?;
+    assert_export_rejects(
+      &injected,
+      &format!("an unknown attribute on {element} in {path}"),
+    )?;
+  }
+  Ok(())
+}
+
+// Inserts an attribute into the root element of an exported XML part.
+fn with_root_attribute(xml: &str, attribute: &str) -> Option<String> {
+  let declaration_end = xml.find("?>")?.checked_add(2)?;
+  let root =
+    declaration_end.checked_add(xml.get(declaration_end..)?.find('<')?)?;
+  let name_end = root.checked_add(xml.get(root..)?.find([' ', '>', '/'])?)?;
+  Some(format!(
+    "{}{attribute}{}",
+    xml.get(..name_end)?,
+    xml.get(name_end..)?
+  ))
+}
+
+#[test]
+fn validation_rejects_an_unknown_attribute_in_any_exported_part() -> TestResult
+{
+  let prepared = prepare_docx_anonymized_export(&zip_parts(
+    &all_part_package("1", "rId2"),
+  )?)?;
+  let parts = unzip(&prepared.document)?;
+  assert_eq!(canonical_zip(parts.clone())?, prepared.document);
+  for (path, _) in &parts {
+    let tampered = edit_part(&parts, path, |xml| {
+      with_root_attribute(xml, " synthetic=\"SyntheticMarker\"")
+    })?;
+    let failure = validate_docx_anonymized_export(&canonical_zip(tampered)?)
+      .err()
+      .ok_or_else(|| format!("an unknown attribute in {path} was accepted"))?;
+    assert_eq!(
+      failure.code(),
+      DocxRewriteErrorCode::UnsupportedReplacement,
+      "{path}"
+    );
+  }
+  Ok(())
+}
