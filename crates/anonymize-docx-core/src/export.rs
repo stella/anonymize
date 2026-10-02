@@ -465,11 +465,41 @@ fn parse_export_xml<'a>(
   Ok(document)
 }
 
-fn escape_text(value: &str) -> String {
-  value
-    .replace('&', "&amp;")
-    .replace('<', "&lt;")
-    .replace('>', "&gt;")
+fn push_escaped_text(output: &mut String, value: &str) {
+  for character in value.chars() {
+    match character {
+      '&' => output.push_str("&amp;"),
+      '<' => output.push_str("&lt;"),
+      '>' => output.push_str("&gt;"),
+      _ => output.push(character),
+    }
+  }
+}
+
+// Children stream into the shared output after a provisional `>`; buffering
+// them per element would copy every descendant once per ancestor, making
+// serialization work grow with depth times content size.
+fn open_element_content(output: &mut String) -> usize {
+  output.push('>');
+  output.len()
+}
+
+fn close_element(
+  output: &mut String,
+  content_start: usize,
+  prefix: &str,
+  local: &str,
+) {
+  if output.len() == content_start {
+    output.truncate(content_start.saturating_sub(1));
+    output.push_str("/>");
+    return;
+  }
+  output.push_str("</");
+  output.push_str(prefix);
+  output.push(':');
+  output.push_str(local);
+  output.push('>');
 }
 
 fn escape_attribute(value: &str) -> String {
@@ -1400,28 +1430,20 @@ fn serialize_content_node(
     output.push('"');
   }
   write_attributes(output, &canonical_word_attributes(node, local, styles)?);
-  let mut children = String::new();
+  let content_start = open_element_content(output);
   for child in node.children() {
     if child.is_element() {
-      serialize_content_node(child, styles, &mut children, false)?;
+      serialize_content_node(child, styles, output, false)?;
     } else if child.is_text() {
       let value = child.text().unwrap_or_default();
       if local == "t" {
-        children.push_str(&escape_text(value));
+        push_escaped_text(output, value);
       } else if !value.trim().is_empty() {
         return Err(unsupported("DOCX content contains unclassified text"));
       }
     }
   }
-  if children.is_empty() {
-    output.push_str("/>");
-  } else {
-    output.push('>');
-    output.push_str(&children);
-    output.push_str("</w:");
-    output.push_str(local);
-    output.push('>');
-  }
+  close_element(output, content_start, "w", local);
   Ok(())
 }
 
@@ -1552,25 +1574,17 @@ fn serialize_formatting_node(
     output.push('"');
   }
   write_attributes(output, &attributes);
-  let mut children = String::new();
+  let content_start = open_element_content(output);
   for child in node.children() {
     if child.is_element() {
-      serialize_formatting_node(child, suffix, styles, &mut children, false)?;
+      serialize_formatting_node(child, suffix, styles, output, false)?;
     } else if child.is_text()
       && child.text().is_some_and(|text| !text.trim().is_empty())
     {
       return Err(unsupported("DOCX formatting contains unclassified text"));
     }
   }
-  if children.is_empty() {
-    output.push_str("/>");
-  } else {
-    output.push('>');
-    output.push_str(&children);
-    output.push_str("</w:");
-    output.push_str(local);
-    output.push('>');
-  }
+  close_element(output, content_start, "w", local);
   Ok(())
 }
 
@@ -1921,25 +1935,17 @@ fn serialize_theme_node(
     output.push('"');
   }
   write_attributes(output, &canonical_theme_attributes(node)?);
-  let mut children = String::new();
+  let content_start = open_element_content(output);
   for child in node.children() {
     if child.is_element() {
-      serialize_theme_node(child, &mut children, false)?;
+      serialize_theme_node(child, output, false)?;
     } else if child.is_text()
       && child.text().is_some_and(|text| !text.trim().is_empty())
     {
       return Err(unsupported("DOCX theme contains unclassified text"));
     }
   }
-  if children.is_empty() {
-    output.push_str("/>");
-  } else {
-    output.push('>');
-    output.push_str(&children);
-    output.push_str("</a:");
-    output.push_str(local);
-    output.push('>');
-  }
+  close_element(output, content_start, "a", local);
   Ok(())
 }
 
@@ -2030,27 +2036,17 @@ fn serialize_text_outline_drawing_node(
     canonical_theme_attributes(node)?
   };
   write_attributes(output, &attributes);
-  let mut children = String::new();
+  let content_start = open_element_content(output);
   for child in node.children() {
     if child.is_element() {
-      serialize_text_outline_drawing_node(child, &mut children)?;
+      serialize_text_outline_drawing_node(child, output)?;
     } else if child.is_text()
       && child.text().is_some_and(|text| !text.trim().is_empty())
     {
       return Err(unsupported("DOCX text outline contains unclassified text"));
     }
   }
-  if children.is_empty() {
-    output.push_str("/>");
-  } else {
-    output.push('>');
-    output.push_str(&children);
-    output.push_str("</");
-    output.push_str(prefix);
-    output.push(':');
-    output.push_str(local);
-    output.push('>');
-  }
+  close_element(output, content_start, prefix, local);
   Ok(())
 }
 
@@ -2109,23 +2105,17 @@ fn serialize_text_outline(
   output.push_str(DRAWINGML_NAMESPACE);
   output.push('"');
   write_attributes(output, &attributes);
-  let mut children = String::new();
+  let content_start = open_element_content(output);
   for child in node.children() {
     if child.is_element() {
-      serialize_text_outline_drawing_node(child, &mut children)?;
+      serialize_text_outline_drawing_node(child, output)?;
     } else if child.is_text()
       && child.text().is_some_and(|text| !text.trim().is_empty())
     {
       return Err(unsupported("DOCX text outline contains unclassified text"));
     }
   }
-  if children.is_empty() {
-    output.push_str("/>");
-  } else {
-    output.push('>');
-    output.push_str(&children);
-    output.push_str("</w14:textOutline>");
-  }
+  close_element(output, content_start, "w14", "textOutline");
   Ok(())
 }
 
