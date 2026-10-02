@@ -237,8 +237,15 @@ pub(super) fn in_template_field(text: &str, start: usize, end: usize) -> bool {
     .any(|segment| segment.chars().any(char::is_numeric))
 }
 
-/// Whether `surface` holds a capital letter: the least a template field
-/// kept as a name must show (`[[Zeta2024]]`, `[[McDonald2024]]`).
-pub(super) fn has_capital(surface: &str) -> bool {
-  surface.chars().any(char::is_uppercase)
+/// Whether `surface` shows a name: a capital letter, or letters only of
+/// scripts without case. A template field kept as a name must show one
+/// (`[[Zeta2024]]`, `[[محمد2024]]`).
+pub(super) fn shows_a_name(surface: &str) -> bool {
+  let letters = surface
+    .chars()
+    .filter(|character| character.is_alphabetic())
+    .collect::<Vec<_>>();
+  !letters.is_empty()
+    && (letters.iter().any(|character| character.is_uppercase())
+      || letters.iter().all(|character| !character.is_lowercase()))
 }
