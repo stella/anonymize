@@ -491,7 +491,7 @@ mod properties {
 
   // Spellings repeat under different labels on purpose: a later entry for a
   // spelling must never take coverage away under a label filter.
-  const COVERAGE_POOL: [(&str, &str); 16] = [
+  const COVERAGE_POOL: [(&str, &str); 17] = [
     ("Luma", "organization"),
     ("Luma", "person"),
     ("LUMA", "location"),
@@ -502,6 +502,7 @@ mod properties {
     ("Novák", "person"),
     ("Novák", "organization"),
     ("Jan Novák", "person"),
+    ("Jan Novák", "organization"),
     ("Velomír", "person"),
     ("Wintermute", "person"),
     ("Orbis", "organization"),
@@ -517,10 +518,10 @@ mod properties {
   ];
   const COVERAGE_TEXT: &str = "Luma Labs a Luma s.r.o. podepsaly. Jan Novák, \
     Novákovi a Nováka zastoupil Velomír. Wintermte a Orbys, Orbis Ltd. \
-    Bex GmbH 2024 a Zy. Žilory archived ⟦record-Luma-01⟧ id 9b1d0c3e-luma-4c1b.";
+    Bex GmbH 2024 a Zy. Podpis: Novák, Jan. Žilory archived ⟦record-Luma-01⟧ id 9b1d0c3e-luma-4c1b.";
   /// Chains a pull request runs; the release-mode variant runs many more.
-  const COVERAGE_CHAINS: u32 = 4;
-  const COVERAGE_CHAINS_RELEASE: u32 = 96;
+  const COVERAGE_CHAINS: u32 = 2;
+  const COVERAGE_CHAINS_RELEASE: u32 = 24;
 
   /// Resolved `(start, end, label)` spans of the pool rows in `rows`.
   fn labelled_spans(
@@ -541,7 +542,12 @@ mod properties {
       .iter()
       .map(|label| (*label).to_owned())
       .collect::<Vec<_>>();
-    let engine = gazetteer::labelled_engine(&entries, "cs", &labels).unwrap();
+    let engine = gazetteer::labelled_engine(gazetteer::LabelledEngine {
+      entries: &entries,
+      language: "cs",
+      labels: &labels,
+    })
+    .unwrap();
     engine
       .redact_static_entities(COVERAGE_TEXT, &OperatorConfig::default())
       .unwrap()
@@ -574,24 +580,23 @@ mod properties {
       .collect()
   }
 
-  /// Adds the pool rows one at a time in a random order under a random label
-  /// filter: no step may uncover a byte, and the full pool resolves the same
-  /// whatever the order. One engine per step keeps a chain cheap.
+  /// Adds the pool rows one at a time in a random order, under every label
+  /// filter: no step may uncover a letter or digit, and the full pool resolves
+  /// the same whatever the order. One engine per step keeps a chain cheap.
   fn assert_coverage_grows(chains: u32) {
     let everything = (0..COVERAGE_POOL.len()).collect::<Vec<_>>();
-    let reference = COVERAGE_LABELS
+    let references = COVERAGE_LABELS
       .iter()
       .map(|labels| labelled_spans(&everything, labels))
       .collect::<Vec<_>>();
     assert!(
-      reference.iter().all(|spans| !spans.is_empty()),
+      references.iter().all(|spans| !spans.is_empty()),
       "real hits must exist"
     );
     property_runner_with(chains)
-      .run(
-        &(Just(everything).prop_shuffle(), 0..COVERAGE_LABELS.len()),
-        |(order, filter)| {
-          let labels = COVERAGE_LABELS[filter];
+      .run(&Just(everything).prop_shuffle(), |order| {
+        let mut exercised = 0;
+        for (labels, reference) in COVERAGE_LABELS.iter().zip(&references) {
           let mut previous = BTreeSet::new();
           for added in 1..=order.len() {
             let spans = labelled_spans(&order[..added], labels);
@@ -603,13 +608,15 @@ mod properties {
               previous.difference(&now).collect::<Vec<_>>()
             );
             if added == order.len() {
-              prop_assert_eq!(&spans, &reference[filter]);
+              prop_assert_eq!(&spans, reference);
             }
             previous = now;
           }
-          Ok(())
-        },
-      )
+          exercised += 1;
+        }
+        prop_assert_eq!(exercised, COVERAGE_LABELS.len());
+        Ok(())
+      })
       .unwrap();
   }
 

@@ -12,3 +12,8 @@ Exact gazetteer hits and custom deny-list hits are now redacted whatever the
 pipeline's `threshold`; typo hits keep it. Names glued to Hangul Jamo,
 halfwidth Katakana, and the other blocks of scripts written without spaces now
 match like names glued to CJK ideographs.
+
+A spelling that a kept `person` label names keeps matching surname first
+(`Smith, John`) when it is reported under another label. Gazetteer data gains a
+`person_forms` field, so the prepared package schema moves to 16 and prepared
+packages need rebuilding.

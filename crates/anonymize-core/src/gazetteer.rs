@@ -411,6 +411,40 @@ struct Hit<'a> {
   spelling: Option<&'a Spelling>,
 }
 
+/// Every per-row list covers the gazetteer slice; optional lists may be
+/// empty.
+fn validate_row_lengths(
+  data: &GazetteerMatchData,
+  slice: PatternSlice,
+  patterns: Option<&[SearchPattern]>,
+) -> Result<()> {
+  validate_length("gazetteer_data.labels", slice, data.labels.len())?;
+  validate_length("gazetteer_data.is_fuzzy", slice, data.is_fuzzy.len())?;
+  if !data.terms.is_empty() {
+    validate_length("gazetteer_data.terms", slice, data.terms.len())?;
+  }
+  if !data.person_forms.is_empty() {
+    validate_length(
+      "gazetteer_data.person_forms",
+      slice,
+      data.person_forms.len(),
+    )?;
+  }
+  if let Some(patterns) = patterns {
+    validate_length("gazetteer patterns", slice, patterns.len())?;
+  }
+  Ok(())
+}
+
+/// An exact row's entry text, indexed by word under its label.
+#[derive(Clone, Copy)]
+struct SequenceEntry<'a> {
+  term: &'a str,
+  label: &'a str,
+  /// Also index the person word orders (surname first).
+  person_forms: bool,
+}
+
 impl PreparedGazetteerMatchData {
   /// Prepares gazetteer rows from the assembled data and the search patterns
   /// of the gazetteer slice, which carry each row's entry text.
@@ -419,14 +453,7 @@ impl PreparedGazetteerMatchData {
     slice: PatternSlice,
     patterns: Option<&[SearchPattern]>,
   ) -> Result<Self> {
-    validate_length("gazetteer_data.labels", slice, data.labels.len())?;
-    validate_length("gazetteer_data.is_fuzzy", slice, data.is_fuzzy.len())?;
-    if !data.terms.is_empty() {
-      validate_length("gazetteer_data.terms", slice, data.terms.len())?;
-    }
-    if let Some(patterns) = patterns {
-      validate_length("gazetteer patterns", slice, patterns.len())?;
-    }
+    validate_row_lengths(&data, slice, patterns)?;
     let legal_forms = data
       .legal_form_suffixes
       .iter()
@@ -459,7 +486,12 @@ impl PreparedGazetteerMatchData {
           // An artifact-only config from before entry text was carried
           // keeps its exact search hits; only folded matching needs text.
           if let Some(term) = term {
-            prepared.add_sequences(term, &label);
+            prepared.add_sequences(SequenceEntry {
+              term,
+              label: &label,
+              person_forms: label == PERSON_LABEL
+                || data.person_forms.get(index).copied().unwrap_or(false),
+            });
           }
           RowKind::Exact
         }
@@ -525,12 +557,17 @@ impl PreparedGazetteerMatchData {
       .and_then(|index| self.rows.get(index))
   }
 
-  fn add_sequences(&mut self, term: &str, label: &str) {
+  fn add_sequences(&mut self, entry: SequenceEntry<'_>) {
+    let SequenceEntry {
+      term,
+      label,
+      person_forms,
+    } = entry;
     let core = self.strip_legal_form(term);
     let Some(SplitTerm { words, gaps, edges }) = split_term(core) else {
       return;
     };
-    let reorderable = label == PERSON_LABEL
+    let reorderable = person_forms
       && edges == EdgePunctuation::default()
       && (2..=MAX_REORDERED_PERSON_WORDS).contains(&words.len())
       && !words.iter().any(|word| word.chars().any(char::is_numeric));
@@ -2246,6 +2283,7 @@ mod tests {
         .collect(),
       inflection,
       terms: Vec::new(),
+      person_forms: Vec::new(),
     };
     (
       PreparedGazetteerMatchData::new(data, slice, Some(&patterns)).unwrap(),
@@ -2896,6 +2934,7 @@ mod tests {
       legal_form_suffixes: Vec::new(),
       inflection: GazetteerInflection::CzechSlovak,
       terms: Vec::new(),
+      person_forms: Vec::new(),
     };
     let patterns = ["Wintermute", "Acme"].map(|term| SearchPattern::Fuzzy {
       pattern: term.to_owned(),
@@ -3629,6 +3668,7 @@ mod tests {
       legal_form_suffixes: Vec::new(),
       inflection: GazetteerInflection::CzechSlovak,
       terms: vec!["Other".to_owned()],
+      person_forms: Vec::new(),
     };
     let literal = [SearchPattern::Literal("Acme".to_owned())];
     let slice = PatternSlice { start: 0, end: 1 };
@@ -3649,6 +3689,7 @@ mod tests {
       legal_form_suffixes: Vec::new(),
       inflection: GazetteerInflection::CzechSlovak,
       terms: Vec::new(),
+      person_forms: Vec::new(),
     };
     let fuzzy = [SearchPattern::Fuzzy {
       pattern: "Acme".to_owned(),

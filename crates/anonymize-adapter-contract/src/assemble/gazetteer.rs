@@ -19,6 +19,9 @@ use crate::{
   BindingGazetteerInflection, BindingGazetteerMatchData, BindingSearchPattern,
 };
 
+/// The label whose spellings also match in person word orders.
+const PERSON_LABEL: &str = "person";
+
 /// Edit distance of the fuzzy pattern for `term`, if it gets one; the core
 /// owns the length scale so automatic distances resolve the same way.
 fn fuzzy_distance(term: &str) -> Option<u32> {
@@ -48,17 +51,25 @@ fn search_labels<'a>(ctx: &'a AssembleContext<'_>) -> &'a [String] {
   ctx.allowed_labels.as_deref().unwrap_or_default()
 }
 
-/// One `(term, label)` row per distinct canonical or variant string, in
-/// first-seen order. Spellings the matcher treats as one
-/// ([`gazetteer_spelling_key`]) share a label: the first label they were given
-/// under in the search-label order ([`search_labels`]), so label filtering
-/// never drops a spelling that a kept label names; without a label filter (or
-/// with none of its labels kept), the alphabetically first. Either way the
-/// label does not depend on entry order.
+/// One search row per distinct canonical or variant string.
+struct SearchTerm {
+  term: String,
+  label: String,
+  /// A kept `person` label names the spelling, so person word orders apply
+  /// whichever label the row reports.
+  person_forms: bool,
+}
+
+/// Rows in first-seen order. Spellings the matcher treats as one
+/// ([`gazetteer_spelling_key`]) share a label: the first label they were
+/// given under in the search-label order ([`search_labels`]), so label
+/// filtering never drops a spelling that a kept label names; without a label
+/// filter (or with none of its labels kept), the alphabetically first. Either
+/// way the label does not depend on entry order.
 fn build_search_terms(
   entries: &[GazetteerEntry],
   allowed_labels: &[String],
-) -> Vec<(String, String)> {
+) -> Vec<SearchTerm> {
   let mut terms: Vec<(&str, String)> = Vec::new();
   let mut seen: HashSet<&str> = HashSet::new();
   let mut labels: HashMap<String, BTreeSet<&str>> = HashMap::new();
@@ -74,16 +85,23 @@ fn build_search_terms(
       }
     }
   }
+  let kept = |label: &str| {
+    allowed_labels.is_empty() || allowed_labels.iter().any(|kept| kept == label)
+  };
   terms
     .into_iter()
     .filter_map(|(term, key)| {
       let given = labels.get(&key)?;
-      let kept = allowed_labels
+      let preferred = allowed_labels
         .iter()
         .map(String::as_str)
         .find(|label| given.contains(label));
-      let label = kept.or_else(|| given.first().copied())?;
-      Some((term.to_owned(), label.to_owned()))
+      let label = preferred.or_else(|| given.first().copied())?;
+      Some(SearchTerm {
+        term: term.to_owned(),
+        label: label.to_owned(),
+        person_forms: given.contains(PERSON_LABEL) && kept(PERSON_LABEL),
+      })
     })
     .collect()
 }
@@ -102,20 +120,30 @@ pub(super) fn build_gazetteer_data(
   let mut labels = Vec::with_capacity(terms.len());
   let mut is_fuzzy = Vec::with_capacity(terms.len());
   let mut row_terms = Vec::with_capacity(terms.len());
-  // Pass 1: exact literals for every term.
-  for (term, label) in &terms {
-    labels.push(label.clone());
-    is_fuzzy.push(false);
-    row_terms.push(term.clone());
+  let mut person_forms = Vec::with_capacity(terms.len());
+  // Pass 1: exact literals for every term; pass 2: fuzzy patterns for terms
+  // long enough.
+  let fuzzy_terms = terms
+    .iter()
+    .filter(|search| fuzzy_distance(&search.term).is_some());
+  for (search, fuzzy) in terms
+    .iter()
+    .map(|search| (search, false))
+    .chain(fuzzy_terms.map(|search| (search, true)))
+  {
+    labels.push(search.label.clone());
+    is_fuzzy.push(fuzzy);
+    row_terms.push(search.term.clone());
+    person_forms.push(search.person_forms);
   }
-  // Pass 2: fuzzy patterns for terms long enough.
-  for (term, label) in &terms {
-    if fuzzy_distance(term).is_none() {
-      continue;
-    }
-    labels.push(label.clone());
-    is_fuzzy.push(true);
-    row_terms.push(term.clone());
+  // Rows labelled `person` take person word orders anyway; carry the flags
+  // only when another row needs them.
+  if person_forms
+    .iter()
+    .zip(&labels)
+    .all(|(forms, label)| !forms || label == PERSON_LABEL)
+  {
+    person_forms.clear();
   }
   Ok(Some(BindingGazetteerMatchData {
     labels,
@@ -123,6 +151,7 @@ pub(super) fn build_gazetteer_data(
     legal_form_suffixes: gazetteer_legal_form_suffixes()?,
     inflection: inflection(ctx),
     terms: row_terms,
+    person_forms,
   }))
 }
 
@@ -146,12 +175,12 @@ pub(super) fn gazetteer_literal_patterns(
   }
   let terms = build_search_terms(gazetteer, search_labels(ctx));
   let mut patterns = Vec::new();
-  for (term, _) in &terms {
-    patterns.push(literal_with_options(term.clone(), None, Some(false)));
+  for search in &terms {
+    patterns.push(literal_with_options(search.term.clone(), None, Some(false)));
   }
-  for (term, _) in &terms {
-    if let Some(distance) = fuzzy_distance(term) {
-      patterns.push(fuzzy_pattern(term.clone(), Some(distance)));
+  for search in &terms {
+    if let Some(distance) = fuzzy_distance(&search.term) {
+      patterns.push(fuzzy_pattern(search.term.clone(), Some(distance)));
     }
   }
   patterns

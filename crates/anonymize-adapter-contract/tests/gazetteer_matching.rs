@@ -361,6 +361,7 @@ fn configs_without_the_newer_gazetteer_fields_still_load() {
   gazetteer.remove("legal_form_suffixes");
   gazetteer.remove("inflection");
   gazetteer.remove("terms");
+  gazetteer.remove("person_forms");
   let binding: BindingPreparedSearchConfig = serde_json::from_value(json)
     .expect("a config without the newer fields should deserialize");
   let engine = PreparedEngine::new(
@@ -371,12 +372,23 @@ fn configs_without_the_newer_gazetteer_fields_still_load() {
   assert_eq!(gazetteer_texts(&engine, "Předáno Novákovi."), ["Novákovi"]);
 }
 
-/// Resolved spans after label filtering, for `entries` under `labels`.
-fn redacted_under_labels(
-  labels: &[&str],
+/// A gazetteer-only pipeline over `(canonical, label)` entries.
+struct LabelledRedaction<'a> {
+  /// Labels the pipeline keeps (every label when empty).
+  labels: &'a [&'a str],
   hotword_rules: bool,
-  entries: &[(&str, &str)],
-  text: &str,
+  entries: &'a [(&'a str, &'a str)],
+  text: &'a str,
+}
+
+/// Resolved `(text, label)` spans after label filtering.
+fn redacted_under_labels(
+  LabelledRedaction {
+    labels,
+    hotword_rules,
+    entries,
+    text,
+  }: LabelledRedaction<'_>,
 ) -> Vec<(String, String)> {
   let config: PipelineConfig = serde_json::from_value(serde_json::json!({
     "threshold": 0.3,
@@ -439,7 +451,12 @@ fn a_spelling_under_several_labels_keeps_each_label() {
       [("ÁCME", PERSON), ("acme", ORGANIZATION)],
     ] {
       assert_eq!(
-        redacted_under_labels(&[kept], false, &entries, text),
+        redacted_under_labels(LabelledRedaction {
+          labels: &[kept],
+          hotword_rules: false,
+          entries: &entries,
+          text,
+        }),
         [("Acme".to_owned(), kept.to_owned())],
         "{kept} {entries:?}"
       );
@@ -454,11 +471,49 @@ fn a_spelling_under_several_labels_keeps_each_label() {
     [("Acme", PERSON), ("Ácme", ORGANIZATION)],
   ] {
     assert_eq!(
-      redacted_under_labels(&[], false, &entries, text),
+      redacted_under_labels(LabelledRedaction {
+        labels: &[],
+        hotword_rules: false,
+        entries: &entries,
+        text,
+      }),
       [("Acme".to_owned(), ORGANIZATION.to_owned())],
       "{entries:?}"
     );
   }
+}
+
+#[test]
+fn a_kept_person_label_keeps_person_word_orders() {
+  // Reported as an organization, `John Smith` is still a person's name and
+  // also matches surname first.
+  let text = "Podpis: Smith, John, jednatel.";
+  for labels in [[ORGANIZATION, PERSON], [PERSON, ORGANIZATION]] {
+    for entries in [
+      [("John Smith", ORGANIZATION), ("John Smith", PERSON)],
+      [("John Smith", PERSON), ("John Smith", ORGANIZATION)],
+    ] {
+      let redacted = redacted_under_labels(LabelledRedaction {
+        labels: &labels,
+        hotword_rules: false,
+        entries: &entries,
+        text,
+      });
+      assert_eq!(
+        redacted,
+        [("Smith, John".to_owned(), labels[0].to_owned())],
+        "{labels:?} {entries:?}"
+      );
+    }
+  }
+  // Without a kept person label the person word orders do not apply.
+  let redacted = redacted_under_labels(LabelledRedaction {
+    labels: &[ORGANIZATION],
+    hotword_rules: false,
+    entries: &[("John Smith", ORGANIZATION), ("John Smith", PERSON)],
+    text,
+  });
+  assert_eq!(redacted, []);
 }
 
 #[test]
@@ -471,17 +526,32 @@ fn a_spelling_keeps_a_label_that_hotword_rules_reclassify() {
     [("Orbis", "address"), ("Orbis", "date")],
   ] {
     assert_eq!(
-      redacted_under_labels(&["date of birth"], true, &entries, text),
+      redacted_under_labels(LabelledRedaction {
+        labels: &["date of birth"],
+        hotword_rules: true,
+        entries: &entries,
+        text,
+      }),
       [("Orbis".to_owned(), "date of birth".to_owned())],
       "{entries:?}"
     );
     // Without hotword rules neither label is searched for or kept.
     assert_eq!(
-      redacted_under_labels(&["date of birth"], false, &entries, text),
+      redacted_under_labels(LabelledRedaction {
+        labels: &["date of birth"],
+        hotword_rules: false,
+        entries: &entries,
+        text,
+      }),
       []
     );
     assert_eq!(
-      redacted_under_labels(&["date"], false, &entries, text),
+      redacted_under_labels(LabelledRedaction {
+        labels: &["date"],
+        hotword_rules: false,
+        entries: &entries,
+        text,
+      }),
       [("Orbis".to_owned(), "date".to_owned())],
       "{entries:?}"
     );

@@ -26,16 +26,30 @@ const COMMON_WORDS: [&str; 40] = [
 
 /// The chat pipeline's detectors, gazetteer included, with one entry.
 fn engine(word: &str, label: &str) -> PreparedEngine {
-  engine_with(word, label, 0.4, false)
+  engine_with(EngineOptions {
+    word,
+    label,
+    threshold: 0.4,
+    confidence_boost: false,
+  })
 }
 
 /// [`engine`] at `threshold`, with or without confidence boosting, and
 /// `Project Nebula` as a custom deny-list entry.
-fn engine_with(
-  word: &str,
-  label: &str,
+struct EngineOptions<'a> {
+  word: &'a str,
+  label: &'a str,
   threshold: f64,
   confidence_boost: bool,
+}
+
+fn engine_with(
+  EngineOptions {
+    word,
+    label,
+    threshold,
+    confidence_boost,
+  }: EngineOptions<'_>,
 ) -> PreparedEngine {
   let config: PipelineConfig = serde_json::from_value(serde_json::json!({
     "threshold": threshold,
@@ -109,8 +123,12 @@ fn fuzzy_hits_keep_the_common_word_filters() {
 fn exact_entries_ignore_the_redaction_threshold() {
   for threshold in [0.95, 1.0] {
     for confidence_boost in [false, true] {
-      let engine =
-        engine_with("Wintermute", "person", threshold, confidence_boost);
+      let engine = engine_with(EngineOptions {
+        word: "Wintermute",
+        label: "person",
+        threshold,
+        confidence_boost,
+      });
       let case = format!("{threshold} boost {confidence_boost}");
       assert!(
         redacted(&engine, "Signed by Wintermute today.", "Wintermute"),
@@ -131,7 +149,7 @@ fn exact_entries_ignore_the_redaction_threshold() {
       );
     }
   }
-  let engine = engine_with("Wintermute", "person", 0.4, false);
+  let engine = engine("Wintermute", "person");
   assert!(redacted(&engine, "Signed by Wintermte today.", "Wintermte"));
 }
 

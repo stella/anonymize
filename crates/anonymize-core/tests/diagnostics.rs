@@ -92,6 +92,7 @@ fn static_redaction_diagnostics_engine() -> PreparedEngine {
       legal_form_suffixes: vec![String::from("s.r.o.")],
       inflection: GazetteerInflection::None,
       terms: Vec::new(),
+      person_forms: Vec::new(),
     }),
     country_data: None,
     hotword_data: None,
@@ -449,6 +450,7 @@ fn engine_reports_prepare_slot_diagnostics() {
       legal_form_suffixes: vec![String::from("s.r.o.")],
       inflection: GazetteerInflection::None,
       terms: Vec::new(),
+      person_forms: Vec::new(),
     }),
     ..empty_config(PreparedEngineSlices::default())
   };

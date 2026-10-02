@@ -403,14 +403,16 @@ Each guarantee is enforced by the tests named after it, under
 3. **Identifiers and opaque markers are left intact.** A name glued to other
    letters (`acme0a1b`), joined by `-`, `_`, `.`, `/`, `+`, `=`, `:`, `@`, `#`
    or `\` to a hex run (UUID and hash segments such as `4c1b`) or a long
-   base64-like run, or inside a `⟦…⟧` marker, is never a hit; an entry that is
-   itself such an identifier matches only exactly. Template brackets (`<<…>>`,
+   base64-like run, or inside a `⟦…⟧` marker, is never a hit. A marker holds
+   no whitespace: `⟦Acme y⟧` is not one, so `Acme` there still matches. An
+   entry that is itself such an identifier matches only exactly. Template brackets (`<<…>>`,
    `{{…}}`, `[[…]]`) still allow names; only a field built around the name
    (`<<token:zeta9>>`, `{{zeta_01}}`) is skipped, unless it spells the name as
    the entry does (`[[Zeta2024]]`, `{{Zeta_01}}`). Tests:
    `p1_opaque_tokens_are_preserved`, `identifier_compounds_never_match`,
    `names_match_alone_but_never_inside_identifier_tokens`,
    `identifiers_match_only_exactly`, `opaque_markers_win_inside_templates`,
+   `markers_enclose_only_their_own_content`,
    `template_placeholders_keep_names_but_not_identifier_fields`,
    `template_names_glued_to_digits_keep_their_entry_case`,
    `templates_stay_open_across_spaces_on_their_line`.
@@ -435,15 +437,20 @@ Each guarantee is enforced by the tests named after it, under
    as one) is redacted under the first of them that the pipeline searches for
    (its `labels`, then the labels hotword rules reclassify into them; the
    alphabetically first when no label filter applies), whatever the entry
-   order. Tests: `adding_entries_never_reduces_coverage`,
+   order. A spelling a kept `person` label names also matches surname first
+   (`Smith, John`), whichever label it is reported under. Tests:
+   `adding_entries_never_reduces_coverage`,
    `p7_adding_entries_never_reduces_coverage`,
    `a_spelling_under_several_labels_keeps_each_label`,
    `a_spelling_keeps_a_label_that_hotword_rules_reclassify`,
+   `a_kept_person_label_keeps_person_word_orders`,
    `p6_redaction_is_stable_and_entry_order_independent`.
 6. **Older prepared configs keep loading.** Gazetteer data written before the
-   legal-form, language-scope and entry-text fields existed deserializes with
-   defaults (no legal-form extension, Czech and Slovak forms on, entry text
-   from the search patterns). Test:
+   legal-form, language-scope, entry-text and person-form fields existed
+   deserializes with defaults (no legal-form extension, Czech and Slovak forms
+   on, entry text from the search patterns, person word orders for `person`
+   rows only). Binary prepared packages carry a schema version and are rebuilt
+   when it changes. Test:
    `configs_without_the_newer_gazetteer_fields_still_load`.
 
 The labeled corpus in `crates/anonymize-core/tests/fixtures/name_matching/`

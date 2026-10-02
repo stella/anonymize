@@ -16,15 +16,27 @@ pub(super) fn engine(
     .iter()
     .map(|canonical| (canonical.clone(), "organization".to_owned()))
     .collect::<Vec<_>>();
-  labelled_engine(&entries, language, &[])
+  labelled_engine(LabelledEngine {
+    entries: &entries,
+    language,
+    labels: &[],
+  })
 }
 
 /// [`engine`] over `(canonical, label)` entries, keeping only `labels` (every
 /// label when empty).
+pub(super) struct LabelledEngine<'a> {
+  pub(super) entries: &'a [(String, String)],
+  pub(super) language: &'a str,
+  pub(super) labels: &'a [String],
+}
+
 pub(super) fn labelled_engine(
-  entries: &[(String, String)],
-  language: &str,
-  labels: &[String],
+  LabelledEngine {
+    entries,
+    language,
+    labels,
+  }: LabelledEngine<'_>,
 ) -> Result<PreparedEngine, String> {
   let config = PipelineConfig {
     threshold: 0.0,
