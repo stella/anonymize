@@ -194,7 +194,14 @@ fn shows_a_name(text: &str) -> bool {
   let mut letters = text.chars().filter(|ch| ch.is_alphabetic()).peekable();
   letters.peek().is_some()
     && (text.chars().any(char::is_uppercase)
-      || letters.all(|ch| !ch.is_lowercase()))
+      || letters.all(|ch| !ch.is_lowercase() || is_unicameral(ch)))
+}
+
+/// Letters of a script that writes names in one case, though Unicode gives
+/// it case mappings: Georgian Mkhedruli (`თბილისი`), whose capitals
+/// (Mtavruli) appear only in all-caps titles.
+const fn is_unicameral(ch: char) -> bool {
+  matches!(ch, '\u{10D0}'..='\u{10FF}')
 }
 
 /// Runs of letters and digits, in any script.
@@ -2702,6 +2709,28 @@ mod tests {
   }
 
   #[test]
+  fn template_names_in_unicameral_scripts_match_their_spelling() {
+    let entries = [
+      exact("თბილისი", ORGANIZATION),
+      exact("Zeta ქუთაისი", ORGANIZATION),
+      exact("orbis", ORGANIZATION),
+      exact("acme ბათუმი", ORGANIZATION),
+    ];
+    for (text, expected) in [
+      ("see [[თბილისი2024]] below", "თბილისი"),
+      ("see {{2024თბილისი}} below", "თბილისი"),
+      ("note [[Zeta ქუთაისი2024]] here", "Zeta ქუთაისი"),
+    ] {
+      assert_eq!(found(&entries, text), [expected], "{text}");
+    }
+    // Lowercase Latin still shows no name, alone or beside Georgian.
+    for text in ["see [[orbis2024]] below", "note [[acme ბათუმი2024]] here"]
+    {
+      assert!(found(&entries, text).is_empty(), "{text}");
+    }
+  }
+
+  #[test]
   fn template_names_glued_to_digits_keep_their_entry_case() {
     let entries = [
       exact("Zeta", ORGANIZATION),
@@ -3348,8 +3377,8 @@ mod tests {
       left in any::<usize>(),
       right in any::<usize>(),
       identifier in ".{0,40}",
-      spelling in "[A-Za-zŽžÁá\u{301}محد東京0-9 _-]{0,16}",
-      entry in "[A-Za-zŽžÁá\u{301}محد東京 .-]{1,16}",
+      spelling in "[A-Za-zŽžÁá\u{301}محد東京თბილᲗᲑ0-9 _-]{0,16}",
+      entry in "[A-Za-zŽžÁá\u{301}محد東京თბილᲗᲑ .-]{1,16}",
       glue in prop::collection::vec(any::<char>(), 0..40),
       edge in prop::option::of(any::<char>()),
     ) {
