@@ -1,5 +1,9 @@
 # @stll/anonymize-wasm
 
+## 3.0.3
+
+No changes in this release.
+
 ## 3.0.2
 
 No changes in this release.

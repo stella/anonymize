@@ -22,7 +22,11 @@ use unicode_normalization::char::{decompose_canonical, is_combining_mark};
 
 #[path = "gazetteer_policy.rs"]
 mod policy;
-
+#[cfg(test)]
+use policy::{
+  COMPOUND_JOINERS, MarkerKind, Markers, encloses, glue_is_free,
+  is_identifier_segment, marker_spans, markers,
+};
 use policy::{CandidatePolicy, is_unspaced_script, is_word_char};
 
 use crate::declension::{expand_name_declensions, expand_surname_derivations};
@@ -54,6 +58,12 @@ const MAX_REORDERED_PERSON_WORDS: usize = 3;
 
 /// Fewer letters than this match only exactly (after folding and declension):
 /// one edit turns a short name into an ordinary word (`Acme` -> `acne`).
+const MIN_SHORT_FUZZY_LETTERS: usize = 5;
+
+/// From this many letters an entry tolerates an edit anywhere. Shorter
+/// fuzzy entries (exactly [`MIN_SHORT_FUZZY_LETTERS`]) tolerate one edit only
+/// on a token spelled like a proper noun, as the entry is (see
+/// [`short_typo_fits`]): `Orbys` for `Orbis`, never `orbit`.
 const MIN_FUZZY_LETTERS: usize = 6;
 
 /// Entries with at least this many letters tolerate two edits; shorter fuzzy
@@ -76,9 +86,154 @@ pub fn gazetteer_fuzzy_distance(term: &str) -> Option<u8> {
     return None;
   }
   match term.chars().filter(|ch| ch.is_alphabetic()).count() {
-    letters if letters < MIN_FUZZY_LETTERS => None,
+    letters if letters < MIN_SHORT_FUZZY_LETTERS => None,
+    letters if letters < MIN_FUZZY_LETTERS => {
+      case_shape(term.trim()).map(|_| 1)
+    }
     letters if letters < MIN_TWO_EDIT_LETTERS => Some(1),
     _ => Some(2),
+  }
+}
+
+/// Letter case a short entry is spelled in, and a one-edit match must share.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum CaseShape {
+  /// `Orbis`: an uppercase letter, then lowercase letters.
+  Capitalized,
+  /// `ORBIS`: uppercase letters only.
+  Upper,
+}
+
+/// The proper-noun case shape of a single word of letters, if it has one.
+fn case_shape(word: &str) -> Option<CaseShape> {
+  let mut letters = word.chars().filter(|ch| !is_combining_mark(*ch));
+  let first = letters.next()?;
+  let rest = letters.collect::<Vec<_>>();
+  if !first.is_alphabetic()
+    || rest.is_empty()
+    || !rest.iter().all(|ch| ch.is_alphabetic())
+  {
+    return None;
+  }
+  if first.is_uppercase() && rest.iter().all(|ch| ch.is_uppercase()) {
+    return Some(CaseShape::Upper);
+  }
+  (first.is_uppercase() && rest.iter().all(|ch| ch.is_lowercase()))
+    .then_some(CaseShape::Capitalized)
+}
+
+/// How an entry spells each of its words, telling the entry's own name
+/// from a field inside a template placeholder (`[[McDonald2024]]` against
+/// `<<token:zeta9>>`).
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct Spelling {
+  words: Vec<SpelledWord>,
+  inflection: GazetteerInflection,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct SpelledWord {
+  /// As the entry writes it, the source of its declined forms.
+  written: String,
+  /// Without diacritics, in its own case.
+  plain: String,
+  shape: Option<CaseShape>,
+}
+
+impl Spelling {
+  /// The entry's words. `None` unless the entry shows a name: a capital
+  /// letter (`Zeta`, `McDonald`), or letters of a script without case
+  /// (`محمد`, `東京`). An entry whose cased letters are all lowercase
+  /// (`orbis`, `@alice`) gives no such evidence.
+  fn of(term: &str, inflection: GazetteerInflection) -> Option<Self> {
+    let words = spelled_words(term)
+      .map(|word| SpelledWord {
+        written: word.to_owned(),
+        plain: unmarked(word),
+        shape: case_shape(word),
+      })
+      .collect::<Vec<_>>();
+    (!words.is_empty() && shows_a_name(term))
+      .then_some(Self { words, inflection })
+  }
+
+  /// Whether `surface` spells every entry word as the entry does
+  /// (`McDonald`, `van`, `J`, `محمد`), as a supported declined form of it
+  /// (`McDonalda`, `Dijka`), or in the same proper-noun case (`Nováka` for
+  /// `Novák`).
+  fn spells(&self, surface: &str) -> bool {
+    let mut words = spelled_words(surface);
+    shows_a_name(surface)
+      && self.words.iter().all(|entry| {
+        words
+          .next()
+          .is_some_and(|word| self.spells_word(entry, word))
+      })
+      && words.next().is_none()
+  }
+
+  fn spells_word(&self, entry: &SpelledWord, word: &str) -> bool {
+    let plain = unmarked(word);
+    plain == entry.plain
+      || entry
+        .shape
+        .is_some_and(|shape| case_shape(word) == Some(shape))
+      || (self.inflection == GazetteerInflection::CzechSlovak
+        && !entry.written.chars().any(char::is_numeric)
+        && expand_name_declensions(&entry.written)
+          .into_iter()
+          .chain(expand_surname_derivations(&entry.written))
+          .any(|form| unmarked(&form) == plain))
+  }
+}
+
+/// A capital letter, or letters only of scripts without case.
+fn shows_a_name(text: &str) -> bool {
+  let mut letters = text.chars().filter(|ch| ch.is_alphabetic()).peekable();
+  letters.peek().is_some()
+    && (text.chars().any(char::is_uppercase)
+      || letters.all(|ch| !ch.is_lowercase() || is_unicameral(ch)))
+}
+
+/// Letters of a script that writes names in one case, though Unicode gives
+/// it case mappings: Georgian Mkhedruli (`თბილისი`), whose capitals
+/// (Mtavruli) appear only in all-caps titles.
+const fn is_unicameral(ch: char) -> bool {
+  matches!(ch, '\u{10D0}'..='\u{10FF}')
+}
+
+/// Runs of letters and digits, in any script.
+fn spelled_words(text: &str) -> impl Iterator<Item = &str> {
+  text
+    .split(|ch: char| !(ch.is_alphanumeric() || is_combining_mark(ch)))
+    .filter(|word| !word.is_empty())
+}
+
+/// `word` without diacritics, in its own case, transliterated as [`fold`]
+/// does (`McDønałd` spells `McDonald`).
+fn unmarked(word: &str) -> String {
+  let mut plain = String::with_capacity(word.len());
+  for ch in word.chars() {
+    decompose_canonical(ch, |part| {
+      if !is_combining_mark(part) {
+        plain.push(unstroked(part));
+      }
+    });
+  }
+  plain
+}
+
+/// The base letter of a letter with a stroke, which has no canonical
+/// decomposition (`ł`, `Đ`, `ø`), in its own case.
+const fn unstroked(ch: char) -> char {
+  match ch {
+    'ł' => 'l',
+    'Ł' => 'L',
+    'đ' => 'd',
+    'Đ' => 'D',
+    'ø' => 'o',
+    'Ø' => 'O',
+    other => other,
   }
 }
 
@@ -102,6 +257,8 @@ pub(crate) struct PreparedGazetteerMatchData {
 struct GazetteerRow {
   label: String,
   kind: RowKind,
+  /// How the entry spells its words; see [`Spelling`].
+  spelling: Option<Spelling>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -112,6 +269,9 @@ enum RowKind {
     max_distance: usize,
     /// Word count of the entry; see [`token_count_fits`].
     words: usize,
+    /// For a short entry, the case a matched token must be spelled in; see
+    /// [`short_typo_fits`].
+    short_shape: Option<CaseShape>,
   },
 }
 
@@ -140,6 +300,8 @@ struct SequenceTrie {
 struct Terminal {
   label: String,
   edges: EdgePunctuation,
+  /// How the entry spells its words; see [`Spelling`].
+  spelling: Option<Spelling>,
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -235,6 +397,8 @@ struct Hit<'a> {
   end: usize,
   label: &'a str,
   score: f64,
+  /// For an exact hit, how its entry spells its words.
+  spelling: Option<&'a Spelling>,
 }
 
 impl PreparedGazetteerMatchData {
@@ -329,7 +493,17 @@ impl PreparedGazetteerMatchData {
             .push(row);
         }
       }
-      prepared.rows.push(GazetteerRow { label, kind });
+      let spelling = (kind == RowKind::Exact)
+        .then(|| {
+          term
+            .and_then(|term| Spelling::of(term, prepared.sequences.inflection))
+        })
+        .flatten();
+      prepared.rows.push(GazetteerRow {
+        label,
+        kind,
+        spelling,
+      });
     }
     Ok(prepared)
   }
@@ -450,10 +624,11 @@ impl PreparedGazetteerMatchData {
           end,
           label: &row.label,
           score: EXACT_SCORE,
+          spelling: row.spelling.as_ref(),
         });
       }
     }
-    exact.retain(|hit| !guard.in_identifier(hit.start, hit.end));
+    exact.retain(|hit| !guard.in_entry_identifier(hit));
     let exact_spans = SpanIndex::new(&exact);
 
     let mut fuzzy = Vec::new();
@@ -467,7 +642,9 @@ impl PreparedGazetteerMatchData {
             folded,
             max_distance,
             words,
+            short_shape,
           },
+        ..
       }) = self.row(found.pattern())
       else {
         continue;
@@ -478,6 +655,9 @@ impl PreparedGazetteerMatchData {
         && guard.fuzzy_span_is_whole_words(start, end)
         && !guard.in_identifier(start, end)
         && token_count_fits(tokenize(surface).len(), *words)
+        && short_shape.is_none_or(|shape| {
+          short_typo_fits(text, (start, end), shape, folded.len())
+        })
         && edit_distance(&fold_word_chars(surface), folded) <= *max_distance
       {
         fuzzy.push(Hit {
@@ -485,6 +665,7 @@ impl PreparedGazetteerMatchData {
           end,
           label,
           score: FUZZY_SCORE,
+          spelling: None,
         });
       }
       // The engine keeps one non-overlapping window per region across all
@@ -506,11 +687,25 @@ impl PreparedGazetteerMatchData {
       }
     }
     let fuzzy = without_contained(fuzzy, &exact);
+    self.entities(text, exact, fuzzy)
+  }
 
+  /// Entities for the exact hits, then the fuzzy ones, each extended over a
+  /// following legal form; a span already emitted for its label is skipped.
+  fn entities(
+    &self,
+    text: &str,
+    exact: Vec<Hit<'_>>,
+    fuzzy: Vec<Hit<'_>>,
+  ) -> Result<Vec<PipelineEntity>> {
     let mut seen = HashSet::new();
     let mut entities =
       Vec::with_capacity(exact.len().saturating_add(fuzzy.len()));
-    for hit in exact.into_iter().chain(fuzzy) {
+    let hits = exact
+      .into_iter()
+      .map(|hit| (hit, true))
+      .chain(fuzzy.into_iter().map(|hit| (hit, false)));
+    for (hit, exact_entry) in hits {
       // Every emitted span must close any dotted chain it ends or starts
       // in (`s.r.o` inside `s.r.o.y`); fall back to the unextended span,
       // then drop the hit.
@@ -535,6 +730,7 @@ impl PreparedGazetteerMatchData {
       );
       entity.source_detail =
         legal_form_end.map(|_| SourceDetail::GazetteerExtension);
+      entity.exact_entry = exact_entry;
       entities.push(entity);
     }
     Ok(entities)
@@ -571,11 +767,22 @@ impl PreparedGazetteerMatchData {
       rows
     });
     for row in rows.iter().filter_map(|row| self.rows.get(*row)) {
+      // The case shape depends on the span itself, not its folded spelling.
+      if let RowKind::Fuzzy {
+        short_shape: Some(shape),
+        folded: ref entry,
+        ..
+      } = row.kind
+        && !short_typo_fits(guard.text, (start, end), shape, entry.len())
+      {
+        continue;
+      }
       hits.push(Hit {
         start,
         end,
         label: &row.label,
         score: FUZZY_SCORE,
+        spelling: None,
       });
     }
   }
@@ -610,6 +817,7 @@ impl PreparedGazetteerMatchData {
             folded: entry,
             max_distance,
             words,
+            ..
           },
         ..
       }) = self.rows.get(*row)
@@ -677,9 +885,11 @@ impl SequenceTrie {
       }
       node = child;
     }
+    let spelling = Spelling::of(&words.join(" "), self.inflection);
     let terminal = Terminal {
       label: label.to_owned(),
       edges: edges.clone(),
+      spelling,
     };
     if let Some(end) = self.nodes.get_mut(node)
       && !end.terminals.contains(&terminal)
@@ -773,6 +983,7 @@ impl SequenceTrie {
           end,
           label: &terminal.label,
           score: EXACT_SCORE,
+          spelling: terminal.spelling.as_ref(),
         });
       }
     }
@@ -1138,12 +1349,7 @@ fn fold_into(value: &str, out: &mut String) {
         return;
       }
       for lower in part.to_lowercase() {
-        out.push(match lower {
-          'ł' => 'l',
-          'đ' => 'd',
-          'ø' => 'o',
-          other => other,
-        });
+        out.push(unstroked(lower));
       }
     });
   }
@@ -1385,16 +1591,80 @@ fn row_term<'t>(
 /// scale as the assembled patterns, so short entries accept folded hits
 /// only; a caller-supplied distance is capped at the supported maximum.
 fn fuzzy_row(term: &str, distance: Option<u8>) -> RowKind {
+  let folded = fold_word_chars(term);
+  let short_shape = (folded.len() < MIN_FUZZY_LETTERS)
+    .then(|| case_shape(term.trim()))
+    .flatten();
+  // Shorter entries match only exactly; a short entry without a
+  // proper-noun shape too.
+  let cap = match folded.len() {
+    letters if letters < MIN_SHORT_FUZZY_LETTERS => 0,
+    letters if letters < MIN_FUZZY_LETTERS => {
+      usize::from(short_shape.is_some())
+    }
+    _ => MAX_FUZZY_DISTANCE,
+  };
   RowKind::Fuzzy {
-    folded: fold_word_chars(term),
     words: tokenize(term).len(),
     max_distance: usize::from(
       distance
         .or_else(|| gazetteer_fuzzy_distance(term))
         .unwrap_or(0),
     )
-    .min(MAX_FUZZY_DISTANCE),
+    .min(cap),
+    folded,
+    short_shape,
   }
+}
+
+/// Whether a fuzzy span may stand for a short entry of `letters` letters
+/// spelled in `shape`: a whole token of as many letters (a substitution, so
+/// added endings stay with inflection), in the same proper-noun case, not
+/// opening a sentence, where ordinary words are capitalized too
+/// (`Nová smlouva`).
+fn short_typo_fits(
+  text: &str,
+  (start, end): (usize, usize),
+  shape: CaseShape,
+  letters: usize,
+) -> bool {
+  let span = text.get(start..end).unwrap_or_default();
+  // A whole token: no digits glued on either side (`Orbys2`).
+  let glued = previous_char(text, start).is_some_and(is_word_char)
+    || next_char(text, end).is_some_and(is_word_char);
+  !glued
+    && fold_word_chars(span).len() == letters
+    && case_shape(span) == Some(shape)
+    && !opens_sentence(text, start)
+}
+
+/// Whether `start` begins a sentence or a line: only whitespace and opening
+/// quotes or brackets separate it from the text start, a line break, or
+/// sentence-final punctuation.
+fn opens_sentence(text: &str, start: usize) -> bool {
+  // Quotes and brackets that may sit between a terminal and the next
+  // sentence (`skončil.) Orbit`, `„Orbit`).
+  const OPENERS: [char; 16] = [
+    '"', '\'', '„', '“', '”', '‘', '’', '«', '»', '(', ')', '[', ']', '{', '}',
+    '¿',
+  ];
+  // Sentence terminals (Unicode Sentence_Terminal, plus `…` and `:`) of
+  // the scripts in common use: Latin, CJK fullwidth, Arabic, Devanagari,
+  // Armenian, Ethiopic, Myanmar.
+  const TERMINALS: [char; 20] = [
+    '.', '!', '?', '…', ':', '‼', '⁇', '⁈', '⁉', '。', '．', '！', '？', '؟',
+    '۔', '।', '॥', '։', '።', '။',
+  ];
+  for ch in text.get(..start).unwrap_or_default().chars().rev().take(32) {
+    if is_line_break(ch) {
+      return true;
+    }
+    if ch.is_whitespace() || OPENERS.contains(&ch) {
+      continue;
+    }
+    return TERMINALS.contains(&ch);
+  }
+  true
 }
 
 /// The entry text a gazetteer search pattern carries.
@@ -1521,6 +1791,17 @@ impl<'t> Guard<'t> {
   fn in_identifier(&self, start: usize, end: usize) -> bool {
     self.policy.in_identifier(start, end)
   }
+
+  fn in_entry_identifier(&self, hit: &Hit<'_>) -> bool {
+    self.policy.identifier(hit.start..hit.end, || {
+      hit.spelling.is_some_and(|spelling| {
+        self
+          .text
+          .get(hit.start..hit.end)
+          .is_some_and(|surface| spelling.spells(surface))
+      })
+    })
+  }
 }
 
 fn edit_distance(left: &[char], right: &[char]) -> usize {
@@ -1599,6 +1880,10 @@ fn validate_length(
     actual,
   })
 }
+
+#[cfg(test)]
+#[path = "../tests/support/gazetteer_template_oracle.rs"]
+mod fuzz_policy;
 
 #[cfg(test)]
 mod tests {
@@ -2026,6 +2311,255 @@ mod tests {
         ),
         [surface]
       );
+    }
+  }
+
+  fn short_entry(term: &str) -> Entry<'_> {
+    Entry {
+      term,
+      label: ORGANIZATION,
+      fuzzy_distance: gazetteer_fuzzy_distance(term),
+    }
+  }
+
+  #[test]
+  fn five_letter_entries_take_one_typo_on_a_proper_noun() {
+    assert_eq!(gazetteer_fuzzy_distance("Orbis"), Some(1));
+    assert_eq!(gazetteer_fuzzy_distance("ORBIS"), Some(1));
+    assert_eq!(gazetteer_fuzzy_distance("orbis"), None);
+    assert_eq!(gazetteer_fuzzy_distance("Zeta"), None);
+    let entries = [short_entry("Orbis")];
+    for (text, expected) in [
+      ("Klient Orbys zaplatil.", "Orbys"),
+      ("Klient Orbís zaplatil.", "Orbís"),
+      ("Klient Orbisu zaplatil.", "Orbisu"),
+    ] {
+      assert!(
+        engine_found(&entries, text)
+          .iter()
+          .any(|hit| hit == expected),
+        "{text}"
+      );
+    }
+    for text in [
+      "The orbit is stable.",
+      "Vstoupil na orbitu.",
+      "Klient ORBYS zaplatil.",
+      "Orbit zaplatil.",
+      "Klient Orbys2 zaplatil.",
+    ] {
+      assert!(engine_found(&entries, text).is_empty(), "{text}");
+    }
+    let upper = [short_entry("ORBIS")];
+    assert_eq!(engine_found(&upper, "Klient ORBYS zaplatil."), ["ORBYS"]);
+    assert!(engine_found(&upper, "Klient Orbys zaplatil.").is_empty());
+  }
+
+  #[test]
+  fn four_letter_entries_stay_exact() {
+    let entries = [short_entry("Zeta")];
+    assert!(engine_found(&entries, "Klient Zeda zaplatil.").is_empty());
+  }
+
+  #[test]
+  fn many_open_delimiters_on_a_line_stay_linear() {
+    let text =
+      format!("{} Acme {}", "<< ⟦".repeat(50_000), ">>".repeat(50_000));
+    let found_markers = markers(&text);
+    assert_eq!(found_markers.template.len(), 1);
+    assert!(found_markers.opaque.is_empty());
+    for repeats in [1_000, 10_000, 100_000] {
+      for unit in ["<< ⟦", "⟦<<\u{a0}", "{{[[ ⟦⟦ ", "⟦ << \n"] {
+        let repeated = unit.repeat(repeats);
+        let mut work = 0;
+        for kind in [MarkerKind::Opaque, MarkerKind::Template] {
+          marker_spans(&repeated, kind, &mut work);
+        }
+        let chars = repeated.chars().count();
+        assert!(
+          work <= chars.saturating_mul(4),
+          "{unit:?} x{repeats}: {work}"
+        );
+      }
+    }
+  }
+
+  #[test]
+  fn opaque_markers_win_inside_templates() {
+    let entries = [exact("Zeta", ORGANIZATION), exact("Acme", ORGANIZATION)];
+    for text in ["see [[⟦Zeta⟧]] below", "see {{⟦Zeta⟧}} below"] {
+      assert!(found(&entries, text).is_empty(), "{text}");
+    }
+    assert_eq!(found(&entries, "see {{Acme:⟦Zeta⟧}} below"), ["Acme"]);
+  }
+
+  #[test]
+  fn templates_stay_open_across_spaces_on_their_line() {
+    let entries = [exact("Zeta", ORGANIZATION), exact("Jan Novák", PERSON)];
+    for text in ["see <<token: zeta9>> below", "see {{ field zeta9 }} below"] {
+      assert!(found(&entries, text).is_empty(), "{text}");
+    }
+    for (text, expected) in [
+      ("see << Jan Novák2024 here", "Jan Novák"),
+      ("see <<token:\nzeta9>> below", "zeta"),
+      ("see {{ Jan Novák }} below", "Jan Novák"),
+    ] {
+      assert_eq!(found(&entries, text), [expected], "{text:?}");
+    }
+  }
+
+  #[test]
+  fn short_typos_skip_sentence_starts_in_other_scripts() {
+    let entries = [short_entry("Orbis")];
+    for text in [
+      "Předtím skončil。 Orbit zůstal.",
+      "Předtím skončil؟ Orbit zůstal.",
+      "Předtím skončil। Orbit zůstal.",
+    ] {
+      assert!(engine_found(&entries, text).is_empty(), "{text}");
+    }
+    for text in [
+      "Předtím skončil.) Orbit zůstal.",
+      "Předtím skončil.] Orbit zůstal.",
+      "Předtím skončil.“) Orbit zůstal.",
+    ] {
+      assert!(engine_found(&entries, text).is_empty(), "{text}");
+    }
+    for text in [
+      "Předtím skončil, Orbys zůstal.",
+      "Předtím (skončil) Orbys zůstal.",
+    ] {
+      assert_eq!(engine_found(&entries, text), ["Orbys"], "{text}");
+    }
+  }
+
+  #[test]
+  fn template_placeholders_keep_names_but_not_identifier_fields() {
+    let entries = [exact("Zeta", ORGANIZATION), exact("Jan Novák", PERSON)];
+    for text in [
+      "see <<token:zeta9>> below",
+      "see {{zeta_01}} below",
+      "see [[zeta2024]] below",
+      "see ⟦Zeta⟧ below",
+      "see ⟦Zeta2024⟧ below",
+    ] {
+      assert!(found(&entries, text).is_empty(), "{text}");
+    }
+    for (text, expected) in [
+      ("see {{Zeta}} below", "Zeta"),
+      ("see <<Zeta>> below", "Zeta"),
+      ("see [[Zeta]] below", "Zeta"),
+      ("see <<token:Zeta>> below", "Zeta"),
+      ("note [[Jan Novák]] here", "Jan Novák"),
+      ("see [Zeta] below", "Zeta"),
+      ("Pište na zeta9@example.cz.", "zeta"),
+    ] {
+      assert_eq!(found(&entries, text), [expected], "{text}");
+    }
+  }
+
+  #[test]
+  fn template_names_in_unicameral_scripts_match_their_spelling() {
+    let entries = [
+      exact("თბილისი", ORGANIZATION),
+      exact("Zeta ქუთაისი", ORGANIZATION),
+      exact("orbis", ORGANIZATION),
+      exact("acme ბათუმი", ORGANIZATION),
+    ];
+    for (text, expected) in [
+      ("see [[თბილისი2024]] below", "თბილისი"),
+      ("see {{2024თბილისი}} below", "თბილისი"),
+      ("note [[Zeta ქუთაისი2024]] here", "Zeta ქუთაისი"),
+    ] {
+      assert_eq!(found(&entries, text), [expected], "{text}");
+    }
+    // Lowercase Latin still shows no name, alone or beside Georgian.
+    for text in ["see [[orbis2024]] below", "note [[acme ბათუმი2024]] here"]
+    {
+      assert!(found(&entries, text).is_empty(), "{text}");
+    }
+  }
+
+  #[test]
+  fn template_names_glued_to_digits_keep_their_entry_case() {
+    let entries = [
+      exact("Zeta", ORGANIZATION),
+      exact("Jan Novák", PERSON),
+      exact("ACME", ORGANIZATION),
+      exact("orbis", ORGANIZATION),
+      exact("McDonald", PERSON),
+      exact("Jan van Dijk", PERSON),
+      exact("J. Dvořák", PERSON),
+      exact("محمد", PERSON),
+      exact("東京", ORGANIZATION),
+      exact("דוד", PERSON),
+      exact("Ahmed علي", PERSON),
+      exact("hasan علي", PERSON),
+    ];
+    for (text, expected) in [
+      ("see [[Zeta2024]] below", "Zeta"),
+      ("see {{Zeta2024}} below", "Zeta"),
+      ("see <<2024Zeta>> below", "Zeta"),
+      ("see {{Zeta_01}} below", "Zeta"),
+      ("note [[Jan Novák2024]] here", "Jan Novák"),
+      ("see {{ACME2024}} below", "ACME"),
+      ("see [[McDonald2024]] below", "McDonald"),
+      ("note [[Jan van Dijk2024]] here", "Jan van Dijk"),
+      ("note [[J. Dvořák2024]] here", "J. Dvořák"),
+      ("note [[J. Dvorak2024]] here", "J. Dvorak"),
+      ("see [[McDonalda2024]] below", "McDonalda"),
+      ("see {{McDonaldovi2024}} below", "McDonaldovi"),
+      ("note [[Jan van Dijka2024]] here", "Jan van Dijka"),
+      ("note [[Jana van Dijka2024]] here", "Jana van Dijka"),
+      ("see [[محمد2024]] below", "محمد"),
+      ("see {{東京2024}} below", "東京"),
+      ("see <<דוד2024>> below", "דוד"),
+      ("note [[Ahmed علي2024]] here", "Ahmed علي"),
+    ] {
+      assert_eq!(found(&entries, text), [expected], "{text}");
+    }
+    for text in [
+      "see <<token:zeta9>> below",
+      "see {{ZETA2024}} below",
+      "see {{Acme2024}} below",
+      "note [[Jan novák2024]] here",
+      "see [[orbis2024]] below",
+      "see [[Orbis2024]] below",
+      "see [[mcdonald2024]] below",
+      "see [[MCDONALD2024]] below",
+      "note [[Jan Van Dijk2024]] here",
+      "note [[j. Dvořák2024]] here",
+      "see [[mcdonalda2024]] below",
+      "note [[Jan Van Dijka2024]] here",
+      "note [[hasan علي2024]] here",
+    ] {
+      assert!(found(&entries, text).is_empty(), "{text}");
+    }
+  }
+
+  #[test]
+  fn template_names_compare_letters_with_strokes_as_fold_does() {
+    for (entry, text, expected) in [
+      ("McDønałd", "see [[McDonald2024]] below", "McDonald"),
+      ("McDØNAŁD", "see [[McDONALD2024]] below", "McDONALD"),
+      ("McDonald", "see [[McDønałd2024]] below", "McDønałd"),
+      (
+        "Đorđe McKay",
+        "note {{Dorde McKay2024}} here",
+        "Dorde McKay",
+      ),
+    ] {
+      assert_eq!(found(&[exact(entry, PERSON)], text), [expected], "{text}");
+      assert_eq!(
+        found(&[exact(entry, PERSON)], &text.replace("2024", "")),
+        [expected]
+      );
+    }
+    for (entry, text) in [
+      ("McDønałd", "see [[mcdonald2024]] below"),
+      ("McDØNAŁD", "see [[McDonald2024]] below"),
+    ] {
+      assert!(found(&[exact(entry, PERSON)], text).is_empty(), "{text}");
     }
   }
 
@@ -2546,16 +3080,16 @@ mod tests {
   fn fuzz_joined_identifier_regression_rejects_the_bad_span() {
     let text = "dead1234-a1b2";
     assert!(
-      CandidatePolicy::new(text).edges_are_free(0, 4),
+      fuzz_policy::edges_are_free(text, 0, 4),
       "numeric glue is allowed at a word edge"
     );
     assert!(
-      CandidatePolicy::new(text).in_identifier(0, 4),
-      "joined identifier must reject the partial candidate"
+      fuzz_policy::touches_identifier(text, 0, 4),
+      "oracle must reject the partial joined identifier"
     );
     assert!(
       Guard::new(text).in_identifier(0, 4),
-      "guard must reject the partial joined identifier"
+      "production must agree with the oracle"
     );
   }
 
@@ -2568,32 +3102,89 @@ mod tests {
     })]
 
     #[test]
-    fn balanced_marker_envelopes_enclose_only_whitespace_free_payloads(
-      depth in 1_usize..8,
-      before in "[a-z0-9]{0,20}",
-      after in "[a-z0-9]{0,20}",
-      whitespace in prop::sample::select(vec![" ", "\t", "\n", "\r", "\u{a0}"]),
+    fn fuzz_marker_oracle_matches_production(
+      text in "[⟦⟧<>{}\\[\\]a \t\n\r\u{00a0}\u{2028}]{0,128}",
     ) {
-      let opening = "⟦".repeat(depth);
-      let closing = "⟧".repeat(depth);
-      let start = opening.len().saturating_add(before.len());
-      let end = start.saturating_add("Acme".len());
-      let balanced = format!("{opening}{before}Acme{after}{closing}");
-      prop_assert!(CandidatePolicy::new(&balanced).in_marker(start, end));
-      let broken = format!("{opening}{before}Acme{whitespace}{after}{closing}");
-      prop_assert!(!CandidatePolicy::new(&broken).in_marker(start, end));
+      let found = markers(&text);
+      let opaque = found
+        .opaque
+        .iter()
+        .map(|(start, close)| (*start, close.saturating_add('⟧'.len_utf8())))
+        .collect::<Vec<_>>();
+      prop_assert_eq!(fuzz_policy::marker_ranges(&text), opaque);
+      let templates = found
+        .template
+        .iter()
+        .map(|(start, close)| (*start, close.saturating_add(2)))
+        .collect::<Vec<_>>();
+      prop_assert_eq!(fuzz_policy::template_ranges(&text), templates);
+    }
+
+    #[test]
+    fn fuzz_acceptance_predicates_match_production(
+      characters in prop::collection::vec(any::<char>(), 0..80),
+      character in any::<char>(),
+      left in any::<usize>(),
+      right in any::<usize>(),
+      identifier in ".{0,40}",
+      spelling in "[A-Za-zŽžÁá\u{301}محد東京თბილᲗᲑ0-9 _-]{0,16}",
+      entry in "[A-Za-zŽžÁá\u{301}محد東京თბილᲗᲑ .-]{1,16}",
+      glue in prop::collection::vec(any::<char>(), 0..40),
+      edge in prop::option::of(any::<char>()),
+    ) {
+      prop_assert_eq!(fuzz_policy::glue_is_free(&glue, edge), glue_is_free(glue.into_iter(), edge));
+      prop_assert_eq!(fuzz_policy::is_word_interior(character), is_word_char(character));
+      prop_assert_eq!(fuzz_policy::is_unspaced_script(character), is_unspaced_script(character));
+      prop_assert_eq!(fuzz_policy::is_compound_joiner(character), COMPOUND_JOINERS.contains(&character));
+      prop_assert_eq!(fuzz_policy::is_identifier_segment(&identifier), is_identifier_segment(&identifier));
+      // A template field is only kept as a name that shows one.
+      let signature = Spelling::of(&entry, GazetteerInflection::CzechSlovak);
+      for surface in [&identifier, &spelling] {
+        prop_assert_eq!(fuzz_policy::shows_a_name(surface), shows_a_name(surface));
+        if signature.as_ref().is_some_and(|signature| signature.spells(surface)) {
+          prop_assert!(fuzz_policy::shows_a_name(surface));
+        }
+      }
+      prop_assert!(signature.is_none_or(|signature| signature.spells(&entry)));
+      // Structured envelopes ensure numeric glue, joined segments, markers,
+      // and their interactions are exercised alongside arbitrary Unicode.
+      let arbitrary = characters.into_iter().collect::<String>();
+      for text in [
+        arbitrary,
+        format!("⟦a1b2-1234{identifier}1234-a1b2⟧"),
+        format!("<<a1b2:{identifier}>> [[{identifier}]]"),
+      ] {
+        let offsets = text.char_indices().map(|(offset, _)| offset)
+          .chain(std::iter::once(text.len())).collect::<Vec<_>>();
+        let first = offsets[left.checked_rem(offsets.len()).unwrap()];
+        let second = offsets[right.checked_rem(offsets.len()).unwrap()];
+        let (start, end) = (first.min(second), first.max(second));
+        let guard = Guard::new(&text);
+        prop_assert_eq!(fuzz_policy::edges_are_free(&text, start, end), guard.edges_are_free(start, end));
+        prop_assert_eq!(fuzz_policy::in_marker(&text, start, end), encloses(&guard.policy.markers.opaque, start, end));
+        prop_assert_eq!(
+          fuzz_policy::touches_identifier(&text, start, end)
+            || fuzz_policy::in_marker(&text, start, end)
+            || fuzz_policy::in_template_field(&text, start, end),
+          guard.in_identifier(start, end)
+        );
+        let mut joined_guard = Guard::new(&text);
+        joined_guard.policy.markers = Markers::default();
+        prop_assert_eq!(fuzz_policy::touches_identifier(&text, start, end), joined_guard.in_identifier(start, end));
+      }
     }
 
     #[test]
     fn fuzz_joined_identifier_predicate_skips_numeric_glue(
       digits in "[0-9]{0,20}",
       segment in "[a-f][0-9][a-f][0-9]{1,12}",
-      joiner in prop::sample::select(policy::COMPOUND_JOINERS.to_vec()),
+      joiner in prop::sample::select(COMPOUND_JOINERS.to_vec()),
     ) {
       for text in [format!("dead{digits}{joiner}{segment}"), format!("{segment}{joiner}{digits}dead")] {
         let start = text.find("dead").unwrap();
         let end = start.checked_add("dead".len()).unwrap();
-        prop_assert!(Guard::new(&text).in_identifier(start, end));
+        prop_assert!(fuzz_policy::touches_identifier(&text, start, end));
+        prop_assert_eq!(fuzz_policy::touches_identifier(&text, start, end), Guard::new(&text).in_identifier(start, end));
       }
     }
 
@@ -2921,6 +3512,7 @@ mod tests {
           end: start.saturating_add(*len),
           label: ORGANIZATION,
           score: EXACT_SCORE,
+          spelling: None,
         })
         .collect::<Vec<_>>();
       let start = query_start;

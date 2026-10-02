@@ -811,6 +811,15 @@ mod properties {
       "界Luma界",
       "ไทยLuma",
       "Luma🦀",
+      "[[Zeta2024]]",
+      "<<token:zeta9>>",
+      "{{acme_01}}",
+      "[[Jan Novák]]",
+      "[[⟦dead⟧]]",
+      "<<{{dead9}}>>",
+      "[[dead9\n]]",
+      "<<[[dead9>>]]",
+      "[[dead9]] [[Luma]]",
     ] {
       let policy = gazetteer_policy::CandidatePolicy::new(text);
       let mut offsets = text
@@ -858,15 +867,19 @@ mod properties {
     let identifier_text = "a1b2-dead-c3d4";
     let identifier_policy =
       gazetteer_policy::CandidatePolicy::new(identifier_text);
-    let reference = gazetteer_reference::acceptance(identifier_text, 5..9);
+    let identifier_reference =
+      gazetteer_reference::acceptance(identifier_text, 5..9);
     assert_eq!(
       (
         identifier_policy.edges_are_free(5, 9),
         identifier_policy.in_identifier(5, 9)
       ),
-      reference
+      identifier_reference
     );
-    assert_ne!((identifier_policy.edges_are_free(5, 9), false), reference);
+    assert_ne!(
+      (identifier_policy.edges_are_free(5, 9), false),
+      identifier_reference
+    );
   }
 
   // The stable harness compiles and exercises the same bounded driver as libFuzzer.

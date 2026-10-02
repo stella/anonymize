@@ -34,7 +34,7 @@ fn edge_is_free(edge: Option<char>, neighbours: &[char]) -> bool {
       && run.iter().all(|ch| ch.is_numeric()))
 }
 
-fn identifier_on_side(neighbours: &[char]) -> bool {
+fn joined_word(neighbours: &[char]) -> &[char] {
   let mut position = 0;
   while neighbours.get(position).is_some_and(|ch| word(*ch)) {
     position += 1;
@@ -49,15 +49,23 @@ fn identifier_on_side(neighbours: &[char]) -> bool {
     position += 1;
   }
   if position == first_joiner {
-    return false;
+    return &[];
   }
+  let start = position;
+  while neighbours.get(position).is_some_and(|ch| word(*ch)) {
+    position += 1;
+  }
+  neighbours.get(start..position).unwrap_or_default()
+}
+
+fn identifier_on_side(neighbours: &[char]) -> bool {
   let mut count = 0;
   let mut digits = 0;
   let mut hex_letters = 0;
   let mut non_hex = 0;
   let mut uppercase = 0;
   let mut lowercase = 0;
-  while let Some(ch) = neighbours.get(position).filter(|ch| word(**ch)) {
+  for ch in joined_word(neighbours) {
     count += 1;
     digits += usize::from(ch.is_ascii_digit());
     hex_letters +=
@@ -65,7 +73,6 @@ fn identifier_on_side(neighbours: &[char]) -> bool {
     non_hex += usize::from(!ch.is_ascii_hexdigit());
     uppercase += usize::from(ch.is_uppercase());
     lowercase += usize::from(ch.is_lowercase());
-    position += 1;
   }
   (count >= 4 && digits > 0 && hex_letters > 0 && non_hex == 0)
     || (count >= 12 && digits > 0 && uppercase > 0 && lowercase > 0)
@@ -115,6 +122,82 @@ fn enclosed(text: &str, span: &Range<usize>) -> bool {
   false
 }
 
+fn template_closer(
+  characters: &[(usize, char)],
+  position: usize,
+) -> Option<char> {
+  let first = characters.get(position)?.1;
+  let second = characters.get(position.checked_add(1)?)?.1;
+  if first != second {
+    return None;
+  }
+  match first {
+    '<' => Some('>'),
+    '{' => Some('}'),
+    '[' => Some(']'),
+    _ => None,
+  }
+}
+
+// Recursively parse a single delimiter pair, rather than building the production
+// marker index. Mismatched closers are text; any line break abandons the pair.
+fn close_template(
+  characters: &[(usize, char)],
+  position: &mut usize,
+  closer: char,
+) -> Option<usize> {
+  *position += 2;
+  while let Some((offset, ch)) = characters.get(*position).copied() {
+    if matches!(ch, '\n' | '\r' | '\u{2028}' | '\u{2029}') {
+      return None;
+    }
+    if ch == closer
+      && characters
+        .get(position.checked_add(1)?)
+        .is_some_and(|(_, next)| *next == closer)
+    {
+      *position += 2;
+      return Some(offset);
+    }
+    if let Some(nested_closer) = template_closer(characters, *position) {
+      close_template(characters, position, nested_closer)?;
+    } else {
+      *position += 1;
+    }
+  }
+  None
+}
+
+fn template_enclosed(text: &str, span: &Range<usize>) -> bool {
+  let characters = text.char_indices().collect::<Vec<_>>();
+  let mut position = 0;
+  while let Some((opening, _)) = characters.get(position).copied() {
+    let Some(closer) = template_closer(&characters, position) else {
+      position += 1;
+      continue;
+    };
+    if close_template(&characters, &mut position, closer)
+      .is_some_and(|closing| opening < span.start && span.end <= closing)
+    {
+      return true;
+    }
+  }
+  false
+}
+
+fn template_field(
+  text: &str,
+  span: &Range<usize>,
+  left: &[char],
+  right: &[char],
+) -> bool {
+  template_enclosed(text, span)
+    && (left.first().is_some_and(|ch| word(*ch))
+      || right.first().is_some_and(|ch| word(*ch))
+      || joined_word(left).iter().any(|ch| ch.is_numeric())
+      || joined_word(right).iter().any(|ch| ch.is_numeric()))
+}
+
 /// Separate edge and identifier results expose regressions in either predicate.
 pub(super) fn acceptance(text: &str, range: Range<usize>) -> (bool, bool) {
   let left = text
@@ -133,6 +216,7 @@ pub(super) fn acceptance(text: &str, range: Range<usize>) -> (bool, bool) {
     edge_is_free(span.chars().next(), &left)
       && edge_is_free(span.chars().next_back(), &right),
     enclosed(text, &range)
+      || template_field(text, &range, &left, &right)
       || identifier_on_side(&left)
       || identifier_on_side(&right),
   )

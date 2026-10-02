@@ -38,7 +38,9 @@ reference without production helpers or marker indexes. Every fuzz run compares
 both predicates at every single-character span, including rejected spans;
 generated properties compare arbitrary UTF-8 spans and exhaustively probe
 synthetic boundary, identifier, and marker cases. No policy exceptions are
-excluded. Mutation witnesses reject a one-byte edge shift and a skipped
+excluded. Template placeholders retain main's entry-spelling exception:
+raw predicate comparisons omit spelling evidence, while emitted-name checks
+allow a template field only when its surface shows a name. Mutation witnesses reject a one-byte edge shift and a skipped
 identifier check. Arbitrary caller entries may match normalized full
 identifiers or eligible subsegments (for example `a1b2` before the plain `dead`
 segment in `a1b2-dead-c3d4`). Independently, the injected short `dead` seed must

@@ -1,5 +1,14 @@
 # @stll/anonymize-cli
 
+## 3.0.3
+
+### Patch Changes
+
+- Updated dependencies [[`722af38`](https://github.com/stella/anonymize/commit/722af38ff0f24acd0f828a794d52d35de938ca96)]:
+  - @stll/anonymize@3.0.3
+  - @stll/anonymize-pdf@3.0.3
+  - @stll/anonymize-docx@3.0.3
+
 ## 3.0.2
 
 ### Patch Changes

@@ -184,6 +184,10 @@ pub struct PipelineEntity {
   pub source_detail: Option<SourceDetail>,
   pub caller_provenance: Option<CallerProvenance>,
   pub kind: EntityKind,
+  /// A caller's gazetteer entry matched exactly (case- and
+  /// diacritic-folded, or an inflected form of it), not inferred by fuzzy
+  /// matching.
+  pub(crate) exact_entry: bool,
 }
 
 impl PipelineEntity {
@@ -206,6 +210,7 @@ impl PipelineEntity {
       source_detail: None,
       caller_provenance: None,
       kind: EntityKind::Detected,
+      exact_entry: false,
     }
   }
 
@@ -230,6 +235,7 @@ impl PipelineEntity {
       kind: EntityKind::Coreference {
         source_text: source_text.into(),
       },
+      exact_entry: false,
     }
   }
 }

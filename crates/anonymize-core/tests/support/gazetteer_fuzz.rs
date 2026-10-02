@@ -2,12 +2,8 @@
 //! Fixed opaque envelopes keep the privacy invariant meaningful with empty
 //! fuzz input or input that contains no useful gazetteer term.
 
-#[path = "gazetteer_policy.rs"]
-mod gazetteer_policy;
-#[path = "gazetteer_reference.rs"]
-mod gazetteer_reference;
-
-use gazetteer_policy::CandidatePolicy;
+use super::gazetteer_policy::CandidatePolicy;
+use super::gazetteer_reference;
 
 use super::gazetteer;
 
@@ -147,8 +143,26 @@ pub(super) fn exercise(data: &[u8]) {
       "injected seed matched inside a protected opaque token"
     );
     assert!(
-      !policy.in_identifier(start, end),
+      !policy.identifier(start..end, || {
+        text.get(start..end).is_some_and(shows_a_name)
+      }),
       "gazetteer span is joined to an identifier segment"
     );
   }
+}
+
+/// Whether `surface` shows a name: a capital letter, or letters only of
+/// scripts without case or written in one case (Georgian Mkhedruli). A template field kept as a name must show one
+/// (`[[Zeta2024]]`, `[[محمد2024]]`).
+fn shows_a_name(surface: &str) -> bool {
+  let letters = surface
+    .chars()
+    .filter(|character| character.is_alphabetic())
+    .collect::<Vec<_>>();
+  !letters.is_empty()
+    && (letters.iter().any(|character| character.is_uppercase())
+      || letters.iter().all(|character| {
+        !character.is_lowercase()
+          || ('\u{10D0}'..='\u{10FF}').contains(character)
+      }))
 }
