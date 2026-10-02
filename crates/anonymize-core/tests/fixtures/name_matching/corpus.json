@@ -2692,6 +2692,146 @@
       ]
     },
     {
+      "expectation": "redact",
+      "kind": "forced-exact",
+      "text": "Organizace 5f0c2a9e-7b1d-4c3a-9e8f-1a2b3c4d5e6f archivována.",
+      "surface": "5f0c2a9e-7b1d-4c3a-9e8f-1a2b3c4d5e6f",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 11,
+          "end": 47,
+          "label": "registration number"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "forced-exact",
+      "text": "Rozsah c3a91f04-6d2e-4b8a-a1f7-0e9d8c7b6a51 uzavřen.",
+      "surface": "c3a91f04-6d2e-4b8a-a1f7-0e9d8c7b6a51",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 7,
+          "end": 43,
+          "label": "registration number"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "forced-case",
+      "text": "ŽÁDOST 5F0C2A9E-7B1D-4C3A-9E8F-1A2B3C4D5E6F ARCHIVOVÁNA.",
+      "surface": "5F0C2A9E-7B1D-4C3A-9E8F-1A2B3C4D5E6F",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 9,
+          "end": 45,
+          "label": "registration number"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "forced-embedded",
+      "text": "GET /organizace/5f0c2a9e-7b1d-4c3a-9e8f-1a2b3c4d5e6f/soubory",
+      "surface": "5f0c2a9e-7b1d-4c3a-9e8f-1a2b3c4d5e6f",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 16,
+          "end": 52,
+          "label": "registration number"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "forced-embedded",
+      "text": "{\"rozsah\":\"c3a91f04-6d2e-4b8a-a1f7-0e9d8c7b6a51\"}",
+      "surface": "c3a91f04-6d2e-4b8a-a1f7-0e9d8c7b6a51",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 11,
+          "end": 47,
+          "label": "registration number"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "forced-exact",
+      "text": "Organizácia 5f0c2a9e-7b1d-4c3a-9e8f-1a2b3c4d5e6f archivovaná.",
+      "surface": "5f0c2a9e-7b1d-4c3a-9e8f-1a2b3c4d5e6f",
+      "language": "sk",
+      "expectedEntities": [
+        {
+          "start": 13,
+          "end": 49,
+          "label": "registration number"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "forced-exact",
+      "text": "Rozsah c3a91f04-6d2e-4b8a-a1f7-0e9d8c7b6a51 uzavretý.",
+      "surface": "c3a91f04-6d2e-4b8a-a1f7-0e9d8c7b6a51",
+      "language": "sk",
+      "expectedEntities": [
+        {
+          "start": 7,
+          "end": 43,
+          "label": "registration number"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "forced-case",
+      "text": "ŽIADOSŤ 5F0C2A9E-7B1D-4C3A-9E8F-1A2B3C4D5E6F ARCHIVOVANÁ.",
+      "surface": "5F0C2A9E-7B1D-4C3A-9E8F-1A2B3C4D5E6F",
+      "language": "sk",
+      "expectedEntities": [
+        {
+          "start": 10,
+          "end": 46,
+          "label": "registration number"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "forced-embedded",
+      "text": "GET /organizacie/5f0c2a9e-7b1d-4c3a-9e8f-1a2b3c4d5e6f/subory",
+      "surface": "5f0c2a9e-7b1d-4c3a-9e8f-1a2b3c4d5e6f",
+      "language": "sk",
+      "expectedEntities": [
+        {
+          "start": 17,
+          "end": 53,
+          "label": "registration number"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "forced-embedded",
+      "text": "{\"rozsah\":\"c3a91f04-6d2e-4b8a-a1f7-0e9d8c7b6a51\"}",
+      "surface": "c3a91f04-6d2e-4b8a-a1f7-0e9d8c7b6a51",
+      "language": "sk",
+      "expectedEntities": [
+        {
+          "start": 11,
+          "end": 47,
+          "label": "registration number"
+        }
+      ]
+    },
+    {
       "expectation": "keep",
       "kind": "forced-near-miss",
       "text": "organization 5f0c2a9e-7b1d-4c3a-9e8f-1a2b3c4d5e6a archived",
