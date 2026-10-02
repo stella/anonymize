@@ -114,6 +114,33 @@ export type DocxRewriteResult = {
   appliedReplacementCount: number;
 };
 
+export const DOCX_ANONYMIZED_EXPORT_ERROR_CODES = {
+  invalidDocument: "invalid-document",
+  invalidRewritePlan: "invalid-rewrite-plan",
+  unsupportedDocument: "unsupported-document",
+  validationFailed: "validation-failed",
+} as const;
+
+export type DocxAnonymizedExportErrorCode =
+  (typeof DOCX_ANONYMIZED_EXPORT_ERROR_CODES)[keyof typeof DOCX_ANONYMIZED_EXPORT_ERROR_CODES];
+
+export type DocxAnonymizedExportReport = {
+  contractVersion: 1;
+  removedPartCount: number;
+  sanitizedXmlPartCount: number;
+};
+
+export type RewriteDocxForAnonymizedExportOptions = {
+  document: Uint8Array;
+  planRewrites: (
+    extraction: DocxExtraction,
+  ) => Promise<readonly DocxBlockRewrite[]>;
+};
+
+export type DocxAnonymizedExportResult = DocxRewriteResult & {
+  report: DocxAnonymizedExportReport;
+};
+
 export const DOCX_COVERAGE_MODES = {
   allowPartial: "allow-partial",
   requireFull: "require-full",

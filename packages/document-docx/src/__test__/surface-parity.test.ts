@@ -10,12 +10,14 @@ import {
   anonymizeDocx,
   extractDocxText,
   restoreDocxText,
+  rewriteDocxForAnonymizedExport,
   rewriteDocxText,
 } from "../index";
 
 const nodeDocumentSurface: Partial<Record<CapabilitySurfaceId, unknown>> = {
   "document.docx.extract": extractDocxText,
   "document.docx.rewrite": rewriteDocxText,
+  "document.docx.anonymized-export": rewriteDocxForAnonymizedExport,
   "document.docx.anonymize": anonymizeDocx,
   "document.docx.restore": restoreDocxText,
 };

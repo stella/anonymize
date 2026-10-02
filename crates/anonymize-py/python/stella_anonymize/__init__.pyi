@@ -155,6 +155,9 @@ class DocxRewriteError(ValueError):
 class DocxAnonymizationError(ValueError):
     code: str
 
+class DocxAnonymizedExportError(ValueError):
+    code: str
+
 class DocxRestorationError(ValueError):
     code: str
 
@@ -313,6 +316,10 @@ def rewrite_pdf_raster_from_detections(
 def rewrite_docx_text(
     document: BytesLike,
     rewrites: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]: ...
+def rewrite_docx_for_anonymized_export(
+    document: BytesLike,
+    plan_rewrites: Callable[[dict[str, Any]], Sequence[Mapping[str, Any]]],
 ) -> dict[str, Any]: ...
 def anonymize_docx(
     document: BytesLike,

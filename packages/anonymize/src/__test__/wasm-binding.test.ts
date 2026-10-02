@@ -26,6 +26,12 @@ const fakeRawModule = (): RawWasmModule => {
     externalDetectionLimitsJson: () => "{}",
     convertExternalDetectionBatchJson: () => "[]",
     extractDocxTextJson: () => "{}",
+    prepareDocxAnonymizedExportNative: () => ({
+      document: new Uint8Array(),
+      extractionJson: "{}",
+      reportJson: "{}",
+    }),
+    finalizeDocxAnonymizedExportNative: (document) => document,
     rewriteDocxTextNative: (document) => ({
       document,
       rewrittenBlockCount: 0,

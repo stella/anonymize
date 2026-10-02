@@ -1519,6 +1519,7 @@ name = "stella-anonymize-docx-core"
 version = "3.0.5"
 dependencies = [
  "percent-encoding",
+ "quick-xml",
  "roxmltree",
  "serde",
  "serde_json",
