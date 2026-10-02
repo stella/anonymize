@@ -46,6 +46,8 @@ mod corpus {
     Cs,
     Sk,
     En,
+    Ja,
+    Th,
   }
 
   impl Language {
@@ -54,9 +56,15 @@ mod corpus {
         Self::Cs => "cs",
         Self::Sk => "sk",
         Self::En => "en",
+        Self::Ja => "ja",
+        Self::Th => "th",
       }
     }
   }
+
+  // Scripts written without spaces have no production language scope; their
+  // cases pin span boundaries only, so they stay outside the language matrix.
+  const SCRIPT_ONLY_LANGUAGES: [Language; 2] = [Language::Ja, Language::Th];
 
   #[derive(Clone, Copy)]
   enum UncoveredLanguage {
@@ -396,6 +404,8 @@ mod corpus {
       vec![Language::Cs, Language::En],
       vec![Language::Sk, Language::En],
       vec![Language::Cs, Language::Sk, Language::En],
+      vec![Language::Ja],
+      vec![Language::Th],
     ];
     scopes
       .into_iter()
@@ -1288,7 +1298,12 @@ mod corpus {
       serde_json::from_str(include_str!("fixtures/name_matching/corpus.json"))?;
     let covered = scoped_engines(&[])?
       .into_keys()
-      .filter(|scope| scope.len() == 1)
+      .filter(|scope| {
+        scope.len() == 1
+          && !scope
+            .iter()
+            .any(|language| SCRIPT_ONLY_LANGUAGES.contains(language))
+      })
       .collect::<BTreeSet<_>>();
     let covered_codes = covered
       .iter()
