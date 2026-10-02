@@ -145,7 +145,8 @@ regression. By default the test prints aggregate counts only, never case text
 or outputs.
 
 Run `cargo test -p stella-anonymize-core --test name_matching_corpus -- --nocapture`.
-The normal workspace Rust CI test command discovers this integration test.
+The normal workspace Rust CI test command discovers this integration test, and
+the release workflow runs it before building and publishing.
 
 To list failing cases, set `NAME_MATCHING_CORPUS_FAILURES=1`:
 
