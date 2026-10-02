@@ -428,11 +428,13 @@ Each guarantee is enforced by the tests named after it, under
 5. **Adding entries never reduces coverage.** Every letter or digit redacted
    with a set of entries is still redacted after more entries are added,
    whatever their order and label filter. A spelling given under several
-   labels is redacted under the first of them in the pipeline's `labels`
-   order (the alphabetically first when no label filter applies), whatever
-   the entry order. Tests: `adding_entries_never_reduces_coverage`,
+   labels is redacted under the first of them that the pipeline searches for
+   (its `labels`, then the labels hotword rules reclassify into them; the
+   alphabetically first when no label filter applies), whatever the entry
+   order. Tests: `adding_entries_never_reduces_coverage`,
    `p7_adding_entries_never_reduces_coverage`,
    `a_spelling_under_several_labels_keeps_each_label`,
+   `a_spelling_keeps_a_label_that_hotword_rules_reclassify`,
    `p6_redaction_is_stable_and_entry_order_independent`.
 6. **Older prepared configs keep loading.** Gazetteer data written before the
    legal-form, language-scope and entry-text fields existed deserializes with

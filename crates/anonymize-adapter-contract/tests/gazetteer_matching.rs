@@ -374,6 +374,7 @@ fn configs_without_the_newer_gazetteer_fields_still_load() {
 /// Resolved spans after label filtering, for `entries` under `labels`.
 fn redacted_under_labels(
   labels: &[&str],
+  hotword_rules: bool,
   entries: &[(&str, &str)],
   text: &str,
 ) -> Vec<(String, String)> {
@@ -389,6 +390,7 @@ fn redacted_under_labels(
     "enableConfidenceBoost": false,
     "enableCoreference": false,
     "enableZoneClassification": false,
+    "enableHotwordRules": hotword_rules,
     "labels": labels,
     "workspaceId": "gazetteer-matching-test"
   }))
@@ -434,7 +436,7 @@ fn a_spelling_under_several_labels_keeps_each_label() {
       [("Acme", PERSON), ("Acme", ORGANIZATION)],
     ] {
       assert_eq!(
-        redacted_under_labels(&[kept], &entries, text),
+        redacted_under_labels(&[kept], false, &entries, text),
         [("Acme".to_owned(), kept.to_owned())],
         "{kept} {entries:?}"
       );
@@ -447,8 +449,35 @@ fn a_spelling_under_several_labels_keeps_each_label() {
     [("Acme", PERSON), ("Acme", ORGANIZATION)],
   ] {
     assert_eq!(
-      redacted_under_labels(&[], &entries, text),
+      redacted_under_labels(&[], false, &entries, text),
       [("Acme".to_owned(), ORGANIZATION.to_owned())],
+      "{entries:?}"
+    );
+  }
+}
+
+#[test]
+fn a_spelling_keeps_a_label_that_hotword_rules_reclassify() {
+  // `date` is not requested, but hotword rules search for it so a date next to
+  // `narozen` becomes a `date of birth`; the spelling must keep that label.
+  let text = "Klient narozen Orbis dnes.";
+  for entries in [
+    [("Orbis", "date"), ("Orbis", "address")],
+    [("Orbis", "address"), ("Orbis", "date")],
+  ] {
+    assert_eq!(
+      redacted_under_labels(&["date of birth"], true, &entries, text),
+      [("Orbis".to_owned(), "date of birth".to_owned())],
+      "{entries:?}"
+    );
+    // Without hotword rules neither label is searched for or kept.
+    assert_eq!(
+      redacted_under_labels(&["date of birth"], false, &entries, text),
+      []
+    );
+    assert_eq!(
+      redacted_under_labels(&["date"], false, &entries, text),
+      [("Orbis".to_owned(), "date".to_owned())],
       "{entries:?}"
     );
   }

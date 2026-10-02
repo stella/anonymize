@@ -42,9 +42,15 @@ fn inflection(ctx: &AssembleContext<'_>) -> BindingGazetteerInflection {
   }
 }
 
+/// The labels the matchers search for: the pipeline's `labels`, plus the
+/// labels hotword rules reclassify into them when those rules are on.
+fn search_labels<'a>(ctx: &'a AssembleContext<'_>) -> &'a [String] {
+  ctx.allowed_labels.as_deref().unwrap_or_default()
+}
+
 /// One `(term, label)` row per distinct canonical or variant string, in
 /// first-seen order. A spelling given under several labels takes the first of
-/// them in the pipeline's `labels` order, so label filtering never drops a
+/// them in the search-label order ([`search_labels`]), so label filtering never drops a
 /// spelling that a kept label names; without a label filter (or with none of
 /// its labels kept) it takes the alphabetically first. Either way the label
 /// does not depend on entry order.
@@ -88,7 +94,7 @@ pub(super) fn build_gazetteer_data(
   if !ctx.config.enable_gazetteer || gazetteer.is_empty() {
     return Ok(None);
   }
-  let terms = build_search_terms(gazetteer, &ctx.config.labels);
+  let terms = build_search_terms(gazetteer, search_labels(ctx));
   let mut labels = Vec::with_capacity(terms.len());
   let mut is_fuzzy = Vec::with_capacity(terms.len());
   let mut row_terms = Vec::with_capacity(terms.len());
@@ -134,7 +140,7 @@ pub(super) fn gazetteer_literal_patterns(
   if !has_gazetteer(ctx, gazetteer) {
     return Vec::new();
   }
-  let terms = build_search_terms(gazetteer, &ctx.config.labels);
+  let terms = build_search_terms(gazetteer, search_labels(ctx));
   let mut patterns = Vec::new();
   for (term, _) in &terms {
     patterns.push(literal_with_options(term.clone(), None, Some(false)));
