@@ -238,7 +238,7 @@ pub(super) fn in_template_field(text: &str, start: usize, end: usize) -> bool {
 }
 
 /// Whether `surface` shows a name: a capital letter, or letters only of
-/// scripts without case. A template field kept as a name must show one
+/// scripts without case or written in one case (Georgian Mkhedruli). A template field kept as a name must show one
 /// (`[[Zeta2024]]`, `[[محمد2024]]`).
 pub(super) fn shows_a_name(surface: &str) -> bool {
   let letters = surface
@@ -247,5 +247,8 @@ pub(super) fn shows_a_name(surface: &str) -> bool {
     .collect::<Vec<_>>();
   !letters.is_empty()
     && (letters.iter().any(|character| character.is_uppercase())
-      || letters.iter().all(|character| !character.is_lowercase()))
+      || letters.iter().all(|character| {
+        !character.is_lowercase()
+          || ('\u{10D0}'..='\u{10FF}').contains(character)
+      }))
 }
