@@ -19,6 +19,12 @@ use super::{
   resolve_relationship_target, rewrite_error,
 };
 
+mod attributes;
+
+use attributes::{
+  CanonicalAttribute, drawing_attribute_spec, word_attribute_spec,
+};
+
 const DRAWINGML_NAMESPACE: &str =
   "http://schemas.openxmlformats.org/drawingml/2006/main";
 const STRICT_DRAWINGML_NAMESPACE: &str =
@@ -99,16 +105,6 @@ const PROHIBITED_WORD_ELEMENTS: [&str; 22] = [
   "tcPrChange",
   "trPrChange",
   "rPrChange",
-];
-const STYLE_REFERENCE_ELEMENTS: [&str; 8] = [
-  "basedOn",
-  "link",
-  "next",
-  "numStyleLink",
-  "pStyle",
-  "rStyle",
-  "styleLink",
-  "tblStyle",
 ];
 const REMOVED_WORD_ELEMENTS: [&str; 10] = [
   "bookmarkEnd",
@@ -527,132 +523,6 @@ fn valid_relationship_id(value: &str) -> bool {
   })
 }
 
-const SAFE_WORD_VALUES: &[&str] = &[
-  "0",
-  "1",
-  "true",
-  "false",
-  "on",
-  "off",
-  "accent1",
-  "accent2",
-  "accent3",
-  "accent4",
-  "accent5",
-  "accent6",
-  "after",
-  "all",
-  "atLeast",
-  "auto",
-  "autofit",
-  "bar",
-  "baseline",
-  "before",
-  "between",
-  "both",
-  "bottom",
-  "center",
-  "character",
-  "clear",
-  "continuous",
-  "decimal",
-  "decimalZero",
-  "default",
-  "distributed",
-  "dot",
-  "dotted",
-  "double",
-  "dxa",
-  "eastAsia",
-  "end",
-  "evenPage",
-  "even",
-  "exact",
-  "firstLine",
-  "first",
-  "firstColumn",
-  "firstRow",
-  "fixed",
-  "heavy",
-  "hanging",
-  "hybridMultilevel",
-  "highKashida",
-  "inside",
-  "left",
-  "light",
-  "line",
-  "lowerLetter",
-  "lowerRoman",
-  "lowKashida",
-  "majorAscii",
-  "majorBidi",
-  "majorEastAsia",
-  "majorHAnsi",
-  "mediumKashida",
-  "minorAscii",
-  "minorBidi",
-  "minorEastAsia",
-  "minorHAnsi",
-  "multiple",
-  "multilevel",
-  "nextPage",
-  "nil",
-  "none",
-  "nothing",
-  "num",
-  "numbering",
-  "oddPage",
-  "page",
-  "paragraph",
-  "portrait",
-  "pct",
-  "right",
-  "restart",
-  "section",
-  "separator",
-  "single",
-  "singleLevel",
-  "space",
-  "start",
-  "continuationNotice",
-  "continuationSeparator",
-  "landscape",
-  "tab",
-  "table",
-  "text",
-  "thick",
-  "top",
-  "transparent",
-  "upperLetter",
-  "upperRoman",
-  "bullet",
-  "wave",
-  "word",
-  "black",
-  "blue",
-  "cyan",
-  "darkBlue",
-  "darkCyan",
-  "darkGray",
-  "darkGreen",
-  "darkMagenta",
-  "darkRed",
-  "darkYellow",
-  "green",
-  "lightGray",
-  "magenta",
-  "red",
-  "white",
-  "yellow",
-];
-
-fn safe_word_value(value: &str) -> bool {
-  !value.is_empty()
-    && value.len() <= 32
-    && value.trim() == value
-    && SAFE_WORD_VALUES.contains(&value)
-}
-
 fn collect_style_identifiers(
   entries: &[ArchiveEntry],
   content_types: &HashMap<&str, &str>,
@@ -690,497 +560,6 @@ fn collect_style_identifiers(
     }
   }
   Ok(identifiers)
-}
-
-const WORD_VAL_ATTRIBUTE_ELEMENTS: &[&str] = &[
-  "abstractNumId",
-  "basedOn",
-  "cnfStyle",
-  "effect",
-  "em",
-  "fitText",
-  "gridSpan",
-  "highlight",
-  "hMerge",
-  "ilvl",
-  "jc",
-  "kern",
-  "link",
-  "lvlJc",
-  "lvlRestart",
-  "lvlText",
-  "multiLevelType",
-  "next",
-  "nsid",
-  "numFmt",
-  "numId",
-  "numIdMacAtCleanup",
-  "numRestart",
-  "numStart",
-  "numStyleLink",
-  "outlineLvl",
-  "paperSrc",
-  "position",
-  "pos",
-  "pStyle",
-  "rStyle",
-  "start",
-  "startOverride",
-  "styleLink",
-  "suff",
-  "sz",
-  "szCs",
-  "tblLayout",
-  "tblOverlap",
-  "tblStyle",
-  "tblStyleColBandSize",
-  "tblStyleRowBandSize",
-  "textAlignment",
-  "textDirection",
-  "tmpl",
-  "type",
-  "uiPriority",
-  "vAlign",
-  "vertAlign",
-  "vMerge",
-  "w",
-];
-
-fn word_border_attribute_allowed(
-  node: Node<'_, '_>,
-  name: &str,
-) -> Option<bool> {
-  let local = node.tag_name().name();
-  if !matches!(
-    local,
-    "top"
-      | "left"
-      | "bottom"
-      | "right"
-      | "start"
-      | "end"
-      | "insideH"
-      | "insideV"
-  ) {
-    return None;
-  }
-  let parent = node.parent_element().and_then(word_local);
-  if parent
-    .is_some_and(|value| matches!(value, "pBdr" | "tblBorders" | "tcBorders"))
-  {
-    return Some(matches!(
-      name,
-      "val"
-        | "color"
-        | "sz"
-        | "space"
-        | "shadow"
-        | "frame"
-        | "themeColor"
-        | "themeTint"
-        | "themeShade"
-        | "w"
-        | "type"
-    ));
-  }
-  if !matches!(local, "insideH" | "insideV")
-    && parent.is_some_and(|value| matches!(value, "tblCellMar" | "tcMar"))
-  {
-    return Some(matches!(name, "w" | "type"));
-  }
-  None
-}
-
-fn word_layout_attribute_allowed(local: &str, name: &str) -> Option<bool> {
-  let allowed = match local {
-    "ind" => matches!(
-      name,
-      "left"
-        | "right"
-        | "firstLine"
-        | "hanging"
-        | "leftChars"
-        | "rightChars"
-        | "firstLineChars"
-        | "hangingChars"
-    ),
-    "spacing" => matches!(
-      name,
-      "before"
-        | "after"
-        | "line"
-        | "lineRule"
-        | "beforeAutospacing"
-        | "afterAutospacing"
-        | "beforeLines"
-        | "afterLines"
-    ),
-    "shd" => matches!(
-      name,
-      "val"
-        | "color"
-        | "fill"
-        | "themeColor"
-        | "themeTint"
-        | "themeShade"
-        | "themeFill"
-        | "themeFillTint"
-        | "themeFillShade"
-    ),
-    "color" => {
-      matches!(name, "val" | "themeColor" | "themeTint" | "themeShade")
-    }
-    "u" => matches!(
-      name,
-      "val" | "color" | "themeColor" | "themeTint" | "themeShade"
-    ),
-    "tblLook" => matches!(
-      name,
-      "val"
-        | "firstRow"
-        | "lastRow"
-        | "firstColumn"
-        | "lastColumn"
-        | "noHBand"
-        | "noVBand"
-    ),
-    "cols" => matches!(name, "num" | "space" | "sep" | "equalWidth"),
-    "trHeight" => matches!(name, "val" | "hRule"),
-    "tblCellSpacing" => matches!(name, "w" | "type"),
-    "tblpPr" => matches!(
-      name,
-      "leftFromText"
-        | "rightFromText"
-        | "topFromText"
-        | "bottomFromText"
-        | "vertAnchor"
-        | "horzAnchor"
-        | "tblpX"
-        | "tblpY"
-        | "tblpXSpec"
-        | "tblpYSpec"
-    ),
-    _ => return None,
-  };
-  Some(allowed)
-}
-
-fn word_attribute_allowed(node: Node<'_, '_>, name: &str) -> bool {
-  let local = node.tag_name().name();
-  if let Some(allowed) = word_border_attribute_allowed(node, name) {
-    return allowed;
-  }
-  if WORD_VAL_ATTRIBUTE_ELEMENTS.contains(&local)
-    || BOOLEAN_WORD_ELEMENTS.contains(&local)
-  {
-    return name == "val";
-  }
-  if local == "spacing" && name == "val" {
-    return node.parent_element().and_then(word_local) == Some("rPr");
-  }
-  if let Some(allowed) = word_layout_attribute_allowed(local, name) {
-    return allowed;
-  }
-  match local {
-    "style" => matches!(name, "styleId" | "type" | "default" | "customStyle"),
-    "rFonts" => matches!(
-      name,
-      "ascii"
-        | "hAnsi"
-        | "eastAsia"
-        | "cs"
-        | "asciiTheme"
-        | "hAnsiTheme"
-        | "eastAsiaTheme"
-        | "csTheme"
-        | "cstheme"
-        | "hint"
-    ),
-    "footnote" | "endnote" => matches!(name, "id" | "type"),
-    "footnoteReference" | "endnoteReference" => {
-      matches!(name, "id" | "customMarkFollows")
-    }
-    "headerReference" | "footerReference" | "tblStylePr" => name == "type",
-    "abstractNum" => name == "abstractNumId",
-    "num" => name == "numId",
-    "lvl" => matches!(name, "ilvl" | "tplc" | "tentative"),
-    "lvlOverride" => name == "ilvl",
-    "gridCol" | "tblInd" | "tblW" | "tcW" => matches!(name, "w" | "type"),
-    "pgSz" => matches!(name, "w" | "h" | "orient" | "code"),
-    "pgMar" => matches!(
-      name,
-      "top" | "right" | "bottom" | "left" | "header" | "footer" | "gutter"
-    ),
-    "br" => matches!(name, "type" | "clear"),
-    "tab" => matches!(name, "val" | "pos" | "leader"),
-    "lnNumType" => matches!(name, "countBy" | "start" | "distance" | "restart"),
-    "pgBorders" => matches!(name, "display" | "offsetFrom" | "zOrder"),
-    "docGrid" => matches!(name, "type" | "linePitch" | "charSpace"),
-    "pgNumType" => {
-      matches!(name, "start" | "fmt" | "chapterStyle" | "chapterSep")
-    }
-    "eastAsianLayout" => matches!(
-      name,
-      "id" | "combine" | "combineBrackets" | "vert" | "vertCompress"
-    ),
-    _ => false,
-  }
-}
-
-fn bounded_number(value: &str, maximum: u32) -> bool {
-  value
-    .parse::<i32>()
-    .is_ok_and(|number| number.unsigned_abs() <= maximum)
-}
-
-fn fixed_hex(value: &str, lengths: &[usize]) -> bool {
-  lengths.contains(&value.len())
-    && value.bytes().all(|byte| byte.is_ascii_hexdigit())
-}
-
-const BOOLEAN_WORD_ATTRIBUTES: &[&str] = &[
-  "default",
-  "customStyle",
-  "tentative",
-  "customMarkFollows",
-  "beforeAutospacing",
-  "afterAutospacing",
-  "shadow",
-  "frame",
-  "firstRow",
-  "lastRow",
-  "firstColumn",
-  "lastColumn",
-  "noHBand",
-  "noVBand",
-  "sep",
-  "equalWidth",
-  "combine",
-  "vert",
-  "vertCompress",
-];
-const NUMERIC_WORD_ATTRIBUTES: &[&str] = &[
-  "id",
-  "abstractNumId",
-  "numId",
-  "ilvl",
-  "code",
-  "num",
-  "countBy",
-  "start",
-  "distance",
-  "top",
-  "right",
-  "bottom",
-  "left",
-  "header",
-  "footer",
-  "gutter",
-  "before",
-  "after",
-  "line",
-  "beforeLines",
-  "afterLines",
-  "w",
-  "h",
-  "firstLine",
-  "hanging",
-  "leftChars",
-  "rightChars",
-  "firstLineChars",
-  "hangingChars",
-  "pos",
-  "space",
-  "sz",
-  "topFromText",
-  "bottomFromText",
-  "leftFromText",
-  "rightFromText",
-  "tblpX",
-  "tblpY",
-  "linePitch",
-  "charSpace",
-];
-const BOOLEAN_WORD_ELEMENTS: &[&str] = &[
-  "adjustRightInd",
-  "autoRedefine",
-  "b",
-  "bCs",
-  "bidi",
-  "bidiVisual",
-  "cantSplit",
-  "caps",
-  "contextualSpacing",
-  "cs",
-  "dstrike",
-  "formProt",
-  "hidden",
-  "hideMark",
-  "i",
-  "iCs",
-  "imprint",
-  "isLgl",
-  "keepLines",
-  "keepNext",
-  "locked",
-  "mirrorInd",
-  "noProof",
-  "noWrap",
-  "outline",
-  "pageBreakBefore",
-  "personal",
-  "personalCompose",
-  "personalReply",
-  "qFormat",
-  "rtl",
-  "semiHidden",
-  "shadow",
-  "smallCaps",
-  "snapToGrid",
-  "specVanish",
-  "strike",
-  "suppressAutoHyphens",
-  "suppressLineNumbers",
-  "tblHeader",
-  "tcFitText",
-  "titlePg",
-  "unhideWhenUsed",
-  "vanish",
-  "webHidden",
-  "widowControl",
-  "wordWrap",
-];
-const NUMERIC_WORD_ELEMENTS: &[&str] = &[
-  "sz",
-  "szCs",
-  "kern",
-  "position",
-  "numId",
-  "ilvl",
-  "start",
-  "startOverride",
-  "abstractNumId",
-  "lvlRestart",
-  "outlineLvl",
-  "tblStyleRowBandSize",
-  "tblStyleColBandSize",
-  "gridSpan",
-  "fitText",
-  "paperSrc",
-  "w",
-];
-const THEME_COLOR_VALUES: &[&str] = &[
-  "accent1",
-  "accent2",
-  "accent3",
-  "accent4",
-  "accent5",
-  "accent6",
-  "background1",
-  "background2",
-  "dark1",
-  "dark2",
-  "followedHyperlink",
-  "hyperlink",
-  "light1",
-  "light2",
-  "text1",
-  "text2",
-];
-const SHADING_VALUES: &[&str] = &[
-  "clear", "nil", "solid", "pct5", "pct10", "pct20", "pct25", "pct30", "pct40",
-  "pct50", "pct60", "pct70", "pct75", "pct80", "pct90",
-];
-const VERTICAL_ALIGNMENT_VALUES: &[&str] =
-  &["baseline", "subscript", "superscript"];
-const DOCUMENT_GRID_TYPES: &[&str] =
-  &["default", "lines", "linesAndChars", "snapToChars"];
-const TEXT_DIRECTION_VALUES: &[&str] =
-  &["btLr", "lrTb", "lrTbV", "tbLrV", "tbRl", "tbRlV"];
-const TABLE_STYLE_OVERRIDE_TYPES: &[&str] = &[
-  "band1Horz",
-  "band1Vert",
-  "band2Horz",
-  "band2Vert",
-  "firstCol",
-  "firstRow",
-  "lastCol",
-  "lastRow",
-  "neCell",
-  "nwCell",
-  "seCell",
-  "swCell",
-  "wholeTable",
-];
-// Word caps expanded or condensed character spacing at 1584 points.
-const CHARACTER_SPACING_MAX_TWIPS: u32 = 31_680;
-
-fn boolean_word_value(value: &str) -> bool {
-  matches!(value, "0" | "1" | "true" | "false" | "on" | "off")
-}
-
-fn word_attribute_value_allowed(
-  node: Node<'_, '_>,
-  name: &str,
-  value: &str,
-) -> bool {
-  let local = node.tag_name().name();
-  if local == "uiPriority" && name == "val" {
-    return value.parse::<u8>().is_ok_and(|number| number <= 99);
-  }
-  if BOOLEAN_WORD_ATTRIBUTES.contains(&name) {
-    return boolean_word_value(value);
-  }
-  if NUMERIC_WORD_ATTRIBUTES.contains(&name) {
-    return bounded_number(value, 1_000_000);
-  }
-  if matches!(name, "color" | "fill") {
-    return value == "auto" || fixed_hex(value, &[6]);
-  }
-  if matches!(
-    name,
-    "themeTint" | "themeShade" | "themeFillTint" | "themeFillShade"
-  ) {
-    return fixed_hex(value, &[2]);
-  }
-  if matches!(name, "themeColor" | "themeFill") {
-    return THEME_COLOR_VALUES.contains(&value);
-  }
-  if local == "tblLook" && name == "val" {
-    return fixed_hex(value, &[4]);
-  }
-  if local == "cnfStyle" && name == "val" {
-    return value.len() == 12
-      && value.bytes().all(|byte| matches!(byte, b'0' | b'1'));
-  }
-  if local == "color" && name == "val" {
-    return value == "auto" || fixed_hex(value, &[6]);
-  }
-  if local == "shd" && name == "val" {
-    return SHADING_VALUES.contains(&value);
-  }
-  if local == "spacing" && name == "val" {
-    return bounded_number(value, CHARACTER_SPACING_MAX_TWIPS);
-  }
-  if local == "tblStylePr" && name == "type" {
-    return TABLE_STYLE_OVERRIDE_TYPES.contains(&value);
-  }
-  if local == "vertAlign" && name == "val" {
-    return VERTICAL_ALIGNMENT_VALUES.contains(&value);
-  }
-  if local == "docGrid" && name == "type" {
-    return DOCUMENT_GRID_TYPES.contains(&value);
-  }
-  if local == "textDirection" && name == "val" {
-    return TEXT_DIRECTION_VALUES.contains(&value);
-  }
-  if BOOLEAN_WORD_ELEMENTS.contains(&local) && name == "val" {
-    return boolean_word_value(value);
-  }
-  if NUMERIC_WORD_ELEMENTS.contains(&local) && name == "val" {
-    return bounded_number(value, 1_000_000);
-  }
-  safe_word_value(value)
 }
 
 fn common_font(value: &str) -> bool {
@@ -1267,9 +646,10 @@ fn common_font(value: &str) -> bool {
 
 fn canonical_word_attributes(
   node: Node<'_, '_>,
-  local: &str,
   styles: &HashMap<String, String>,
 ) -> Result<Vec<(String, String)>, DocxRewriteError> {
+  let local = node.tag_name().name();
+  let parent = node.parent_element().and_then(word_local);
   let mut attributes = Vec::new();
   for attribute in node.attributes() {
     let name = attribute.name();
@@ -1301,68 +681,24 @@ fn canonical_word_attributes(
       attributes.push(("xml:space".to_owned(), attribute.value().to_owned()));
       continue;
     }
-    if !WORDPROCESSING_NAMESPACES.contains(&namespace)
-      || !word_attribute_allowed(node, name)
-    {
-      return Err(unsupported("DOCX content has an unsupported XML attribute"));
-    }
-    let value = if local == "style" && name == "styleId"
-      || STYLE_REFERENCE_ELEMENTS.contains(&local) && name == "val"
-    {
-      styles.get(attribute.value()).cloned().ok_or_else(|| {
-        unsupported("DOCX content references an unknown style")
-      })?
-    } else if local == "rFonts"
-      && matches!(name, "ascii" | "hAnsi" | "eastAsia" | "cs")
-    {
-      if !common_font(attribute.value()) {
-        return Err(unsupported("DOCX formatting uses an unsupported font"));
+    let spec = WORDPROCESSING_NAMESPACES
+      .contains(&namespace)
+      .then(|| word_attribute_spec(local, parent, name))
+      .flatten()
+      .ok_or_else(|| {
+        unsupported("DOCX content has an unsupported XML attribute")
+      })?;
+    match spec.domain.canonical(attribute.value(), styles) {
+      Some(CanonicalAttribute::Retain(value)) => {
+        attributes.push((format!("w:{name}"), value));
       }
-      attribute.value().to_owned()
-    } else if local == "rFonts" && name.ends_with("Theme") {
-      if !matches!(
-        attribute.value(),
-        "majorAscii"
-          | "majorBidi"
-          | "majorEastAsia"
-          | "majorHAnsi"
-          | "minorAscii"
-          | "minorBidi"
-          | "minorEastAsia"
-          | "minorHAnsi"
-      ) {
-        return Err(unsupported(
-          "DOCX formatting uses an unsupported theme font",
-        ));
-      }
-      attribute.value().to_owned()
-    } else if local == "rFonts" && name == "hint" {
-      if !matches!(attribute.value(), "default" | "eastAsia" | "cs") {
-        return Err(unsupported(
-          "DOCX formatting uses an unsupported font hint",
-        ));
-      }
-      attribute.value().to_owned()
-    } else if matches!(local, "nsid" | "tmpl") && name == "val"
-      || local == "lvl" && name == "tplc"
-    {
-      "00000001".to_owned()
-    } else if local == "lvlText" && name == "val" {
-      if !valid_numbering_label(attribute.value()) {
-        return Err(unsupported(
-          "DOCX numbering contains unsupported label text",
-        ));
-      }
-      attribute.value().to_owned()
-    } else {
-      if !word_attribute_value_allowed(node, name, attribute.value()) {
+      Some(CanonicalAttribute::Omit) => {}
+      None => {
         return Err(unsupported(
           "DOCX content has an unsupported attribute value",
         ));
       }
-      attribute.value().to_owned()
-    };
-    attributes.push((format!("w:{name}"), value));
+    }
   }
   attributes.sort_unstable();
   Ok(attributes)
@@ -1495,7 +831,7 @@ fn serialize_content_node(
     output.push_str(OFFICE_RELATIONSHIP_NAMESPACE);
     output.push('"');
   }
-  write_attributes(output, &canonical_word_attributes(node, local, styles)?);
+  write_attributes(output, &canonical_word_attributes(node, styles)?);
   let content_start = open_element_content(output);
   for child in node.children() {
     if child.is_element() {
@@ -1626,7 +962,7 @@ fn serialize_formatting_node(
       "DOCX formatting contains an unclassified Word element",
     ));
   }
-  let attributes = canonical_word_attributes(node, local, styles)?;
+  let attributes = canonical_word_attributes(node, styles)?;
   if local == "lvlText"
     && attributes
       .iter()
@@ -1739,269 +1075,41 @@ const SAFE_THEME_ELEMENTS: &[&str] = &[
   "tint",
 ];
 
-fn safe_theme_script(value: &str) -> bool {
-  matches!(
-    value,
-    "Arab"
-      | "Armn"
-      | "Beng"
-      | "Bopo"
-      | "Bugi"
-      | "Cans"
-      | "Cher"
-      | "Deva"
-      | "Ethi"
-      | "Geor"
-      | "Gujr"
-      | "Guru"
-      | "Hang"
-      | "Hans"
-      | "Hant"
-      | "Hebr"
-      | "Jpan"
-      | "Khmr"
-      | "Knda"
-      | "Laoo"
-      | "Latn"
-      | "Mlym"
-      | "Mong"
-      | "Mymr"
-      | "Orya"
-      | "Sinh"
-      | "Syrc"
-      | "Taml"
-      | "Telu"
-      | "Thaa"
-      | "Thai"
-      | "Tibt"
-      | "Uigh"
-      | "Viet"
-      | "Yiii"
-      | "Java"
-      | "Lisu"
-      | "Nkoo"
-      | "Olck"
-      | "Osma"
-      | "Phag"
-      | "Sora"
-      | "Syre"
-      | "Syrj"
-      | "Syrn"
-      | "Tale"
-      | "Talu"
-      | "Tfng"
-  )
-}
-
-fn valid_preset_dash(value: &str) -> bool {
-  matches!(
-    value,
-    "dash" | "dashDot" | "dot" | "lgDash" | "solid" | "sysDash" | "sysDot"
-  )
-}
-
-const SCHEME_COLOR_VALUES: &[&str] = &[
-  "accent1", "accent2", "accent3", "accent4", "accent5", "accent6", "bg1",
-  "bg2", "dk1", "dk2", "folHlink", "hlink", "lt1", "lt2", "phClr", "tx1",
-  "tx2",
-];
-const PATTERN_FILL_VALUES: &[&str] = &[
-  "cross",
-  "dashDnDiag",
-  "dashHorz",
-  "dashUpDiag",
-  "dashVert",
-  "diagCross",
-  "dkDnDiag",
-  "dkHorz",
-  "dkUpDiag",
-  "dkVert",
-  "dnDiag",
-  "horz",
-  "ltDnDiag",
-  "ltHorz",
-  "ltUpDiag",
-  "ltVert",
-  "pct10",
-  "pct20",
-  "pct25",
-  "pct30",
-  "pct40",
-  "pct5",
-  "pct50",
-  "pct60",
-  "pct70",
-  "pct75",
-  "pct80",
-  "pct90",
-  "smCheck",
-  "smGrid",
-  "solidDmnd",
-  "upDiag",
-  "vert",
-];
-
-fn theme_enum_attribute_allowed(local: &str, name: &str, value: &str) -> bool {
-  match (local, name) {
-    ("sysClr", "val") => {
-      matches!(value, "window" | "windowText" | "btnFace" | "btnText")
+fn canonical_drawing_attributes(
+  node: Node<'_, '_>,
+  namespace: Option<&str>,
+  prefix: &str,
+) -> Result<Vec<(String, String)>, DocxRewriteError> {
+  let local = node.tag_name().name();
+  let mut output = Vec::new();
+  for attribute in node.attributes() {
+    let canonical = (attribute.namespace() == namespace)
+      .then(|| drawing_attribute_spec(local, attribute.name()))
+      .flatten()
+      .and_then(|spec| {
+        spec.domain.canonical(attribute.value(), &HashMap::new())
+      })
+      .ok_or_else(|| {
+        unsupported("DOCX drawing formatting has an unsupported attribute")
+      })?;
+    if let CanonicalAttribute::Retain(value) = canonical {
+      output.push((format!("{prefix}{}", attribute.name()), value));
     }
-    ("schemeClr", "val") => SCHEME_COLOR_VALUES.contains(&value),
-    ("prstClr", "val") => matches!(
-      value,
-      "black" | "blue" | "gray" | "green" | "red" | "white" | "yellow"
-    ),
-    ("prstDash", "val") => valid_preset_dash(value),
-    ("path", "path") => matches!(value, "circle" | "rect" | "shape"),
-    ("pattFill", "prst") => PATTERN_FILL_VALUES.contains(&value),
-    ("camera", "prst") => matches!(
-      value,
-      "legacyObliqueFront"
-        | "legacyPerspectiveFront"
-        | "orthographicFront"
-        | "perspectiveFront"
-        | "perspectiveRelaxed"
-    ),
-    ("bevelT", "prst") => {
-      matches!(value, "angle" | "circle" | "convex" | "relaxedInset")
-    }
-    ("lightRig", "rig") => matches!(
-      value,
-      "balanced"
-        | "brightRoom"
-        | "contrasting"
-        | "flat"
-        | "soft"
-        | "threePt"
-        | "twoPt"
-    ),
-    ("lightRig", "dir") => {
-      matches!(value, "b" | "bl" | "br" | "l" | "r" | "t" | "tl" | "tr")
-    }
-    (_, "rotWithShape") | ("lin", "scaled") => {
-      matches!(value, "0" | "1" | "true" | "false")
-    }
-    ("headEnd" | "tailEnd", "w" | "len") => {
-      matches!(value, "lg" | "med" | "sm")
-    }
-    ("headEnd" | "tailEnd", "type") => matches!(
-      value,
-      "arrow" | "diamond" | "none" | "oval" | "stealth" | "triangle"
-    ),
-    (_, "cap") => matches!(value, "flat" | "rnd" | "sq"),
-    (_, "cmpd") => {
-      matches!(value, "dbl" | "sng" | "thickThin" | "thinThick" | "tri")
-    }
-    (_, "algn") => matches!(
-      value,
-      "b" | "bl" | "br" | "ctr" | "in" | "l" | "out" | "r" | "t" | "tl" | "tr"
-    ),
-    (_, "flip") => matches!(value, "none" | "x" | "xy" | "y"),
-    _ => false,
   }
-}
-
-fn parsed_i32_in(value: &str, minimum: i32, maximum: i32) -> bool {
-  value
-    .parse::<i32>()
-    .is_ok_and(|number| (minimum..=maximum).contains(&number))
-}
-
-fn theme_numeric_attribute_allowed(
-  local: &str,
-  name: &str,
-  value: &str,
-) -> bool {
-  match (local, name) {
-    ("alpha" | "alphaOff" | "lumOff" | "shade" | "tint", "val")
-    | ("gs", "pos")
-    | ("scrgbClr", "r" | "g" | "b") => parsed_i32_in(value, 0, 100_000),
-    // Modulations scale a colour component and may exceed 100%; Office
-    // themes use up to 350%.
-    ("alphaMod" | "lumMod" | "satMod", "val") => {
-      parsed_i32_in(value, 0, 1_000_000)
-    }
-    ("ln" | "bevelT", "w") => parsed_i32_in(value, 0, 20_116_800),
-    // Gradient focus rectangles may extend beyond the shape; Office themes
-    // place an edge at 180%.
-    ("fillToRect", "l" | "t" | "r" | "b") => {
-      parsed_i32_in(value, -1_000_000, 1_000_000)
-    }
-    ("lin", "ang") | ("hslClr", "hue" | "sat" | "lum") => {
-      parsed_i32_in(value, 0, 21_600_000)
-    }
-    ("miter", "lim") => parsed_i32_in(value, 0, 1_000_000),
-    (
-      element,
-      "h" | "blurRad" | "dist" | "dir" | "kx" | "ky" | "sx" | "sy" | "rad",
-    ) if element != "lightRig" => bounded_number(value, 21_600_000),
-    ("rot", "lat" | "lon" | "rev") => bounded_number(value, 21_600_000),
-    ("latin" | "ea" | "cs" | "font", "pitchFamily" | "charset") => {
-      parsed_i32_in(value, 0, 255)
-    }
-    _ => false,
-  }
-}
-
-fn canonical_theme_attribute(
-  local: &str,
-  name: &str,
-  value: &str,
-) -> Option<String> {
-  if name == "name"
-    && matches!(local, "theme" | "clrScheme" | "fontScheme" | "fmtScheme")
-  {
-    return Some("stella".to_owned());
-  }
-  if name == "script" && local == "font" && safe_theme_script(value) {
-    return Some(value.to_owned());
-  }
-  if name == "panose"
-    && matches!(local, "latin" | "ea" | "cs" | "font")
-    && fixed_hex(value, &[20])
-  {
-    return Some(value.to_ascii_uppercase());
-  }
-  if (name == "val" && local == "srgbClr" && fixed_hex(value, &[6]))
-    || (name == "lastClr" && local == "sysClr" && fixed_hex(value, &[6]))
-  {
-    return Some(value.to_ascii_uppercase());
-  }
-  if theme_enum_attribute_allowed(local, name, value)
-    || theme_numeric_attribute_allowed(local, name, value)
-  {
-    return Some(value.to_owned());
-  }
-  None
+  output.sort_unstable();
+  Ok(output)
 }
 
 fn canonical_theme_attributes(
   node: Node<'_, '_>,
 ) -> Result<Vec<(String, String)>, DocxRewriteError> {
-  let local = node.tag_name().name();
-  let mut output = Vec::new();
-  for attribute in node.attributes() {
-    if attribute.namespace().is_some() {
-      return Err(unsupported("DOCX theme contains a namespaced attribute"));
-    }
-    let name = attribute.name();
-    let value = attribute.value();
-    let canonical = if name == "typeface"
-      && matches!(local, "latin" | "ea" | "cs" | "font")
-    {
-      if !value.is_empty() && !common_font(value) {
-        return Err(unsupported("DOCX theme uses an unsupported font"));
-      }
-      value.to_owned()
-    } else {
-      canonical_theme_attribute(local, name, value).ok_or_else(|| {
-        unsupported("DOCX theme contains an unsupported attribute")
-      })?
-    };
-    output.push((name.to_owned(), canonical));
-  }
-  output.sort_unstable();
-  Ok(output)
+  canonical_drawing_attributes(node, None, "")
+}
+
+fn canonical_word_2010_attributes(
+  node: Node<'_, '_>,
+) -> Result<Vec<(String, String)>, DocxRewriteError> {
+  canonical_drawing_attributes(node, Some(WORD_2010_NAMESPACE), "w14:")
 }
 
 fn serialize_theme_node(
@@ -2081,33 +1189,6 @@ const SAFE_TEXT_OUTLINE_DRAWING_ELEMENTS: &[&str] = &[
   "tint",
 ];
 
-fn canonical_text_outline_word_2010_attributes(
-  node: Node<'_, '_>,
-) -> Result<Vec<(String, String)>, DocxRewriteError> {
-  let local = node.tag_name().name();
-  let mut output = Vec::new();
-  for attribute in node.attributes() {
-    if attribute.namespace() != Some(WORD_2010_NAMESPACE) {
-      return Err(unsupported(
-        "DOCX text outline contains an unsupported Word extension attribute",
-      ));
-    }
-    let canonical = canonical_theme_attribute(
-      local,
-      attribute.name(),
-      attribute.value(),
-    )
-    .ok_or_else(|| {
-      unsupported(
-        "DOCX text outline contains an unsupported Word extension attribute",
-      )
-    })?;
-    output.push((format!("w14:{}", attribute.name()), canonical));
-  }
-  output.sort_unstable();
-  Ok(output)
-}
-
 fn serialize_text_outline_drawing_node(
   node: Node<'_, '_>,
   output: &mut String,
@@ -2129,7 +1210,7 @@ fn serialize_text_outline_drawing_node(
   output.push(':');
   output.push_str(local);
   let attributes = if is_word_2010 {
-    canonical_text_outline_word_2010_attributes(node)?
+    canonical_word_2010_attributes(node)?
   } else {
     canonical_theme_attributes(node)?
   };
@@ -2158,45 +1239,7 @@ fn serialize_text_outline(
   {
     return Err(unsupported("DOCX contains an unsupported Word extension"));
   }
-  let mut attributes = Vec::new();
-  for attribute in node.attributes() {
-    if attribute.namespace() != Some(WORD_2010_NAMESPACE) {
-      return Err(unsupported(
-        "DOCX text outline has an unsupported attribute",
-      ));
-    }
-    let value = match attribute.name() {
-      "w"
-        if attribute
-          .value()
-          .parse::<i32>()
-          .is_ok_and(|number| (0..=20_116_800).contains(&number)) =>
-      {
-        attribute.value()
-      }
-      "cap" if matches!(attribute.value(), "flat" | "rnd" | "sq") => {
-        attribute.value()
-      }
-      "cmpd"
-        if matches!(
-          attribute.value(),
-          "dbl" | "sng" | "thickThin" | "thinThick" | "tri"
-        ) =>
-      {
-        attribute.value()
-      }
-      "algn" if matches!(attribute.value(), "ctr" | "in" | "out") => {
-        attribute.value()
-      }
-      _ => {
-        return Err(unsupported(
-          "DOCX text outline has an unsupported attribute value",
-        ));
-      }
-    };
-    attributes.push((format!("w14:{}", attribute.name()), value.to_owned()));
-  }
-  attributes.sort_unstable();
+  let attributes = canonical_word_2010_attributes(node)?;
   output.push_str("<w14:textOutline xmlns:w14=\"");
   output.push_str(WORD_2010_NAMESPACE);
   output.push_str("\" xmlns:a=\"");
@@ -2217,25 +1260,6 @@ fn serialize_text_outline(
   Ok(())
 }
 
-const LIGATURE_VALUES: &[&str] = &[
-  "none",
-  "standard",
-  "contextual",
-  "historical",
-  "discretional",
-  "standardContextual",
-  "standardHistorical",
-  "contextualHistorical",
-  "standardDiscretional",
-  "contextualDiscretional",
-  "historicalDiscretional",
-  "standardContextualHistorical",
-  "standardContextualDiscretional",
-  "standardHistoricalDiscretional",
-  "contextualHistoricalDiscretional",
-  "all",
-];
-
 fn serialize_ligatures(
   node: Node<'_, '_>,
   output: &mut String,
@@ -2248,24 +1272,15 @@ fn serialize_ligatures(
   {
     return Err(unsupported("DOCX ligatures must be an empty run property"));
   }
-  let mut attributes = node.attributes();
-  let value = match (attributes.next(), attributes.next()) {
-    (Some(attribute), None)
-      if attribute.namespace() == Some(WORD_2010_NAMESPACE)
-        && attribute.name() == "val"
-        && LIGATURE_VALUES.contains(&attribute.value()) =>
-    {
-      attribute.value()
-    }
-    _ => {
-      return Err(unsupported("DOCX ligatures have an unsupported value"));
-    }
-  };
+  let attributes = canonical_word_2010_attributes(node)?;
+  if attributes.len() != 1 {
+    return Err(unsupported("DOCX ligatures have an unsupported value"));
+  }
   output.push_str("<w14:ligatures xmlns:w14=\"");
   output.push_str(WORD_2010_NAMESPACE);
-  output.push_str("\" w14:val=\"");
-  output.push_str(value);
-  output.push_str("\"/>");
+  output.push('"');
+  write_attributes(output, &attributes);
+  output.push_str("/>");
   Ok(())
 }
 
@@ -2971,14 +1986,12 @@ mod tests {
   };
 
   use super::{
-    BOOLEAN_WORD_ELEMENTS, DRAWINGML_NAMESPACE, FORMATTING_WORD_PART_SUFFIXES,
-    SAFE_CONTENT_WORD_ELEMENTS, SAFE_NUMBERING_WORD_ELEMENTS,
-    SAFE_STYLE_WORD_ELEMENTS, STRICT_DRAWINGML_NAMESPACE, THEME_CONTENT_TYPE,
-    WORD_2010_NAMESPACE, common_font, escape_attribute,
+    DRAWINGML_NAMESPACE, FORMATTING_WORD_PART_SUFFIXES,
+    STRICT_DRAWINGML_NAMESPACE, THEME_CONTENT_TYPE, WORD_2010_NAMESPACE,
+    canonical_word_attributes, common_font, escape_attribute,
     finalize_docx_anonymized_export, prepare_docx_anonymized_export,
     sanitize_formatting_xml, valid_numbering_label,
-    validate_docx_anonymized_export, word_attribute_allowed,
-    word_attribute_value_allowed,
+    validate_docx_anonymized_export,
   };
 
   const CONTENT_TYPES: &str =
@@ -3042,6 +2055,18 @@ mod tests {
   fn ordinary_document(
     body: &str,
   ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    ordinary_document_with_numbering(
+      body,
+      &format!(
+        "<w:numbering xmlns:w=\"{WORD}\"><w:abstractNum w:abstractNumId=\"0\"><w:lvl w:ilvl=\"0\"><w:numFmt w:val=\"bullet\"/><w:lvlText w:val=\"\u{f0b7}\"/><w:pPr><w:tabs><w:tab w:val=\"num\" w:pos=\"720\"/></w:tabs></w:pPr><w:rPr><w:rFonts w:ascii=\"Symbol\" w:hAnsi=\"Symbol\" w:hint=\"default\"/></w:rPr></w:lvl></w:abstractNum></w:numbering>"
+      ),
+    )
+  }
+
+  fn ordinary_document_with_numbering(
+    body: &str,
+    numbering: &str,
+  ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     archive(&[
       (
         "[Content_Types].xml",
@@ -3073,12 +2098,7 @@ mod tests {
           "<w:styles xmlns:w=\"{WORD}\" xmlns:w14=\"{WORD_2010_NAMESPACE}\"><w:style w:type=\"paragraph\" w:styleId=\"PrivateStyleName\"><w:name w:val=\"Private Style Name\"/><w:uiPriority w:val=\"9\"/><w:rPr><w:b/><w14:textOutline w14:w=\"12700\" w14:cap=\"rnd\" w14:cmpd=\"sng\" w14:algn=\"ctr\"><w14:gradFill w14:rotWithShape=\"1\"><w14:gsLst><w14:gs w14:pos=\"0\"><w14:srgbClr w14:val=\"112233\"/></w14:gs></w14:gsLst></w14:gradFill><w14:prstDash w14:val=\"solid\"/><w14:miter w14:lim=\"800000\"/></w14:textOutline></w:rPr></w:style><w:style w:type=\"character\" w:styleId=\"SecondaryStyle\"><w:rPr><w14:textOutline><w14:solidFill><w14:srgbClr w14:val=\"AABBCC\"/></w14:solidFill><w14:round/></w14:textOutline></w:rPr></w:style></w:styles>"
         ),
       ),
-      (
-        "word/numbering.xml",
-        &format!(
-          "<w:numbering xmlns:w=\"{WORD}\"><w:abstractNum w:abstractNumId=\"0\"><w:lvl w:ilvl=\"0\"><w:numFmt w:val=\"bullet\"/><w:lvlText w:val=\"\u{f0b7}\"/><w:pPr><w:tabs><w:tab w:val=\"num\" w:pos=\"720\"/></w:tabs></w:pPr><w:rPr><w:rFonts w:ascii=\"Symbol\" w:hAnsi=\"Symbol\" w:hint=\"default\"/></w:rPr></w:lvl></w:abstractNum></w:numbering>"
-        ),
-      ),
+      ("word/numbering.xml", numbering),
       (
         "word/settings.xml",
         &format!(
@@ -3283,19 +2303,17 @@ mod tests {
     assert!(common_font("游ゴシック Light"));
     assert!(common_font("等线 Light"));
     assert_eq!(escape_attribute("a\tb\nc\rd"), "a&#x9;b&#xA;c&#xD;d");
-    let priority_xml =
-      format!("<w:uiPriority xmlns:w=\"{WORD}\" w:val=\"99\"/>");
-    let priority = roxmltree::Document::parse(&priority_xml)?;
-    assert!(word_attribute_value_allowed(
-      priority.root_element(),
-      "val",
-      "99"
-    ));
-    assert!(!word_attribute_value_allowed(
-      priority.root_element(),
-      "val",
-      "100"
-    ));
+    for (value, accepted) in [("99", true), ("100", false), ("099", false)] {
+      let priority_xml =
+        format!("<w:uiPriority xmlns:w=\"{WORD}\" w:val=\"{value}\"/>");
+      let priority = roxmltree::Document::parse(&priority_xml)?;
+      assert_eq!(
+        canonical_word_attributes(priority.root_element(), &HashMap::new())
+          .is_ok(),
+        accepted,
+        "uiPriority {value}"
+      );
+    }
     Ok(())
   }
 
@@ -3345,27 +2363,6 @@ mod tests {
           "formatting parts must reject text outside extraction coverage"
         );
       }
-    }
-    Ok(())
-  }
-
-  #[test]
-  fn every_preserved_on_off_element_accepts_explicit_values()
-  -> Result<(), Box<dyn std::error::Error>> {
-    for element in BOOLEAN_WORD_ELEMENTS {
-      assert!(
-        SAFE_CONTENT_WORD_ELEMENTS.contains(element)
-          || SAFE_STYLE_WORD_ELEMENTS.contains(element)
-          || SAFE_NUMBERING_WORD_ELEMENTS.contains(element)
-      );
-      let xml = format!("<w:{element} xmlns:w=\"{WORD}\" w:val=\"true\"/>");
-      let parsed = roxmltree::Document::parse(&xml)?;
-      let node = parsed.root_element();
-      assert!(word_attribute_allowed(node, "val"));
-      for value in ["0", "1", "true", "false", "on", "off"] {
-        assert!(word_attribute_value_allowed(node, "val", value));
-      }
-      assert!(!word_attribute_value_allowed(node, "val", "yes"));
     }
     Ok(())
   }
@@ -3540,15 +2537,13 @@ mod tests {
       THEME_CONTENT_TYPE,
       &HashMap::new(),
     )?;
-    assert!(accepted.contains("panose=\"020F0302020204030204\""));
+    assert!(accepted.contains("<a:latin typeface=\"Calibri Light\"/>"));
+    assert!(!accepted.contains("panose"));
     assert!(accepted.contains("<a:objectDefaults/>"));
     for (font, color) in [
-      ("<a:latin typeface=\"Calibri\" panose=\"020F05\"/>", ""),
-      (
-        "<a:latin typeface=\"Calibri\" panose=\"PRIVATE0000000000000\"/>",
-        "",
-      ),
       (calibri, "<a:satMod val=\"1000001\"/>"),
+      (calibri, "<a:satMod val=\"0350000\"/>"),
+      (calibri, "<a:satMod val=\"+350000\"/>"),
       (calibri, "<a:lumMod val=\"-1\"/>"),
     ] {
       assert!(
@@ -3668,6 +2663,179 @@ mod tests {
     body.push_str(&"</w:sdt>".repeat(300));
     let source = ordinary_document(&body)?;
     assert!(prepare_docx_anonymized_export(&source).is_err());
+    Ok(())
+  }
+
+  #[test]
+  fn retained_values_reject_cross_domain_and_noncanonical_spellings()
+  -> Result<(), Box<dyn std::error::Error>> {
+    let cell = |span: &str| {
+      format!(
+        "<w:tbl><w:tr><w:tc><w:tcPr><w:gridSpan w:val=\"{span}\"/></w:tcPr><w:p><w:r><w:t>Alice</w:t></w:r></w:p></w:tc></w:tr></w:tbl>"
+      )
+    };
+    let level = |value: &str| {
+      format!(
+        "<w:p><w:pPr><w:numPr><w:ilvl w:val=\"{value}\"/><w:numId w:val=\"1\"/></w:numPr></w:pPr><w:r><w:t>Alice</w:t></w:r></w:p>"
+      )
+    };
+    let run = |properties: &str| {
+      format!(
+        "<w:p><w:r><w:rPr>{properties}</w:rPr><w:t>Alice</w:t></w:r></w:p>"
+      )
+    };
+    for (body, accepted) in [
+      (cell("2"), true),
+      (cell("-1"), false),
+      (cell("0"), false),
+      (cell("+2"), false),
+      (cell("02"), false),
+      (level("8"), true),
+      (level("9"), false),
+      (level("999999"), false),
+      (run("<w:sz w:val=\"24\"/>"), true),
+      (run("<w:sz w:val=\"+5\"/>"), false),
+      (run("<w:sz w:val=\"007\"/>"), false),
+      (run("<w:highlight w:val=\"yellow\"/>"), true),
+      (run("<w:highlight w:val=\"on\"/>"), false),
+      (run("<w:u w:val=\"accent1\"/>"), false),
+    ] {
+      let result = prepare_docx_anonymized_export(&ordinary_document(&body)?);
+      assert_eq!(result.is_ok(), accepted, "{body}");
+    }
+    let numbering_type = format!("{WORD_CONTENT}numbering+xml");
+    for (format, accepted) in
+      [("decimal", true), ("on", false), ("accent1", false)]
+    {
+      let numbering = format!(
+        "<w:numbering xmlns:w=\"{WORD}\"><w:abstractNum w:abstractNumId=\"0\"><w:lvl w:ilvl=\"0\"><w:numFmt w:val=\"{format}\"/></w:lvl></w:abstractNum></w:numbering>"
+      );
+      let result = sanitize_formatting_xml(
+        &numbering,
+        "word/numbering.xml",
+        &numbering_type,
+        &HashMap::new(),
+      );
+      assert_eq!(result.is_ok(), accepted, "numFmt {format}");
+    }
+    let styles =
+      HashMap::from([("Synthetic".to_owned(), "stellaStyle1".to_owned())]);
+    let styles_type = format!("{WORD_CONTENT}styles+xml");
+    for (kind, accepted) in
+      [("paragraph", true), ("accent1", false), ("on", false)]
+    {
+      let xml = format!(
+        "<w:styles xmlns:w=\"{WORD}\"><w:style w:type=\"{kind}\" w:styleId=\"Synthetic\"><w:rPr><w:b/></w:rPr></w:style></w:styles>"
+      );
+      let result =
+        sanitize_formatting_xml(&xml, "word/styles.xml", &styles_type, &styles);
+      assert_eq!(result.is_ok(), accepted, "style type {kind}");
+    }
+    Ok(())
+  }
+
+  fn numbered_paragraph(text: &str) -> String {
+    format!(
+      "<w:p><w:pPr><w:numPr><w:ilvl w:val=\"0\"/><w:numId w:val=\"1\"/></w:numPr></w:pPr><w:r><w:t>{text}</w:t></w:r></w:p>"
+    )
+  }
+
+  fn decimal_numbering(start: &str, override_start: Option<&str>) -> String {
+    let override_xml = override_start.map_or_else(String::new, |value| {
+      format!(
+        "<w:lvlOverride w:ilvl=\"0\"><w:startOverride w:val=\"{value}\"/></w:lvlOverride>"
+      )
+    });
+    format!(
+      "<w:numbering xmlns:w=\"{WORD}\"><w:abstractNum w:abstractNumId=\"0\"><w:lvl w:ilvl=\"0\"><w:start w:val=\"{start}\"/><w:numFmt w:val=\"decimal\"/><w:lvlText w:val=\"%1.\"/><w:lvlJc w:val=\"left\"/></w:lvl></w:abstractNum><w:num w:numId=\"1\"><w:abstractNumId w:val=\"0\"/>{override_xml}</w:num></w:numbering>"
+    )
+  }
+
+  // Rewrites every extracted character, as a planner redacting all text
+  // would, and returns the finalized package.
+  fn redact_every_block(
+    prepared: &[u8],
+    blocks: &[crate::DocxTextBlock],
+  ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    let rewrites = blocks
+      .iter()
+      .filter(|block| !block.text.is_empty())
+      .map(|block| DocxBlockRewrite {
+        location: block.location.clone(),
+        expected_text: block.text.clone(),
+        replacements: vec![DocxTextReplacement {
+          start: 0,
+          end: block.text.encode_utf16().count(),
+          replacement: "█".to_owned(),
+        }],
+      })
+      .collect::<Vec<_>>();
+    let rewritten = rewrite_docx_text(prepared, &rewrites)?;
+    Ok(finalize_docx_anonymized_export(&rewritten.document)?)
+  }
+
+  #[test]
+  fn rendered_start_numbers_are_normalized_before_planning()
+  -> Result<(), Box<dyn std::error::Error>> {
+    let paragraph = numbered_paragraph("Synthetic client record");
+    let section = |properties: &str| {
+      format!("{paragraph}<w:sectPr>{properties}</w:sectPr>")
+    };
+    for (body, numbering) in [
+      (paragraph.clone(), decimal_numbering("123456", None)),
+      (paragraph.clone(), decimal_numbering("1", Some("123456"))),
+      (
+        section("<w:pgNumType w:fmt=\"decimal\" w:start=\"123456\"/>"),
+        decimal_numbering("1", None),
+      ),
+      (
+        section("<w:lnNumType w:countBy=\"1\" w:start=\"123456\"/>"),
+        decimal_numbering("1", None),
+      ),
+      (
+        section("<w:footnotePr><w:numStart w:val=\"123456\"/></w:footnotePr>"),
+        decimal_numbering("1", None),
+      ),
+    ] {
+      let source = ordinary_document_with_numbering(&body, &numbering)?;
+      let prepared = prepare_docx_anonymized_export(&source)?;
+      let finalized =
+        redact_every_block(&prepared.document, &prepared.extraction.blocks)?;
+      validate_docx_anonymized_export(&finalized)?;
+      let all_xml = archive_text(&finalized)?;
+      assert!(!all_xml.contains("123456"), "{body}");
+      assert!(!all_xml.contains("Synthetic client record"), "{body}");
+    }
+    let restarted =
+      prepare_docx_anonymized_export(&ordinary_document_with_numbering(
+        &paragraph,
+        &decimal_numbering("123456", Some("123456")),
+      )?)?;
+    let numbering = entry(&restarted.document, "word/numbering.xml")?;
+    assert!(numbering.contains("<w:start w:val=\"1\"/>"));
+    assert!(numbering.contains("<w:startOverride w:val=\"1\"/>"));
+    for start in ["0", "1"] {
+      let ordinary =
+        prepare_docx_anonymized_export(&ordinary_document_with_numbering(
+          &paragraph,
+          &decimal_numbering(start, None),
+        )?)?;
+      assert!(
+        entry(&ordinary.document, "word/numbering.xml")?
+          .contains(&format!("<w:start w:val=\"{start}\"/>")),
+        "ordinary start {start} must be kept"
+      );
+    }
+    for start in ["-1", "+5", "007", "first"] {
+      let source = ordinary_document_with_numbering(
+        &paragraph,
+        &decimal_numbering(start, None),
+      )?;
+      assert!(
+        prepare_docx_anonymized_export(&source).is_err(),
+        "start {start} must be rejected"
+      );
+    }
     Ok(())
   }
 }
