@@ -20,6 +20,8 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 
 use unicode_normalization::char::{decompose_canonical, is_combining_mark};
 
+use crate::name_joiners::NameJoiner;
+
 #[path = "gazetteer_policy.rs"]
 mod policy;
 pub(crate) use policy::is_unspaced_script;
@@ -1372,12 +1374,8 @@ const fn is_horizontal_space(ch: char) -> bool {
   ch.is_whitespace() && !is_line_break(ch)
 }
 
-const fn canonical_punctuation(ch: char) -> char {
-  match ch {
-    '\u{2019}' | '\u{02bc}' | '`' => '\'',
-    '\u{2010}' | '\u{2011}' | '\u{2013}' => '-',
-    other => other,
-  }
+fn canonical_punctuation(ch: char) -> char {
+  NameJoiner::of(ch).map_or(ch, NameJoiner::canonical)
 }
 
 /// Lower case without combining marks, so `Ľubomír` and `lubomir` agree.
@@ -1939,6 +1937,7 @@ mod tests {
   use proptest::test_runner::RngSeed;
 
   use super::*;
+  use crate::name_joiners::NAME_JOINERS;
 
   const ORGANIZATION: &str = "organization";
   const PERSON: &str = PERSON_LABEL;
@@ -3368,6 +3367,32 @@ mod tests {
     assert_eq!(found(&entries, "Acme a.s.2024 dnes"), ["Acme"]);
     assert_eq!(found(&entries, "Acme s.r.o., dnes"), ["Acme s.r.o."]);
     assert_eq!(found(&entries, "Acme s.r.o./2024"), ["Acme s.r.o."]);
+  }
+
+  #[test]
+  fn every_name_joiner_matches_an_entry_spelled_with_another() {
+    for (spelling, joiner) in NAME_JOINERS {
+      assert_eq!(canonical_punctuation(spelling), joiner.canonical());
+      // MODIFIER LETTER APOSTROPHE is a letter: it never splits a word, so
+      // an entry spelled with it matches only that spelling.
+      let entry = if spelling.is_alphanumeric() {
+        format!("Tarsk{spelling}Velmor")
+      } else {
+        format!("Tarsk{}Velmor", joiner.canonical())
+      };
+      let surname = format!("Tarsk{spelling}Velmor");
+      assert_eq!(
+        found(
+          &[exact(&entry, PERSON)],
+          &format!("Smlouvu podepsal {surname} dnes"),
+        ),
+        [surname],
+        "{spelling:?}"
+      );
+    }
+    for other in ['\u{2014}', '"', '\u{201c}', '\u{2018}'] {
+      assert_eq!(canonical_punctuation(other), other);
+    }
   }
 
   #[test]
