@@ -161,6 +161,7 @@ const SAFE_CONTENT_WORD_ELEMENTS: &[&str] = &[
   "footnoteRef",
   "footnoteReference",
   "footnotes",
+  "formProt",
   "gridAfter",
   "gridBefore",
   "gridCol",
@@ -996,6 +997,8 @@ const NUMERIC_WORD_ATTRIBUTES: &[&str] = &[
   "rightFromText",
   "tblpX",
   "tblpY",
+  "linePitch",
+  "charSpace",
 ];
 const BOOLEAN_WORD_ELEMENTS: &[&str] = &[
   "adjustRightInd",
@@ -1009,6 +1012,7 @@ const BOOLEAN_WORD_ELEMENTS: &[&str] = &[
   "contextualSpacing",
   "cs",
   "dstrike",
+  "formProt",
   "hidden",
   "hideMark",
   "i",
@@ -1086,6 +1090,12 @@ const SHADING_VALUES: &[&str] = &[
   "clear", "nil", "solid", "pct5", "pct10", "pct20", "pct25", "pct30", "pct40",
   "pct50", "pct60", "pct70", "pct75", "pct80", "pct90",
 ];
+const VERTICAL_ALIGNMENT_VALUES: &[&str] =
+  &["baseline", "subscript", "superscript"];
+const DOCUMENT_GRID_TYPES: &[&str] =
+  &["default", "lines", "linesAndChars", "snapToChars"];
+const TEXT_DIRECTION_VALUES: &[&str] =
+  &["btLr", "lrTb", "lrTbV", "tbLrV", "tbRl", "tbRlV"];
 
 fn boolean_word_value(value: &str) -> bool {
   matches!(value, "0" | "1" | "true" | "false" | "on" | "off")
@@ -1131,6 +1141,15 @@ fn word_attribute_value_allowed(
   if local == "shd" && name == "val" {
     return SHADING_VALUES.contains(&value);
   }
+  if local == "vertAlign" && name == "val" {
+    return VERTICAL_ALIGNMENT_VALUES.contains(&value);
+  }
+  if local == "docGrid" && name == "type" {
+    return DOCUMENT_GRID_TYPES.contains(&value);
+  }
+  if local == "textDirection" && name == "val" {
+    return TEXT_DIRECTION_VALUES.contains(&value);
+  }
   if BOOLEAN_WORD_ELEMENTS.contains(&local) && name == "val" {
     return boolean_word_value(value);
   }
@@ -1151,6 +1170,7 @@ fn common_font(value: &str) -> bool {
       | "Calibri"
       | "Cambria"
       | "Courier New"
+      | "DejaVu Sans"
       | "Garamond"
       | "Georgia"
       | "Helvetica"
@@ -1478,7 +1498,7 @@ fn sanitize_content_xml(
 }
 
 fn valid_numbering_label(value: &str) -> bool {
-  if value.is_empty() || value.len() > 64 {
+  if value.len() > 64 {
     return false;
   }
   let mut characters = value.chars();
@@ -1849,6 +1869,9 @@ fn theme_numeric_attribute_allowed(
       "h" | "blurRad" | "dist" | "dir" | "kx" | "ky" | "sx" | "sy" | "rad",
     ) if element != "lightRig" => bounded_number(value, 21_600_000),
     ("rot", "lat" | "lon" | "rev") => bounded_number(value, 21_600_000),
+    ("latin" | "ea" | "cs" | "font", "pitchFamily" | "charset") => {
+      parsed_i32_in(value, 0, 255)
+    }
     _ => false,
   }
 }
@@ -3294,6 +3317,45 @@ mod tests {
     assert!(!valid_numbering_label("%1. 1234567890"));
     assert!(valid_numbering_label("%1.%2."));
     assert!(valid_numbering_label("\u{f0b7}"));
+    assert!(valid_numbering_label(""));
+    Ok(())
+  }
+
+  #[test]
+  fn layout_values_accept_only_their_typed_domains()
+  -> Result<(), Box<dyn std::error::Error>> {
+    let paragraph = |run_properties: &str| {
+      format!(
+        "<w:p><w:r><w:rPr>{run_properties}</w:rPr><w:t>Alice</w:t></w:r></w:p>"
+      )
+    };
+    let section = |properties: &str| {
+      format!("{}<w:sectPr>{properties}</w:sectPr>", paragraph(""))
+    };
+    for body in [
+      section(
+        "<w:docGrid w:type=\"linesAndChars\" w:linePitch=\"360\" w:charSpace=\"-1541\"/>",
+      ),
+      section("<w:docGrid w:linePitch=\"312\" w:charSpace=\"40960\"/>"),
+      section("<w:textDirection w:val=\"tbRl\"/><w:formProt w:val=\"0\"/>"),
+      paragraph("<w:vertAlign w:val=\"subscript\"/>"),
+      paragraph("<w:rFonts w:hint=\"cs\"/>"),
+    ] {
+      prepare_docx_anonymized_export(&ordinary_document(&body)?)?;
+    }
+    for body in [
+      section("<w:docGrid w:linePitch=\"1000001\"/>"),
+      section("<w:docGrid w:charSpace=\"12pt\"/>"),
+      section("<w:docGrid w:type=\"Private\"/>"),
+      section("<w:textDirection w:val=\"Private\"/>"),
+      section("<w:formProt w:val=\"Private\"/>"),
+      paragraph("<w:vertAlign w:val=\"Private\"/>"),
+    ] {
+      assert!(
+        prepare_docx_anonymized_export(&ordinary_document(&body)?).is_err(),
+        "{body} must be rejected"
+      );
+    }
     Ok(())
   }
 
