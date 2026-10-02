@@ -47,6 +47,7 @@ const ENTRIES: &[(&str, &str, &[&str])] = &[
   ("J. Dvořák", PERSON, &[]),
   ("محمد", PERSON, &[]),
   ("東京", ORGANIZATION, &[]),
+  ("กมลวรรณ ศรีสุข", PERSON, &[]),
   ("თბილისი", ORGANIZATION, &[]),
   (FORCED_ID, IDENTIFIER, &[]),
 ];
@@ -273,12 +274,21 @@ const CASES: &[Case] = &[
   miss(Class::IdShapes, "Viz <<token:zeta9>> níže.", "<<token:zeta9>>"),
   miss(Class::IdShapes, "Blob QWNtZUEvb3JiaXM9WmV0YQ== platí.", "QWNtZUEvb3JiaXM9WmV0YQ=="),
   miss(Class::IdShapes, "Id 9b1d0c3e-acfe-4c1b-9d2e-5f6a7b8c9d0f uložen.", "9b1d0c3e-acfe-4c1b-9d2e-5f6a7b8c9d0f"),
-  // A hit covers the name (plus legal form) and nothing more.
+  // A hit covers the name (plus legal form) and nothing more, scored on the
+  // resolved output: neighbouring text in scripts written without spaces
+  // and closing delimiters stay outside it.
   spans(Class::SpanExtent, "Acme A signed the deal.", "Acme A signed", "Acme A"),
   spans(Class::SpanExtent, "Acme signed the deal.", "Acme signed", "Acme"),
   spans(Class::SpanExtent, "Novák podepsal smlouvu.", "Novák podepsal", "Novák"),
   spans(Class::SpanExtent, "Record 9b1d0c3e-acfe-4c1b-9d2e-5f6a7b8c9d0e archived today.", "9b1d0c3e-acfe-4c1b-9d2e-5f6a7b8c9d0e archived", FORCED_ID),
   spans(Class::SpanExtent, "Record 9b1d0c3e-acfe-4c1b-9d2e-5f6a7b8c9d0e closed.", "9b1d0c3e-acfe-4c1b-9d2e-5f6a7b8c9d0e closed", FORCED_ID),
+  spans(Class::SpanExtent, "本契約は東京と締結された。", "は東京と", "東京"),
+  spans(Class::SpanExtent, "東京株式会社は署名した。", "東京株式会社は", "東京"),
+  spans(Class::SpanExtent, "会社名「東京」に変更する。", "「東京」", "東京"),
+  spans(Class::SpanExtent, "ผู้ซื้อคือกมลวรรณ ศรีสุขตามสัญญานี้", "คือกมลวรรณ ศรีสุขตาม", "กมลวรรณ ศรีสุข"),
+  spans(Class::SpanExtent, "Šablona <<Beta Trading s.r.o.>> je hotová.", "<<Beta Trading s.r.o.>>", "Beta Trading s.r.o."),
+  spans(Class::SpanExtent, "Strana «Beta Trading s.r.o.» souhlasí.", "«Beta Trading s.r.o.»", "Beta Trading s.r.o."),
+  spans(Class::SpanExtent, "Strana „Beta Trading s.r.o.“ souhlasí.", "„Beta Trading s.r.o.“", "Beta Trading s.r.o."),
 ];
 
 fn engine() -> PreparedEngine {
@@ -583,7 +593,7 @@ fn czech_slovak_forms_follow_the_pipeline_language() {
 /// [`Class::CommonWordNames`] the resolved entities that survive into the
 /// redaction.
 fn case_entities(engine: &PreparedEngine, case: &Case) -> Vec<PipelineEntity> {
-  if case.class != Class::CommonWordNames {
+  if !matches!(case.class, Class::CommonWordNames | Class::SpanExtent) {
     return gazetteer_entities(engine, case.text);
   }
   engine

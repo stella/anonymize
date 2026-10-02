@@ -218,7 +218,7 @@ events:
     label: organization
     span:
       start: 0
-      end: 12
+      end: 11
     score: "0.900"
     span_valid: true
   - stage: Boundary

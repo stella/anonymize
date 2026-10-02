@@ -2,6 +2,7 @@ use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 
 use crate::byte_offsets::ByteOffsets;
+use crate::gazetteer::is_unspaced_script;
 use crate::processors::PatternSlice;
 use crate::resolution::{DetectionSource, PipelineEntity};
 use crate::types::{Result, SearchMatch};
@@ -797,12 +798,35 @@ fn token_before<'a>(
   if end == 0 {
     return None;
   }
+  let before = previous_char(text, end);
+  // A word glued to the walk position across a script change (`本契約は` in
+  // `本契約はAcme`) is another word of the sentence, not of the name.
+  if end == pos
+    && let (Some((_, before)), Some((_, after))) =
+      (before, next_char(text, pos))
+    && !same_script_run(before, after)
+  {
+    return None;
+  }
+  // A trailing apostrophe closes a quotation (`'Acme s.r.o.' and …`) unless
+  // it marks a plural possessive (`Investors' Bank`).
+  if let Some((quote_start, '\'' | '’')) = before
+    && !previous_char(text, quote_start)
+      .is_some_and(|(_, ch)| matches!(ch, 's' | 'S'))
+  {
+    return None;
+  }
 
   let mut start = end;
+  let mut next = None::<char>;
   while let Some((prev_start, ch)) = previous_char(text, start) {
-    if ch == '\n' || !is_token_char(ch) {
+    if ch == '\n'
+      || !is_token_char(ch)
+      || next.is_some_and(|next| !same_script_run(ch, next))
+    {
       break;
     }
+    next = Some(ch);
     start = prev_start;
   }
 
@@ -1097,6 +1121,13 @@ fn jurisdiction_parenthetical_open(
 
 const fn is_inter_token_space(ch: char) -> bool {
   matches!(ch, ' ' | '\t' | '\r' | '\u{00a0}' | '\u{202f}')
+}
+
+/// Whether two adjacent characters can belong to one word. Scripts written
+/// without spaces (CJK, Thai, Hangul) show no word edges, so where one meets
+/// a script written with spaces the word ends even without a space.
+fn same_script_run(left: char, right: char) -> bool {
+  is_unspaced_script(left) == is_unspaced_script(right)
 }
 
 fn is_token_char(ch: char) -> bool {
@@ -2387,11 +2418,22 @@ fn simple_word_before(text: &str, pos: usize) -> Option<Token<'_>> {
     break;
   }
 
+  if end == pos
+    && let (Some((_, before)), Some((_, after))) =
+      (previous_char(text, end), next_char(text, pos))
+    && !same_script_run(before, after)
+  {
+    return None;
+  }
   let mut start = end;
+  let mut next = None::<char>;
   while let Some((prev_start, ch)) = previous_char(text, start) {
-    if !(ch.is_alphabetic() || ch == '&') {
+    if !(ch.is_alphabetic() || ch == '&')
+      || next.is_some_and(|next| !same_script_run(ch, next))
+    {
       break;
     }
+    next = Some(ch);
     start = prev_start;
   }
 

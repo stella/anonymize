@@ -224,6 +224,24 @@
       "workspaceId": "corpus-workspace",
       "createdAt": 0,
       "source": "manual"
+    },
+    {
+      "id": "corpus-entry-span-ja",
+      "canonical": "紫苑工房",
+      "label": "organization",
+      "variants": [],
+      "workspaceId": "corpus-workspace",
+      "createdAt": 0,
+      "source": "manual"
+    },
+    {
+      "id": "corpus-entry-span-th",
+      "canonical": "กมลวรรณ ศรีสุข",
+      "label": "person",
+      "variants": [],
+      "workspaceId": "corpus-workspace",
+      "createdAt": 0,
+      "source": "manual"
     }
   ],
   "cases": [
@@ -3765,6 +3783,62 @@
           "start": 8,
           "end": 16,
           "label": "person"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "span-boundary",
+      "text": "本契約は紫苑工房と締結された。",
+      "surface": "紫苑工房",
+      "language": "ja",
+      "expectedEntities": [
+        {
+          "start": 12,
+          "end": 24,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "span-boundary",
+      "text": "紫苑工房株式会社は本契約に署名した。",
+      "surface": "紫苑工房",
+      "language": "ja",
+      "expectedEntities": [
+        {
+          "start": 0,
+          "end": 12,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "span-boundary",
+      "text": "ผู้ซื้อคือกมลวรรณ ศรีสุขตามสัญญานี้",
+      "surface": "กมลวรรณ ศรีสุข",
+      "language": "th",
+      "expectedEntities": [
+        {
+          "start": 30,
+          "end": 70,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "span-boundary",
+      "text": "Šablona <<Beta Trading s.r.o.>> je hotová.",
+      "surface": "Beta Trading s.r.o.",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 11,
+          "end": 30,
+          "label": "organization"
         }
       ]
     }

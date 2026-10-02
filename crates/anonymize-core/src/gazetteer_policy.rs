@@ -23,7 +23,9 @@ pub(super) fn is_word_char(ch: char) -> bool {
 
 /// Every block of the scripts written without spaces between words: Thai,
 /// Lao, Myanmar, Khmer, Hiragana, Katakana, Hangul, and CJK ideographs.
-pub(super) fn is_unspaced_script(ch: char) -> bool {
+/// Span resolution and the legal-form and person-name scans share this
+/// class, so no stage infers a word edge inside such a run.
+pub(crate) fn is_unspaced_script(ch: char) -> bool {
   matches!(u32::from(ch),
     0x0E00..=0x0EFF // Thai, Lao
     | 0x1000..=0x109F // Myanmar

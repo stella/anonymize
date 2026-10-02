@@ -9,6 +9,11 @@ A Georgian name exercises a script without letter case; Georgian is not a
 production language scope, so those cases declare `en` and check script
 handling, not Georgian morphology.
 
+The `span-boundary` class pins exact spans for names glued to Japanese and
+Thai text and for a name inside `<<…>>`. Japanese (`ja`) and Thai (`th`)
+have no production language scope: their cases run with that code alone and
+stay outside the forced-identifier language matrix.
+
 `name_matching_corpus.rs` assembles the production native gazetteer and runs
 its complete resolution/redaction path. Unrelated dictionary, regex and
 contextual detectors are disabled to attribute results to caller-owned names.
