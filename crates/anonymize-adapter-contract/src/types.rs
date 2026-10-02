@@ -101,6 +101,10 @@ pub struct BindingGazetteerMatchData {
   /// search patterns.
   #[serde(default)]
   pub terms: Vec<String>,
+  /// Rows whose spelling a kept `person` label names; absent in older
+  /// configs, where only `person` rows take person word orders.
+  #[serde(default)]
+  pub person_forms: Vec<bool>,
 }
 
 #[derive(

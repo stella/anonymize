@@ -268,8 +268,12 @@ mod properties {
   }
 
   fn property_runner() -> TestRunner {
+    property_runner_with(PROPERTY_CASES)
+  }
+
+  fn property_runner_with(cases: u32) -> TestRunner {
     TestRunner::new(ProptestConfig {
-      cases: PROPERTY_CASES,
+      cases,
       rng_seed: RngSeed::Fixed(0x6761_7a65_7474_6565),
       source_file: Some(file!()),
       failure_persistence: Some(Box::new(FileFailurePersistence::WithSource(
@@ -569,6 +573,148 @@ mod properties {
         Ok(())
       })
       .unwrap();
+  }
+
+  // Spellings repeat under different labels on purpose: a later entry for a
+  // spelling must never take coverage away under a label filter.
+  const COVERAGE_POOL: [(&str, &str); 17] = [
+    ("Luma", "organization"),
+    ("Luma", "person"),
+    ("LUMA", "location"),
+    ("Žilóra", "person"),
+    ("Luma Labs", "organization"),
+    ("Luma s.r.o.", "organization"),
+    ("Mivo", "person"),
+    ("Novák", "person"),
+    ("Novák", "organization"),
+    ("Jan Novák", "person"),
+    ("Jan Novák", "organization"),
+    ("Velomír", "person"),
+    ("Wintermute", "person"),
+    ("Orbis", "organization"),
+    ("Žilora", "location"),
+    ("Bex GmbH", "organization"),
+    ("Zy", "person"),
+  ];
+  const COVERAGE_LABELS: [&[&str]; 4] = [
+    &[],
+    &["organization"],
+    &["person"],
+    &["person", "organization"],
+  ];
+  const COVERAGE_TEXT: &str = "Luma Labs a Luma s.r.o. podepsaly. Jan Novák, \
+    Novákovi a Nováka zastoupil Velomír. Wintermte a Orbys, Orbis Ltd. \
+    Bex GmbH 2024 a Zy. Podpis: Novák, Jan. Žilory archived ⟦record-Luma-01⟧ id 9b1d0c3e-luma-4c1b.";
+  /// Chains a pull request runs; the release-mode variant runs many more.
+  const COVERAGE_CHAINS: u32 = 2;
+  const COVERAGE_CHAINS_RELEASE: u32 = 24;
+
+  /// Resolved `(start, end, label)` spans of the pool rows in `rows`.
+  fn labelled_spans(
+    rows: &[usize],
+    labels: &[&str],
+  ) -> BTreeSet<(usize, usize, String)> {
+    if rows.is_empty() {
+      return BTreeSet::new();
+    }
+    let entries = rows
+      .iter()
+      .map(|row| {
+        let (canonical, label) = COVERAGE_POOL[*row];
+        (canonical.to_owned(), label.to_owned())
+      })
+      .collect::<Vec<_>>();
+    let labels = labels
+      .iter()
+      .map(|label| (*label).to_owned())
+      .collect::<Vec<_>>();
+    let engine = gazetteer::labelled_engine(gazetteer::LabelledEngine {
+      entries: &entries,
+      language: "cs",
+      labels: &labels,
+    })
+    .unwrap();
+    engine
+      .redact_static_entities(COVERAGE_TEXT, &OperatorConfig::default())
+      .unwrap()
+      .resolved_entities
+      .into_iter()
+      .map(|entity| {
+        (
+          usize::try_from(entity.start).unwrap(),
+          usize::try_from(entity.end).unwrap(),
+          entity.label,
+        )
+      })
+      .collect()
+  }
+
+  /// Byte offsets of the letters and digits the spans cover. Separators are
+  /// left out: merging two adjacent names may cover the `, ` between them,
+  /// and a longer entry may resolve the same names without it.
+  fn covered(spans: &BTreeSet<(usize, usize, String)>) -> BTreeSet<usize> {
+    spans
+      .iter()
+      .flat_map(|(start, end, _)| {
+        COVERAGE_TEXT
+          .get(*start..*end)
+          .unwrap()
+          .char_indices()
+          .filter(|(_, character)| character.is_alphanumeric())
+          .map(move |(offset, _)| start + offset)
+      })
+      .collect()
+  }
+
+  /// Adds the pool rows one at a time in a random order, under every label
+  /// filter: no step may uncover a letter or digit, and the full pool resolves
+  /// the same whatever the order. One engine per step keeps a chain cheap.
+  fn assert_coverage_grows(chains: u32) {
+    let everything = (0..COVERAGE_POOL.len()).collect::<Vec<_>>();
+    let references = COVERAGE_LABELS
+      .iter()
+      .map(|labels| labelled_spans(&everything, labels))
+      .collect::<Vec<_>>();
+    assert!(
+      references.iter().all(|spans| !spans.is_empty()),
+      "real hits must exist"
+    );
+    property_runner_with(chains)
+      .run(&Just(everything).prop_shuffle(), |order| {
+        let mut exercised = 0;
+        for (labels, reference) in COVERAGE_LABELS.iter().zip(&references) {
+          let mut previous = BTreeSet::new();
+          for added in 1..=order.len() {
+            let spans = labelled_spans(&order[..added], labels);
+            let now = covered(&spans);
+            prop_assert!(
+              previous.is_subset(&now),
+              "adding {:?} under {labels:?} uncovered bytes {:?}",
+              COVERAGE_POOL[order[added - 1]],
+              previous.difference(&now).collect::<Vec<_>>()
+            );
+            if added == order.len() {
+              prop_assert_eq!(&spans, reference);
+            }
+            previous = now;
+          }
+          exercised += 1;
+        }
+        prop_assert_eq!(exercised, COVERAGE_LABELS.len());
+        Ok(())
+      })
+      .unwrap();
+  }
+
+  #[test]
+  fn p7_adding_entries_never_reduces_coverage() {
+    assert_coverage_grows(COVERAGE_CHAINS);
+  }
+
+  #[test]
+  #[ignore = "release-mode coverage monotonicity over many entry orders"]
+  fn p7_adding_entries_never_reduces_coverage_in_many_orders() {
+    assert_coverage_grows(COVERAGE_CHAINS_RELEASE);
   }
 
   // Independent wrong implementations are witnesses, never the production matcher.

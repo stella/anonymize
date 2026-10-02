@@ -51,7 +51,7 @@ pub use diagnostics::{
   DiagnosticDetail, DiagnosticEvent, DiagnosticEventKind, DiagnosticPhase,
   DiagnosticScope, DiagnosticStage, StaticRedactionDiagnostics,
 };
-pub use gazetteer::gazetteer_fuzzy_distance;
+pub use gazetteer::{gazetteer_fuzzy_distance, gazetteer_spelling_key};
 pub use hotwords::{HotwordRule, HotwordRuleData};
 pub use legal_forms::{LegalFormData, LowercaseBridge};
 pub use money::{

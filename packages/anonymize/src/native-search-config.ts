@@ -294,6 +294,7 @@ export type NativeGazetteerData = {
   legal_form_suffixes: string[];
   inflection: NativeGazetteerInflection;
   terms: string[];
+  person_forms?: boolean[];
 };
 
 export type NativeHotwordRule = {

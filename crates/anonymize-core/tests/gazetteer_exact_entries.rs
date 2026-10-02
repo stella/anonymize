@@ -26,14 +26,41 @@ const COMMON_WORDS: [&str; 40] = [
 
 /// The chat pipeline's detectors, gazetteer included, with one entry.
 fn engine(word: &str, label: &str) -> PreparedEngine {
+  engine_with(EngineOptions {
+    word,
+    label,
+    threshold: 0.4,
+    confidence_boost: false,
+  })
+}
+
+/// [`engine`] at `threshold`, with or without confidence boosting, and
+/// `Project Nebula` as a custom deny-list entry.
+struct EngineOptions<'a> {
+  word: &'a str,
+  label: &'a str,
+  threshold: f64,
+  confidence_boost: bool,
+}
+
+fn engine_with(
+  EngineOptions {
+    word,
+    label,
+    threshold,
+    confidence_boost,
+  }: EngineOptions<'_>,
+) -> PreparedEngine {
   let config: PipelineConfig = serde_json::from_value(serde_json::json!({
-    "threshold": 0.4,
+    "threshold": threshold,
     "enableTriggerPhrases": true,
     "enableRegex": true,
     "enableNameCorpus": true,
-    "enableDenyList": false,
+    "enableDenyList": true,
+    "denyListCountries": [],
+    "customDenyList": [{ "value": "Project Nebula", "label": "organization" }],
     "enableGazetteer": true,
-    "enableConfidenceBoost": false,
+    "enableConfidenceBoost": confidence_boost,
     "enableCoreference": true,
     "enableLegalForms": true,
     "labels": LABELS,
@@ -90,6 +117,40 @@ fn fuzzy_hits_keep_the_common_word_filters() {
   let engine = engine("Augusts", "person");
   assert!(!redacted(&engine, "Ask August now.", "August"));
   assert!(redacted(&engine, "Ask Augusts now.", "Augusts"));
+}
+
+#[test]
+fn exact_entries_ignore_the_redaction_threshold() {
+  for threshold in [0.95, 1.0] {
+    for confidence_boost in [false, true] {
+      let engine = engine_with(EngineOptions {
+        word: "Wintermute",
+        label: "person",
+        threshold,
+        confidence_boost,
+      });
+      let case = format!("{threshold} boost {confidence_boost}");
+      assert!(
+        redacted(&engine, "Signed by Wintermute today.", "Wintermute"),
+        "{case}"
+      );
+      assert!(
+        redacted(&engine, "Signed by WINTERMUTE today.", "WINTERMUTE"),
+        "{case}"
+      );
+      assert!(
+        redacted(&engine, "Funded by Project Nebula today.", "Project Nebula"),
+        "{case}"
+      );
+      // A typo is inferred, not named: it keeps the threshold.
+      assert!(
+        !redacted(&engine, "Signed by Wintermte today.", "Wintermte"),
+        "{case}"
+      );
+    }
+  }
+  let engine = engine("Wintermute", "person");
+  assert!(redacted(&engine, "Signed by Wintermte today.", "Wintermte"));
 }
 
 proptest! {

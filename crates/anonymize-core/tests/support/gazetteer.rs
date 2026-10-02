@@ -12,6 +12,32 @@ pub(super) fn engine(
   entries: &[String],
   language: &str,
 ) -> Result<PreparedEngine, String> {
+  let entries = entries
+    .iter()
+    .map(|canonical| (canonical.clone(), "organization".to_owned()))
+    .collect::<Vec<_>>();
+  labelled_engine(LabelledEngine {
+    entries: &entries,
+    language,
+    labels: &[],
+  })
+}
+
+/// [`engine`] over `(canonical, label)` entries, keeping only `labels` (every
+/// label when empty).
+pub(super) struct LabelledEngine<'a> {
+  pub(super) entries: &'a [(String, String)],
+  pub(super) language: &'a str,
+  pub(super) labels: &'a [String],
+}
+
+pub(super) fn labelled_engine(
+  LabelledEngine {
+    entries,
+    language,
+    labels,
+  }: LabelledEngine<'_>,
+) -> Result<PreparedEngine, String> {
   let config = PipelineConfig {
     threshold: 0.0,
     enable_trigger_phrases: false,
@@ -34,17 +60,17 @@ pub(super) fn engine(
     enable_zone_classification: Some(false),
     enable_hotword_rules: Some(false),
     standalone_street_detection: StandaloneStreetDetection::default(),
-    labels: vec![],
+    labels: labels.to_vec(),
     workspace_id: "property-test".to_owned(),
     dictionaries: None,
   };
   let entries = entries
     .iter()
     .enumerate()
-    .map(|(index, canonical)| GazetteerEntry {
+    .map(|(index, (canonical, label))| GazetteerEntry {
       id: format!("entry-{index}"),
       canonical: canonical.clone(),
-      label: "organization".to_owned(),
+      label: label.clone(),
       variants: vec![],
       workspace_id: config.workspace_id.clone(),
       created_at: 0,

@@ -95,6 +95,14 @@ pub fn gazetteer_fuzzy_distance(term: &str) -> Option<u8> {
   }
 }
 
+/// The form under which the matcher treats spellings as one: case and
+/// diacritics folded, whitespace runs collapsed (`Acme`, `ACME`, and `Ácme`
+/// share a key).
+#[must_use]
+pub fn gazetteer_spelling_key(term: &str) -> String {
+  fold(term).split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
 /// Letter case a short entry is spelled in, and a one-edit match must share.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum CaseShape {
@@ -401,6 +409,40 @@ struct Hit<'a> {
   spelling: Option<&'a Spelling>,
 }
 
+/// Every per-row list covers the gazetteer slice; optional lists may be
+/// empty.
+fn validate_row_lengths(
+  data: &GazetteerMatchData,
+  slice: PatternSlice,
+  patterns: Option<&[SearchPattern]>,
+) -> Result<()> {
+  validate_length("gazetteer_data.labels", slice, data.labels.len())?;
+  validate_length("gazetteer_data.is_fuzzy", slice, data.is_fuzzy.len())?;
+  if !data.terms.is_empty() {
+    validate_length("gazetteer_data.terms", slice, data.terms.len())?;
+  }
+  if !data.person_forms.is_empty() {
+    validate_length(
+      "gazetteer_data.person_forms",
+      slice,
+      data.person_forms.len(),
+    )?;
+  }
+  if let Some(patterns) = patterns {
+    validate_length("gazetteer patterns", slice, patterns.len())?;
+  }
+  Ok(())
+}
+
+/// An exact row's entry text, indexed by word under its label.
+#[derive(Clone, Copy)]
+struct SequenceEntry<'a> {
+  term: &'a str,
+  label: &'a str,
+  /// Also index the person word orders (surname first).
+  person_forms: bool,
+}
+
 impl PreparedGazetteerMatchData {
   /// Prepares gazetteer rows from the assembled data and the search patterns
   /// of the gazetteer slice, which carry each row's entry text.
@@ -409,14 +451,7 @@ impl PreparedGazetteerMatchData {
     slice: PatternSlice,
     patterns: Option<&[SearchPattern]>,
   ) -> Result<Self> {
-    validate_length("gazetteer_data.labels", slice, data.labels.len())?;
-    validate_length("gazetteer_data.is_fuzzy", slice, data.is_fuzzy.len())?;
-    if !data.terms.is_empty() {
-      validate_length("gazetteer_data.terms", slice, data.terms.len())?;
-    }
-    if let Some(patterns) = patterns {
-      validate_length("gazetteer patterns", slice, patterns.len())?;
-    }
+    validate_row_lengths(&data, slice, patterns)?;
     let legal_forms = data
       .legal_form_suffixes
       .iter()
@@ -449,7 +484,12 @@ impl PreparedGazetteerMatchData {
           // An artifact-only config from before entry text was carried
           // keeps its exact search hits; only folded matching needs text.
           if let Some(term) = term {
-            prepared.add_sequences(term, &label);
+            prepared.add_sequences(SequenceEntry {
+              term,
+              label: &label,
+              person_forms: label == PERSON_LABEL
+                || data.person_forms.get(index).copied().unwrap_or(false),
+            });
           }
           RowKind::Exact
         }
@@ -515,12 +555,17 @@ impl PreparedGazetteerMatchData {
       .and_then(|index| self.rows.get(index))
   }
 
-  fn add_sequences(&mut self, term: &str, label: &str) {
+  fn add_sequences(&mut self, entry: SequenceEntry<'_>) {
+    let SequenceEntry {
+      term,
+      label,
+      person_forms,
+    } = entry;
     let core = self.strip_legal_form(term);
     let Some(SplitTerm { words, gaps, edges }) = split_term(core) else {
       return;
     };
-    let reorderable = label == PERSON_LABEL
+    let reorderable = person_forms
       && edges == EdgePunctuation::default()
       && (2..=MAX_REORDERED_PERSON_WORDS).contains(&words.len())
       && !words.iter().any(|word| word.chars().any(char::is_numeric));
@@ -1974,6 +2019,7 @@ mod tests {
         .collect(),
       inflection,
       terms: Vec::new(),
+      person_forms: Vec::new(),
     };
     (
       PreparedGazetteerMatchData::new(data, slice, Some(&patterns)).unwrap(),
@@ -2362,6 +2408,35 @@ mod tests {
   }
 
   #[test]
+  fn automatic_edit_budget_grows_with_letter_count() {
+    for (term, expected) in [
+      ("Zeta", None),
+      ("Orbis", Some(1)),
+      ("orbis", None),
+      ("Lindqvist", Some(1)),
+      ("Wintermute", Some(2)),
+      ("Acme2024", None),
+    ] {
+      assert_eq!(gazetteer_fuzzy_distance(term), expected, "{term}");
+    }
+    let longest = format!("W{}", "a".repeat(63));
+    assert_eq!(gazetteer_fuzzy_distance(&longest), Some(2));
+    assert_eq!(gazetteer_fuzzy_distance(&format!("{longest}b")), None);
+    let nine = [fuzzy_entry("Lindqvist")];
+    assert_eq!(
+      engine_found(&nine, "Signed by Lindqvyst today."),
+      ["Lindqvyst"]
+    );
+    assert!(engine_found(&nine, "Signed by Lyndqvyst today.").is_empty());
+    let ten = [fuzzy_entry("Wintermute")];
+    assert_eq!(
+      engine_found(&ten, "Signed by Wyntermyte today."),
+      ["Wyntermyte"]
+    );
+    assert!(engine_found(&ten, "Signed by Wyntarmyte today.").is_empty());
+  }
+
+  #[test]
   fn many_open_delimiters_on_a_line_stay_linear() {
     let text =
       format!("{} Acme {}", "<< ⟦".repeat(50_000), ">>".repeat(50_000));
@@ -2595,6 +2670,7 @@ mod tests {
       legal_form_suffixes: Vec::new(),
       inflection: GazetteerInflection::CzechSlovak,
       terms: Vec::new(),
+      person_forms: Vec::new(),
     };
     let patterns = ["Wintermute", "Acme"].map(|term| SearchPattern::Fuzzy {
       pattern: term.to_owned(),
@@ -3296,6 +3372,28 @@ mod tests {
   #[test]
   fn names_in_unspaced_scripts_keep_matching_as_substrings() {
     assert_eq!(found(&[exact("東京", ORGANIZATION)], "東京都に"), ["東京"]);
+    // Characters of those scripts are not word characters, so a name of any
+    // script inside such a run sits on token edges.
+    for text in [
+      "界Luma界",
+      "ภาษาLumaไทย",
+      "ខ្មែរLumaខ្មែរ",
+      "ᄀLumaᄀ",
+      "ㄱLumaㄱ",
+      "ꥠLumaꥠ",
+      "ힰLumaힰ",
+      "ｶLumaｶ",
+      "ﾡLumaﾡ",
+      "ㇰLumaㇰ",
+      "ꩠLumaꩠ",
+      "𛀁Luma𛀁",
+    ] {
+      assert_eq!(
+        found(&[exact("Luma", ORGANIZATION)], text),
+        ["Luma"],
+        "{text}"
+      );
+    }
   }
 
   #[test]
@@ -3306,6 +3404,7 @@ mod tests {
       legal_form_suffixes: Vec::new(),
       inflection: GazetteerInflection::CzechSlovak,
       terms: vec!["Other".to_owned()],
+      person_forms: Vec::new(),
     };
     let literal = [SearchPattern::Literal("Acme".to_owned())];
     let slice = PatternSlice { start: 0, end: 1 };
@@ -3326,6 +3425,7 @@ mod tests {
       legal_form_suffixes: Vec::new(),
       inflection: GazetteerInflection::CzechSlovak,
       terms: Vec::new(),
+      person_forms: Vec::new(),
     };
     let fuzzy = [SearchPattern::Fuzzy {
       pattern: "Acme".to_owned(),
