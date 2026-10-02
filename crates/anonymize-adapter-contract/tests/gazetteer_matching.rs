@@ -187,6 +187,9 @@ const CASES: &[Case] = &[
   hit(Class::Templates, "Šablona {{Acme}} zde.", "Acme"),
   hit(Class::Templates, "Šablona <<Novák>> zde.", "Novák"),
   hit(Class::Templates, "Odkaz [[Orbis]] zde.", "Orbis"),
+  hit(Class::Templates, "Odkaz [[Zeta2024]] zde.", "Zeta"),
+  hit(Class::Templates, "Šablona {{Acme2024}} zde.", "Acme"),
+  miss(Class::Templates, "Šablona {{acme_01}} zde.", "acme"),
   // Person entries that are also common words, scored on the resolved
   // (redacted) output: an exact entry is always redacted.
   hit(Class::CommonWordNames, "Hello Mark there.", "Mark"),

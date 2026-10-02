@@ -124,6 +124,17 @@ fn case_shape(word: &str) -> Option<CaseShape> {
     .then_some(CaseShape::Capitalized)
 }
 
+/// The proper-noun case of every word of `term` (`Jan Novák`: capitalized,
+/// capitalized), or `None` when a word has none (`acme`, `s.`, `C3PO`).
+fn word_shapes(term: &str) -> Option<Vec<CaseShape>> {
+  let shapes = term
+    .split(|ch: char| !is_word_char(ch))
+    .filter(|word| !word.is_empty())
+    .map(case_shape)
+    .collect::<Option<Vec<_>>>()?;
+  (!shapes.is_empty()).then_some(shapes)
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct PreparedGazetteerMatchData {
   slice: PatternSlice,
@@ -144,6 +155,8 @@ pub(crate) struct PreparedGazetteerMatchData {
 struct GazetteerRow {
   label: String,
   kind: RowKind,
+  /// The entry's proper-noun case per word; see [`word_shapes`].
+  shapes: Option<Vec<CaseShape>>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -185,6 +198,8 @@ struct SequenceTrie {
 struct Terminal {
   label: String,
   edges: EdgePunctuation,
+  /// The entry's proper-noun case per word; see [`word_shapes`].
+  shapes: Option<Vec<CaseShape>>,
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -280,6 +295,8 @@ struct Hit<'a> {
   end: usize,
   label: &'a str,
   score: f64,
+  /// For an exact hit, its entry's proper-noun case per word.
+  shapes: Option<&'a [CaseShape]>,
 }
 
 impl PreparedGazetteerMatchData {
@@ -374,7 +391,12 @@ impl PreparedGazetteerMatchData {
             .push(row);
         }
       }
-      prepared.rows.push(GazetteerRow { label, kind });
+      let shapes = term.and_then(word_shapes);
+      prepared.rows.push(GazetteerRow {
+        label,
+        kind,
+        shapes,
+      });
     }
     Ok(prepared)
   }
@@ -495,10 +517,11 @@ impl PreparedGazetteerMatchData {
           end,
           label: &row.label,
           score: EXACT_SCORE,
+          shapes: row.shapes.as_deref(),
         });
       }
     }
-    exact.retain(|hit| !guard.in_identifier(hit.start, hit.end));
+    exact.retain(|hit| !guard.in_entry_identifier(hit));
     let exact_spans = SpanIndex::new(&exact);
 
     let mut fuzzy = Vec::new();
@@ -514,6 +537,7 @@ impl PreparedGazetteerMatchData {
             words,
             short_shape,
           },
+        ..
       }) = self.row(found.pattern())
       else {
         continue;
@@ -534,6 +558,7 @@ impl PreparedGazetteerMatchData {
           end,
           label,
           score: FUZZY_SCORE,
+          shapes: None,
         });
       }
       // The engine keeps one non-overlapping window per region across all
@@ -650,6 +675,7 @@ impl PreparedGazetteerMatchData {
         end,
         label: &row.label,
         score: FUZZY_SCORE,
+        shapes: None,
       });
     }
   }
@@ -752,9 +778,15 @@ impl SequenceTrie {
       }
       node = child;
     }
+    let shapes = words
+      .iter()
+      .map(|word| case_shape(word))
+      .collect::<Option<Vec<_>>>()
+      .filter(|shapes| !shapes.is_empty());
     let terminal = Terminal {
       label: label.to_owned(),
       edges: edges.clone(),
+      shapes,
     };
     if let Some(end) = self.nodes.get_mut(node)
       && !end.terminals.contains(&terminal)
@@ -848,6 +880,7 @@ impl SequenceTrie {
           end,
           label: &terminal.label,
           score: EXACT_SCORE,
+          shapes: terminal.shapes.as_deref(),
         });
       }
     }
@@ -1707,6 +1740,26 @@ impl<'t> Guard<'t> {
   /// (`9b1d0c3e-acfe-4c1b`). Plain numbers, years, and words next to a name
   /// (`Acme/2024`, `Novák-1`, `acme.cz`) do not count.
   fn in_identifier(&self, start: usize, end: usize) -> bool {
+    self.identifier(start, end, false)
+  }
+
+  /// [`Self::in_identifier`] for an exact hit. Inside a template
+  /// placeholder, a hit spelled in its entry's proper-noun case is a name
+  /// even when digits are glued or joined to it (`[[Zeta2024]]`,
+  /// `{{Acme2024}}`); a field spelled otherwise (`<<token:zeta9>>`,
+  /// `{{acme_01}}`) is not.
+  fn in_entry_identifier(&self, hit: &Hit<'_>) -> bool {
+    let named = hit.shapes.is_some_and(|shapes| {
+      self
+        .text
+        .get(hit.start..hit.end)
+        .and_then(word_shapes)
+        .is_some_and(|spelled| spelled == shapes)
+    });
+    self.identifier(hit.start, hit.end, named)
+  }
+
+  fn identifier(&self, start: usize, end: usize, named: bool) -> bool {
     let head = self.text.get(..start).unwrap_or_default();
     let tail = self.text.get(end..).unwrap_or_default();
     let before = joined_segment(
@@ -1722,7 +1775,7 @@ impl<'t> Guard<'t> {
       // A template placeholder may hold a real name (`[[Orbis]]`,
       // `<<Novák>>`); only a field built around it (`<<token:zeta9>>`,
       // `{{acme_01}}`) is an identifier.
-      Some(MarkerKind::Template) => {
+      Some(MarkerKind::Template) if !named => {
         previous_char(self.text, start).is_some_and(is_word_char)
           || next_char(self.text, end).is_some_and(is_word_char)
           || [&before, &after]
@@ -1730,7 +1783,7 @@ impl<'t> Guard<'t> {
             .flatten()
             .any(|segment| segment.chars().any(char::is_numeric))
       }
-      None => false,
+      Some(MarkerKind::Template) | None => false,
     };
     in_marker
       || before.is_some_and(|segment| is_identifier_segment(&segment))
@@ -2530,8 +2583,9 @@ mod tests {
     for text in [
       "see <<token:zeta9>> below",
       "see {{zeta_01}} below",
-      "see [[Zeta2024]] below",
+      "see [[zeta2024]] below",
       "see ⟦Zeta⟧ below",
+      "see ⟦Zeta2024⟧ below",
     ] {
       assert!(found(&entries, text).is_empty(), "{text}");
     }
@@ -2545,6 +2599,36 @@ mod tests {
       ("Pište na zeta9@example.cz.", "zeta"),
     ] {
       assert_eq!(found(&entries, text), [expected], "{text}");
+    }
+  }
+
+  #[test]
+  fn template_names_glued_to_digits_keep_their_entry_case() {
+    let entries = [
+      exact("Zeta", ORGANIZATION),
+      exact("Jan Novák", PERSON),
+      exact("ACME", ORGANIZATION),
+      exact("orbis", ORGANIZATION),
+    ];
+    for (text, expected) in [
+      ("see [[Zeta2024]] below", "Zeta"),
+      ("see {{Zeta2024}} below", "Zeta"),
+      ("see <<2024Zeta>> below", "Zeta"),
+      ("see {{Zeta_01}} below", "Zeta"),
+      ("note [[Jan Novák2024]] here", "Jan Novák"),
+      ("see {{ACME2024}} below", "ACME"),
+    ] {
+      assert_eq!(found(&entries, text), [expected], "{text}");
+    }
+    for text in [
+      "see <<token:zeta9>> below",
+      "see {{ZETA2024}} below",
+      "see {{Acme2024}} below",
+      "note [[Jan novák2024]] here",
+      "see [[orbis2024]] below",
+      "see [[Orbis2024]] below",
+    ] {
+      assert!(found(&entries, text).is_empty(), "{text}");
     }
   }
 
@@ -3112,6 +3196,7 @@ mod tests {
       left in any::<usize>(),
       right in any::<usize>(),
       identifier in ".{0,40}",
+      spelling in "[A-Za-zŽžÁá\u{301}0-9 _-]{0,16}",
       glue in prop::collection::vec(any::<char>(), 0..40),
       edge in prop::option::of(any::<char>()),
     ) {
@@ -3120,6 +3205,9 @@ mod tests {
       prop_assert_eq!(fuzz_policy::is_unspaced_script(character), is_unspaced_script(character));
       prop_assert_eq!(fuzz_policy::is_compound_joiner(character), COMPOUND_JOINERS.contains(&character));
       prop_assert_eq!(fuzz_policy::is_identifier_segment(&identifier), is_identifier_segment(&identifier));
+      for surface in [&identifier, &spelling] {
+        prop_assert_eq!(fuzz_policy::is_proper_noun_spelling(surface), word_shapes(surface).is_some());
+      }
       // Structured envelopes ensure numeric glue, joined segments, markers,
       // and their interactions are exercised alongside arbitrary Unicode.
       let arbitrary = characters.into_iter().collect::<String>();
@@ -3486,6 +3574,7 @@ mod tests {
           end: start.saturating_add(*len),
           label: ORGANIZATION,
           score: EXACT_SCORE,
+          shapes: None,
         })
         .collect::<Vec<_>>();
       let start = query_start;
