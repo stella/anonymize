@@ -6,7 +6,8 @@
 mod gazetteer_policy;
 
 use gazetteer_policy::{
-  edges_are_free, in_marker, in_template_field, touches_identifier,
+  edges_are_free, in_marker, in_template_field, shows_a_name,
+  touches_identifier,
 };
 
 use super::gazetteer;
@@ -123,10 +124,15 @@ pub(super) fn exercise(data: &[u8]) {
       "gazetteer span overlaps a protected opaque token"
     );
     assert!(
-      !in_marker(&text, start, end)
-        && !in_template_field(&text, start, end)
-        && !touches_identifier(&text, start, end),
+      !in_marker(&text, start, end) && !touches_identifier(&text, start, end),
       "gazetteer span is joined to an identifier segment"
+    );
+    // Inside a template, only a name spelled as its entry spells it, showing
+    // a name, may sit in a field (`[[Zeta2024]]`).
+    assert!(
+      !in_template_field(&text, start, end)
+        || text.get(start..end).is_some_and(shows_a_name),
+      "gazetteer span is a template field"
     );
   }
 }

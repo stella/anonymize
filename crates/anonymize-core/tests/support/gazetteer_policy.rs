@@ -236,3 +236,16 @@ pub(super) fn in_template_field(text: &str, start: usize, end: usize) -> bool {
     .flatten()
     .any(|segment| segment.chars().any(char::is_numeric))
 }
+
+/// Whether `surface` shows a name: a capital letter, or letters only of
+/// scripts without case. A template field kept as a name must show one
+/// (`[[Zeta2024]]`, `[[محمد2024]]`).
+pub(super) fn shows_a_name(surface: &str) -> bool {
+  let letters = surface
+    .chars()
+    .filter(|character| character.is_alphabetic())
+    .collect::<Vec<_>>();
+  !letters.is_empty()
+    && (letters.iter().any(|character| character.is_uppercase())
+      || letters.iter().all(|character| !character.is_lowercase()))
+}

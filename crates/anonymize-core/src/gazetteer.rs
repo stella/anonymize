@@ -124,6 +124,114 @@ fn case_shape(word: &str) -> Option<CaseShape> {
     .then_some(CaseShape::Capitalized)
 }
 
+/// How an entry spells each of its words, telling the entry's own name
+/// from a field inside a template placeholder (`[[McDonald2024]]` against
+/// `<<token:zeta9>>`).
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct Spelling {
+  words: Vec<SpelledWord>,
+  inflection: GazetteerInflection,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct SpelledWord {
+  /// As the entry writes it, the source of its declined forms.
+  written: String,
+  /// Without diacritics, in its own case.
+  plain: String,
+  shape: Option<CaseShape>,
+}
+
+impl Spelling {
+  /// The entry's words. `None` unless the entry shows a name: a capital
+  /// letter (`Zeta`, `McDonald`), or letters of a script without case
+  /// (`محمد`, `東京`). An entry whose cased letters are all lowercase
+  /// (`orbis`, `@alice`) gives no such evidence.
+  fn of(term: &str, inflection: GazetteerInflection) -> Option<Self> {
+    let words = spelled_words(term)
+      .map(|word| SpelledWord {
+        written: word.to_owned(),
+        plain: unmarked(word),
+        shape: case_shape(word),
+      })
+      .collect::<Vec<_>>();
+    (!words.is_empty() && shows_a_name(term))
+      .then_some(Self { words, inflection })
+  }
+
+  /// Whether `surface` spells every entry word as the entry does
+  /// (`McDonald`, `van`, `J`, `محمد`), as a supported declined form of it
+  /// (`McDonalda`, `Dijka`), or in the same proper-noun case (`Nováka` for
+  /// `Novák`).
+  fn spells(&self, surface: &str) -> bool {
+    let mut words = spelled_words(surface);
+    shows_a_name(surface)
+      && self.words.iter().all(|entry| {
+        words
+          .next()
+          .is_some_and(|word| self.spells_word(entry, word))
+      })
+      && words.next().is_none()
+  }
+
+  fn spells_word(&self, entry: &SpelledWord, word: &str) -> bool {
+    let plain = unmarked(word);
+    plain == entry.plain
+      || entry
+        .shape
+        .is_some_and(|shape| case_shape(word) == Some(shape))
+      || (self.inflection == GazetteerInflection::CzechSlovak
+        && !entry.written.chars().any(char::is_numeric)
+        && expand_name_declensions(&entry.written)
+          .into_iter()
+          .chain(expand_surname_derivations(&entry.written))
+          .any(|form| unmarked(&form) == plain))
+  }
+}
+
+/// A capital letter, or letters only of scripts without case.
+fn shows_a_name(text: &str) -> bool {
+  let mut letters = text.chars().filter(|ch| ch.is_alphabetic()).peekable();
+  letters.peek().is_some()
+    && (text.chars().any(char::is_uppercase)
+      || letters.all(|ch| !ch.is_lowercase()))
+}
+
+/// Runs of letters and digits, in any script.
+fn spelled_words(text: &str) -> impl Iterator<Item = &str> {
+  text
+    .split(|ch: char| !(ch.is_alphanumeric() || is_combining_mark(ch)))
+    .filter(|word| !word.is_empty())
+}
+
+/// `word` without diacritics, in its own case, transliterated as [`fold`]
+/// does (`McDønałd` spells `McDonald`).
+fn unmarked(word: &str) -> String {
+  let mut plain = String::with_capacity(word.len());
+  for ch in word.chars() {
+    decompose_canonical(ch, |part| {
+      if !is_combining_mark(part) {
+        plain.push(unstroked(part));
+      }
+    });
+  }
+  plain
+}
+
+/// The base letter of a letter with a stroke, which has no canonical
+/// decomposition (`ł`, `Đ`, `ø`), in its own case.
+const fn unstroked(ch: char) -> char {
+  match ch {
+    'ł' => 'l',
+    'Ł' => 'L',
+    'đ' => 'd',
+    'Đ' => 'D',
+    'ø' => 'o',
+    'Ø' => 'O',
+    other => other,
+  }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct PreparedGazetteerMatchData {
   slice: PatternSlice,
@@ -144,6 +252,8 @@ pub(crate) struct PreparedGazetteerMatchData {
 struct GazetteerRow {
   label: String,
   kind: RowKind,
+  /// How the entry spells its words; see [`Spelling`].
+  spelling: Option<Spelling>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -185,6 +295,8 @@ struct SequenceTrie {
 struct Terminal {
   label: String,
   edges: EdgePunctuation,
+  /// How the entry spells its words; see [`Spelling`].
+  spelling: Option<Spelling>,
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -280,6 +392,8 @@ struct Hit<'a> {
   end: usize,
   label: &'a str,
   score: f64,
+  /// For an exact hit, how its entry spells its words.
+  spelling: Option<&'a Spelling>,
 }
 
 impl PreparedGazetteerMatchData {
@@ -374,7 +488,17 @@ impl PreparedGazetteerMatchData {
             .push(row);
         }
       }
-      prepared.rows.push(GazetteerRow { label, kind });
+      let spelling = (kind == RowKind::Exact)
+        .then(|| {
+          term
+            .and_then(|term| Spelling::of(term, prepared.sequences.inflection))
+        })
+        .flatten();
+      prepared.rows.push(GazetteerRow {
+        label,
+        kind,
+        spelling,
+      });
     }
     Ok(prepared)
   }
@@ -495,10 +619,11 @@ impl PreparedGazetteerMatchData {
           end,
           label: &row.label,
           score: EXACT_SCORE,
+          spelling: row.spelling.as_ref(),
         });
       }
     }
-    exact.retain(|hit| !guard.in_identifier(hit.start, hit.end));
+    exact.retain(|hit| !guard.in_entry_identifier(hit));
     let exact_spans = SpanIndex::new(&exact);
 
     let mut fuzzy = Vec::new();
@@ -514,6 +639,7 @@ impl PreparedGazetteerMatchData {
             words,
             short_shape,
           },
+        ..
       }) = self.row(found.pattern())
       else {
         continue;
@@ -534,6 +660,7 @@ impl PreparedGazetteerMatchData {
           end,
           label,
           score: FUZZY_SCORE,
+          spelling: None,
         });
       }
       // The engine keeps one non-overlapping window per region across all
@@ -650,6 +777,7 @@ impl PreparedGazetteerMatchData {
         end,
         label: &row.label,
         score: FUZZY_SCORE,
+        spelling: None,
       });
     }
   }
@@ -752,9 +880,11 @@ impl SequenceTrie {
       }
       node = child;
     }
+    let spelling = Spelling::of(&words.join(" "), self.inflection);
     let terminal = Terminal {
       label: label.to_owned(),
       edges: edges.clone(),
+      spelling,
     };
     if let Some(end) = self.nodes.get_mut(node)
       && !end.terminals.contains(&terminal)
@@ -848,6 +978,7 @@ impl SequenceTrie {
           end,
           label: &terminal.label,
           score: EXACT_SCORE,
+          spelling: terminal.spelling.as_ref(),
         });
       }
     }
@@ -1233,12 +1364,7 @@ fn fold_into(value: &str, out: &mut String) {
         return;
       }
       for lower in part.to_lowercase() {
-        out.push(match lower {
-          'ł' => 'l',
-          'đ' => 'd',
-          'ø' => 'o',
-          other => other,
-        });
+        out.push(unstroked(lower));
       }
     });
   }
@@ -1707,6 +1833,25 @@ impl<'t> Guard<'t> {
   /// (`9b1d0c3e-acfe-4c1b`). Plain numbers, years, and words next to a name
   /// (`Acme/2024`, `Novák-1`, `acme.cz`) do not count.
   fn in_identifier(&self, start: usize, end: usize) -> bool {
+    self.identifier(start, end, None)
+  }
+
+  /// [`Self::in_identifier`] for an exact hit. Inside a template
+  /// placeholder, a hit spelled as its entry spells it is a name even when
+  /// digits are glued or joined to it (`[[Zeta2024]]`, `[[McDonald2024]]`);
+  /// a field spelled otherwise (`<<token:zeta9>>`, `{{acme_01}}`) is not.
+  fn in_entry_identifier(&self, hit: &Hit<'_>) -> bool {
+    self.identifier(hit.start, hit.end, hit.spelling)
+  }
+
+  /// See [`Self::in_identifier`]; `spelling` is the entry's, for an exact
+  /// hit, checked only for a hit in a template field.
+  fn identifier(
+    &self,
+    start: usize,
+    end: usize,
+    spelling: Option<&Spelling>,
+  ) -> bool {
     let head = self.text.get(..start).unwrap_or_default();
     let tail = self.text.get(end..).unwrap_or_default();
     let before = joined_segment(
@@ -1723,12 +1868,19 @@ impl<'t> Guard<'t> {
       // `<<Novák>>`); only a field built around it (`<<token:zeta9>>`,
       // `{{acme_01}}`) is an identifier.
       Some(MarkerKind::Template) => {
-        previous_char(self.text, start).is_some_and(is_word_char)
+        let field = previous_char(self.text, start).is_some_and(is_word_char)
           || next_char(self.text, end).is_some_and(is_word_char)
           || [&before, &after]
             .into_iter()
             .flatten()
-            .any(|segment| segment.chars().any(char::is_numeric))
+            .any(|segment| segment.chars().any(char::is_numeric));
+        field
+          && !spelling.is_some_and(|spelling| {
+            self
+              .text
+              .get(start..end)
+              .is_some_and(|surface| spelling.spells(surface))
+          })
       }
       None => false,
     };
@@ -2530,8 +2682,9 @@ mod tests {
     for text in [
       "see <<token:zeta9>> below",
       "see {{zeta_01}} below",
-      "see [[Zeta2024]] below",
+      "see [[zeta2024]] below",
       "see ⟦Zeta⟧ below",
+      "see ⟦Zeta2024⟧ below",
     ] {
       assert!(found(&entries, text).is_empty(), "{text}");
     }
@@ -2545,6 +2698,89 @@ mod tests {
       ("Pište na zeta9@example.cz.", "zeta"),
     ] {
       assert_eq!(found(&entries, text), [expected], "{text}");
+    }
+  }
+
+  #[test]
+  fn template_names_glued_to_digits_keep_their_entry_case() {
+    let entries = [
+      exact("Zeta", ORGANIZATION),
+      exact("Jan Novák", PERSON),
+      exact("ACME", ORGANIZATION),
+      exact("orbis", ORGANIZATION),
+      exact("McDonald", PERSON),
+      exact("Jan van Dijk", PERSON),
+      exact("J. Dvořák", PERSON),
+      exact("محمد", PERSON),
+      exact("東京", ORGANIZATION),
+      exact("דוד", PERSON),
+      exact("Ahmed علي", PERSON),
+      exact("hasan علي", PERSON),
+    ];
+    for (text, expected) in [
+      ("see [[Zeta2024]] below", "Zeta"),
+      ("see {{Zeta2024}} below", "Zeta"),
+      ("see <<2024Zeta>> below", "Zeta"),
+      ("see {{Zeta_01}} below", "Zeta"),
+      ("note [[Jan Novák2024]] here", "Jan Novák"),
+      ("see {{ACME2024}} below", "ACME"),
+      ("see [[McDonald2024]] below", "McDonald"),
+      ("note [[Jan van Dijk2024]] here", "Jan van Dijk"),
+      ("note [[J. Dvořák2024]] here", "J. Dvořák"),
+      ("note [[J. Dvorak2024]] here", "J. Dvorak"),
+      ("see [[McDonalda2024]] below", "McDonalda"),
+      ("see {{McDonaldovi2024}} below", "McDonaldovi"),
+      ("note [[Jan van Dijka2024]] here", "Jan van Dijka"),
+      ("note [[Jana van Dijka2024]] here", "Jana van Dijka"),
+      ("see [[محمد2024]] below", "محمد"),
+      ("see {{東京2024}} below", "東京"),
+      ("see <<דוד2024>> below", "דוד"),
+      ("note [[Ahmed علي2024]] here", "Ahmed علي"),
+    ] {
+      assert_eq!(found(&entries, text), [expected], "{text}");
+    }
+    for text in [
+      "see <<token:zeta9>> below",
+      "see {{ZETA2024}} below",
+      "see {{Acme2024}} below",
+      "note [[Jan novák2024]] here",
+      "see [[orbis2024]] below",
+      "see [[Orbis2024]] below",
+      "see [[mcdonald2024]] below",
+      "see [[MCDONALD2024]] below",
+      "note [[Jan Van Dijk2024]] here",
+      "note [[j. Dvořák2024]] here",
+      "see [[mcdonalda2024]] below",
+      "note [[Jan Van Dijka2024]] here",
+      "note [[hasan علي2024]] here",
+    ] {
+      assert!(found(&entries, text).is_empty(), "{text}");
+    }
+  }
+
+  #[test]
+  fn template_names_compare_letters_with_strokes_as_fold_does() {
+    for (entry, text, expected) in [
+      ("McDønałd", "see [[McDonald2024]] below", "McDonald"),
+      ("McDØNAŁD", "see [[McDONALD2024]] below", "McDONALD"),
+      ("McDonald", "see [[McDønałd2024]] below", "McDønałd"),
+      (
+        "Đorđe McKay",
+        "note {{Dorde McKay2024}} here",
+        "Dorde McKay",
+      ),
+    ] {
+      assert_eq!(found(&[exact(entry, PERSON)], text), [expected], "{text}");
+      assert_eq!(
+        found(&[exact(entry, PERSON)], &text.replace("2024", "")),
+        [expected]
+      );
+    }
+    for (entry, text) in [
+      ("McDønałd", "see [[mcdonald2024]] below"),
+      ("McDØNAŁD", "see [[McDonald2024]] below"),
+    ] {
+      assert!(found(&[exact(entry, PERSON)], text).is_empty(), "{text}");
     }
   }
 
@@ -3112,6 +3348,8 @@ mod tests {
       left in any::<usize>(),
       right in any::<usize>(),
       identifier in ".{0,40}",
+      spelling in "[A-Za-zŽžÁá\u{301}محد東京0-9 _-]{0,16}",
+      entry in "[A-Za-zŽžÁá\u{301}محد東京 .-]{1,16}",
       glue in prop::collection::vec(any::<char>(), 0..40),
       edge in prop::option::of(any::<char>()),
     ) {
@@ -3120,6 +3358,15 @@ mod tests {
       prop_assert_eq!(fuzz_policy::is_unspaced_script(character), is_unspaced_script(character));
       prop_assert_eq!(fuzz_policy::is_compound_joiner(character), COMPOUND_JOINERS.contains(&character));
       prop_assert_eq!(fuzz_policy::is_identifier_segment(&identifier), is_identifier_segment(&identifier));
+      // A template field is only kept as a name that shows one.
+      let signature = Spelling::of(&entry, GazetteerInflection::CzechSlovak);
+      for surface in [&identifier, &spelling] {
+        prop_assert_eq!(fuzz_policy::shows_a_name(surface), shows_a_name(surface));
+        if signature.as_ref().is_some_and(|signature| signature.spells(surface)) {
+          prop_assert!(fuzz_policy::shows_a_name(surface));
+        }
+      }
+      prop_assert!(signature.is_none_or(|signature| signature.spells(&entry)));
       // Structured envelopes ensure numeric glue, joined segments, markers,
       // and their interactions are exercised alongside arbitrary Unicode.
       let arbitrary = characters.into_iter().collect::<String>();
@@ -3486,6 +3733,7 @@ mod tests {
           end: start.saturating_add(*len),
           label: ORGANIZATION,
           score: EXACT_SCORE,
+          spelling: None,
         })
         .collect::<Vec<_>>();
       let start = query_start;
