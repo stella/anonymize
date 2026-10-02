@@ -41,6 +41,7 @@ const ENTRIES: &[(&str, &str, &[&str])] = &[
   ("Mark", PERSON, &[]),
   ("Will", PERSON, &[]),
   ("Grant", PERSON, &[]),
+  ("Augusts", PERSON, &[]),
   (FORCED_ID, IDENTIFIER, &[]),
 ];
 
@@ -192,6 +193,8 @@ const CASES: &[Case] = &[
   hit(Class::CommonWordNames, "Ask Will now.", "Will"),
   hit(Class::CommonWordNames, "Grant signed the deal.", "Grant"),
   hit(Class::CommonWordNames, "Smlouvu podepsal Mark dnes.", "Mark"),
+  // A fuzzy hit is inferred, so common-word filters still apply to it.
+  miss(Class::CommonWordNames, "Ask August now.", "August"),
   // Names next to numbers, years, and words in references, emails, URLs,
   // handles, and file names.
   spans(Class::BesideNumbers, "Smlouva Acme/2024 platí.", "Acme/2024", "Acme"),

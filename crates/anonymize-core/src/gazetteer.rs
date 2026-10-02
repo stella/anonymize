@@ -555,11 +555,25 @@ impl PreparedGazetteerMatchData {
       }
     }
     let fuzzy = without_contained(fuzzy, &exact);
+    self.entities(text, exact, fuzzy)
+  }
 
+  /// Entities for the exact hits, then the fuzzy ones, each extended over a
+  /// following legal form; a span already emitted for its label is skipped.
+  fn entities(
+    &self,
+    text: &str,
+    exact: Vec<Hit<'_>>,
+    fuzzy: Vec<Hit<'_>>,
+  ) -> Result<Vec<PipelineEntity>> {
     let mut seen = HashSet::new();
     let mut entities =
       Vec::with_capacity(exact.len().saturating_add(fuzzy.len()));
-    for hit in exact.into_iter().chain(fuzzy) {
+    let hits = exact
+      .into_iter()
+      .map(|hit| (hit, true))
+      .chain(fuzzy.into_iter().map(|hit| (hit, false)));
+    for (hit, exact_entry) in hits {
       // Every emitted span must close any dotted chain it ends or starts
       // in (`s.r.o` inside `s.r.o.y`); fall back to the unextended span,
       // then drop the hit.
@@ -584,6 +598,7 @@ impl PreparedGazetteerMatchData {
       );
       entity.source_detail =
         legal_form_end.map(|_| SourceDetail::GazetteerExtension);
+      entity.exact_entry = exact_entry;
       entities.push(entity);
     }
     Ok(entities)

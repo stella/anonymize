@@ -84,6 +84,14 @@ fn common_word_person_entries_are_redacted() {
   }
 }
 
+#[test]
+fn fuzzy_hits_keep_the_common_word_filters() {
+  // `August` is one edit from the entry, not the entry itself.
+  let engine = engine("Augusts", "person");
+  assert!(!redacted(&engine, "Ask August now.", "August"));
+  assert!(redacted(&engine, "Ask Augusts now.", "Augusts"));
+}
+
 proptest! {
   #![proptest_config(ProptestConfig {
     cases: 64,
