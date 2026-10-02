@@ -1,10 +1,15 @@
 import { describe, expect, test } from "bun:test";
+import {
+  loadNativeAnonymizeBinding,
+  setNativeBindingOverride,
+} from "@stll/anonymize";
 import { strToU8, unzipSync, zipSync } from "fflate";
 
 import {
   DocxAnonymizedExportError,
   rewriteDocxForAnonymizedExport,
 } from "../index";
+import type { DocxExtraction } from "../types";
 
 const CONTENT_TYPES =
   "http://schemas.openxmlformats.org/package/2006/content-types";
@@ -32,6 +37,33 @@ const documentWithMetadata = (extraEntries: Record<string, Uint8Array> = {}) =>
     ),
     ...extraEntries,
   });
+
+const redactFirstName =
+  (replacement: string) => async (extraction: DocxExtraction) => {
+    const block = extraction.blocks.at(0);
+    if (block === undefined) {
+      throw new Error("test fixture must contain one text block");
+    }
+    return [
+      {
+        location: block.location,
+        expectedText: block.text,
+        replacements: [{ start: 0, end: 5, replacement }],
+      },
+    ];
+  };
+
+const exportOutcome = async (replacement: string) => {
+  try {
+    const result = await rewriteDocxForAnonymizedExport({
+      document: documentWithMetadata(),
+      planRewrites: redactFirstName(replacement),
+    });
+    return { result, error: undefined };
+  } catch (error) {
+    return { result: undefined, error };
+  }
+};
 
 describe("rewriteDocxForAnonymizedExport", () => {
   test("plans against sanitized extraction and validates the final document", async () => {
@@ -83,5 +115,50 @@ describe("rewriteDocxForAnonymizedExport", () => {
       message: "The DOCX contains content unsupported by anonymized export",
     });
     expect(JSON.stringify(caught)).not.toContain("private-name");
+  });
+
+  test("rejects a NUL replacement and returns no document", async () => {
+    const { result, error } = await exportOutcome("\u0000");
+    expect(result).toBeUndefined();
+    expect(error).toBeInstanceOf(DocxAnonymizedExportError);
+    expect(error).toMatchObject({ code: "invalid-rewrite-plan" });
+  });
+
+  test("returns validation-failed and no document when finalization rejects", async () => {
+    const binding = loadNativeAnonymizeBinding();
+    const finalized: Uint8Array[] = [];
+    setNativeBindingOverride(
+      new Proxy(binding, {
+        get: (target, key, receiver) =>
+          key === "finalizeDocxAnonymizedExportNative"
+            ? (document: Uint8Array) => {
+                finalized.push(document);
+                throw new Error("unsupported-replacement: synthetic failure");
+              }
+            : Reflect.get(target, key, receiver),
+      }),
+    );
+    let outcome: Awaited<ReturnType<typeof exportOutcome>>;
+    try {
+      outcome = await exportOutcome("█████");
+    } finally {
+      setNativeBindingOverride(undefined);
+    }
+
+    expect(outcome.result).toBeUndefined();
+    expect(outcome.error).toBeInstanceOf(DocxAnonymizedExportError);
+    expect(outcome.error).toMatchObject({
+      code: "validation-failed",
+      message: "The anonymized DOCX did not pass export validation",
+    });
+    expect(finalized).toHaveLength(1);
+    const rewritten = finalized.at(0);
+    if (rewritten === undefined) {
+      throw new Error("finalization must receive the rewritten document");
+    }
+    const documentXml = new TextDecoder().decode(
+      unzipSync(rewritten)["word/document.xml"],
+    );
+    expect(documentXml).toContain("█████ signed.");
   });
 });
