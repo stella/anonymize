@@ -141,18 +141,18 @@
   },
   "forced/forced-case": {
     "metric": "recall",
-    "minimum_exact_hits": 1,
-    "total": 1
+    "minimum_exact_hits": 3,
+    "total": 3
   },
   "forced/forced-embedded": {
     "metric": "recall",
-    "minimum_exact_hits": 2,
-    "total": 2
+    "minimum_exact_hits": 6,
+    "total": 6
   },
   "forced/forced-exact": {
     "metric": "recall",
-    "minimum_exact_hits": 2,
-    "total": 2
+    "minimum_exact_hits": 6,
+    "total": 6
   },
   "forced/forced-near-miss": {
     "maximum_false_positives": 0,
@@ -182,7 +182,7 @@
   "forced/language-scope": {
     "maximum_false_positives": 0,
     "metric": "false-positives",
-    "total": 68
+    "total": 78
   },
   "forced/marker-suppression": {
     "metric": "false-positives",
