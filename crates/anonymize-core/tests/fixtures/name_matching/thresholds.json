@@ -7,12 +7,17 @@
   "deny-list/bracketed-id": {
     "maximum_false_positives": 0,
     "metric": "false-positives",
-    "total": 4
+    "total": 5
   },
   "deny-list/case": {
     "metric": "recall",
     "minimum_exact_hits": 7,
     "total": 7
+  },
+  "deny-list/common-word-person": {
+    "metric": "recall",
+    "minimum_exact_hits": 5,
+    "total": 5
   },
   "deny-list/context-whitespace": {
     "metric": "recall",
@@ -34,10 +39,15 @@
     "minimum_exact_hits": 10,
     "total": 11
   },
+  "deny-list/exact-low-signal": {
+    "metric": "recall",
+    "minimum_exact_hits": 6,
+    "total": 6
+  },
   "deny-list/guard-control": {
     "metric": "recall",
-    "minimum_exact_hits": 24,
-    "total": 24
+    "minimum_exact_hits": 26,
+    "total": 26
   },
   "deny-list/hash": {
     "maximum_false_positives": 0,
@@ -67,12 +77,12 @@
   "deny-list/language-exclusion": {
     "metric": "false-positives",
     "maximum_false_positives": 0,
-    "total": 15
+    "total": 19
   },
   "deny-list/language-scope": {
     "maximum_false_positives": 0,
     "metric": "false-positives",
-    "total": 151
+    "total": 221
   },
   "deny-list/legal-form-variant": {
     "metric": "recall",
@@ -87,27 +97,52 @@
   "deny-list/marker-suppression": {
     "metric": "false-positives",
     "maximum_false_positives": 0,
-    "total": 1
+    "total": 2
   },
   "deny-list/multi-entity": {
     "metric": "recall",
     "minimum_exact_hits": 5,
     "total": 5
   },
+  "deny-list/multi-label": {
+    "metric": "recall",
+    "minimum_exact_hits": 3,
+    "total": 3
+  },
   "deny-list/ordinary-word": {
     "maximum_false_positives": 0,
     "metric": "false-positives",
-    "total": 21
+    "total": 22
   },
   "deny-list/per-label-operator": {
     "metric": "recall",
     "minimum_exact_hits": 2,
     "total": 2
   },
+  "deny-list/reordered-organization": {
+    "maximum_false_positives": 0,
+    "metric": "false-positives",
+    "total": 2
+  },
   "deny-list/split": {
     "metric": "recall",
     "minimum_exact_hits": 9,
     "total": 9
+  },
+  "deny-list/surname-first": {
+    "metric": "recall",
+    "minimum_exact_hits": 9,
+    "total": 9
+  },
+  "deny-list/template-field": {
+    "maximum_false_positives": 0,
+    "metric": "false-positives",
+    "total": 6
+  },
+  "deny-list/template-glued": {
+    "metric": "recall",
+    "minimum_exact_hits": 11,
+    "total": 11
   },
   "deny-list/typo-1": {
     "metric": "recall",
@@ -118,6 +153,21 @@
     "metric": "recall",
     "minimum_exact_hits": 6,
     "total": 6
+  },
+  "deny-list/uncased-script": {
+    "metric": "recall",
+    "minimum_exact_hits": 5,
+    "total": 5
+  },
+  "deny-list/uncased-script-near-miss": {
+    "maximum_false_positives": 0,
+    "metric": "false-positives",
+    "total": 3
+  },
+  "deny-list/unseeded-identifier": {
+    "maximum_false_positives": 0,
+    "metric": "false-positives",
+    "total": 17
   },
   "deny-list/uuid": {
     "maximum_false_positives": 0,
@@ -132,7 +182,7 @@
   "forced/bracketed-id": {
     "maximum_false_positives": 0,
     "metric": "false-positives",
-    "total": 4
+    "total": 5
   },
   "forced/forced-adjacent-word": {
     "maximum_false_positives": 0,
@@ -182,17 +232,37 @@
   "forced/language-scope": {
     "maximum_false_positives": 0,
     "metric": "false-positives",
-    "total": 78
+    "total": 109
   },
   "forced/marker-suppression": {
     "metric": "false-positives",
     "maximum_false_positives": 0,
-    "total": 1
+    "total": 2
   },
   "forced/ordinary-word": {
     "maximum_false_positives": 0,
     "metric": "false-positives",
-    "total": 21
+    "total": 22
+  },
+  "forced/reordered-organization": {
+    "maximum_false_positives": 0,
+    "metric": "false-positives",
+    "total": 2
+  },
+  "forced/template-field": {
+    "maximum_false_positives": 0,
+    "metric": "false-positives",
+    "total": 6
+  },
+  "forced/uncased-script-near-miss": {
+    "maximum_false_positives": 0,
+    "metric": "false-positives",
+    "total": 3
+  },
+  "forced/unseeded-identifier": {
+    "maximum_false_positives": 0,
+    "metric": "false-positives",
+    "total": 17
   },
   "forced/uuid": {
     "maximum_false_positives": 0,

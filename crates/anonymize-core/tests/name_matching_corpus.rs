@@ -1056,6 +1056,47 @@ mod corpus {
     check_thresholds(&outcome, &thresholds)
   }
 
+  #[test]
+  fn corpus_results_do_not_depend_on_entry_order() -> Result<(), Box<dyn Error>>
+  {
+    let corpus: Corpus =
+      serde_json::from_str(include_str!("fixtures/name_matching/corpus.json"))?;
+    let mut reversed = corpus.entries.clone();
+    reversed.reverse();
+    let default_operators = OperatorConfig {
+      operators: corpus
+        .entries
+        .iter()
+        .map(|entry| (entry.label.clone(), Operator::Redact))
+        .collect(),
+      ..OperatorConfig::default()
+    };
+    let mut drifted = Vec::new();
+    let mut compared = 0_usize;
+    for language in [Language::Cs, Language::Sk, Language::En] {
+      let forward = engine(&corpus.entries, &[language])?;
+      let backward = engine(&reversed, &[language])?;
+      for case in corpus.cases.iter().filter(|case| case.language == language) {
+        let operators = case_operators(case, &default_operators)?;
+        let first = forward.redact_static_entities(&case.text, &operators)?;
+        let second = backward.redact_static_entities(&case.text, &operators)?;
+        if first.resolved_entities != second.resolved_entities
+          || first.redaction != second.redaction
+        {
+          drifted.push(format!("{} ({})", case.kind, language.code()));
+        }
+        compared = compared.checked_add(1).ok_or("case count overflow")?;
+      }
+    }
+    assert_eq!(compared, corpus.cases.len(), "every case must be compared");
+    assert!(
+      drifted.is_empty(),
+      "reversing the entries changed results: {}",
+      drifted.join(", ")
+    );
+    Ok(())
+  }
+
   fn check_thresholds(
     Outcome {
       report, violations, ..
