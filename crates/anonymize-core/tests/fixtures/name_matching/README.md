@@ -5,6 +5,9 @@ Slovak and English cases exercise case folding, diacritics, morphology,
 typos, legal forms and whitespace/order variations. Identifier-shaped tokens,
 ordinary words and adjacent words provide negative labels. This vocabulary
 covers those three languages; it does not claim coverage of other languages.
+A Georgian name exercises a script without letter case; Georgian is not a
+production language scope, so those cases declare `en` and check script
+handling, not Georgian morphology.
 
 `name_matching_corpus.rs` assembles the production native gazetteer and runs
 its complete resolution/redaction path. Unrelated dictionary, regex and
@@ -81,7 +84,35 @@ the corresponding canonical name's two-edit budget:
 
 Czech and Slovak share the matcher inflection policy. These checks enforce
 that morphology boundary against English, without disabling its fuzzy
-matching or claiming separate cs/sk policies.
+matching or claiming separate cs/sk policies. Four inflected Czech cases in
+other classes carry the same exclusion: `Malým` (`common-word-person`) and
+`Dvořákovou Marií`, `Dvořákové Marii`, `Kubíčkovi Tomášovi`
+(`surname-first`).
+
+Further classes cover:
+
+- `common-word-person` and `exact-low-signal`: single-word entries that are
+  also ordinary words (`Mark`, `Will`, `Grant`, `Malý`) and a three-letter
+  entry (`Oxa`), matched in lowercase, at a sentence start and in quotes;
+  `ordinary-word` keeps `willing`.
+- `surname-first`: person names written surname first, with or without a
+  comma, in capitals and inflected.
+- `template-glued`: names inside `[[…]]`, `{{…}}`, `<<…>>` and JSON strings.
+  Digits glued to a name belong to its match (`Zeta2024`); an underscore
+  suffix does not (`Zeta_01` resolves `Zeta`). `template-field` keeps fields
+  not spelled as their entry (`{{zeta_01}}`, `<<token:orbis7>>`).
+- `uncased-script`: the Georgian name exact, inflected and surname first;
+  `uncased-script-near-miss` keeps another name sharing one word and an
+  ordinary word.
+- `multi-label`: one spelling listed as both organization and person resolves
+  once, as `organization`. A separate test requires every case to resolve
+  identically with the entries in reverse order.
+- `reordered-organization`: organization words in another order stay; word
+  orders apply to person names only.
+- `unseeded-identifier`: hex, UUID, hash, code and placeholder tokens that
+  contain no configured surface, including near misses such as `acmeA_total`
+  and `ORB1S-55`. They are distinct negatives because suppression classes
+  require a configured seed.
 
 Every keep fixture declares a tagged `negativeCheck`. Suppression cases
 identify a configured surface inside the guarded region and a neutral context
@@ -110,10 +141,24 @@ matcher this suite ships with; class ceilings retain its behavior for
 compounds with plain word or number segments. Measured classes must equal
 the declared classes, and case counts must equal the denominators. Review
 fixture and threshold changes together; do not lower bounds to accommodate a
-regression. The test prints aggregate counts only, never case text or outputs.
+regression. By default the test prints aggregate counts only, never case text
+or outputs.
 
 Run `cargo test -p stella-anonymize-core --test name_matching_corpus -- --nocapture`.
-The normal workspace Rust CI test command discovers this integration test.
+The normal workspace Rust CI test command discovers this integration test, and
+the release workflow runs it before building and publishing.
+
+To list failing cases, set `NAME_MATCHING_CORPUS_FAILURES=1`:
+
+```sh
+NAME_MATCHING_CORPUS_FAILURES=1 cargo test -p stella-anonymize-core \
+  --test name_matching_corpus labeled_name_matching_corpus_gate -- --nocapture
+```
+
+Each failing case, pinned ones included, prints as one JSON line with its
+profile, class, languages, text, expected and actual entities, and expected
+and actual output; the per-class table follows. The gate collects every case
+violation and fails once, after the table.
 
 Suppression controls also replay the seed at its original byte span: replace
 only the surrounding annotated envelope with equal-width spaces, preserve the
@@ -125,8 +170,8 @@ identifier suppression after edge admission. The `acfe0a1b2c3d4e5f` regression
 explicitly checks the former, while `9b1d0c3e-acfe-4ca1-8b2e-5c7a0a1b2c3d`
 checks the latter. A neutral match alone cannot satisfy these controls.
 
-The existing `<<token:zeta9>>` accepted failure is eligible under production's
-numeric-glue rule. Its exact entity and redacted output stay pinned; the control
-must not misrepresent it as a suppressed occurrence. Guard rejection is required
-for every unpinned control, and the accepted failure still requires exact recall
-at the counterfactual occurrence. Existing false-positive ceilings are unchanged.
+Guard rejection is required for every unpinned control. A guarded seed that
+production admits may stay only as a pinned failure: its exact entity and
+redacted output stay pinned, the control must not present it as a suppressed
+occurrence, and it still requires exact recall at the counterfactual
+occurrence. No suppression case is pinned; false-positive ceilings are zero.
