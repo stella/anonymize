@@ -2612,6 +2612,32 @@ mod tests {
   }
 
   #[test]
+  fn automatic_edit_budget_grows_with_letter_count() {
+    for (term, expected) in [
+      ("Zeta", None),
+      ("Orbis", Some(1)),
+      ("orbis", None),
+      ("Lindqvist", Some(1)),
+      ("Wintermute", Some(2)),
+      ("Acme2024", None),
+    ] {
+      assert_eq!(gazetteer_fuzzy_distance(term), expected, "{term}");
+    }
+    let nine = [fuzzy_entry("Lindqvist")];
+    assert_eq!(
+      engine_found(&nine, "Signed by Lindqvyst today."),
+      ["Lindqvyst"]
+    );
+    assert!(engine_found(&nine, "Signed by Lyndqvyst today.").is_empty());
+    let ten = [fuzzy_entry("Wintermute")];
+    assert_eq!(
+      engine_found(&ten, "Signed by Wyntermyte today."),
+      ["Wyntermyte"]
+    );
+    assert!(engine_found(&ten, "Signed by Wyntarmyte today.").is_empty());
+  }
+
+  #[test]
   fn many_open_delimiters_on_a_line_stay_linear() {
     let text =
       format!("{} Acme {}", "<< ⟦".repeat(50_000), ">>".repeat(50_000));

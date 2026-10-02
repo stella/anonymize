@@ -485,6 +485,62 @@ mod properties {
       .unwrap();
   }
 
+  const COVERAGE_POOL: [&str; 12] = [
+    "Luma",
+    "Luma Labs",
+    "Luma s.r.o.",
+    "Mivo",
+    "Novák",
+    "Jan Novák",
+    "Velomír",
+    "Wintermute",
+    "Orbis",
+    "Žilora",
+    "Bex GmbH",
+    "Zy",
+  ];
+  const COVERAGE_TEXT: &str = "Luma Labs a Luma s.r.o. podepsaly. Jan Novák, \
+    Novákovi a Nováka zastoupil Velomír. Wintermte a Orbys, Orbis Ltd. \
+    Bex GmbH 2024 a Zy. Žilory archived ⟦record-Luma-01⟧ id 9b1d0c3e-luma-4c1b.";
+
+  fn covered_bytes(entries: &[String]) -> BTreeSet<usize> {
+    if entries.is_empty() {
+      return BTreeSet::new();
+    }
+    let engine = gazetteer::engine(entries, "cs").unwrap();
+    spans(&engine, COVERAGE_TEXT)
+      .into_iter()
+      .flatten()
+      .collect()
+  }
+
+  #[test]
+  fn p7_adding_entries_never_reduces_coverage() {
+    let pick = |mask: u16| {
+      COVERAGE_POOL
+        .iter()
+        .enumerate()
+        .filter(|(index, _)| mask >> index & 1 == 1)
+        .map(|(_, entry)| (*entry).to_owned())
+        .collect::<Vec<_>>()
+    };
+    let everything = covered_bytes(&pick(u16::MAX));
+    assert!(!everything.is_empty(), "real hits must exist");
+    property_runner()
+      .run(&(any::<u16>(), any::<u16>()), |(base, extra)| {
+        let smaller = covered_bytes(&pick(base));
+        let larger = covered_bytes(&pick(base | extra));
+        prop_assert!(
+          smaller.is_subset(&larger),
+          "lost bytes {:?}",
+          smaller.difference(&larger).collect::<Vec<_>>()
+        );
+        prop_assert!(larger.is_subset(&everything));
+        Ok(())
+      })
+      .unwrap();
+  }
+
   // Independent wrong implementations are witnesses, never the production matcher.
   fn substring_matcher(text: &str, entry: &str) -> Vec<Range<usize>> {
     text

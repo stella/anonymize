@@ -322,7 +322,11 @@ call.
 
 ## Caller-Owned Deny Lists and Regexes
 
-Use `customDenyList` for exact terms and variants that you control. Use
+Use `customDenyList` for literal terms and variants that you control: each value
+and variant matches as written, ignoring case, as whole words when it starts and
+ends with a letter or digit, with no inflection or typo tolerance. Use
+`gazetteerEntries` for the names and values that must always be redacted (a
+workspace deny list); they follow the matching contract below. Use
 `customRegexes` for deterministic patterns that are not built into the package.
 Caller-owned data is part of the prepared package, so build or load a package
 from that config before serving documents.
@@ -360,6 +364,75 @@ const pipeline = await createNativePipelineFromConfig({
 
 const result = pipeline.redactText(text);
 ```
+
+### Gazetteer matching contract
+
+Callers can rely on the following for `gazetteerEntries` (canonical values and
+their variants, including identifier-like values such as registration numbers).
+Each guarantee is enforced by the tests named after it, under
+`crates/anonymize-core/` (`src/gazetteer.rs` unit tests, `tests/`) and
+`crates/anonymize-adapter-contract/tests/`.
+
+1. **Every exact occurrence is redacted.** An entry standing as its own token is
+   redacted under any label the pipeline keeps, however common the word, after
+   folding case and diacritics. When Czech or Slovak is among the content
+   languages (or no language is set), its case forms and surname derivations
+   count as exact (`Novák` covers `Novákovi`, `Nováka`). Tests:
+   `exact_entries_standing_alone_are_always_redacted`,
+   `common_word_person_entries_are_redacted`,
+   `p5_czech_slovak_declensions_and_diacritics_are_exact`,
+   `czech_slovak_forms_follow_the_pipeline_language`.
+2. **Hits stay on word boundaries.** A hit never starts or ends inside a run of
+   letters, and never takes in the next word; the only extension is over a
+   legal form that follows the name (`Acme a. s.`). A plain number, year,
+   punctuation or word beside a name does not block it (`Acme/2024`,
+   `novak2@acme.cz`, `Novak_smlouva_2024.pdf`). Tests:
+   `p2_spaced_latin_names_follow_unicode_word_boundaries`,
+   `p3_hits_do_not_swallow_adjacent_words`,
+   `p3_only_legal_suffixes_extend_a_hit`,
+   `hits_cover_the_name_and_legal_form_only`,
+   `names_next_to_numbers_and_words_match`,
+   `recovered_fuzzy_spans_do_not_absorb_a_short_word`.
+3. **Identifiers and opaque markers are left intact.** A name glued to other
+   letters (`acme0a1b`), joined by `-`, `_`, `.`, `/`, `+`, `=`, `:`, `@`, `#`
+   or `\` to a hex run (UUID and hash segments such as `4c1b`) or a long
+   base64-like run, or inside a `⟦…⟧` marker, is never a hit; an entry that is
+   itself such an identifier matches only exactly. Template brackets (`<<…>>`,
+   `{{…}}`, `[[…]]`) still allow names; only a field built around the name
+   (`<<token:zeta9>>`, `{{zeta_01}}`) is skipped, unless it spells the name as
+   the entry does (`[[Zeta2024]]`, `{{Zeta_01}}`). Tests:
+   `p1_opaque_tokens_are_preserved`, `identifier_compounds_never_match`,
+   `names_match_alone_but_never_inside_identifier_tokens`,
+   `identifiers_match_only_exactly`, `opaque_markers_win_inside_templates`,
+   `template_placeholders_keep_names_but_not_identifier_fields`,
+   `template_names_glued_to_digits_keep_their_entry_case`,
+   `templates_stay_open_across_spaces_on_their_line`.
+4. **Typo tolerance is bounded by length.** Entries with fewer than 5 letters,
+   or with digits, match only exactly. A 5-letter entry tolerates one
+   substituted letter, only on a token in the entry's proper-noun case shape
+   (`Orbys` for `Orbis`, never `orbit`) that does not open a sentence. Entries
+   of 6 to 9 letters tolerate one edit, entries of 10 or more two. Typo hits
+   are whole words and still pass the ordinary-word filters. Tests:
+   `four_letter_entries_stay_exact`,
+   `five_letter_entries_take_one_typo_on_a_proper_noun`,
+   `short_typos_skip_sentence_starts_in_other_scripts`,
+   `automatic_edit_budget_grows_with_letter_count`,
+   `fuzzy_hits_are_rejected_inside_tokens_and_beyond_distance`,
+   `p4_short_names_do_not_match_ordinary_neighbours`,
+   `fuzzy_hits_keep_the_common_word_filters`.
+5. **Adding entries never reduces coverage.** Every character redacted with a
+   set of entries is still redacted after more entries are added, whatever
+   their order. Tests: `adding_entries_never_reduces_coverage`,
+   `p7_adding_entries_never_reduces_coverage`,
+   `p6_redaction_is_stable_and_entry_order_independent`.
+6. **Older prepared configs keep loading.** Gazetteer data written before the
+   legal-form, language-scope and entry-text fields existed deserializes with
+   defaults (no legal-form extension, Czech and Slovak forms on, entry text
+   from the search patterns). Test:
+   `configs_without_the_newer_gazetteer_fields_still_load`.
+
+The labeled corpus in `crates/anonymize-core/tests/fixtures/name_matching/`
+measures recall and false positives per class on top of these guarantees.
 
 ## Browser setup
 
