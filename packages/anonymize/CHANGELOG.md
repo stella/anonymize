@@ -1,5 +1,37 @@
 # Changelog
 
+## 3.0.4
+
+### Patch Changes
+
+- [#538](https://github.com/stella/anonymize/pull/538) [`da874cc`](https://github.com/stella/anonymize/commit/da874cce51e57fe2532785f1997bcd3557a89757) Thanks [@jan-kubica](https://github.com/jan-kubica)! - A gazetteer spelling given under several labels now takes the first of them
+  that the pipeline searches for (its `labels`, then the labels hotword rules
+  reclassify into them; the alphabetically first without a label filter), so the
+  label no longer depends on entry order and a kept label always wins.
+  Spellings that differ only in case or diacritics count as one for this.
+
+  Exact gazetteer hits and custom deny-list hits are now redacted whatever the
+  pipeline's `threshold`; typo hits keep it. Names glued to Hangul Jamo,
+  halfwidth Katakana, and the other blocks of scripts written without spaces now
+  match like names glued to CJK ideographs.
+
+  A spelling that a kept `person` label names keeps matching surname first
+  (`Smith, John`) when it is reported under another label. Gazetteer data gains a
+  `person_forms` field, so the prepared package schema moves to 16 and prepared
+  packages need rebuilding.
+
+- [#535](https://github.com/stella/anonymize/pull/535) [`9e0ec02`](https://github.com/stella/anonymize/commit/9e0ec02b9b84e882382baf8c8a9c42782f5e2991) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Inside template placeholders `<<…>>`, `{{…}}` and `[[…]]`, a name glued to
+  digits (`[[Zeta2024]]`, `[[McDonald2024]]`, `[[Jan van Dijk2024]]`) is now
+  matched when it is spelled as its gazetteer entry spells it, as a supported
+  inflected form of it (`[[McDonalda2024]]`), or in the same capitalization.
+  Entries in scripts without letter case (`[[محمد2024]]`, `{{東京2024}}`) match
+  on their own spelling. A field spelled otherwise (`<<token:zeta9>>`,
+  `{{acme_01}}`) is still not matched.
+
+- [#537](https://github.com/stella/anonymize/pull/537) [`82b5bb8`](https://github.com/stella/anonymize/commit/82b5bb8f1066fc249346454ea7aa3b871f6007d9) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Inside template placeholders, a gazetteer entry written in Georgian
+  (`[[თბილისი2024]]`) now matches on its own spelling when digits are glued to
+  it, like entries in other scripts without letter case.
+
 ## 3.0.3
 
 ### Patch Changes
