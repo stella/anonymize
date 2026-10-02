@@ -20,10 +20,12 @@ use super::{
 };
 
 mod attributes;
+mod names;
 
 use attributes::{
   CanonicalAttribute, drawing_attribute_spec, word_attribute_spec,
 };
+use names::{PackageNames, package_names, part_number};
 
 const DRAWINGML_NAMESPACE: &str =
   "http://schemas.openxmlformats.org/drawingml/2006/main";
@@ -403,25 +405,11 @@ fn conventional_supported_path(path: &str, content_type: &str) -> bool {
 }
 
 fn numbered_word_part(path: &str, stem: &str) -> bool {
-  path
-    .strip_prefix(&format!("word/{stem}"))
-    .and_then(|tail| tail.strip_suffix(".xml"))
-    .is_some_and(|digits| {
-      !digits.is_empty()
-        && digits.len() <= 10
-        && digits.bytes().all(|byte| byte.is_ascii_digit())
-    })
+  part_number(path, &format!("word/{stem}")).is_some()
 }
 
 fn theme_path(path: &str) -> bool {
-  path
-    .strip_prefix("word/theme/theme")
-    .and_then(|tail| tail.strip_suffix(".xml"))
-    .is_some_and(|digits| {
-      !digits.is_empty()
-        && digits.len() <= 10
-        && digits.bytes().all(|byte| byte.is_ascii_digit())
-    })
+  part_number(path, "word/theme/theme").is_some()
 }
 
 fn relationship_entry(path: &str) -> bool {
@@ -645,9 +633,17 @@ fn common_font(value: &str) -> bool {
   )
 }
 
+// Export identifiers that replace producer-chosen style and relationship
+// identifiers in one Word part.
+#[derive(Clone, Copy, Debug)]
+struct WordIdentifiers<'a> {
+  styles: &'a HashMap<String, String>,
+  relationships: &'a HashMap<String, String>,
+}
+
 fn canonical_word_attributes(
   node: Node<'_, '_>,
-  styles: &HashMap<String, String>,
+  identifiers: WordIdentifiers<'_>,
 ) -> Result<Vec<(String, String)>, DocxRewriteError> {
   let local = node.tag_name().name();
   let parent = node.parent_element().and_then(word_local);
@@ -664,12 +660,13 @@ fn canonical_word_attributes(
       continue;
     }
     if RELATIONSHIP_NAMESPACES.contains(&namespace) {
-      if name != "id" || !valid_relationship_id(attribute.value()) {
-        return Err(unsupported(
-          "DOCX content has an invalid relationship reference",
-        ));
-      }
-      attributes.push(("r:id".to_owned(), attribute.value().to_owned()));
+      let identifier = (name == "id")
+        .then(|| identifiers.relationships.get(attribute.value()))
+        .flatten()
+        .ok_or_else(|| {
+          unsupported("DOCX content has an unresolved relationship reference")
+        })?;
+      attributes.push(("r:id".to_owned(), identifier.clone()));
       continue;
     }
     if namespace == XML_NAMESPACE {
@@ -689,7 +686,7 @@ fn canonical_word_attributes(
       .ok_or_else(|| {
         unsupported("DOCX content has an unsupported XML attribute")
       })?;
-    match spec.domain.canonical(attribute.value(), styles) {
+    match spec.domain.canonical(attribute.value(), identifiers.styles) {
       Some(CanonicalAttribute::Retain(value)) => {
         attributes.push((format!("w:{name}"), value));
       }
@@ -773,7 +770,7 @@ fn validate_retained_content_node(
 
 fn serialize_content_node(
   node: Node<'_, '_>,
-  styles: &HashMap<String, String>,
+  identifiers: WordIdentifiers<'_>,
   output: &mut String,
   is_root: bool,
 ) -> Result<(), DocxRewriteError> {
@@ -818,7 +815,7 @@ fn serialize_content_node(
       ));
     }
     for child in node.children().filter(Node::is_element) {
-      serialize_content_node(child, styles, output, false)?;
+      serialize_content_node(child, identifiers, output, false)?;
     }
     return Ok(());
   }
@@ -832,11 +829,11 @@ fn serialize_content_node(
     output.push_str(OFFICE_RELATIONSHIP_NAMESPACE);
     output.push('"');
   }
-  write_attributes(output, &canonical_word_attributes(node, styles)?);
+  write_attributes(output, &canonical_word_attributes(node, identifiers)?);
   let content_start = open_element_content(output);
   for child in node.children() {
     if child.is_element() {
-      serialize_content_node(child, styles, output, false)?;
+      serialize_content_node(child, identifiers, output, false)?;
     } else if child.is_text() {
       let value = child.text().unwrap_or_default();
       if local == "t" {
@@ -853,7 +850,7 @@ fn serialize_content_node(
 fn sanitize_content_xml(
   xml: &str,
   path: &str,
-  styles: &HashMap<String, String>,
+  identifiers: WordIdentifiers<'_>,
 ) -> Result<String, DocxRewriteError> {
   let document = parse_export_xml(xml, "content part")?;
   let root = document.root_element();
@@ -876,7 +873,7 @@ fn sanitize_content_xml(
     ));
   }
   let mut output = XML_DECLARATION.to_owned();
-  serialize_content_node(root, styles, &mut output, true)?;
+  serialize_content_node(root, identifiers, &mut output, true)?;
   Ok(output)
 }
 
@@ -963,7 +960,13 @@ fn serialize_formatting_node(
       "DOCX formatting contains an unclassified Word element",
     ));
   }
-  let attributes = canonical_word_attributes(node, styles)?;
+  let attributes = canonical_word_attributes(
+    node,
+    WordIdentifiers {
+      styles,
+      relationships: &HashMap::new(),
+    },
+  )?;
   if local == "lvlText"
     && attributes
       .iter()
@@ -1330,10 +1333,15 @@ fn sanitize_formatting_xml(
   Ok(output)
 }
 
-fn relationship_type_removed(value: &str) -> bool {
+fn relationship_removed(
+  relation_type: &str,
+  resolved: Option<&str>,
+  removed_paths: &HashSet<String>,
+) -> bool {
   REMOVED_RELATIONSHIP_SUFFIXES
     .iter()
-    .any(|suffix| value.ends_with(suffix))
+    .any(|suffix| relation_type.ends_with(suffix))
+    || resolved.is_some_and(|resolved| removed_paths.contains(resolved))
 }
 
 fn allowed_relationship_suffix(value: &str) -> Option<&'static str> {
@@ -1364,12 +1372,7 @@ fn canonical_relationship_target(path: &str, resolved: &str) -> String {
     .to_owned()
 }
 
-fn sanitize_relationships(
-  xml: &str,
-  path: &str,
-  removed_paths: &HashSet<String>,
-) -> Result<String, DocxRewriteError> {
-  let document = parse_export_xml(xml, "relationships part")?;
+fn relationships_root(document: &Document<'_>) -> Result<(), DocxRewriteError> {
   let root = document.root_element();
   if root.tag_name().name() != "Relationships"
     || !PACKAGE_RELATIONSHIP_NAMESPACES
@@ -1380,58 +1383,84 @@ fn sanitize_relationships(
       "DOCX relationships have an invalid root element",
     ));
   }
+  Ok(())
+}
+
+fn validate_relationship_node(
+  node: Node<'_, '_>,
+) -> Result<(), DocxRewriteError> {
+  if !node.is_element()
+    || node.tag_name().name() != "Relationship"
+    || !PACKAGE_RELATIONSHIP_NAMESPACES
+      .contains(&node.tag_name().namespace().unwrap_or_default())
+    || node.children().any(|child| {
+      child.is_element()
+        || child.is_text()
+          && child.text().is_some_and(|text| !text.trim().is_empty())
+    })
+  {
+    return Err(unsupported(
+      "DOCX relationships contain an unsupported node",
+    ));
+  }
+  if node.attributes().any(|attribute| {
+    attribute.namespace().is_some()
+      || !matches!(attribute.name(), "Id" | "Type" | "Target" | "TargetMode")
+  }) {
+    return Err(unsupported(
+      "DOCX relationships contain an unsupported attribute",
+    ));
+  }
+  Ok(())
+}
+
+fn validate_retained_relationship(
+  node: Node<'_, '_>,
+) -> Result<(), DocxRewriteError> {
+  if node
+    .attribute("TargetMode")
+    .is_some_and(|mode| mode != "Internal")
+  {
+    return Err(unsupported(
+      "DOCX relationships contain an unsafe target mode",
+    ));
+  }
+  if !valid_relationship_id(node.attribute("Id").unwrap_or_default()) {
+    return Err(unsupported(
+      "DOCX relationships contain an unsafe identifier or mode",
+    ));
+  }
+  Ok(())
+}
+
+fn sanitize_relationships(
+  xml: &str,
+  path: &str,
+  removed_paths: &HashSet<String>,
+  names: &PackageNames,
+) -> Result<String, DocxRewriteError> {
+  let document = parse_export_xml(xml, "relationships part")?;
+  relationships_root(&document)?;
+  let identifiers = names
+    .relationships(&relationship_source_path(path).unwrap_or_default())
+    .ok_or_else(|| unsupported("DOCX relationships were not numbered"))?;
+  let export_path = names.path(path);
   let mut relationships = Vec::new();
-  for node in root.children() {
+  for node in document.root_element().children() {
     if node.is_text() && node.text().is_some_and(|text| text.trim().is_empty())
     {
       continue;
     }
-    if !node.is_element()
-      || node.tag_name().name() != "Relationship"
-      || !PACKAGE_RELATIONSHIP_NAMESPACES
-        .contains(&node.tag_name().namespace().unwrap_or_default())
-      || node.children().any(|child| {
-        child.is_element()
-          || child.is_text()
-            && child.text().is_some_and(|text| !text.trim().is_empty())
-      })
-    {
-      return Err(unsupported(
-        "DOCX relationships contain an unsupported node",
-      ));
-    }
-    if node.attributes().any(|attribute| {
-      attribute.namespace().is_some()
-        || !matches!(attribute.name(), "Id" | "Type" | "Target" | "TargetMode")
-    }) {
-      return Err(unsupported(
-        "DOCX relationships contain an unsupported attribute",
-      ));
-    }
-    let identifier = node.attribute("Id").unwrap_or_default();
+    validate_relationship_node(node)?;
     let relation_type = node.attribute("Type").unwrap_or_default();
-    let target = node.attribute("Target").unwrap_or_default();
-    let resolved = resolve_relationship_target(target, path);
-    let remove = relationship_type_removed(relation_type)
-      || resolved
-        .as_ref()
-        .is_some_and(|resolved| removed_paths.contains(resolved));
-    if remove {
+    let resolved = resolve_relationship_target(
+      node.attribute("Target").unwrap_or_default(),
+      path,
+    );
+    if relationship_removed(relation_type, resolved.as_deref(), removed_paths) {
       continue;
     }
-    if node
-      .attribute("TargetMode")
-      .is_some_and(|mode| mode != "Internal")
-    {
-      return Err(unsupported(
-        "DOCX relationships contain an unsafe target mode",
-      ));
-    }
-    if !valid_relationship_id(identifier) || identifier.trim() != identifier {
-      return Err(unsupported(
-        "DOCX relationships contain an unsafe identifier or mode",
-      ));
-    }
+    validate_retained_relationship(node)?;
     let suffix =
       allowed_relationship_suffix(relation_type).ok_or_else(|| {
         unsupported("DOCX relationships contain an unsupported type")
@@ -1439,10 +1468,13 @@ fn sanitize_relationships(
     let resolved = resolved.ok_or_else(|| {
       unsupported("DOCX relationships contain an unsafe target")
     })?;
+    let identifier = identifiers
+      .get(node.attribute("Id").unwrap_or_default())
+      .ok_or_else(|| unsupported("DOCX relationships were not numbered"))?;
     relationships.push((
-      identifier.to_owned(),
+      identifier.clone(),
       format!("{OFFICE_RELATIONSHIP_NAMESPACE}{suffix}"),
-      canonical_relationship_target(path, &resolved),
+      canonical_relationship_target(export_path, names.path(&resolved)),
     ));
   }
   relationships.sort_unstable();
@@ -1465,6 +1497,7 @@ fn sanitize_relationships(
 fn sanitize_content_types(
   xml: &str,
   removed_paths: &HashSet<String>,
+  names: &PackageNames,
 ) -> Result<String, DocxRewriteError> {
   let document = parse_export_xml(xml, "content types part")?;
   let root = document.root_element();
@@ -1518,7 +1551,7 @@ fn sanitize_content_types(
       return Err(unsupported("DOCX content type path is not canonical"));
     };
     if !removed_paths.contains(path) {
-      overrides.push((path.to_owned(), content_type.to_owned()));
+      overrides.push((names.path(path).to_owned(), content_type.to_owned()));
     }
   }
   overrides.sort_unstable();
@@ -1559,55 +1592,43 @@ fn write_archive(
     .map_err(|_| unsupported("Sanitized DOCX archive could not be created"))
 }
 
-fn validate_relationship_identifiers(
+fn validate_main_relationship(
   entries: &[ArchiveEntry],
-) -> Result<HashMap<String, HashSet<String>>, DocxRewriteError> {
-  let mut relationship_ids = HashMap::<String, HashSet<String>>::new();
-  let mut main_relationship_count = 0_usize;
-  for entry in entries
+) -> Result<(), DocxRewriteError> {
+  let main_type = format!("{OFFICE_RELATIONSHIP_NAMESPACE}/officeDocument");
+  let root = entries
     .iter()
-    .filter(|entry| relationship_entry(&entry.path))
-  {
-    let xml = std::str::from_utf8(&entry.bytes)
-      .map_err(|_| unsupported("Sanitized DOCX relationships are not UTF-8"))?;
-    let relationships = parse_export_xml(xml, "relationships part")?;
-    let source = relationship_source_path(&entry.path).unwrap_or_default();
-    let ids = relationship_ids.entry(source).or_default();
-    for relation in relationships.descendants().filter(|node| {
-      node.is_element() && node.tag_name().name() == "Relationship"
-    }) {
-      let identifier = relation.attribute("Id").unwrap_or_default();
-      if !ids.insert(identifier.to_owned()) {
-        return Err(unsupported(
-          "Sanitized DOCX contains duplicate relationship identifiers",
-        ));
-      }
-      let is_main = entry.path == ROOT_RELATIONSHIPS_PATH
-        && relation.attribute("Type").is_some_and(|value| {
-          value == format!("{OFFICE_RELATIONSHIP_NAMESPACE}/officeDocument")
-        })
+    .find(|entry| entry.path == ROOT_RELATIONSHIPS_PATH)
+    .ok_or_else(|| unsupported("Sanitized DOCX is missing relationships"))?;
+  let xml = std::str::from_utf8(&root.bytes)
+    .map_err(|_| unsupported("Sanitized DOCX relationships are not UTF-8"))?;
+  let relationships = parse_export_xml(xml, "relationships part")?;
+  let main_relationship_count = relationships
+    .descendants()
+    .filter(|relation| {
+      relation.is_element()
+        && relation.tag_name().name() == "Relationship"
+        && relation.attribute("Type") == Some(main_type.as_str())
         && resolve_relationship_target(
           relation.attribute("Target").unwrap_or_default(),
-          &entry.path,
+          &root.path,
         )
         .as_deref()
-          == Some("word/document.xml");
-      if is_main {
-        main_relationship_count = main_relationship_count.saturating_add(1);
-      }
-    }
-  }
+          == Some("word/document.xml")
+    })
+    .count();
   if main_relationship_count != 1 {
     return Err(unsupported(
       "Sanitized DOCX must have one main-document relationship",
     ));
   }
-  Ok(relationship_ids)
+  Ok(())
 }
 
 fn validate_relationship_entry(
   entry: &ArchiveEntry,
   entry_paths: &HashSet<&str>,
+  names: &PackageNames,
 ) -> Result<(), DocxRewriteError> {
   if entry.path != ROOT_RELATIONSHIPS_PATH
     && relationship_source_path(&entry.path)
@@ -1620,7 +1641,7 @@ fn validate_relationship_entry(
   }
   let xml = std::str::from_utf8(&entry.bytes)
     .map_err(|_| unsupported("Sanitized DOCX relationships are not UTF-8"))?;
-  if sanitize_relationships(xml, &entry.path, &HashSet::new())? != xml {
+  if sanitize_relationships(xml, &entry.path, &HashSet::new(), names)? != xml {
     return Err(unsupported(
       "Sanitized DOCX relationships are not canonical",
     ));
@@ -1645,7 +1666,7 @@ fn validate_xml_entry(
   entry: &ArchiveEntry,
   content_type: &str,
   styles: &HashMap<String, String>,
-  relationship_ids: &HashMap<String, HashSet<String>>,
+  names: &PackageNames,
 ) -> Result<(), DocxRewriteError> {
   let xml = std::str::from_utf8(&entry.bytes)
     .map_err(|_| unsupported("Sanitized DOCX XML is not UTF-8"))?;
@@ -1653,9 +1674,15 @@ fn validate_xml_entry(
     path: entry.path.clone(),
     content_type: content_type.to_owned(),
   };
-  let is_content = classify_part(&part).is_some();
-  let canonical = if is_content {
-    sanitize_content_xml(xml, &entry.path, styles)?
+  let no_relationships = HashMap::new();
+  let canonical = if classify_part(&part).is_some() {
+    let identifiers = WordIdentifiers {
+      styles,
+      relationships: names
+        .relationships(&entry.path)
+        .unwrap_or(&no_relationships),
+    };
+    sanitize_content_xml(xml, &entry.path, identifiers)?
   } else if formatting_content_type(content_type) {
     sanitize_formatting_xml(xml, &entry.path, content_type, styles)?
   } else {
@@ -1663,29 +1690,6 @@ fn validate_xml_entry(
   };
   if canonical != xml {
     return Err(unsupported("Sanitized DOCX XML is not canonical"));
-  }
-  if !is_content {
-    return Ok(());
-  }
-  let parsed = parse_export_xml(xml, "content part")?;
-  for attribute in parsed
-    .descendants()
-    .filter(Node::is_element)
-    .flat_map(|node| node.attributes())
-    .filter(|attribute| {
-      attribute.name() == "id"
-        && RELATIONSHIP_NAMESPACES
-          .contains(&attribute.namespace().unwrap_or_default())
-    })
-  {
-    if relationship_ids
-      .get(&entry.path)
-      .is_none_or(|ids| !ids.contains(attribute.value()))
-    {
-      return Err(unsupported(
-        "Sanitized DOCX content has an unresolved relationship reference",
-      ));
-    }
   }
   Ok(())
 }
@@ -1782,10 +1786,16 @@ fn validate_profile(
     .map(|part| (part.path.as_str(), part.content_type.as_str()))
     .collect::<HashMap<_, _>>();
   let styles = collect_style_identifiers(&entries, &by_path)?;
-  let relationship_ids = validate_relationship_identifiers(&entries)?;
+  validate_main_relationship(&entries)?;
+  let names = package_names(&entries, &HashSet::new())?;
+  if !names.is_identity() {
+    return Err(unsupported(
+      "Sanitized DOCX part names or relationship identifiers are not canonical",
+    ));
+  }
   let content_types_xml = std::str::from_utf8(&content_types_entry.bytes)
     .map_err(|_| unsupported("Sanitized DOCX content types are not UTF-8"))?;
-  if sanitize_content_types(content_types_xml, &HashSet::new())?
+  if sanitize_content_types(content_types_xml, &HashSet::new(), &names)?
     != content_types_xml
   {
     return Err(unsupported(
@@ -1806,14 +1816,14 @@ fn validate_profile(
       continue;
     }
     if relationship_entry(&entry.path) {
-      validate_relationship_entry(entry, &entry_paths)?;
+      validate_relationship_entry(entry, &entry_paths, &names)?;
       continue;
     }
     let content_type =
       by_path.get(entry.path.as_str()).copied().ok_or_else(|| {
         unsupported("Sanitized DOCX contains an undeclared part")
       })?;
-    validate_xml_entry(entry, content_type, &styles, &relationship_ids)?;
+    validate_xml_entry(entry, content_type, &styles, &names)?;
   }
   let extraction = extract_docx_text(document).map_err(|error| {
     rewrite_error(DocxRewriteErrorCode::InvalidPackage, error.to_string())
@@ -1825,26 +1835,39 @@ fn validate_profile(
   Ok(extraction)
 }
 
+struct ExportContext<'a> {
+  content_types: &'a HashMap<&'a str, &'a str>,
+  removed_paths: &'a HashSet<String>,
+  styles: &'a HashMap<String, String>,
+  names: &'a PackageNames,
+}
+
 fn sanitize_export_entry(
   entry: &mut ArchiveEntry,
-  content_types: &HashMap<&str, &str>,
-  removed_paths: &HashSet<String>,
-  styles: &HashMap<String, String>,
+  context: &ExportContext<'_>,
 ) -> Result<bool, DocxRewriteError> {
   if entry.path == CONTENT_TYPES_PATH {
     let xml = std::str::from_utf8(&entry.bytes)
       .map_err(|_| unsupported("DOCX content types are not valid UTF-8"))?;
-    entry.bytes = sanitize_content_types(xml, removed_paths)?.into_bytes();
+    entry.bytes =
+      sanitize_content_types(xml, context.removed_paths, context.names)?
+        .into_bytes();
     return Ok(true);
   }
   if relationship_entry(&entry.path) {
     let xml = std::str::from_utf8(&entry.bytes)
       .map_err(|_| unsupported("DOCX relationships are not valid UTF-8"))?;
-    entry.bytes =
-      sanitize_relationships(xml, &entry.path, removed_paths)?.into_bytes();
+    entry.bytes = sanitize_relationships(
+      xml,
+      &entry.path,
+      context.removed_paths,
+      context.names,
+    )?
+    .into_bytes();
     return Ok(true);
   }
-  let content_type = content_types
+  let content_type = context
+    .content_types
     .get(entry.path.as_str())
     .copied()
     .ok_or_else(|| {
@@ -1868,7 +1891,16 @@ fn sanitize_export_entry(
     }
     let xml = std::str::from_utf8(&entry.bytes)
       .map_err(|_| unsupported("DOCX content part is not valid UTF-8"))?;
-    entry.bytes = sanitize_content_xml(xml, &entry.path, styles)?.into_bytes();
+    let no_relationships = HashMap::new();
+    let identifiers = WordIdentifiers {
+      styles: context.styles,
+      relationships: context
+        .names
+        .relationships(&entry.path)
+        .unwrap_or(&no_relationships),
+    };
+    entry.bytes =
+      sanitize_content_xml(xml, &entry.path, identifiers)?.into_bytes();
     return Ok(true);
   }
   if formatting_content_type(content_type)
@@ -1877,7 +1909,7 @@ fn sanitize_export_entry(
     let xml = std::str::from_utf8(&entry.bytes)
       .map_err(|_| unsupported("DOCX formatting part is not valid UTF-8"))?;
     entry.bytes =
-      sanitize_formatting_xml(xml, &entry.path, content_type, styles)?
+      sanitize_formatting_xml(xml, &entry.path, content_type, context.styles)?
         .into_bytes();
     return Ok(true);
   }
@@ -1888,6 +1920,20 @@ fn sanitize_export_entry(
     "DOCX anonymized export does not support package part: {}",
     entry.path
   )))
+}
+
+fn rename_export_entries(
+  entries: &mut [ArchiveEntry],
+  names: &PackageNames,
+) -> Result<(), DocxRewriteError> {
+  let mut paths = HashSet::new();
+  for entry in entries {
+    entry.path = names.path(&entry.path).to_owned();
+    if !paths.insert(entry.path.clone()) {
+      return Err(unsupported("DOCX part names collide after renumbering"));
+    }
+  }
+  Ok(())
 }
 
 pub fn prepare_docx_anonymized_export(
@@ -1941,12 +1987,20 @@ pub fn prepare_docx_anonymized_export(
       && !removed_paths.contains(&entry.path)
       && !removed_relationship_paths.contains(&entry.path)
   });
+  let names = package_names(&entries, &removed_paths)?;
+  let context = ExportContext {
+    content_types: &by_path,
+    removed_paths: &removed_paths,
+    styles: &styles,
+    names: &names,
+  };
   let mut sanitized_xml_part_count = 0_usize;
   for entry in &mut entries {
-    if sanitize_export_entry(entry, &by_path, &removed_paths, &styles)? {
+    if sanitize_export_entry(entry, &context)? {
       sanitized_xml_part_count = sanitized_xml_part_count.saturating_add(1);
     }
   }
+  rename_export_entries(&mut entries, &names)?;
   let sanitized = write_archive(entries)?;
   let extraction = validate_profile(&sanitized)?;
   Ok(DocxAnonymizedExportPreparation {
@@ -1989,7 +2043,7 @@ mod tests {
   use super::{
     DRAWINGML_NAMESPACE, FORMATTING_WORD_PART_SUFFIXES,
     STRICT_DRAWINGML_NAMESPACE, THEME_CONTENT_TYPE, WORD_2010_NAMESPACE,
-    canonical_word_attributes, common_font, escape_attribute,
+    WordIdentifiers, canonical_word_attributes, common_font, escape_attribute,
     finalize_docx_anonymized_export, prepare_docx_anonymized_export,
     sanitize_formatting_xml, valid_numbering_label,
     validate_docx_anonymized_export,
@@ -2308,9 +2362,13 @@ mod tests {
       let priority_xml =
         format!("<w:uiPriority xmlns:w=\"{WORD}\" w:val=\"{value}\"/>");
       let priority = roxmltree::Document::parse(&priority_xml)?;
+      let none = HashMap::new();
+      let identifiers = WordIdentifiers {
+        styles: &none,
+        relationships: &none,
+      };
       assert_eq!(
-        canonical_word_attributes(priority.root_element(), &HashMap::new())
-          .is_ok(),
+        canonical_word_attributes(priority.root_element(), identifiers).is_ok(),
         accepted,
         "uiPriority {value}"
       );

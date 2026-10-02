@@ -1143,7 +1143,7 @@ mod tests {
   use super::super::{
     SAFE_CONTENT_WORD_ELEMENTS, SAFE_NUMBERING_WORD_ELEMENTS,
     SAFE_STYLE_WORD_ELEMENTS, SAFE_TEXT_OUTLINE_DRAWING_ELEMENTS,
-    SAFE_THEME_ELEMENTS, canonical_theme_attributes,
+    SAFE_THEME_ELEMENTS, WordIdentifiers, canonical_theme_attributes,
     canonical_word_2010_attributes, canonical_word_attributes,
   };
   use super::{
@@ -1270,7 +1270,14 @@ mod tests {
       .ok_or("missing element")?;
     let styles =
       HashMap::from([("Synthetic".to_owned(), "stellaStyle1".to_owned())]);
-    Ok(canonical_word_attributes(node, &styles))
+    let relationships = HashMap::new();
+    Ok(canonical_word_attributes(
+      node,
+      WordIdentifiers {
+        styles: &styles,
+        relationships: &relationships,
+      },
+    ))
   }
 
   // A drawing row applies to theme DrawingML and to the Word 2010 text-effect
