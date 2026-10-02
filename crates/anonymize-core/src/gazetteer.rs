@@ -1516,8 +1516,12 @@ fn short_typo_fits(
 /// quotes or brackets separate it from the text start, a line break, or
 /// sentence-final punctuation.
 fn opens_sentence(text: &str, start: usize) -> bool {
-  const OPENERS: [char; 12] =
-    ['"', '\'', '„', '“', '”', '‘', '’', '«', '»', '(', '[', '¿'];
+  // Quotes and brackets that may sit between a terminal and the next
+  // sentence (`skončil.) Orbit`, `„Orbit`).
+  const OPENERS: [char; 16] = [
+    '"', '\'', '„', '“', '”', '‘', '’', '«', '»', '(', ')', '[', ']', '{', '}',
+    '¿',
+  ];
   // Sentence terminals (Unicode Sentence_Terminal, plus `…` and `:`) of
   // the scripts in common use: Latin, CJK fullwidth, Arabic, Devanagari,
   // Armenian, Ethiopic, Myanmar.
@@ -1751,9 +1755,10 @@ const MARKER_DELIMITERS: [(&str, &str, MarkerKind); 4] = [
 /// marker nested in a template stays suppressed (`[[⟦Zeta⟧]]`) and a
 /// template delimiter never hides an opaque marker around it.
 fn markers(text: &str) -> Markers {
+  let mut work = 0;
   Markers {
-    opaque: marker_spans(text, MarkerKind::Opaque),
-    template: marker_spans(text, MarkerKind::Template),
+    opaque: marker_spans(text, MarkerKind::Opaque, &mut work),
+    template: marker_spans(text, MarkerKind::Template, &mut work),
   }
 }
 
@@ -1761,8 +1766,13 @@ fn markers(text: &str) -> Markers {
 /// disjoint. An opaque marker never contains whitespace; a template may, but
 /// never a line break, so a delimiter still open there is dropped and
 /// suppresses nothing after it. A closing delimiter that does not close the
-/// innermost open one is ignored.
-fn marker_spans(text: &str, kind: MarkerKind) -> Vec<(usize, usize)> {
+/// innermost open one is ignored. `work` counts the steps and stack
+/// entries visited, which stays linear in the text length.
+fn marker_spans(
+  text: &str,
+  kind: MarkerKind,
+  work: &mut usize,
+) -> Vec<(usize, usize)> {
   let delimiters = || {
     MARKER_DELIMITERS
       .iter()
@@ -1782,7 +1792,9 @@ fn marker_spans(text: &str, kind: MarkerKind) -> Vec<(usize, usize)> {
       MarkerKind::Opaque => ch.is_whitespace(),
       MarkerKind::Template => is_line_break(ch),
     };
+    *work = work.saturating_add(1);
     if closes_all {
+      *work = work.saturating_add(open.len());
       open.clear();
     }
     if let Some((closer, start)) = open.last().copied()
@@ -2432,6 +2444,20 @@ mod tests {
     let found_markers = markers(&text);
     assert_eq!(found_markers.template.len(), 1);
     assert!(found_markers.opaque.is_empty());
+    for repeats in [1_000, 10_000, 100_000] {
+      for unit in ["<< ⟦", "⟦<<\u{a0}", "{{[[ ⟦⟦ ", "⟦ << \n"] {
+        let repeated = unit.repeat(repeats);
+        let mut work = 0;
+        for kind in [MarkerKind::Opaque, MarkerKind::Template] {
+          marker_spans(&repeated, kind, &mut work);
+        }
+        let chars = repeated.chars().count();
+        assert!(
+          work <= chars.saturating_mul(4),
+          "{unit:?} x{repeats}: {work}"
+        );
+      }
+    }
   }
 
   #[test]
@@ -2468,10 +2494,19 @@ mod tests {
     ] {
       assert!(engine_found(&entries, text).is_empty(), "{text}");
     }
-    assert_eq!(
-      engine_found(&entries, "Předtím skončil, Orbys zůstal."),
-      ["Orbys"]
-    );
+    for text in [
+      "Předtím skončil.) Orbit zůstal.",
+      "Předtím skončil.] Orbit zůstal.",
+      "Předtím skončil.“) Orbit zůstal.",
+    ] {
+      assert!(engine_found(&entries, text).is_empty(), "{text}");
+    }
+    for text in [
+      "Předtím skončil, Orbys zůstal.",
+      "Předtím (skončil) Orbys zůstal.",
+    ] {
+      assert_eq!(engine_found(&entries, text), ["Orbys"], "{text}");
+    }
   }
 
   #[test]
