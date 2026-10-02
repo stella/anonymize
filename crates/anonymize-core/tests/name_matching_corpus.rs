@@ -22,6 +22,7 @@ mod corpus {
   };
   use stella_anonymize_core::{
     DetectionSource, Operator, OperatorConfig, PipelineEntity, PreparedEngine,
+    StaticRedactionResult,
   };
 
   #[derive(Deserialize)]
@@ -189,6 +190,82 @@ mod corpus {
   }
 
   type Report = BTreeMap<String, Tally>;
+
+  /// Set to `1` to print every failing case as one JSON line: its text, the
+  /// expected and actual entities and the expected and actual output. The
+  /// gate otherwise prints aggregate counts only.
+  const FAILURES_ENV: &str = "NAME_MATCHING_CORPUS_FAILURES";
+
+  /// Class tallies plus every case-level violation, collected so one run
+  /// reports all of them before the gate fails.
+  struct Outcome {
+    report: Report,
+    violations: Vec<String>,
+    print_failures: bool,
+  }
+
+  impl Outcome {
+    fn new() -> Self {
+      Self {
+        report: Report::new(),
+        violations: Vec::new(),
+        print_failures: std::env::var_os(FAILURES_ENV)
+          .is_some_and(|value| value == "1"),
+      }
+    }
+  }
+
+  struct FailureLine<'a> {
+    mode: &'a str,
+    class: &'a str,
+    case: &'a Case,
+    languages: &'a [Language],
+    pinned: bool,
+    expected: &'a [ExpectedEntity],
+    expected_text: &'a str,
+    actual: &'a [PipelineEntity],
+    actual_text: &'a str,
+  }
+
+  fn print_failure(
+    FailureLine {
+      mode,
+      class,
+      case,
+      languages,
+      pinned,
+      expected,
+      expected_text,
+      actual,
+      actual_text,
+    }: FailureLine<'_>,
+  ) -> Result<(), Box<dyn Error>> {
+    let line = serde_json::json!({
+      "profile": mode,
+      "class": class,
+      "languages": languages.iter().map(|language| language.code()).collect::<Vec<_>>(),
+      "pinned": pinned,
+      "text": case.text,
+      "surface": case.surface,
+      "expectedEntities": expected
+        .iter()
+        .map(|entity| serde_json::json!({
+          "start": entity.start, "end": entity.end, "label": entity.label
+        }))
+        .collect::<Vec<_>>(),
+      "expectedText": expected_text,
+      "actualEntities": actual
+        .iter()
+        .map(|entity| serde_json::json!({
+          "start": entity.start, "end": entity.end, "label": entity.label,
+          "gazetteer": entity.source == DetectionSource::Gazetteer
+        }))
+        .collect::<Vec<_>>(),
+      "actualText": actual_text,
+    });
+    writeln!(io::stdout().lock(), "{line}")?;
+    Ok(())
+  }
 
   fn engine(
     entries: &[GazetteerEntry],
@@ -411,7 +488,7 @@ mod corpus {
     engines: &'a ScopedEngines,
     operators: &'a OperatorConfig,
     mode: &'a str,
-    report: &'a mut Report,
+    outcome: &'a mut Outcome,
   }
 
   fn check_language_exclusions(
@@ -420,7 +497,7 @@ mod corpus {
       engines,
       operators,
       mode,
-      report,
+      outcome,
     }: LanguageExclusionCheck<'_>,
   ) -> Result<(), Box<dyn Error>> {
     let Some(exclusions) = &case.language_exclusions else {
@@ -445,16 +522,26 @@ mod corpus {
         &case.text,
       );
       if !excluded_passed {
-        return Err(
-          format!(
-            "{mode}/{}: excluded language matched or changed text",
-            case.kind
-          )
-          .into(),
-        );
+        outcome.violations.push(format!(
+          "{mode}/{}: excluded language matched or changed text",
+          case.kind
+        ));
+        if outcome.print_failures {
+          print_failure(FailureLine {
+            mode,
+            class: "language-exclusion",
+            case,
+            languages: &[*excluded],
+            pinned: false,
+            expected: &[],
+            expected_text: &case.text,
+            actual: &excluded_result.resolved_entities,
+            actual_text: &excluded_result.redaction.redacted_text,
+          })?;
+        }
       }
       record(
-        report,
+        &mut outcome.report,
         format!("{mode}/language-exclusion"),
         Expectation::Keep,
         excluded_passed,
@@ -671,6 +758,124 @@ mod corpus {
     Ok(())
   }
 
+  struct LanguageScopeCheck<'a> {
+    case: &'a Case,
+    engines: &'a ScopedEngines,
+    operators: &'a OperatorConfig,
+    isolated: &'a StaticRedactionResult,
+    mode: &'a str,
+    outcome: &'a mut Outcome,
+  }
+
+  /// Every language superset must reproduce the isolated language's result.
+  fn check_language_scope(
+    LanguageScopeCheck {
+      case,
+      engines,
+      operators,
+      isolated,
+      mode,
+      outcome,
+    }: LanguageScopeCheck<'_>,
+  ) -> Result<(), Box<dyn Error>> {
+    let mut unchanged = true;
+    for (scope, expanded) in engines {
+      if scope.len() == 1 || !scope.contains(&case.language) {
+        continue;
+      }
+      let comparison =
+        expanded.redact_static_entities(&case.text, operators)?;
+      let same = isolated.resolved_entities == comparison.resolved_entities
+        && isolated.redaction == comparison.redaction;
+      if !same && outcome.print_failures {
+        let isolated_entities = isolated
+          .resolved_entities
+          .iter()
+          .map(|entity| ExpectedEntity {
+            start: entity.start,
+            end: entity.end,
+            label: entity.label.clone(),
+          })
+          .collect::<Vec<_>>();
+        print_failure(FailureLine {
+          mode,
+          class: "language-scope",
+          case,
+          languages: scope,
+          pinned: false,
+          expected: &isolated_entities,
+          expected_text: &isolated.redaction.redacted_text,
+          actual: &comparison.resolved_entities,
+          actual_text: &comparison.redaction.redacted_text,
+        })?;
+      }
+      unchanged &= same;
+    }
+    record(
+      &mut outcome.report,
+      format!("{mode}/language-scope"),
+      Expectation::Keep,
+      unchanged,
+    )
+  }
+
+  struct CaseScore<'a> {
+    case: &'a Case,
+    expected: &'a [ExpectedEntity],
+    expected_text: &'a str,
+    known_failure: Option<&'a KnownFailure>,
+    result: &'a StaticRedactionResult,
+    mode: &'a str,
+    outcome: &'a mut Outcome,
+  }
+
+  /// Whether the case resolved exactly; records pin violations and, when
+  /// requested, prints the failing case.
+  fn score_case(
+    CaseScore {
+      case,
+      expected,
+      expected_text,
+      known_failure,
+      result,
+      mode,
+      outcome,
+    }: CaseScore<'_>,
+  ) -> Result<bool, Box<dyn Error>> {
+    let entities = &result.resolved_entities;
+    validate_resolved_spans(entities, &case.text)?;
+    let passed = exact_case(
+      entities,
+      &result.redaction.redacted_text,
+      expected,
+      expected_text,
+    );
+    if let Err(error) = verify_known_failure(KnownFailureCheck {
+      passed,
+      entities,
+      redacted_text: &result.redaction.redacted_text,
+      known: known_failure,
+    }) {
+      outcome
+        .violations
+        .push(format!("{mode}/{}: {error}", case.kind));
+    }
+    if !passed && outcome.print_failures {
+      print_failure(FailureLine {
+        mode,
+        class: &case.kind,
+        case,
+        languages: &[case.language],
+        pinned: known_failure.is_some(),
+        expected,
+        expected_text,
+        actual: entities,
+        actual_text: &result.redaction.redacted_text,
+      })?;
+    }
+    Ok(passed)
+  }
+
   struct ScoredCase<'a> {
     case: &'a Case,
     expected: &'a [ExpectedEntity],
@@ -683,7 +888,7 @@ mod corpus {
     entries: &[GazetteerEntry],
     cases: &[ScoredCase<'_>],
     mode: &str,
-    report: &mut Report,
+    outcome: &mut Outcome,
   ) -> Result<(), Box<dyn Error>> {
     let engines = scoped_engines(entries)?;
     let default_operators = OperatorConfig {
@@ -727,53 +932,39 @@ mod corpus {
         .map_err(|error| format!("{mode}/{}: {error}", case.kind))?
       {
         record(
-          report,
+          &mut outcome.report,
           format!("{mode}/guard-control"),
           Expectation::Redact,
           control_passed,
         )?;
       }
       let result = isolated.redact_static_entities(&case.text, &operators)?;
-      let mut unchanged = true;
-      for (scope, expanded) in &engines {
-        if scope.len() == 1 || !scope.contains(&case.language) {
-          continue;
-        }
-        let comparison =
-          expanded.redact_static_entities(&case.text, &operators)?;
-        unchanged &= result.resolved_entities == comparison.resolved_entities
-          && result.redaction == comparison.redaction;
-      }
-      record(
-        report,
-        format!("{mode}/language-scope"),
-        Expectation::Keep,
-        unchanged,
-      )?;
+      check_language_scope(LanguageScopeCheck {
+        case,
+        engines: &engines,
+        operators: &operators,
+        isolated: &result,
+        mode,
+        outcome,
+      })?;
       check_language_exclusions(LanguageExclusionCheck {
         case,
         engines: &engines,
         operators: &operators,
         mode,
-        report,
+        outcome,
       })?;
-      let entities = &result.resolved_entities;
-      validate_resolved_spans(entities, &case.text)?;
-      let passed = exact_case(
-        entities,
-        &result.redaction.redacted_text,
+      let passed = score_case(CaseScore {
+        case,
         expected,
-        &expected_text,
-      );
-      verify_known_failure(KnownFailureCheck {
-        passed,
-        entities,
-        redacted_text: &result.redaction.redacted_text,
-        known: *known_failure,
-      })
-      .map_err(|error| format!("{mode}/{}: {error}", case.kind))?;
+        expected_text: &expected_text,
+        known_failure: *known_failure,
+        result: &result,
+        mode,
+        outcome,
+      })?;
       record(
-        report,
+        &mut outcome.report,
         format!("{mode}/{}", case.kind),
         case.expectation,
         passed,
@@ -816,7 +1007,7 @@ mod corpus {
         source: GazetteerSource::Manual,
       })
       .collect::<Vec<_>>();
-    let mut report = Report::new();
+    let mut outcome = Outcome::new();
     measure(
       &corpus.entries,
       &corpus
@@ -831,7 +1022,7 @@ mod corpus {
         })
         .collect::<Vec<_>>(),
       "deny-list",
-      &mut report,
+      &mut outcome,
     )?;
     let mut forced_cases = corpus
       .forced_cases
@@ -861,24 +1052,28 @@ mod corpus {
         negative_scope: NegativeScope::ForcedReplay,
       });
     }
-    measure(&forced_entries, &forced_cases, "forced", &mut report)?;
-    check_thresholds(&report, &thresholds)
+    measure(&forced_entries, &forced_cases, "forced", &mut outcome)?;
+    check_thresholds(&outcome, &thresholds)
   }
 
   fn check_thresholds(
-    report: &Report,
+    Outcome {
+      report, violations, ..
+    }: &Outcome,
     thresholds: &BTreeMap<String, Threshold>,
   ) -> Result<(), Box<dyn Error>> {
-    assert_eq!(
-      report.keys().collect::<BTreeSet<_>>(),
-      thresholds.keys().collect::<BTreeSet<_>>(),
-      "threshold classes must exactly match measured classes"
-    );
     let mut failures = Vec::new();
     let mut table = io::stdout().lock();
     writeln!(table, "class | metric | count/total | bound")?;
     for (key, tally) in report {
-      let threshold = thresholds.get(key).ok_or("missing threshold")?;
+      let Some(threshold) = thresholds.get(key) else {
+        writeln!(
+          table,
+          "{key} | unbounded | {}/{} | missing",
+          tally.passed, tally.total
+        )?;
+        continue;
+      };
       let (total, count, bound, holds, metric) = match threshold {
         Threshold::Recall {
           total,
@@ -930,6 +1125,16 @@ mod corpus {
         failures.push(key.clone());
       }
     }
+    assert_eq!(
+      report.keys().collect::<BTreeSet<_>>(),
+      thresholds.keys().collect::<BTreeSet<_>>(),
+      "threshold classes must exactly match measured classes"
+    );
+    assert!(
+      violations.is_empty(),
+      "corpus case violations (set {FAILURES_ENV}=1 for details):\n{}",
+      violations.join("\n")
+    );
     assert!(
       failures.is_empty(),
       "corpus thresholds failed: {}",

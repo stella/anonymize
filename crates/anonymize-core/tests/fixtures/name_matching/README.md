@@ -110,10 +110,23 @@ matcher this suite ships with; class ceilings retain its behavior for
 compounds with plain word or number segments. Measured classes must equal
 the declared classes, and case counts must equal the denominators. Review
 fixture and threshold changes together; do not lower bounds to accommodate a
-regression. The test prints aggregate counts only, never case text or outputs.
+regression. By default the test prints aggregate counts only, never case text
+or outputs.
 
 Run `cargo test -p stella-anonymize-core --test name_matching_corpus -- --nocapture`.
 The normal workspace Rust CI test command discovers this integration test.
+
+To list failing cases, set `NAME_MATCHING_CORPUS_FAILURES=1`:
+
+```sh
+NAME_MATCHING_CORPUS_FAILURES=1 cargo test -p stella-anonymize-core \
+  --test name_matching_corpus labeled_name_matching_corpus_gate -- --nocapture
+```
+
+Each failing case, pinned ones included, prints as one JSON line with its
+profile, class, languages, text, expected and actual entities, and expected
+and actual output; the per-class table follows. The gate collects every case
+violation and fails once, after the table.
 
 Suppression controls also replay the seed at its original byte span: replace
 only the surrounding annotated envelope with equal-width spaces, preserve the
