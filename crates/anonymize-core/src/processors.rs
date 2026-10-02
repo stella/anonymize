@@ -1,10 +1,11 @@
 use std::collections::{BTreeMap, BTreeSet, HashSet, btree_map::Entry};
 
 use smallvec::SmallVec;
+use unicode_normalization::char::is_combining_mark;
 
 use crate::address_seeds::soft_wrapped_us_city_tail;
 use crate::byte_offsets::ByteOffsets;
-use crate::gazetteer::PreparedGazetteerMatchData;
+use crate::gazetteer::{PreparedGazetteerMatchData, is_unspaced_script};
 use crate::prepared_metadata::{
   PreparedCountryMatchData, PreparedRegexMatchData,
 };
@@ -2292,7 +2293,7 @@ fn extend_person_name(
     }
 
     let word = read_until_whitespace(full_text, offsets, word_start)?;
-    let stripped = strip_trailing_name_punctuation(&word);
+    let stripped = leading_name_word(&word);
     // Dotted middle initials ("A.", "R.") are part of the name; keep
     // scanning so the surname after them is absorbed.
     if is_middle_initial_token(&word) {
@@ -2415,6 +2416,28 @@ fn read_until_whitespace(
 ) -> Result<String> {
   let tail = slice_from(full_text, offsets, start)?;
   Ok(tail.chars().take_while(|ch| !ch.is_whitespace()).collect())
+}
+
+/// The name word that starts `token`: letters and combining marks of a
+/// script written with spaces, joined by inner hyphens and apostrophes
+/// (`Smith-Jones`, `O'Neil`). Punctuation, delimiters (`>>`, `»`, `)`) and
+/// unspaced-script text glued after it are not part of the name.
+fn leading_name_word(token: &str) -> &str {
+  let is_name_char = |ch: char| {
+    (ch.is_alphabetic() && !is_unspaced_script(ch)) || is_combining_mark(ch)
+  };
+  let mut end = 0_usize;
+  let mut chars = token.char_indices().peekable();
+  while let Some((index, ch)) = chars.next() {
+    let joined = end > 0
+      && matches!(ch, '-' | '\u{2010}' | '\'' | '\u{2019}' | '\u{02bc}')
+      && chars.peek().is_some_and(|(_, next)| is_name_char(*next));
+    if !is_name_char(ch) && !joined {
+      break;
+    }
+    end = index.saturating_add(ch.len_utf8());
+  }
+  token.get(..end).unwrap_or_default()
 }
 
 fn strip_trailing_name_punctuation(word: &str) -> &str {
