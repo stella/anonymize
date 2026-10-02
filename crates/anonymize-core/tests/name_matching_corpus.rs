@@ -712,7 +712,7 @@ mod corpus {
           &control_expected,
           &expected_text,
         ) {
-          return Err("guard positive control did not resolve its complete configured surface".into());
+          return Ok(Some(false));
         }
         let (control, guarded_start) = unguarded_control(case, surface)?;
         let counterfactual_expected = [ExpectedEntity {
@@ -734,10 +734,7 @@ mod corpus {
           &counterfactual_expected,
           &counterfactual_text,
         ) {
-          return Err(
-            "unguarded occurrence did not resolve at its original byte span"
-              .into(),
-          );
+          return Ok(Some(false));
         }
         Ok(Some(true))
       }
@@ -931,6 +928,15 @@ mod corpus {
         })
         .map_err(|error| format!("{mode}/{}: {error}", case.kind))?
       {
+        // A control that resolves wrongly is a measured failure, not a
+        // malformed fixture: record it and keep scoring the remaining cases.
+        if !control_passed {
+          outcome.violations.push(format!(
+            "{mode}/{}: guard control did not resolve its configured surface \
+             at its original byte span",
+            case.kind
+          ));
+        }
         record(
           &mut outcome.report,
           format!("{mode}/guard-control"),
@@ -1459,7 +1465,7 @@ mod corpus {
       "matchable control must occur inside the guarded region"
     );
     let empty = engine(&[], &[sample.language])?;
-    assert!(
+    assert_eq!(
       check_negative_control(NegativeControlCheck {
         case: sample,
         expected: &[],
@@ -1467,8 +1473,8 @@ mod corpus {
         scope: NegativeScope::Configured,
         engine: &empty,
         operators: &operators
-      })
-      .is_err(),
+      })?,
+      Some(false),
       "embedded seed without a configured match must fail its control"
     );
     Ok(())
