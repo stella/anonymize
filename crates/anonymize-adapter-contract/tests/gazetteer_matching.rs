@@ -9,7 +9,9 @@ use stella_anonymize_adapter_contract::{
   prepared_search_config_from_binding,
 };
 use stella_anonymize_core::assemble::{GazetteerEntry, PipelineConfig};
-use stella_anonymize_core::{DetectionSource, PipelineEntity, PreparedEngine};
+use stella_anonymize_core::{
+  DetectionSource, OperatorConfig, PipelineEntity, PreparedEngine,
+};
 
 const PERSON: &str = "person";
 const ORGANIZATION: &str = "organization";
@@ -35,6 +37,11 @@ const ENTRIES: &[(&str, &str, &[&str])] = &[
   ("Omega Stav k.s.", ORGANIZATION, &[]),
   ("@álîce", PERSON, &[]),
   ("C++", ORGANIZATION, &[]),
+  ("Jan Novák", PERSON, &[]),
+  ("Mark", PERSON, &[]),
+  ("Will", PERSON, &[]),
+  ("Grant", PERSON, &[]),
+  ("Augusts", PERSON, &[]),
   (FORCED_ID, IDENTIFIER, &[]),
 ];
 
@@ -46,6 +53,8 @@ enum Class {
   CaseAndOrder,
   Typo,
   Punctuated,
+  Templates,
+  CommonWordNames,
   BesideNumbers,
   OrdinaryWords,
   IdShapes,
@@ -53,13 +62,15 @@ enum Class {
 }
 
 impl Class {
-  const ALL: [Self; 10] = [
+  const ALL: [Self; 12] = [
     Self::Diacritics,
     Self::Inflection,
     Self::LegalForm,
     Self::CaseAndOrder,
     Self::Typo,
     Self::Punctuated,
+    Self::Templates,
+    Self::CommonWordNames,
     Self::BesideNumbers,
     Self::OrdinaryWords,
     Self::IdShapes,
@@ -161,12 +172,29 @@ const CASES: &[Case] = &[
   // Typos in long names.
   hit(Class::Typo, "Smluvní strana Beta Tradng s.r.o. souhlasí.", "Beta Tradng s.r.o."),
   hit(Class::Typo, "The memo names Wintermite as the sender.", "Wintermite"),
+  hit(Class::Typo, "Klient Orbys zaplatil.", "Orbys"),
+  hit(Class::Typo, "Smlouvu podepsal pan Novác dnes.", "Novác"),
+  miss(Class::Typo, "Zvolili orbys jako název.", "orbys"),
+  miss(Class::Typo, "Orbit se nezměnil.", "Orbit"),
   // Entries spelled with edge punctuation, folded like any other.
   hit(Class::Punctuated, "Napište @alice dnes.", "@alice"),
   hit(Class::Punctuated, "Napište @Álîce dnes.", "@Álîce"),
   miss(Class::Punctuated, "Přišla alice dnes.", "alice"),
   hit(Class::Punctuated, "Píšeme v C++ dnes.", "C++"),
   miss(Class::Punctuated, "Plán C platí.", "C"),
+  // Names inside template placeholders and wiki links.
+  hit(Class::Templates, "Poznámka [[Jan Novák]] zde.", "Jan Novák"),
+  hit(Class::Templates, "Šablona {{Acme}} zde.", "Acme"),
+  hit(Class::Templates, "Šablona <<Novák>> zde.", "Novák"),
+  hit(Class::Templates, "Odkaz [[Orbis]] zde.", "Orbis"),
+  // Person entries that are also common words, scored on the resolved
+  // (redacted) output: an exact entry is always redacted.
+  hit(Class::CommonWordNames, "Hello Mark there.", "Mark"),
+  hit(Class::CommonWordNames, "Ask Will now.", "Will"),
+  hit(Class::CommonWordNames, "Grant signed the deal.", "Grant"),
+  hit(Class::CommonWordNames, "Smlouvu podepsal Mark dnes.", "Mark"),
+  // A fuzzy hit is inferred, so common-word filters still apply to it.
+  miss(Class::CommonWordNames, "Ask August now.", "August"),
   // Names next to numbers, years, and words in references, emails, URLs,
   // handles, and file names.
   spans(Class::BesideNumbers, "Smlouva Acme/2024 platí.", "Acme/2024", "Acme"),
@@ -223,6 +251,7 @@ const CASES: &[Case] = &[
   miss(Class::IdShapes, "Kód ORB1S platí.", "ORB1S"),
   miss(Class::IdShapes, "Kód ZT4471Z platí.", "ZT4471Z"),
   miss(Class::IdShapes, "Sloupec acmeA_total platí.", "acmeA_total"),
+  miss(Class::IdShapes, "Viz <<token:zeta9>> níže.", "<<token:zeta9>>"),
   miss(Class::IdShapes, "Blob QWNtZUEvb3JiaXM9WmV0YQ== platí.", "QWNtZUEvb3JiaXM9WmV0YQ=="),
   miss(Class::IdShapes, "Id 9b1d0c3e-acfe-4c1b-9d2e-5f6a7b8c9d0f uložen.", "9b1d0c3e-acfe-4c1b-9d2e-5f6a7b8c9d0f"),
   // A hit covers the name (plus legal form) and nothing more.
@@ -344,6 +373,22 @@ fn czech_slovak_forms_follow_the_pipeline_language() {
   }
 }
 
+/// Gazetteer entities a case is scored on: the detector output, or for
+/// [`Class::CommonWordNames`] the resolved entities that survive into the
+/// redaction.
+fn case_entities(engine: &PreparedEngine, case: &Case) -> Vec<PipelineEntity> {
+  if case.class != Class::CommonWordNames {
+    return gazetteer_entities(engine, case.text);
+  }
+  engine
+    .redact_static_entities(case.text, &OperatorConfig::default())
+    .expect("redaction should succeed")
+    .resolved_entities
+    .into_iter()
+    .filter(|entity| entity.source == DetectionSource::Gazetteer)
+    .collect()
+}
+
 fn gazetteer_entities(
   engine: &PreparedEngine,
   text: &str,
@@ -374,14 +419,14 @@ fn case_covered(engine: &PreparedEngine, case: &Case) -> bool {
     return false;
   };
   let (name_start, name_end) = byte_range(case.text, name);
-  gazetteer_entities(engine, case.text)
+  case_entities(engine, case)
     .iter()
     .any(|entity| entity.start <= name_start && entity.end >= name_end)
 }
 
 /// Outcome of one case: `true` when the gazetteer behaved as labeled.
 fn case_passes(engine: &PreparedEngine, case: &Case) -> bool {
-  let entities = gazetteer_entities(engine, case.text);
+  let entities = case_entities(engine, case);
   let (probe_start, probe_end) = byte_range(case.text, case.probe);
   let overlapping: Vec<&PipelineEntity> = entities
     .iter()

@@ -60,6 +60,12 @@ const MIN_BASE64_SEGMENT_CHARS: usize = 12;
 
 /// Fewer letters than this match only exactly (after folding and declension):
 /// one edit turns a short name into an ordinary word (`Acme` -> `acne`).
+const MIN_SHORT_FUZZY_LETTERS: usize = 5;
+
+/// From this many letters an entry tolerates an edit anywhere. Shorter
+/// fuzzy entries (exactly [`MIN_SHORT_FUZZY_LETTERS`]) tolerate one edit only
+/// on a token spelled like a proper noun, as the entry is (see
+/// [`short_typo_fits`]): `Orbys` for `Orbis`, never `orbit`.
 const MIN_FUZZY_LETTERS: usize = 6;
 
 /// Entries with at least this many letters tolerate two edits; shorter fuzzy
@@ -82,10 +88,40 @@ pub fn gazetteer_fuzzy_distance(term: &str) -> Option<u8> {
     return None;
   }
   match term.chars().filter(|ch| ch.is_alphabetic()).count() {
-    letters if letters < MIN_FUZZY_LETTERS => None,
+    letters if letters < MIN_SHORT_FUZZY_LETTERS => None,
+    letters if letters < MIN_FUZZY_LETTERS => {
+      case_shape(term.trim()).map(|_| 1)
+    }
     letters if letters < MIN_TWO_EDIT_LETTERS => Some(1),
     _ => Some(2),
   }
+}
+
+/// Letter case a short entry is spelled in, and a one-edit match must share.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum CaseShape {
+  /// `Orbis`: an uppercase letter, then lowercase letters.
+  Capitalized,
+  /// `ORBIS`: uppercase letters only.
+  Upper,
+}
+
+/// The proper-noun case shape of a single word of letters, if it has one.
+fn case_shape(word: &str) -> Option<CaseShape> {
+  let mut letters = word.chars().filter(|ch| !is_combining_mark(*ch));
+  let first = letters.next()?;
+  let rest = letters.collect::<Vec<_>>();
+  if !first.is_alphabetic()
+    || rest.is_empty()
+    || !rest.iter().all(|ch| ch.is_alphabetic())
+  {
+    return None;
+  }
+  if first.is_uppercase() && rest.iter().all(|ch| ch.is_uppercase()) {
+    return Some(CaseShape::Upper);
+  }
+  (first.is_uppercase() && rest.iter().all(|ch| ch.is_lowercase()))
+    .then_some(CaseShape::Capitalized)
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -118,6 +154,9 @@ enum RowKind {
     max_distance: usize,
     /// Word count of the entry; see [`token_count_fits`].
     words: usize,
+    /// For a short entry, the case a matched token must be spelled in; see
+    /// [`short_typo_fits`].
+    short_shape: Option<CaseShape>,
   },
 }
 
@@ -473,6 +512,7 @@ impl PreparedGazetteerMatchData {
             folded,
             max_distance,
             words,
+            short_shape,
           },
       }) = self.row(found.pattern())
       else {
@@ -484,6 +524,9 @@ impl PreparedGazetteerMatchData {
         && guard.fuzzy_span_is_whole_words(start, end)
         && !guard.in_identifier(start, end)
         && token_count_fits(tokenize(surface).len(), *words)
+        && short_shape.is_none_or(|shape| {
+          short_typo_fits(text, (start, end), shape, folded.len())
+        })
         && edit_distance(&fold_word_chars(surface), folded) <= *max_distance
       {
         fuzzy.push(Hit {
@@ -512,11 +555,25 @@ impl PreparedGazetteerMatchData {
       }
     }
     let fuzzy = without_contained(fuzzy, &exact);
+    self.entities(text, exact, fuzzy)
+  }
 
+  /// Entities for the exact hits, then the fuzzy ones, each extended over a
+  /// following legal form; a span already emitted for its label is skipped.
+  fn entities(
+    &self,
+    text: &str,
+    exact: Vec<Hit<'_>>,
+    fuzzy: Vec<Hit<'_>>,
+  ) -> Result<Vec<PipelineEntity>> {
     let mut seen = HashSet::new();
     let mut entities =
       Vec::with_capacity(exact.len().saturating_add(fuzzy.len()));
-    for hit in exact.into_iter().chain(fuzzy) {
+    let hits = exact
+      .into_iter()
+      .map(|hit| (hit, true))
+      .chain(fuzzy.into_iter().map(|hit| (hit, false)));
+    for (hit, exact_entry) in hits {
       // Every emitted span must close any dotted chain it ends or starts
       // in (`s.r.o` inside `s.r.o.y`); fall back to the unextended span,
       // then drop the hit.
@@ -541,6 +598,7 @@ impl PreparedGazetteerMatchData {
       );
       entity.source_detail =
         legal_form_end.map(|_| SourceDetail::GazetteerExtension);
+      entity.exact_entry = exact_entry;
       entities.push(entity);
     }
     Ok(entities)
@@ -577,6 +635,16 @@ impl PreparedGazetteerMatchData {
       rows
     });
     for row in rows.iter().filter_map(|row| self.rows.get(*row)) {
+      // The case shape depends on the span itself, not its folded spelling.
+      if let RowKind::Fuzzy {
+        short_shape: Some(shape),
+        folded: ref entry,
+        ..
+      } = row.kind
+        && !short_typo_fits(guard.text, (start, end), shape, entry.len())
+      {
+        continue;
+      }
       hits.push(Hit {
         start,
         end,
@@ -616,6 +684,7 @@ impl PreparedGazetteerMatchData {
             folded: entry,
             max_distance,
             words,
+            ..
           },
         ..
       }) = self.rows.get(*row)
@@ -1411,16 +1480,80 @@ fn row_term<'t>(
 /// scale as the assembled patterns, so short entries accept folded hits
 /// only; a caller-supplied distance is capped at the supported maximum.
 fn fuzzy_row(term: &str, distance: Option<u8>) -> RowKind {
+  let folded = fold_word_chars(term);
+  let short_shape = (folded.len() < MIN_FUZZY_LETTERS)
+    .then(|| case_shape(term.trim()))
+    .flatten();
+  // Shorter entries match only exactly; a short entry without a
+  // proper-noun shape too.
+  let cap = match folded.len() {
+    letters if letters < MIN_SHORT_FUZZY_LETTERS => 0,
+    letters if letters < MIN_FUZZY_LETTERS => {
+      usize::from(short_shape.is_some())
+    }
+    _ => MAX_FUZZY_DISTANCE,
+  };
   RowKind::Fuzzy {
-    folded: fold_word_chars(term),
     words: tokenize(term).len(),
     max_distance: usize::from(
       distance
         .or_else(|| gazetteer_fuzzy_distance(term))
         .unwrap_or(0),
     )
-    .min(MAX_FUZZY_DISTANCE),
+    .min(cap),
+    folded,
+    short_shape,
   }
+}
+
+/// Whether a fuzzy span may stand for a short entry of `letters` letters
+/// spelled in `shape`: a whole token of as many letters (a substitution, so
+/// added endings stay with inflection), in the same proper-noun case, not
+/// opening a sentence, where ordinary words are capitalized too
+/// (`Nová smlouva`).
+fn short_typo_fits(
+  text: &str,
+  (start, end): (usize, usize),
+  shape: CaseShape,
+  letters: usize,
+) -> bool {
+  let span = text.get(start..end).unwrap_or_default();
+  // A whole token: no digits glued on either side (`Orbys2`).
+  let glued = previous_char(text, start).is_some_and(is_word_char)
+    || next_char(text, end).is_some_and(is_word_char);
+  !glued
+    && fold_word_chars(span).len() == letters
+    && case_shape(span) == Some(shape)
+    && !opens_sentence(text, start)
+}
+
+/// Whether `start` begins a sentence or a line: only whitespace and opening
+/// quotes or brackets separate it from the text start, a line break, or
+/// sentence-final punctuation.
+fn opens_sentence(text: &str, start: usize) -> bool {
+  // Quotes and brackets that may sit between a terminal and the next
+  // sentence (`skončil.) Orbit`, `„Orbit`).
+  const OPENERS: [char; 16] = [
+    '"', '\'', '„', '“', '”', '‘', '’', '«', '»', '(', ')', '[', ']', '{', '}',
+    '¿',
+  ];
+  // Sentence terminals (Unicode Sentence_Terminal, plus `…` and `:`) of
+  // the scripts in common use: Latin, CJK fullwidth, Arabic, Devanagari,
+  // Armenian, Ethiopic, Myanmar.
+  const TERMINALS: [char; 20] = [
+    '.', '!', '?', '…', ':', '‼', '⁇', '⁈', '⁉', '。', '．', '！', '？', '؟',
+    '۔', '।', '॥', '։', '።', '။',
+  ];
+  for ch in text.get(..start).unwrap_or_default().chars().rev().take(32) {
+    if is_line_break(ch) {
+      return true;
+    }
+    if ch.is_whitespace() || OPENERS.contains(&ch) {
+      continue;
+    }
+    return TERMINALS.contains(&ch);
+  }
+  true
 }
 
 /// The entry text a gazetteer search pattern carries.
@@ -1507,8 +1640,8 @@ fn trim_fuzzy_span(text: &str, (start, end): (usize, usize)) -> (usize, usize) {
 /// glue, joiners, and one joined segment.
 struct Guard<'t> {
   text: &'t str,
-  /// Outermost balanced `⟦…⟧` markers, sorted and disjoint.
-  markers: Vec<(usize, usize)>,
+  /// Balanced markers by kind.
+  markers: Markers,
   /// Characters the scans have looked at, for scaling tests.
   visits: Cell<usize>,
   /// Deletion lookups and distance checks of the fuzzy fallback.
@@ -1576,54 +1709,145 @@ impl<'t> Guard<'t> {
   fn in_identifier(&self, start: usize, end: usize) -> bool {
     let head = self.text.get(..start).unwrap_or_default();
     let tail = self.text.get(end..).unwrap_or_default();
-    self.in_marker(start, end)
-      || joined_segment(
-        self
-          .visit(head.chars().rev())
-          .skip_while(|ch| is_word_char(*ch)),
-      )
-      .is_some_and(|segment| is_identifier_segment(&segment))
-      || joined_segment(
-        self.visit(tail.chars()).skip_while(|ch| is_word_char(*ch)),
-      )
-      .is_some_and(|segment| is_identifier_segment(&segment))
+    let before = joined_segment(
+      self
+        .visit(head.chars().rev())
+        .skip_while(|ch| is_word_char(*ch)),
+    );
+    let after = joined_segment(
+      self.visit(tail.chars()).skip_while(|ch| is_word_char(*ch)),
+    );
+    let in_marker = match self.marker_kind(start, end) {
+      Some(MarkerKind::Opaque) => true,
+      // A template placeholder may hold a real name (`[[Orbis]]`,
+      // `<<Novák>>`); only a field built around it (`<<token:zeta9>>`,
+      // `{{acme_01}}`) is an identifier.
+      Some(MarkerKind::Template) => {
+        previous_char(self.text, start).is_some_and(is_word_char)
+          || next_char(self.text, end).is_some_and(is_word_char)
+          || [&before, &after]
+            .into_iter()
+            .flatten()
+            .any(|segment| segment.chars().any(char::is_numeric))
+      }
+      None => false,
+    };
+    in_marker
+      || before.is_some_and(|segment| is_identifier_segment(&segment))
+      || after.is_some_and(|segment| is_identifier_segment(&segment))
   }
 
-  /// Whether a balanced `⟦…⟧` marker encloses the span: one binary search
-  /// over the indexed markers.
-  fn in_marker(&self, start: usize, end: usize) -> bool {
-    let opened_before = self.markers.partition_point(|(open, _)| *open < start);
-    opened_before
-      .checked_sub(1)
-      .and_then(|index| self.markers.get(index))
-      .is_some_and(|(_, close)| *close >= end)
+  /// The strongest kind of balanced marker enclosing the span, if any: an
+  /// opaque marker wins over a template around it. Binary searches over the
+  /// indexed markers.
+  fn marker_kind(&self, start: usize, end: usize) -> Option<MarkerKind> {
+    if encloses(&self.markers.opaque, start, end) {
+      return Some(MarkerKind::Opaque);
+    }
+    encloses(&self.markers.template, start, end).then_some(MarkerKind::Template)
   }
 }
 
-/// Outermost balanced `⟦…⟧` markers as `(open, close)` byte offsets, in one
-/// pass. Markers never contain whitespace, so whitespace drops any bracket
-/// still open; a `⟧` without an open `⟦` is ignored.
-fn markers(text: &str) -> Vec<(usize, usize)> {
-  let mut markers = Vec::new();
-  if !text.contains('⟦') {
-    return markers;
+/// What a balanced marker's content is taken to be.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum MarkerKind {
+  /// `⟦…⟧`: an opaque marker; nothing inside it is a name.
+  Opaque,
+  /// `<<…>>`, `{{…}}`, `[[…]]`: a template placeholder or link that may hold
+  /// a name.
+  Template,
+}
+
+/// Marker delimiters and the kind of marker each opens.
+const MARKER_DELIMITERS: [(&str, &str, MarkerKind); 4] = [
+  ("⟦", "⟧", MarkerKind::Opaque),
+  ("<<", ">>", MarkerKind::Template),
+  ("{{", "}}", MarkerKind::Template),
+  ("[[", "]]", MarkerKind::Template),
+];
+
+/// Balanced markers by kind. Each kind is scanned on its own, so an opaque
+/// marker nested in a template stays suppressed (`[[⟦Zeta⟧]]`) and a
+/// template delimiter never hides an opaque marker around it.
+fn markers(text: &str) -> Markers {
+  let mut work = 0;
+  Markers {
+    opaque: marker_spans(text, MarkerKind::Opaque, &mut work),
+    template: marker_spans(text, MarkerKind::Template, &mut work),
   }
-  let mut open = Vec::new();
-  for (index, ch) in text.char_indices() {
-    match ch {
-      '⟦' => open.push(index),
-      '⟧' => {
-        if let Some(start) = open.pop()
-          && open.is_empty()
-        {
-          markers.push((start, index));
-        }
-      }
-      _ if ch.is_whitespace() => open.clear(),
-      _ => {}
+}
+
+/// Outermost balanced markers of one kind, in one pass, sorted and
+/// disjoint. An opaque marker never contains whitespace; a template may, but
+/// never a line break, so a delimiter still open there is dropped and
+/// suppresses nothing after it. A closing delimiter that does not close the
+/// innermost open one is ignored. `work` counts the steps and stack
+/// entries visited, which stays linear in the text length.
+fn marker_spans(
+  text: &str,
+  kind: MarkerKind,
+  work: &mut usize,
+) -> Vec<(usize, usize)> {
+  let delimiters = || {
+    MARKER_DELIMITERS
+      .iter()
+      .filter(move |(_, _, delimiter_kind)| *delimiter_kind == kind)
+  };
+  let mut spans = Vec::new();
+  if !delimiters().any(|(opener, _, _)| text.contains(opener)) {
+    return spans;
+  }
+  let mut open = Vec::<(&str, usize)>::new();
+  let mut index = 0_usize;
+  while let Some(rest) = text.get(index..) {
+    let Some(ch) = rest.chars().next() else {
+      break;
+    };
+    let closes_all = match kind {
+      MarkerKind::Opaque => ch.is_whitespace(),
+      MarkerKind::Template => is_line_break(ch),
+    };
+    *work = work.saturating_add(1);
+    if closes_all {
+      *work = work.saturating_add(open.len());
+      open.clear();
     }
+    if let Some((closer, start)) = open.last().copied()
+      && rest.starts_with(closer)
+    {
+      open.pop();
+      if open.is_empty() {
+        spans.push((start, index));
+      }
+      index = index.saturating_add(closer.len());
+      continue;
+    }
+    if let Some((opener, closer, _)) =
+      delimiters().find(|(opener, _, _)| rest.starts_with(opener))
+    {
+      open.push((closer, index));
+      index = index.saturating_add(opener.len());
+      continue;
+    }
+    index = index.saturating_add(ch.len_utf8());
   }
-  markers
+  spans
+}
+
+/// Marker spans by kind, each sorted and disjoint.
+#[derive(Debug, Default)]
+struct Markers {
+  opaque: Vec<(usize, usize)>,
+  template: Vec<(usize, usize)>,
+}
+
+/// Whether one of the sorted, disjoint `spans` encloses `start..end`.
+fn encloses(spans: &[(usize, usize)], start: usize, end: usize) -> bool {
+  let opened_before = spans.partition_point(|(open, _)| *open < start);
+  opened_before
+    .checked_sub(1)
+    .and_then(|index| spans.get(index))
+    .is_some_and(|(_, close)| *close >= end)
 }
 
 fn glue_is_free(
@@ -2181,6 +2405,149 @@ mod tests {
     }
   }
 
+  fn short_entry(term: &str) -> Entry<'_> {
+    Entry {
+      term,
+      label: ORGANIZATION,
+      fuzzy_distance: gazetteer_fuzzy_distance(term),
+    }
+  }
+
+  #[test]
+  fn five_letter_entries_take_one_typo_on_a_proper_noun() {
+    assert_eq!(gazetteer_fuzzy_distance("Orbis"), Some(1));
+    assert_eq!(gazetteer_fuzzy_distance("ORBIS"), Some(1));
+    assert_eq!(gazetteer_fuzzy_distance("orbis"), None);
+    assert_eq!(gazetteer_fuzzy_distance("Zeta"), None);
+    let entries = [short_entry("Orbis")];
+    for (text, expected) in [
+      ("Klient Orbys zaplatil.", "Orbys"),
+      ("Klient Orbís zaplatil.", "Orbís"),
+      ("Klient Orbisu zaplatil.", "Orbisu"),
+    ] {
+      assert!(
+        engine_found(&entries, text)
+          .iter()
+          .any(|hit| hit == expected),
+        "{text}"
+      );
+    }
+    for text in [
+      "The orbit is stable.",
+      "Vstoupil na orbitu.",
+      "Klient ORBYS zaplatil.",
+      "Orbit zaplatil.",
+      "Klient Orbys2 zaplatil.",
+    ] {
+      assert!(engine_found(&entries, text).is_empty(), "{text}");
+    }
+    let upper = [short_entry("ORBIS")];
+    assert_eq!(engine_found(&upper, "Klient ORBYS zaplatil."), ["ORBYS"]);
+    assert!(engine_found(&upper, "Klient Orbys zaplatil.").is_empty());
+  }
+
+  #[test]
+  fn four_letter_entries_stay_exact() {
+    let entries = [short_entry("Zeta")];
+    assert!(engine_found(&entries, "Klient Zeda zaplatil.").is_empty());
+  }
+
+  #[test]
+  fn many_open_delimiters_on_a_line_stay_linear() {
+    let text =
+      format!("{} Acme {}", "<< ⟦".repeat(50_000), ">>".repeat(50_000));
+    let found_markers = markers(&text);
+    assert_eq!(found_markers.template.len(), 1);
+    assert!(found_markers.opaque.is_empty());
+    for repeats in [1_000, 10_000, 100_000] {
+      for unit in ["<< ⟦", "⟦<<\u{a0}", "{{[[ ⟦⟦ ", "⟦ << \n"] {
+        let repeated = unit.repeat(repeats);
+        let mut work = 0;
+        for kind in [MarkerKind::Opaque, MarkerKind::Template] {
+          marker_spans(&repeated, kind, &mut work);
+        }
+        let chars = repeated.chars().count();
+        assert!(
+          work <= chars.saturating_mul(4),
+          "{unit:?} x{repeats}: {work}"
+        );
+      }
+    }
+  }
+
+  #[test]
+  fn opaque_markers_win_inside_templates() {
+    let entries = [exact("Zeta", ORGANIZATION), exact("Acme", ORGANIZATION)];
+    for text in ["see [[⟦Zeta⟧]] below", "see {{⟦Zeta⟧}} below"] {
+      assert!(found(&entries, text).is_empty(), "{text}");
+    }
+    assert_eq!(found(&entries, "see {{Acme:⟦Zeta⟧}} below"), ["Acme"]);
+  }
+
+  #[test]
+  fn templates_stay_open_across_spaces_on_their_line() {
+    let entries = [exact("Zeta", ORGANIZATION), exact("Jan Novák", PERSON)];
+    for text in ["see <<token: zeta9>> below", "see {{ field zeta9 }} below"] {
+      assert!(found(&entries, text).is_empty(), "{text}");
+    }
+    for (text, expected) in [
+      ("see << Jan Novák2024 here", "Jan Novák"),
+      ("see <<token:\nzeta9>> below", "zeta"),
+      ("see {{ Jan Novák }} below", "Jan Novák"),
+    ] {
+      assert_eq!(found(&entries, text), [expected], "{text:?}");
+    }
+  }
+
+  #[test]
+  fn short_typos_skip_sentence_starts_in_other_scripts() {
+    let entries = [short_entry("Orbis")];
+    for text in [
+      "Předtím skončil。 Orbit zůstal.",
+      "Předtím skončil؟ Orbit zůstal.",
+      "Předtím skončil। Orbit zůstal.",
+    ] {
+      assert!(engine_found(&entries, text).is_empty(), "{text}");
+    }
+    for text in [
+      "Předtím skončil.) Orbit zůstal.",
+      "Předtím skončil.] Orbit zůstal.",
+      "Předtím skončil.“) Orbit zůstal.",
+    ] {
+      assert!(engine_found(&entries, text).is_empty(), "{text}");
+    }
+    for text in [
+      "Předtím skončil, Orbys zůstal.",
+      "Předtím (skončil) Orbys zůstal.",
+    ] {
+      assert_eq!(engine_found(&entries, text), ["Orbys"], "{text}");
+    }
+  }
+
+  #[test]
+  fn template_placeholders_keep_names_but_not_identifier_fields() {
+    let entries = [exact("Zeta", ORGANIZATION), exact("Jan Novák", PERSON)];
+    for text in [
+      "see <<token:zeta9>> below",
+      "see {{zeta_01}} below",
+      "see [[Zeta2024]] below",
+      "see ⟦Zeta⟧ below",
+    ] {
+      assert!(found(&entries, text).is_empty(), "{text}");
+    }
+    for (text, expected) in [
+      ("see {{Zeta}} below", "Zeta"),
+      ("see <<Zeta>> below", "Zeta"),
+      ("see [[Zeta]] below", "Zeta"),
+      ("see <<token:Zeta>> below", "Zeta"),
+      ("note [[Jan Novák]] here", "Jan Novák"),
+      ("see [Zeta] below", "Zeta"),
+      ("Pište na zeta9@example.cz.", "zeta"),
+    ] {
+      assert_eq!(found(&entries, text), [expected], "{text}");
+    }
+  }
+
   #[test]
   fn edge_punctuation_stays_part_of_the_entry() {
     let entries = [exact("C++", ORGANIZATION), exact("@alice", PERSON)];
@@ -2721,13 +3088,21 @@ mod tests {
 
     #[test]
     fn fuzz_marker_oracle_matches_production(
-      text in "[⟦⟧a \t\n\r\u{00a0}]{0,128}",
+      text in "[⟦⟧<>{}\\[\\]a \t\n\r\u{00a0}\u{2028}]{0,128}",
     ) {
-      let expected = markers(&text)
-        .into_iter()
-        .map(|(start, close)| (start, close.saturating_add('⟧'.len_utf8())))
+      let found = markers(&text);
+      let opaque = found
+        .opaque
+        .iter()
+        .map(|(start, close)| (*start, close.saturating_add('⟧'.len_utf8())))
         .collect::<Vec<_>>();
-      prop_assert_eq!(fuzz_policy::marker_ranges(&text), expected);
+      prop_assert_eq!(fuzz_policy::marker_ranges(&text), opaque);
+      let templates = found
+        .template
+        .iter()
+        .map(|(start, close)| (*start, close.saturating_add(2)))
+        .collect::<Vec<_>>();
+      prop_assert_eq!(fuzz_policy::template_ranges(&text), templates);
     }
 
     #[test]
@@ -2748,7 +3123,11 @@ mod tests {
       // Structured envelopes ensure numeric glue, joined segments, markers,
       // and their interactions are exercised alongside arbitrary Unicode.
       let arbitrary = characters.into_iter().collect::<String>();
-      for text in [arbitrary, format!("⟦a1b2-1234{identifier}1234-a1b2⟧")] {
+      for text in [
+        arbitrary,
+        format!("⟦a1b2-1234{identifier}1234-a1b2⟧"),
+        format!("<<a1b2:{identifier}>> [[{identifier}]]"),
+      ] {
         let offsets = text.char_indices().map(|(offset, _)| offset)
           .chain(std::iter::once(text.len())).collect::<Vec<_>>();
         let first = offsets[left.checked_rem(offsets.len()).unwrap()];
@@ -2756,10 +3135,15 @@ mod tests {
         let (start, end) = (first.min(second), first.max(second));
         let guard = Guard::new(&text);
         prop_assert_eq!(fuzz_policy::edges_are_free(&text, start, end), guard.edges_are_free(start, end));
-        prop_assert_eq!(fuzz_policy::in_marker(&text, start, end), guard.in_marker(start, end));
-        prop_assert_eq!(fuzz_policy::touches_identifier(&text, start, end) || fuzz_policy::in_marker(&text, start, end), guard.in_identifier(start, end));
+        prop_assert_eq!(fuzz_policy::in_marker(&text, start, end), encloses(&guard.markers.opaque, start, end));
+        prop_assert_eq!(
+          fuzz_policy::touches_identifier(&text, start, end)
+            || fuzz_policy::in_marker(&text, start, end)
+            || fuzz_policy::in_template_field(&text, start, end),
+          guard.in_identifier(start, end)
+        );
         let mut joined_guard = Guard::new(&text);
-        joined_guard.markers.clear();
+        joined_guard.markers = Markers::default();
         prop_assert_eq!(fuzz_policy::touches_identifier(&text, start, end), joined_guard.in_identifier(start, end));
       }
     }

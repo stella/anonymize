@@ -695,11 +695,7 @@
           "end": 12,
           "label": "organization"
         }
-      ],
-      "knownFailure": {
-        "entities": [],
-        "redactedText": "Klient Orbys zaplatil."
-      }
+      ]
     },
     {
       "expectation": "redact",
@@ -1791,16 +1787,6 @@
       "language": "en",
       "expectedEntities": [],
       "forcedExpectedEntities": [],
-      "knownFailure": {
-        "entities": [
-          {
-            "end": 17,
-            "label": "organization",
-            "start": 12
-          }
-        ],
-        "redactedText": "see <<token:[REDACTED]>> below"
-      },
       "negativeCheck": {
         "type": "suppression",
         "surface": "zeta",

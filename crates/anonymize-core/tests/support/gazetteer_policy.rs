@@ -164,3 +164,75 @@ pub(super) fn in_marker(text: &str, start: usize, end: usize) -> bool {
     *open < start && close.saturating_sub('⟧'.len_utf8()) >= end
   })
 }
+
+const TEMPLATE_DELIMITERS: [(&str, &str); 3] =
+  [("<<", ">>"), ("{{", "}}"), ("[[", "]]")];
+
+const fn is_line_break(character: char) -> bool {
+  matches!(character, '\n' | '\r' | '\u{2028}' | '\u{2029}')
+}
+
+/// Outermost template placeholders (`<<…>>`, `{{…}}`, `[[…]]`), closing
+/// delimiter included. A template spans spaces but never a line break; a
+/// closer that does not match the innermost open delimiter is ignored.
+pub(super) fn template_ranges(text: &str) -> Vec<(usize, usize)> {
+  let mut ranges = Vec::new();
+  let mut open: Vec<(usize, &str)> = Vec::new();
+  let mut next = 0;
+  for (offset, character) in text.char_indices() {
+    if offset < next {
+      continue;
+    }
+    if is_line_break(character) {
+      open.clear();
+      continue;
+    }
+    let rest = text.get(offset..).unwrap_or_default();
+    if let Some(&(start, closer)) = open.last()
+      && rest.starts_with(closer)
+    {
+      open.pop();
+      next = offset.saturating_add(closer.len());
+      if open.is_empty() {
+        ranges.push((start, next));
+      }
+      continue;
+    }
+    if let Some((opener, closer)) = TEMPLATE_DELIMITERS
+      .iter()
+      .find(|(opener, _)| rest.starts_with(opener))
+    {
+      open.push((offset, closer));
+      next = offset.saturating_add(opener.len());
+    }
+  }
+  ranges
+}
+
+/// A span inside a template placeholder that is glued to a word character
+/// or joined to a segment with a digit (`<<token:zeta9>>`): a field, not a
+/// name. Plain names inside (`[[Jan Novák]]`) are not fields.
+pub(super) fn in_template_field(text: &str, start: usize, end: usize) -> bool {
+  let enclosed = template_ranges(text)
+    .iter()
+    .any(|(open, close)| *open < start && close.saturating_sub(2) >= end);
+  if !enclosed {
+    return false;
+  }
+  let glued = text
+    .get(..start)
+    .and_then(|head| head.chars().next_back())
+    .is_some_and(is_word_interior)
+    || text
+      .get(end..)
+      .and_then(|tail| tail.chars().next())
+      .is_some_and(is_word_interior);
+  glued
+    || [
+      adjacent_identifier_segment(text, Edge::Start(start)),
+      adjacent_identifier_segment(text, Edge::End(end)),
+    ]
+    .into_iter()
+    .flatten()
+    .any(|segment| segment.chars().any(char::is_numeric))
+}
