@@ -1,5 +1,9 @@
 # @stll/anonymize-win32-x64-msvc
 
+## 3.0.3
+
+No changes in this release.
+
 ## 3.0.2
 
 No changes in this release.
