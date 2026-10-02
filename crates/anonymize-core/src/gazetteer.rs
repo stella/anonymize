@@ -22,12 +22,13 @@ use unicode_normalization::char::{decompose_canonical, is_combining_mark};
 
 #[path = "gazetteer_policy.rs"]
 mod policy;
+pub(crate) use policy::is_unspaced_script;
 #[cfg(test)]
 use policy::{
   COMPOUND_JOINERS, MarkerKind, Markers, encloses, glue_is_free,
   is_identifier_segment, marker_spans, markers,
 };
-use policy::{CandidatePolicy, is_unspaced_script, is_word_char};
+use policy::{CandidatePolicy, is_word_char};
 
 use crate::declension::{expand_name_declensions, expand_surname_derivations};
 use crate::labels::PERSON_LABEL;
