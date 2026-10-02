@@ -127,6 +127,78 @@
       "source": "manual"
     },
     {
+      "id": "corpus-entry-mark",
+      "canonical": "Mark",
+      "label": "person",
+      "variants": [],
+      "workspaceId": "corpus-workspace",
+      "createdAt": 0,
+      "source": "manual"
+    },
+    {
+      "id": "corpus-entry-will",
+      "canonical": "Will",
+      "label": "person",
+      "variants": [],
+      "workspaceId": "corpus-workspace",
+      "createdAt": 0,
+      "source": "manual"
+    },
+    {
+      "id": "corpus-entry-grant",
+      "canonical": "Grant",
+      "label": "person",
+      "variants": [],
+      "workspaceId": "corpus-workspace",
+      "createdAt": 0,
+      "source": "manual"
+    },
+    {
+      "id": "corpus-entry-maly",
+      "canonical": "Malý",
+      "label": "person",
+      "variants": [],
+      "workspaceId": "corpus-workspace",
+      "createdAt": 0,
+      "source": "manual"
+    },
+    {
+      "id": "corpus-entry-oxa",
+      "canonical": "Oxa",
+      "label": "organization",
+      "variants": [],
+      "workspaceId": "corpus-workspace",
+      "createdAt": 0,
+      "source": "manual"
+    },
+    {
+      "id": "corpus-entry-lindgarth-organization",
+      "canonical": "Lindgarth",
+      "label": "organization",
+      "variants": [],
+      "workspaceId": "corpus-workspace",
+      "createdAt": 0,
+      "source": "manual"
+    },
+    {
+      "id": "corpus-entry-lindgarth-person",
+      "canonical": "Lindgarth",
+      "label": "person",
+      "variants": [],
+      "workspaceId": "corpus-workspace",
+      "createdAt": 0,
+      "source": "manual"
+    },
+    {
+      "id": "corpus-entry-nino-beridze",
+      "canonical": "ნინო ბერიძე",
+      "label": "person",
+      "variants": [],
+      "workspaceId": "corpus-workspace",
+      "createdAt": 0,
+      "source": "manual"
+    },
+    {
       "id": "corpus-entry-17",
       "canonical": "Nerava++",
       "label": "organization",
@@ -1385,6 +1457,556 @@
       ]
     },
     {
+      "expectation": "redact",
+      "kind": "common-word-person",
+      "text": "Signed by Mark on behalf of the buyer.",
+      "surface": "Mark",
+      "language": "en",
+      "expectedEntities": [
+        {
+          "start": 10,
+          "end": 14,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "common-word-person",
+      "text": "The notice was sent to Will yesterday.",
+      "surface": "Will",
+      "language": "en",
+      "expectedEntities": [
+        {
+          "start": 23,
+          "end": 27,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "common-word-person",
+      "text": "Approved by Grant on Monday.",
+      "surface": "Grant",
+      "language": "en",
+      "expectedEntities": [
+        {
+          "start": 12,
+          "end": 17,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "common-word-person",
+      "text": "Za kupujícího jednal pan Malý.",
+      "surface": "Malý",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 27,
+          "end": 32,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "common-word-person",
+      "text": "Jednali jsme s panem Malým.",
+      "surface": "Malým",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 21,
+          "end": 27,
+          "label": "person"
+        }
+      ],
+      "languageExclusions": ["en"]
+    },
+    {
+      "expectation": "redact",
+      "kind": "exact-low-signal",
+      "text": "please ask will, thanks.",
+      "surface": "will",
+      "language": "en",
+      "expectedEntities": [
+        {
+          "start": 11,
+          "end": 15,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "exact-low-signal",
+      "text": "hello mark there.",
+      "surface": "mark",
+      "language": "en",
+      "expectedEntities": [
+        {
+          "start": 6,
+          "end": 10,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "exact-low-signal",
+      "text": "grant signed the deal.",
+      "surface": "grant",
+      "language": "en",
+      "expectedEntities": [
+        {
+          "start": 0,
+          "end": 5,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "exact-low-signal",
+      "text": "„Grant“ souhlasí.",
+      "surface": "Grant",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 3,
+          "end": 8,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "exact-low-signal",
+      "text": "Za dodavatele jedná Oxa.",
+      "surface": "Oxa",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 21,
+          "end": 24,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "exact-low-signal",
+      "text": "dodavatel oxa potvrdil",
+      "surface": "oxa",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 10,
+          "end": 13,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "surname-first",
+      "text": "Za kupujícího Dvořáková Marie.",
+      "surface": "Dvořáková Marie",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 16,
+          "end": 34,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "surname-first",
+      "text": "ŽALOVANÝ: KUBÍČEK Tomáš",
+      "surface": "KUBÍČEK Tomáš",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 12,
+          "end": 29,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "surname-first",
+      "text": "Witnessed by Wellbourne, Harriet.",
+      "surface": "Wellbourne, Harriet",
+      "language": "en",
+      "expectedEntities": [
+        {
+          "start": 13,
+          "end": 32,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "surname-first",
+      "text": "Wellbourne Harriet signed the lease.",
+      "surface": "Wellbourne Harriet",
+      "language": "en",
+      "expectedEntities": [
+        {
+          "start": 0,
+          "end": 18,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "surname-first",
+      "text": "Odvolanie podal ŠŤASTNÝ Ľubomír.",
+      "surface": "ŠŤASTNÝ Ľubomír",
+      "language": "sk",
+      "expectedEntities": [
+        {
+          "start": 16,
+          "end": 36,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "surname-first",
+      "text": "Účastník: KOVÁČOVÁ, Zuzana",
+      "surface": "KOVÁČOVÁ, Zuzana",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 13,
+          "end": 32,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "surname-first",
+      "text": "Jednal jsem s Dvořákovou Marií.",
+      "surface": "Dvořákovou Marií",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 14,
+          "end": 33,
+          "label": "person"
+        }
+      ],
+      "languageExclusions": ["en"]
+    },
+    {
+      "expectation": "redact",
+      "kind": "surname-first",
+      "text": "Plnou moc udělila Dvořákové Marii.",
+      "surface": "Dvořákové Marii",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 19,
+          "end": 37,
+          "label": "person"
+        }
+      ],
+      "languageExclusions": ["en"]
+    },
+    {
+      "expectation": "redact",
+      "kind": "surname-first",
+      "text": "Doručeno: Kubíčkovi Tomášovi.",
+      "surface": "Kubíčkovi Tomášovi",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 11,
+          "end": 33,
+          "label": "person"
+        }
+      ],
+      "languageExclusions": ["en"]
+    },
+    {
+      "expectation": "redact",
+      "kind": "template-glued",
+      "text": "Šablona [[Zeta2024]] je hotová.",
+      "surface": "Zeta2024",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 11,
+          "end": 19,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "template-glued",
+      "text": "Šablona {{Zeta_01}} je hotová.",
+      "surface": "Zeta",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 11,
+          "end": 15,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "template-glued",
+      "text": "Šablona <<Orbis7>> je hotová.",
+      "surface": "Orbis7",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 11,
+          "end": 17,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "template-glued",
+      "text": "Šablona [[Orbis_v2]] je hotová.",
+      "surface": "Orbis",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 11,
+          "end": 16,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "template-glued",
+      "text": "Šablona {{Novák_2024}} je hotová.",
+      "surface": "Novák",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 11,
+          "end": 17,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "template-glued",
+      "text": "Pole <<Acme A>> je vyplněno.",
+      "surface": "Acme A",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 7,
+          "end": 13,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "template-glued",
+      "text": "Vložte {{Marie Dvořáková}} do hlavičky.",
+      "surface": "Marie Dvořáková",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 10,
+          "end": 28,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "template-glued",
+      "text": "{\"name\":\"Tomáš Kubíček\",\"role\":\"jednatel\"}",
+      "surface": "Tomáš Kubíček",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 9,
+          "end": 26,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "template-glued",
+      "text": "შაბლონი {{ნინო ბერიძე}} შევსებულია.",
+      "surface": "ნინო ბერიძე",
+      "language": "en",
+      "expectedEntities": [
+        {
+          "start": 24,
+          "end": 55,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "template-glued",
+      "text": "შაბლონი [[ნინო ბერიძე2024]] შევსებულია.",
+      "surface": "ნინო ბერიძე2024",
+      "language": "en",
+      "expectedEntities": [
+        {
+          "start": 24,
+          "end": 59,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "template-glued",
+      "text": "შაბლონი {{ნინო ბერიძე_01}} შევსებულია.",
+      "surface": "ნინო ბერიძე",
+      "language": "en",
+      "expectedEntities": [
+        {
+          "start": 24,
+          "end": 55,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "uncased-script",
+      "text": "მოსარჩელე: ნინო ბერიძე",
+      "surface": "ნინო ბერიძე",
+      "language": "en",
+      "expectedEntities": [
+        {
+          "start": 29,
+          "end": 60,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "uncased-script",
+      "text": "ხელშეკრულებას ხელს აწერს ნინო ბერიძე, მყიდველი.",
+      "surface": "ნინო ბერიძე",
+      "language": "en",
+      "expectedEntities": [
+        {
+          "start": 69,
+          "end": 100,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "uncased-script",
+      "text": "ხელშეკრულება გააფორმა ნინო ბერიძემ.",
+      "surface": "ნინო ბერიძემ",
+      "language": "en",
+      "expectedEntities": [
+        {
+          "start": 62,
+          "end": 96,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "uncased-script",
+      "text": "საქმე: ნინო ბერიძის სარჩელი",
+      "surface": "ნინო ბერიძის",
+      "language": "en",
+      "expectedEntities": [
+        {
+          "start": 17,
+          "end": 51,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "uncased-script",
+      "text": "ბერიძე ნინო, მოსარჩელე",
+      "surface": "ბერიძე ნინო",
+      "language": "en",
+      "expectedEntities": [
+        {
+          "start": 0,
+          "end": 31,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "multi-label",
+      "text": "Smlouvu uzavřela společnost Lindgarth.",
+      "surface": "Lindgarth",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 30,
+          "end": 39,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "multi-label",
+      "text": "Lindgarth signed the lease.",
+      "surface": "Lindgarth",
+      "language": "en",
+      "expectedEntities": [
+        {
+          "start": 0,
+          "end": 9,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "expectation": "redact",
+      "kind": "multi-label",
+      "text": "Podle smlouvy Lindgarth dodá zboží.",
+      "surface": "Lindgarth",
+      "language": "cs",
+      "expectedEntities": [
+        {
+          "start": 14,
+          "end": 23,
+          "label": "organization"
+        }
+      ]
+    },
+    {
       "expectation": "keep",
       "kind": "hex",
       "text": "commit 3f2acfeca1b04d2e9c7a5b6d8e0f1a2b merged",
@@ -1765,6 +2387,25 @@
       }
     },
     {
+      "expectation": "keep",
+      "kind": "marker-suppression",
+      "text": "before ⟦field-acfe-01⟧ after",
+      "surface": "⟦field-acfe-01⟧",
+      "language": "en",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "suppression",
+        "surface": "acfe",
+        "label": "organization",
+        "context": "before acfe after"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
       "expectation": "redact",
       "kind": "marker-control",
       "text": "before Zeta after",
@@ -1848,6 +2489,25 @@
         "surface": "ACFE",
         "label": "organization",
         "context": "before ACFE after"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "bracketed-id",
+      "text": "see <<marker:zeta9>> below",
+      "surface": "<<marker:zeta9>>",
+      "language": "en",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "suppression",
+        "surface": "zeta",
+        "label": "organization",
+        "context": "before zeta after"
       },
       "forcedNegativeCheck": {
         "type": "distinct",
@@ -2213,6 +2873,23 @@
     },
     {
       "expectation": "keep",
+      "kind": "ordinary-word",
+      "text": "Both parties are willing to settle.",
+      "surface": "willing",
+      "language": "en",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "Similar text is not a configured gazetteer surface."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
       "kind": "adjacent-word",
       "text": "Acme A signed the deal.",
       "surface": "signed",
@@ -2425,6 +3102,482 @@
       "forcedExpectedEntities": [],
       "negativeCheck": {
         "type": "context"
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "unseeded-identifier",
+      "text": "build acme0a1b2c3d4e5f ready",
+      "surface": "acme0a1b2c3d4e5f",
+      "language": "en",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "The identifier contains no configured surface."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "unseeded-identifier",
+      "text": "pointer 0xacbe12ef freed",
+      "surface": "0xacbe12ef",
+      "language": "en",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "The identifier contains no configured surface."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "unseeded-identifier",
+      "text": "row acee4f1b-0c2d-4e5f-9a8b-7c6d5e4f3a2b updated",
+      "surface": "acee4f1b-0c2d-4e5f-9a8b-7c6d5e4f3a2b",
+      "language": "en",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "The identifier contains no configured surface."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "unseeded-identifier",
+      "text": "file 0d8f6a2c-acde-4b7e-8f01-ac3ea1b2c3d4 uploaded",
+      "surface": "0d8f6a2c-acde-4b7e-8f01-ac3ea1b2c3d4",
+      "language": "en",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "The identifier contains no configured surface."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "unseeded-identifier",
+      "text": "dokument 7e4b9c1a-2f3d-4a5b-b6c7-d8e9f0a1b2c3 nahrán",
+      "surface": "7e4b9c1a-2f3d-4a5b-b6c7-d8e9f0a1b2c3",
+      "language": "cs",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "The identifier contains no configured surface."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "unseeded-identifier",
+      "text": "sha256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 ok",
+      "surface": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "language": "en",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "The identifier contains no configured surface."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "unseeded-identifier",
+      "text": "sha1 da39a3ee5e6b4b0d3255bfef95601890afd80709 ok",
+      "surface": "da39a3ee5e6b4b0d3255bfef95601890afd80709",
+      "language": "en",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "The identifier contains no configured surface."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "unseeded-identifier",
+      "text": "md5 9e107d9d372bb6826bd81d3542a419d6 ok",
+      "surface": "9e107d9d372bb6826bd81d3542a419d6",
+      "language": "en",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "The identifier contains no configured surface."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "unseeded-identifier",
+      "text": "token QWNtZSBBIHJlcG9ydA== expired",
+      "surface": "QWNtZSBBIHJlcG9ydA==",
+      "language": "en",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "The identifier contains no configured surface."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "unseeded-identifier",
+      "text": "Faktura INV-2024-0042 je splatná.",
+      "surface": "INV-2024-0042",
+      "language": "cs",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "The identifier contains no configured surface."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "unseeded-identifier",
+      "text": "Kód ACM3A-77 je neplatný.",
+      "surface": "ACM3A-77",
+      "language": "cs",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "The identifier contains no configured surface."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "unseeded-identifier",
+      "text": "ref ORB1S-55 closed",
+      "surface": "ORB1S-55",
+      "language": "en",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "The identifier contains no configured surface."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "unseeded-identifier",
+      "text": "SKU ZT4471Z out of stock",
+      "surface": "ZT4471Z",
+      "language": "en",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "The identifier contains no configured surface."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "unseeded-identifier",
+      "text": "variable acmeA_total reset",
+      "surface": "acmeA_total",
+      "language": "en",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "The identifier contains no configured surface."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "unseeded-identifier",
+      "text": "insert {{clause_ref}} here",
+      "surface": "{{clause_ref}}",
+      "language": "en",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "The placeholder contains no configured surface."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "unseeded-identifier",
+      "text": "text [[[__field_marker_3__]]] text",
+      "surface": "[[[__field_marker_3__]]]",
+      "language": "en",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "The placeholder contains no configured surface."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "unseeded-identifier",
+      "text": "section %%ACMEA_SECTION%% end",
+      "surface": "%%ACMEA_SECTION%%",
+      "language": "en",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "The placeholder contains no configured surface."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "template-field",
+      "text": "Šablona {{zeta_01}} je hotová.",
+      "surface": "{{zeta_01}}",
+      "language": "cs",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "Glued to a template field, a name matches only as its entry spells it."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "template-field",
+      "text": "Šablona [[orbis2024]] je hotová.",
+      "surface": "[[orbis2024]]",
+      "language": "cs",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "Glued to a template field, a name matches only as its entry spells it."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "template-field",
+      "text": "Šablona {{acme_a_01}} je hotová.",
+      "surface": "{{acme_a_01}}",
+      "language": "cs",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "Glued to a template field, a name matches only as its entry spells it."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "template-field",
+      "text": "Pole <<zeta2024>> je prázdné.",
+      "surface": "<<zeta2024>>",
+      "language": "cs",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "Glued to a template field, a name matches only as its entry spells it."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "template-field",
+      "text": "Šablona [[novák_2024]] je hotová.",
+      "surface": "[[novák_2024]]",
+      "language": "cs",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "Glued to a template field, a name matches only as its entry spells it."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "template-field",
+      "text": "Šablona <<token:orbis7>> je hotová.",
+      "surface": "<<token:orbis7>>",
+      "language": "cs",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "Glued to a template field, a name matches only as its entry spells it."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "reordered-organization",
+      "text": "The Analytics Northfield team met on Monday.",
+      "surface": "Analytics Northfield",
+      "language": "en",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "Reordered words match only for person names."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "reordered-organization",
+      "text": "Ve verzi Trading Beta je chyba.",
+      "surface": "Trading Beta",
+      "language": "cs",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "Reordered words match only for person names."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "uncased-script-near-miss",
+      "text": "მოპასუხე: ნინო გელაშვილი",
+      "surface": "ნინო გელაშვილი",
+      "language": "en",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "Another name sharing one word is not a configured surface."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "uncased-script-near-miss",
+      "text": "მოსარჩელე: თამარ ბერიძე",
+      "surface": "თამარ ბერიძე",
+      "language": "en",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "Another name sharing one word is not a configured surface."
+      },
+      "forcedNegativeCheck": {
+        "type": "distinct",
+        "reason": "Neither configured forced UUID occurs."
+      }
+    },
+    {
+      "expectation": "keep",
+      "kind": "uncased-script-near-miss",
+      "text": "ბერი მონასტერში ცხოვრობს.",
+      "surface": "ბერი",
+      "language": "en",
+      "expectedEntities": [],
+      "forcedExpectedEntities": [],
+      "negativeCheck": {
+        "type": "distinct",
+        "reason": "Similar text is not a configured gazetteer surface."
       },
       "forcedNegativeCheck": {
         "type": "distinct",
