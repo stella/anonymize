@@ -371,6 +371,89 @@ fn configs_without_the_newer_gazetteer_fields_still_load() {
   assert_eq!(gazetteer_texts(&engine, "Předáno Novákovi."), ["Novákovi"]);
 }
 
+/// Resolved spans after label filtering, for `entries` under `labels`.
+fn redacted_under_labels(
+  labels: &[&str],
+  entries: &[(&str, &str)],
+  text: &str,
+) -> Vec<(String, String)> {
+  let config: PipelineConfig = serde_json::from_value(serde_json::json!({
+    "threshold": 0.3,
+    "enableTriggerPhrases": false,
+    "enableRegex": false,
+    "enableLegalForms": false,
+    "enableNameCorpus": false,
+    "enableDenyList": false,
+    "enableGazetteer": true,
+    "enableCountries": false,
+    "enableConfidenceBoost": false,
+    "enableCoreference": false,
+    "enableZoneClassification": false,
+    "labels": labels,
+    "workspaceId": "gazetteer-matching-test"
+  }))
+  .expect("config should deserialize");
+  let gazetteer: Vec<GazetteerEntry> = entries
+    .iter()
+    .enumerate()
+    .map(|(index, (canonical, label))| {
+      serde_json::from_value(serde_json::json!({
+        "id": format!("gaz-{index}"),
+        "canonical": canonical,
+        "label": label,
+        "variants": [],
+        "workspaceId": "gazetteer-matching-test",
+        "createdAt": 1_700_000_000_000_i64,
+        "source": "manual",
+      }))
+      .expect("entry should deserialize")
+    })
+    .collect();
+  let binding = assemble_static_search_config(&config, None, &gazetteer)
+    .expect("config should assemble");
+  let engine = PreparedEngine::new(
+    prepared_search_config_from_binding(binding)
+      .expect("assembled config should convert"),
+  )
+  .expect("pipeline should prepare");
+  engine
+    .redact_static_entities(text, &OperatorConfig::default())
+    .expect("redaction should succeed")
+    .resolved_entities
+    .into_iter()
+    .map(|entity| (entity.text, entity.label))
+    .collect()
+}
+
+#[test]
+fn a_spelling_under_several_labels_keeps_each_label() {
+  let text = "Smlouvu podepsala Acme dnes.";
+  for kept in [ORGANIZATION, PERSON] {
+    for entries in [
+      [("Acme", ORGANIZATION), ("Acme", PERSON)],
+      [("Acme", PERSON), ("Acme", ORGANIZATION)],
+    ] {
+      assert_eq!(
+        redacted_under_labels(&[kept], &entries, text),
+        [("Acme".to_owned(), kept.to_owned())],
+        "{kept} {entries:?}"
+      );
+    }
+  }
+  // Without a label filter the label is the alphabetically first, whatever
+  // the entry order.
+  for entries in [
+    [("Acme", ORGANIZATION), ("Acme", PERSON)],
+    [("Acme", PERSON), ("Acme", ORGANIZATION)],
+  ] {
+    assert_eq!(
+      redacted_under_labels(&[], &entries, text),
+      [("Acme".to_owned(), ORGANIZATION.to_owned())],
+      "{entries:?}"
+    );
+  }
+}
+
 #[test]
 fn czech_slovak_forms_follow_the_pipeline_language() {
   const ANA: &[(&str, &str, &[&str])] = &[("Ana", PERSON, &[])];

@@ -209,8 +209,12 @@ mod properties {
   }
 
   fn property_runner() -> TestRunner {
+    property_runner_with(PROPERTY_CASES)
+  }
+
+  fn property_runner_with(cases: u32) -> TestRunner {
     TestRunner::new(ProptestConfig {
-      cases: PROPERTY_CASES,
+      cases,
       rng_seed: RngSeed::Fixed(0x6761_7a65_7474_6565),
       source_file: Some(file!()),
       failure_persistence: Some(Box::new(FileFailurePersistence::WithSource(
@@ -485,60 +489,140 @@ mod properties {
       .unwrap();
   }
 
-  const COVERAGE_POOL: [&str; 12] = [
-    "Luma",
-    "Luma Labs",
-    "Luma s.r.o.",
-    "Mivo",
-    "Novák",
-    "Jan Novák",
-    "Velomír",
-    "Wintermute",
-    "Orbis",
-    "Žilora",
-    "Bex GmbH",
-    "Zy",
+  // Spellings repeat under different labels on purpose: a later entry for a
+  // spelling must never take coverage away under a label filter.
+  const COVERAGE_POOL: [(&str, &str); 14] = [
+    ("Luma", "organization"),
+    ("Luma", "person"),
+    ("Luma Labs", "organization"),
+    ("Luma s.r.o.", "organization"),
+    ("Mivo", "person"),
+    ("Novák", "person"),
+    ("Novák", "organization"),
+    ("Jan Novák", "person"),
+    ("Velomír", "person"),
+    ("Wintermute", "person"),
+    ("Orbis", "organization"),
+    ("Žilora", "location"),
+    ("Bex GmbH", "organization"),
+    ("Zy", "person"),
+  ];
+  const COVERAGE_LABELS: [&[&str]; 4] = [
+    &[],
+    &["organization"],
+    &["person"],
+    &["person", "organization"],
   ];
   const COVERAGE_TEXT: &str = "Luma Labs a Luma s.r.o. podepsaly. Jan Novák, \
     Novákovi a Nováka zastoupil Velomír. Wintermte a Orbys, Orbis Ltd. \
     Bex GmbH 2024 a Zy. Žilory archived ⟦record-Luma-01⟧ id 9b1d0c3e-luma-4c1b.";
+  /// Chains a pull request runs; the release-mode variant runs many more.
+  const COVERAGE_CHAINS: u32 = 4;
+  const COVERAGE_CHAINS_RELEASE: u32 = 96;
 
-  fn covered_bytes(entries: &[String]) -> BTreeSet<usize> {
-    if entries.is_empty() {
+  /// Resolved `(start, end, label)` spans of the pool rows in `rows`.
+  fn labelled_spans(
+    rows: &[usize],
+    labels: &[&str],
+  ) -> BTreeSet<(usize, usize, String)> {
+    if rows.is_empty() {
       return BTreeSet::new();
     }
-    let engine = gazetteer::engine(entries, "cs").unwrap();
-    spans(&engine, COVERAGE_TEXT)
+    let entries = rows
+      .iter()
+      .map(|row| {
+        let (canonical, label) = COVERAGE_POOL[*row];
+        (canonical.to_owned(), label.to_owned())
+      })
+      .collect::<Vec<_>>();
+    let labels = labels
+      .iter()
+      .map(|label| (*label).to_owned())
+      .collect::<Vec<_>>();
+    let engine = gazetteer::labelled_engine(&entries, "cs", &labels).unwrap();
+    engine
+      .redact_static_entities(COVERAGE_TEXT, &OperatorConfig::default())
+      .unwrap()
+      .resolved_entities
       .into_iter()
-      .flatten()
+      .map(|entity| {
+        (
+          usize::try_from(entity.start).unwrap(),
+          usize::try_from(entity.end).unwrap(),
+          entity.label,
+        )
+      })
       .collect()
+  }
+
+  /// Byte offsets of the letters and digits the spans cover. Separators are
+  /// left out: merging two adjacent names may cover the `, ` between them,
+  /// and a longer entry may resolve the same names without it.
+  fn covered(spans: &BTreeSet<(usize, usize, String)>) -> BTreeSet<usize> {
+    spans
+      .iter()
+      .flat_map(|(start, end, _)| {
+        COVERAGE_TEXT
+          .get(*start..*end)
+          .unwrap()
+          .char_indices()
+          .filter(|(_, character)| character.is_alphanumeric())
+          .map(move |(offset, _)| start + offset)
+      })
+      .collect()
+  }
+
+  /// Adds the pool rows one at a time in a random order under a random label
+  /// filter: no step may uncover a byte, and the full pool resolves the same
+  /// whatever the order. One engine per step keeps a chain cheap.
+  fn assert_coverage_grows(chains: u32) {
+    let everything = (0..COVERAGE_POOL.len()).collect::<Vec<_>>();
+    let reference = COVERAGE_LABELS
+      .iter()
+      .map(|labels| labelled_spans(&everything, labels))
+      .collect::<Vec<_>>();
+    assert!(
+      reference.iter().all(|spans| !spans.is_empty()),
+      "real hits must exist"
+    );
+    property_runner_with(chains)
+      .run(
+        &(
+          Just(everything).prop_shuffle(),
+          0..COVERAGE_LABELS.len(),
+        ),
+        |(order, filter)| {
+          let labels = COVERAGE_LABELS[filter];
+          let mut previous = BTreeSet::new();
+          for added in 1..=order.len() {
+            let spans = labelled_spans(&order[..added], labels);
+            let now = covered(&spans);
+            prop_assert!(
+              previous.is_subset(&now),
+              "adding {:?} under {labels:?} uncovered bytes {:?}",
+              COVERAGE_POOL[order[added - 1]],
+              previous.difference(&now).collect::<Vec<_>>()
+            );
+            if added == order.len() {
+              prop_assert_eq!(&spans, &reference[filter]);
+            }
+            previous = now;
+          }
+          Ok(())
+        },
+      )
+      .unwrap();
   }
 
   #[test]
   fn p7_adding_entries_never_reduces_coverage() {
-    let pick = |mask: u16| {
-      COVERAGE_POOL
-        .iter()
-        .enumerate()
-        .filter(|(index, _)| mask >> index & 1 == 1)
-        .map(|(_, entry)| (*entry).to_owned())
-        .collect::<Vec<_>>()
-    };
-    let everything = covered_bytes(&pick(u16::MAX));
-    assert!(!everything.is_empty(), "real hits must exist");
-    property_runner()
-      .run(&(any::<u16>(), any::<u16>()), |(base, extra)| {
-        let smaller = covered_bytes(&pick(base));
-        let larger = covered_bytes(&pick(base | extra));
-        prop_assert!(
-          smaller.is_subset(&larger),
-          "lost bytes {:?}",
-          smaller.difference(&larger).collect::<Vec<_>>()
-        );
-        prop_assert!(larger.is_subset(&everything));
-        Ok(())
-      })
-      .unwrap();
+    assert_coverage_grows(COVERAGE_CHAINS);
+  }
+
+  #[test]
+  #[ignore = "release-mode coverage monotonicity over many entry orders"]
+  fn p7_adding_entries_never_reduces_coverage_in_many_orders() {
+    assert_coverage_grows(COVERAGE_CHAINS_RELEASE);
   }
 
   // Independent wrong implementations are witnesses, never the production matcher.

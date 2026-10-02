@@ -2623,6 +2623,9 @@ mod tests {
     ] {
       assert_eq!(gazetteer_fuzzy_distance(term), expected, "{term}");
     }
+    let longest = format!("W{}", "a".repeat(63));
+    assert_eq!(gazetteer_fuzzy_distance(&longest), Some(2));
+    assert_eq!(gazetteer_fuzzy_distance(&format!("{longest}b")), None);
     let nine = [fuzzy_entry("Lindqvist")];
     assert_eq!(
       engine_found(&nine, "Signed by Lindqvyst today."),
@@ -3572,6 +3575,16 @@ mod tests {
   #[test]
   fn names_in_unspaced_scripts_keep_matching_as_substrings() {
     assert_eq!(found(&[exact("東京", ORGANIZATION)], "東京都に"), ["東京"]);
+    // Characters of those scripts are not word characters, so a name of any
+    // script inside such a run sits on token edges.
+    for text in ["界Luma界", "ภาษาLumaไทย", "ខ្មែរLumaខ្មែរ"]
+    {
+      assert_eq!(
+        found(&[exact("Luma", ORGANIZATION)], text),
+        ["Luma"],
+        "{text}"
+      );
+    }
   }
 
   #[test]

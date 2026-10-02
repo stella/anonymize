@@ -386,8 +386,12 @@ Each guarantee is enforced by the tests named after it, under
    letters, and never takes in the next word; the only extension is over a
    legal form that follows the name (`Acme a. s.`). A plain number, year,
    punctuation or word beside a name does not block it (`Acme/2024`,
-   `novak2@acme.cz`, `Novak_smlouva_2024.pdf`). Tests:
+   `novak2@acme.cz`, `Novak_smlouva_2024.pdf`). Scripts written without
+   spaces (Chinese, Japanese, Korean, Thai, Lao, Khmer, Myanmar) have no word
+   edges, so their characters never block a hit: an entry inside such a run
+   matches as a substring (`東京` in `東京都に`, `Luma` in `界Luma界`). Tests:
    `p2_spaced_latin_names_follow_unicode_word_boundaries`,
+   `names_in_unspaced_scripts_keep_matching_as_substrings`,
    `p3_hits_do_not_swallow_adjacent_words`,
    `p3_only_legal_suffixes_extend_a_hit`,
    `hits_cover_the_name_and_legal_form_only`,
@@ -411,8 +415,9 @@ Each guarantee is enforced by the tests named after it, under
    or with digits, match only exactly. A 5-letter entry tolerates one
    substituted letter, only on a token in the entry's proper-noun case shape
    (`Orbys` for `Orbis`, never `orbit`) that does not open a sentence. Entries
-   of 6 to 9 letters tolerate one edit, entries of 10 or more two. Typo hits
-   are whole words and still pass the ordinary-word filters. Tests:
+   of 6 to 9 letters tolerate one edit, entries of 10 or more two. Entries
+   longer than 64 characters match only exactly. Typo hits are whole words and
+   still pass the ordinary-word filters. Tests:
    `four_letter_entries_stay_exact`,
    `five_letter_entries_take_one_typo_on_a_proper_noun`,
    `short_typos_skip_sentence_starts_in_other_scripts`,
@@ -420,10 +425,14 @@ Each guarantee is enforced by the tests named after it, under
    `fuzzy_hits_are_rejected_inside_tokens_and_beyond_distance`,
    `p4_short_names_do_not_match_ordinary_neighbours`,
    `fuzzy_hits_keep_the_common_word_filters`.
-5. **Adding entries never reduces coverage.** Every character redacted with a
-   set of entries is still redacted after more entries are added, whatever
-   their order. Tests: `adding_entries_never_reduces_coverage`,
+5. **Adding entries never reduces coverage.** Every letter or digit redacted
+   with a set of entries is still redacted after more entries are added,
+   whatever their order and label filter. A spelling given under several
+   labels is redacted under the first of them in the pipeline's `labels`
+   order (the alphabetically first when no label filter applies), whatever
+   the entry order. Tests: `adding_entries_never_reduces_coverage`,
    `p7_adding_entries_never_reduces_coverage`,
+   `a_spelling_under_several_labels_keeps_each_label`,
    `p6_redaction_is_stable_and_entry_order_independent`.
 6. **Older prepared configs keep loading.** Gazetteer data written before the
    legal-form, language-scope and entry-text fields existed deserializes with

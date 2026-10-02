@@ -625,7 +625,7 @@ dependencies = [
 
 [[package]]
 name = "stella-anonymize-adapter-contract"
-version = "3.0.1"
+version = "3.0.3"
 dependencies = [
  "blake3",
  "lz4_flex",
@@ -640,7 +640,7 @@ dependencies = [
 
 [[package]]
 name = "stella-anonymize-core"
-version = "3.0.1"
+version = "3.0.3"
 dependencies = [
  "bon",
  "chacha20poly1305",

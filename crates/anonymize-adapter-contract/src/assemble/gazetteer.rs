@@ -6,7 +6,7 @@
 //! also get a fuzzy pattern whose distance scales with their length. The core
 //! matches terms as whole words, folded for case and diacritics and declined.
 
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 
 use stella_anonymize_core::assemble::{AssembleError, GazetteerEntry};
 use stella_anonymize_core::gazetteer_fuzzy_distance;
@@ -42,33 +42,40 @@ fn inflection(ctx: &AssembleContext<'_>) -> BindingGazetteerInflection {
   }
 }
 
-/// Mirrors `buildSearchTerms`: a `Map<term, { label }>` keyed by canonical and
-/// variant strings. JS `Map` keeps first-insertion order but last-write-wins
-/// for the value, so a term reused by a later entry keeps its original position
-/// while its label is overwritten.
-fn build_search_terms(entries: &[GazetteerEntry]) -> Vec<(String, String)> {
-  // `position[term]` is the index into `terms` for a first-seen term; a later
-  // entry reusing the term overwrites its label in place (last-write-wins) but
-  // keeps the original insertion position, matching JS `Map` semantics.
-  let mut terms: Vec<(String, String)> = Vec::new();
-  let mut position: HashMap<String, usize> = HashMap::new();
+/// One `(term, label)` row per distinct canonical or variant string, in
+/// first-seen order. A spelling given under several labels takes the first of
+/// them in the pipeline's `labels` order, so label filtering never drops a
+/// spelling that a kept label names; without a label filter (or with none of
+/// its labels kept) it takes the alphabetically first. Either way the label
+/// does not depend on entry order.
+fn build_search_terms(
+  entries: &[GazetteerEntry],
+  allowed_labels: &[String],
+) -> Vec<(String, String)> {
+  let mut terms: Vec<(String, BTreeSet<&str>)> = Vec::new();
+  let mut position: HashMap<&str, usize> = HashMap::new();
   for entry in entries {
-    let mut set_term = |term: &str| {
-      if let Some(&index) = position.get(term) {
-        if let Some(slot) = terms.get_mut(index) {
-          slot.1.clone_from(&entry.label);
-        }
-      } else {
-        position.insert(term.to_string(), terms.len());
-        terms.push((term.to_string(), entry.label.clone()));
+    for term in std::iter::once(&entry.canonical).chain(&entry.variants) {
+      let index = *position.entry(term.as_str()).or_insert_with(|| {
+        terms.push((term.clone(), BTreeSet::new()));
+        terms.len().saturating_sub(1)
+      });
+      if let Some((_, labels)) = terms.get_mut(index) {
+        labels.insert(entry.label.as_str());
       }
-    };
-    set_term(&entry.canonical);
-    for variant in &entry.variants {
-      set_term(variant);
     }
   }
   terms
+    .into_iter()
+    .filter_map(|(term, labels)| {
+      let kept = allowed_labels
+        .iter()
+        .map(String::as_str)
+        .find(|label| labels.contains(label));
+      let label = kept.or_else(|| labels.first().copied())?;
+      Some((term, label.to_owned()))
+    })
+    .collect()
 }
 
 /// Exact rows for every term first (`is_fuzzy=false`), then fuzzy rows for
@@ -81,7 +88,7 @@ pub(super) fn build_gazetteer_data(
   if !ctx.config.enable_gazetteer || gazetteer.is_empty() {
     return Ok(None);
   }
-  let terms = build_search_terms(gazetteer);
+  let terms = build_search_terms(gazetteer, &ctx.config.labels);
   let mut labels = Vec::with_capacity(terms.len());
   let mut is_fuzzy = Vec::with_capacity(terms.len());
   let mut row_terms = Vec::with_capacity(terms.len());
@@ -127,7 +134,7 @@ pub(super) fn gazetteer_literal_patterns(
   if !has_gazetteer(ctx, gazetteer) {
     return Vec::new();
   }
-  let terms = build_search_terms(gazetteer);
+  let terms = build_search_terms(gazetteer, &ctx.config.labels);
   let mut patterns = Vec::new();
   for (term, _) in &terms {
     patterns.push(literal_with_options(term.clone(), None, Some(false)));
