@@ -42,6 +42,9 @@ const ENTRIES: &[(&str, &str, &[&str])] = &[
   ("Will", PERSON, &[]),
   ("Grant", PERSON, &[]),
   ("Augusts", PERSON, &[]),
+  ("McDonald", PERSON, &[]),
+  ("Jan van Dijk", PERSON, &[]),
+  ("J. Dvořák", PERSON, &[]),
   (FORCED_ID, IDENTIFIER, &[]),
 ];
 
@@ -190,6 +193,10 @@ const CASES: &[Case] = &[
   hit(Class::Templates, "Odkaz [[Zeta2024]] zde.", "Zeta"),
   hit(Class::Templates, "Šablona {{Acme2024}} zde.", "Acme"),
   miss(Class::Templates, "Šablona {{acme_01}} zde.", "acme"),
+  hit(Class::Templates, "Odkaz [[McDonald2024]] zde.", "McDonald"),
+  hit(Class::Templates, "Odkaz [[Jan van Dijk2024]] zde.", "Jan van Dijk"),
+  hit(Class::Templates, "Odkaz [[J. Dvořák2024]] zde.", "J. Dvořák"),
+  miss(Class::Templates, "Viz <<token:zeta9>> a {{mcdonald2024}}.", "mcdonald"),
   // Person entries that are also common words, scored on the resolved
   // (redacted) output: an exact entry is always redacted.
   hit(Class::CommonWordNames, "Hello Mark there.", "Mark"),

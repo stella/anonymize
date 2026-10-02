@@ -237,26 +237,8 @@ pub(super) fn in_template_field(text: &str, start: usize, end: usize) -> bool {
     .any(|segment| segment.chars().any(char::is_numeric))
 }
 
-/// Every word of `surface` is spelled as a proper noun: capitalized
-/// (`Novák`) or all capitals (`ACME`), letters only, two or more letters.
-pub(super) fn is_proper_noun_spelling(surface: &str) -> bool {
-  let mut words = surface
-    .split(|character: char| !is_word_interior(character))
-    .filter(|word| !word.is_empty())
-    .peekable();
-  words.peek().is_some()
-    && words.all(|word| {
-      let letters = word
-        .chars()
-        .filter(|character| !is_combining_mark(*character))
-        .collect::<Vec<_>>();
-      let Some((first, rest)) = letters.split_first() else {
-        return false;
-      };
-      first.is_uppercase()
-        && !rest.is_empty()
-        && rest.iter().all(|character| character.is_alphabetic())
-        && (rest.iter().all(|character| character.is_uppercase())
-          || rest.iter().all(|character| character.is_lowercase()))
-    })
+/// Whether `surface` holds a capital letter: the least a template field
+/// kept as a name must show (`[[Zeta2024]]`, `[[McDonald2024]]`).
+pub(super) fn has_capital(surface: &str) -> bool {
+  surface.chars().any(char::is_uppercase)
 }
