@@ -735,6 +735,7 @@ fn gazetteer_processor_extends_exact_matches_and_drops_overlapping_fuzzy() {
     legal_form_suffixes: vec![String::from("s.r.o.")],
     inflection: GazetteerInflection::None,
     terms: Vec::new(),
+    person_forms: Vec::new(),
   };
   let patterns = [
     gazetteer_literal("Acme"),
@@ -775,6 +776,7 @@ fn gazetteer_processor_emits_non_overlapping_fuzzy_matches() {
     legal_form_suffixes: Vec::new(),
     inflection: GazetteerInflection::None,
     terms: Vec::new(),
+    person_forms: Vec::new(),
   };
   let patterns = [SearchPattern::Fuzzy {
     pattern: String::from("Wintermute"),
@@ -802,6 +804,7 @@ fn gazetteer_processor_rejects_pattern_kinds_that_disagree_with_rows() {
     legal_form_suffixes: Vec::new(),
     inflection: GazetteerInflection::None,
     terms: Vec::new(),
+    person_forms: Vec::new(),
   };
 
   let error = process_gazetteer_matches(

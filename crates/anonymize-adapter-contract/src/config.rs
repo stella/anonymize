@@ -159,6 +159,7 @@ fn gazetteer_data_from_binding(
     is_fuzzy: data.is_fuzzy,
     legal_form_suffixes: data.legal_form_suffixes,
     terms: data.terms,
+    person_forms: data.person_forms,
     inflection: match data.inflection {
       BindingGazetteerInflection::None => GazetteerInflection::None,
       BindingGazetteerInflection::CzechSlovak => {

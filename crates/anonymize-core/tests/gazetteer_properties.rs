@@ -16,6 +16,10 @@ mod properties {
   mod gazetteer;
   #[path = "support/gazetteer_fuzz.rs"]
   mod gazetteer_fuzz;
+  #[path = "support/gazetteer_policy.rs"]
+  mod gazetteer_policy;
+  #[path = "support/gazetteer_reference.rs"]
+  mod gazetteer_reference;
 
   use std::collections::{BTreeMap, BTreeSet};
   use std::fmt::Write;
@@ -23,7 +27,9 @@ mod properties {
 
   use proptest::prelude::*;
   use proptest::sample;
-  use proptest::test_runner::{FileFailurePersistence, RngSeed, TestRunner};
+  use proptest::test_runner::{
+    FileFailurePersistence, RngSeed, TestCaseResult, TestRunner,
+  };
   use serde::Deserialize;
   use stella_anonymize_core::{OperatorConfig, PreparedEngine};
   use unicode_segmentation::UnicodeSegmentation;
@@ -40,6 +46,7 @@ mod properties {
     ["s.r.o.", "s. r. o.", "a.s.", "a. s.", "GmbH", "Ltd"];
   const SHORT_ENTRY_COUNT: usize =
     SINGLE_ENTRIES.len() + COMPOUND_NAMES.len() * COMPOUND_SUFFIXES.len();
+  const BOUNDARY_SEPARATORS: [&str; 5] = [" ", ", ", "\n", "\u{a0}", "🦀"];
 
   fn short_entries() -> Vec<String> {
     let mut entries = SINGLE_ENTRIES
@@ -81,6 +88,20 @@ mod properties {
       .collect()
   }
 
+  fn detected_spans(engine: &PreparedEngine, text: &str) -> Vec<Range<usize>> {
+    engine
+      .detect_static_entities(text)
+      .unwrap()
+      .entities
+      .all_entities()
+      .into_iter()
+      .map(|entity| {
+        usize::try_from(entity.start).unwrap()
+          ..usize::try_from(entity.end).unwrap()
+      })
+      .collect()
+  }
+
   const fn disjoint(a: &Range<usize>, b: &Range<usize>) -> bool {
     a.end <= b.start || b.end <= a.start
   }
@@ -90,6 +111,44 @@ mod properties {
       && actual
         .iter()
         .all(|span| disjoint(span, expected) || span == expected)
+  }
+
+  fn boundary_fixture(
+    entries: &[String],
+    separator: &str,
+  ) -> (String, Vec<Range<usize>>) {
+    let mut text = String::new();
+    let mut expected = Vec::new();
+    for entry in entries {
+      if !text.is_empty() {
+        text.push_str(separator);
+      }
+      write!(text, "archived{separator}").unwrap();
+      let start = text.len();
+      text.push_str(entry);
+      expected.push(start..text.len());
+      write!(
+        text,
+        "{separator}reviewed x{entry}y e\u{301} Ελληνικά Кирилица 界"
+      )
+      .unwrap();
+    }
+    (text, expected)
+  }
+
+  fn require_boundary_hits(
+    actual: &[Range<usize>],
+    expected: &[Range<usize>],
+  ) -> TestCaseResult {
+    for span in expected {
+      prop_assert!(
+        actual.contains(span),
+        "missing exact standalone span: {:?}; actual spans: {:?}",
+        span,
+        actual
+      );
+    }
+    Ok(())
   }
 
   // Each envelope contains the entry verbatim; digit substitution also exercises
@@ -209,8 +268,12 @@ mod properties {
   }
 
   fn property_runner() -> TestRunner {
+    property_runner_with(PROPERTY_CASES)
+  }
+
+  fn property_runner_with(cases: u32) -> TestRunner {
     TestRunner::new(ProptestConfig {
-      cases: PROPERTY_CASES,
+      cases,
       rng_seed: RngSeed::Fixed(0x6761_7a65_7474_6565),
       source_file: Some(file!()),
       failure_persistence: Some(Box::new(FileFailurePersistence::WithSource(
@@ -270,23 +333,50 @@ mod properties {
   fn p2_spaced_latin_names_follow_unicode_word_boundaries() {
     let entries = short_entries();
     let engine = gazetteer::engine(&entries, "cs").unwrap();
-    property_runner().run(&sample::select(vec![" ", ", ", "\n", "\u{a0}", "🦀"]), |separator| {
-      let mut exercised = 0;
-      let text = entries.iter().map(|entry| {
-        exercised += 1;
-        format!("archived{separator}{entry}{separator}reviewed x{entry}y e\u{301} Ελληνικά Кирилица 界")
+    property_runner()
+      .run(&sample::select(BOUNDARY_SEPARATORS.to_vec()), |separator| {
+        let (text, expected) = boundary_fixture(&entries, separator);
+        prop_assert_eq!(expected.len(), SHORT_ENTRY_COUNT);
+        let boundaries = boundaries(&text);
+        // Detection must recall every standalone entry exactly; resolution
+        // separately guarantees that its spans end on Unicode word boundaries.
+        require_boundary_hits(&detected_spans(&engine, &text), &expected)?;
+        let actual = spans(&engine, &text);
+        for span in actual {
+          prop_assert!(text.get(span.clone()).is_some());
+          prop_assert!(
+            boundaries.contains(&span.start) && boundaries.contains(&span.end)
+          );
+        }
+        Ok(())
       })
-        .collect::<Vec<_>>().join(separator);
-      prop_assert_eq!(exercised, SHORT_ENTRY_COUNT);
+      .unwrap();
+  }
+
+  #[test]
+  fn p2_boundary_contract_rejects_dropped_compound_hits() {
+    let entries = short_entries();
+    let engine = gazetteer::engine(&entries, "cs").unwrap();
+    for separator in BOUNDARY_SEPARATORS {
+      let (text, expected) = boundary_fixture(&entries, separator);
+      let actual = detected_spans(&engine, &text);
+      require_boundary_hits(&actual, &expected).unwrap();
+      let dropped = actual
+        .into_iter()
+        .filter(|span| {
+          !expected
+            .iter()
+            .skip(SINGLE_ENTRIES.len())
+            .any(|compound| !disjoint(span, compound))
+        })
+        .collect::<Vec<_>>();
       let boundaries = boundaries(&text);
-      let actual = spans(&engine, &text);
-      prop_assert!(!actual.is_empty(), "real hits must exist");
-      for span in actual {
-        prop_assert!(text.get(span.clone()).is_some());
-        prop_assert!(boundaries.contains(&span.start) && boundaries.contains(&span.end));
-      }
-      Ok(())
-    }).unwrap();
+      assert!(!dropped.is_empty());
+      assert!(dropped.iter().all(|span| {
+        boundaries.contains(&span.start) && boundaries.contains(&span.end)
+      }));
+      assert!(require_boundary_hits(&dropped, &expected).is_err());
+    }
   }
 
   #[test]
@@ -485,6 +575,148 @@ mod properties {
       .unwrap();
   }
 
+  // Spellings repeat under different labels on purpose: a later entry for a
+  // spelling must never take coverage away under a label filter.
+  const COVERAGE_POOL: [(&str, &str); 17] = [
+    ("Luma", "organization"),
+    ("Luma", "person"),
+    ("LUMA", "location"),
+    ("Žilóra", "person"),
+    ("Luma Labs", "organization"),
+    ("Luma s.r.o.", "organization"),
+    ("Mivo", "person"),
+    ("Novák", "person"),
+    ("Novák", "organization"),
+    ("Jan Novák", "person"),
+    ("Jan Novák", "organization"),
+    ("Velomír", "person"),
+    ("Wintermute", "person"),
+    ("Orbis", "organization"),
+    ("Žilora", "location"),
+    ("Bex GmbH", "organization"),
+    ("Zy", "person"),
+  ];
+  const COVERAGE_LABELS: [&[&str]; 4] = [
+    &[],
+    &["organization"],
+    &["person"],
+    &["person", "organization"],
+  ];
+  const COVERAGE_TEXT: &str = "Luma Labs a Luma s.r.o. podepsaly. Jan Novák, \
+    Novákovi a Nováka zastoupil Velomír. Wintermte a Orbys, Orbis Ltd. \
+    Bex GmbH 2024 a Zy. Podpis: Novák, Jan. Žilory archived ⟦record-Luma-01⟧ id 9b1d0c3e-luma-4c1b.";
+  /// Chains a pull request runs; the release-mode variant runs many more.
+  const COVERAGE_CHAINS: u32 = 2;
+  const COVERAGE_CHAINS_RELEASE: u32 = 24;
+
+  /// Resolved `(start, end, label)` spans of the pool rows in `rows`.
+  fn labelled_spans(
+    rows: &[usize],
+    labels: &[&str],
+  ) -> BTreeSet<(usize, usize, String)> {
+    if rows.is_empty() {
+      return BTreeSet::new();
+    }
+    let entries = rows
+      .iter()
+      .map(|row| {
+        let (canonical, label) = COVERAGE_POOL[*row];
+        (canonical.to_owned(), label.to_owned())
+      })
+      .collect::<Vec<_>>();
+    let labels = labels
+      .iter()
+      .map(|label| (*label).to_owned())
+      .collect::<Vec<_>>();
+    let engine = gazetteer::labelled_engine(gazetteer::LabelledEngine {
+      entries: &entries,
+      language: "cs",
+      labels: &labels,
+    })
+    .unwrap();
+    engine
+      .redact_static_entities(COVERAGE_TEXT, &OperatorConfig::default())
+      .unwrap()
+      .resolved_entities
+      .into_iter()
+      .map(|entity| {
+        (
+          usize::try_from(entity.start).unwrap(),
+          usize::try_from(entity.end).unwrap(),
+          entity.label,
+        )
+      })
+      .collect()
+  }
+
+  /// Byte offsets of the letters and digits the spans cover. Separators are
+  /// left out: merging two adjacent names may cover the `, ` between them,
+  /// and a longer entry may resolve the same names without it.
+  fn covered(spans: &BTreeSet<(usize, usize, String)>) -> BTreeSet<usize> {
+    spans
+      .iter()
+      .flat_map(|(start, end, _)| {
+        COVERAGE_TEXT
+          .get(*start..*end)
+          .unwrap()
+          .char_indices()
+          .filter(|(_, character)| character.is_alphanumeric())
+          .map(move |(offset, _)| start + offset)
+      })
+      .collect()
+  }
+
+  /// Adds the pool rows one at a time in a random order, under every label
+  /// filter: no step may uncover a letter or digit, and the full pool resolves
+  /// the same whatever the order. One engine per step keeps a chain cheap.
+  fn assert_coverage_grows(chains: u32) {
+    let everything = (0..COVERAGE_POOL.len()).collect::<Vec<_>>();
+    let references = COVERAGE_LABELS
+      .iter()
+      .map(|labels| labelled_spans(&everything, labels))
+      .collect::<Vec<_>>();
+    assert!(
+      references.iter().all(|spans| !spans.is_empty()),
+      "real hits must exist"
+    );
+    property_runner_with(chains)
+      .run(&Just(everything).prop_shuffle(), |order| {
+        let mut exercised = 0;
+        for (labels, reference) in COVERAGE_LABELS.iter().zip(&references) {
+          let mut previous = BTreeSet::new();
+          for added in 1..=order.len() {
+            let spans = labelled_spans(&order[..added], labels);
+            let now = covered(&spans);
+            prop_assert!(
+              previous.is_subset(&now),
+              "adding {:?} under {labels:?} uncovered bytes {:?}",
+              COVERAGE_POOL[order[added - 1]],
+              previous.difference(&now).collect::<Vec<_>>()
+            );
+            if added == order.len() {
+              prop_assert_eq!(&spans, reference);
+            }
+            previous = now;
+          }
+          exercised += 1;
+        }
+        prop_assert_eq!(exercised, COVERAGE_LABELS.len());
+        Ok(())
+      })
+      .unwrap();
+  }
+
+  #[test]
+  fn p7_adding_entries_never_reduces_coverage() {
+    assert_coverage_grows(COVERAGE_CHAINS);
+  }
+
+  #[test]
+  #[ignore = "release-mode coverage monotonicity over many entry orders"]
+  fn p7_adding_entries_never_reduces_coverage_in_many_orders() {
+    assert_coverage_grows(COVERAGE_CHAINS_RELEASE);
+  }
+
   // Independent wrong implementations are witnesses, never the production matcher.
   fn substring_matcher(text: &str, entry: &str) -> Vec<Range<usize>> {
     text
@@ -585,6 +817,59 @@ mod properties {
   }
 
   #[test]
+  fn fuzz_oracle_accepts_normalized_full_identifier_matches() {
+    for canonical in ["A1B2-dead-c3d4", "A1B2‐dead‐c3d4"] {
+      let entries =
+        [canonical, "a", "b", "c", "dead", "NeutralFixture"].map(str::to_owned);
+      let engine = gazetteer::engine(&entries, "cs").unwrap();
+      let text = "a1b2-dead-c3d4";
+      let detected = engine.detect_static_entities(text).unwrap();
+      assert!(
+        detected.entities.all_entities().iter().any(|entity| {
+          entity.start == 0
+            && usize::try_from(entity.end).unwrap() == text.len()
+        }),
+        "normalized full identifier must retain exact detection recall"
+      );
+    }
+    gazetteer_fuzz::exercise(b"A1B2-dead-c3d4\na\nb\nc\n");
+    gazetteer_fuzz::exercise("A1B2‐dead‐c3d4\na\nb\nc\n".as_bytes());
+  }
+
+  #[test]
+  fn fuzz_oracle_accepts_non_joined_identifier_segment_matches() {
+    let entries =
+      ["a1b2", "b", "c", "d", "dead", "NeutralFixture"].map(str::to_owned);
+    let engine = gazetteer::engine(&entries, "cs").unwrap();
+    for text in [
+      "a1b2-dead-c3d4",
+      "https://example.test/path/a1b2-dead-c3d4/end",
+      "neutral+a1b2-dead-c3d4@example.test",
+      "prefix_a1b2-dead-c3d4_suffix",
+      "[a1b2-dead-c3d4]",
+    ] {
+      let start = text.find("a1b2").unwrap();
+      let detected = engine.detect_static_entities(text).unwrap();
+      assert!(
+        detected.entities.all_entities().iter().any(|entity| {
+          usize::try_from(entity.start).unwrap() == start
+            && usize::try_from(entity.end).unwrap() == start + "a1b2".len()
+        }),
+        "non-joined identifier segment must retain exact detection recall"
+      );
+    }
+    assert!(
+      engine
+        .detect_static_entities("⟦a1b2-dead-c3d4⟧")
+        .unwrap()
+        .entities
+        .all_entities()
+        .is_empty()
+    );
+    gazetteer_fuzz::exercise(b"a1b2\nb\nc\nd\n");
+  }
+
+  #[test]
   fn fuzz_oracle_accepts_unclosed_outer_marker() {
     let engine = gazetteer::engine(&["dead".to_owned()], "cs").unwrap();
     let detected = engine.detect_static_entities("⟦⟦dead⟧").unwrap();
@@ -610,6 +895,137 @@ mod properties {
         .any(|entity| { entity.start == 0 && entity.end == 1 })
     );
     gazetteer_fuzz::exercise("a\nb\nc\nd\na\u{06dd}".as_bytes());
+  }
+
+  proptest! {
+    #![proptest_config(ProptestConfig {
+      cases: PROPERTY_CASES,
+      rng_seed: RngSeed::Fixed(0x532),
+      ..ProptestConfig::default()
+    })]
+
+    #[test]
+    fn candidate_policy_matches_independent_reference(
+      chars in prop::collection::vec(
+        prop_oneof![
+          any::<char>(),
+          sample::select(vec!['a', '1', 'B', '-', '_', '⟦', '⟧', ' ' , '\u{301}', '界']),
+        ],
+        0..64,
+      ),
+      first in any::<usize>(),
+      second in any::<usize>(),
+    ) {
+      let text = chars.into_iter().collect::<String>();
+      let mut offsets = text.char_indices().map(|(offset, _)| offset).collect::<Vec<_>>();
+      offsets.push(text.len());
+      let a = offsets[first % offsets.len()];
+      let b = offsets[second % offsets.len()];
+      let start = a.min(b);
+      let end = a.max(b);
+      let policy = gazetteer_policy::CandidatePolicy::new(&text);
+      prop_assert_eq!(
+        (policy.edges_are_free(start, end), policy.in_identifier(start, end)),
+        gazetteer_reference::acceptance(&text, start..end)
+      );
+    }
+  }
+
+  #[test]
+  fn independent_reference_covers_policy_contract_classes() {
+    for text in [
+      "123Luma456",
+      "xLuma",
+      "Luma0a1b",
+      "Luma.letters",
+      "a1b2-dead-c3d4",
+      "a1b-dead-1234",
+      "QWNtZUEvb3J1-dead",
+      "QWNtZUEvb3J-dead",
+      "dead_0000",
+      "dead/2024",
+      "dead++a1b2",
+      "⟦dead⟧",
+      "⟦⟦dead⟧⟧",
+      "⟦⟦dead⟧",
+      "⟦dead ⟧",
+      "⟧dead⟦",
+      "⟦a⟧⟦dead⟧",
+      "e\u{301}Luma",
+      "Luma\u{903}",
+      "a\u{06dd}",
+      "界Luma界",
+      "ไทยLuma",
+      "Luma🦀",
+      "[[Zeta2024]]",
+      "<<token:zeta9>>",
+      "{{acme_01}}",
+      "[[Jan Novák]]",
+      "[[⟦dead⟧]]",
+      "<<{{dead9}}>>",
+      "[[dead9\n]]",
+      "<<[[dead9>>]]",
+      "[[dead9]] [[Luma]]",
+    ] {
+      let policy = gazetteer_policy::CandidatePolicy::new(text);
+      let mut offsets = text
+        .char_indices()
+        .map(|(offset, _)| offset)
+        .collect::<Vec<_>>();
+      offsets.push(text.len());
+      for &start in &offsets {
+        for &end in offsets.iter().filter(|&&end| end >= start) {
+          assert_eq!(
+            (
+              policy.edges_are_free(start, end),
+              policy.in_identifier(start, end)
+            ),
+            gazetteer_reference::acceptance(text, start..end),
+            "contract reference differs at {start}..{end}"
+          );
+        }
+      }
+    }
+  }
+
+  #[test]
+  fn independent_reference_rejects_policy_mutations() {
+    // Moving the left edge one byte outward admits the otherwise split word.
+    let edge_text = "xLuma";
+    let edge_policy = gazetteer_policy::CandidatePolicy::new(edge_text);
+    let reference = gazetteer_reference::acceptance(edge_text, 1..5);
+    assert_eq!(
+      (
+        edge_policy.edges_are_free(1, 5),
+        edge_policy.in_identifier(1, 5)
+      ),
+      reference
+    );
+    assert_ne!(
+      (
+        edge_policy.edges_are_free(0, 5),
+        edge_policy.in_identifier(1, 5)
+      ),
+      reference
+    );
+
+    // Omitting the identifier predicate admits an edge-valid protected seed.
+    let identifier_text = "a1b2-dead-c3d4";
+    let identifier_policy =
+      gazetteer_policy::CandidatePolicy::new(identifier_text);
+    let identifier_reference =
+      gazetteer_reference::acceptance(identifier_text, 5..9);
+    assert_eq!(
+      (
+        identifier_policy.edges_are_free(5, 9),
+        identifier_policy.in_identifier(5, 9)
+      ),
+      identifier_reference
+    );
+    assert_ne!(
+      (identifier_policy.edges_are_free(5, 9), false),
+      identifier_reference
+    );
   }
 
   // The stable harness compiles and exercises the same bounded driver as libFuzzer.

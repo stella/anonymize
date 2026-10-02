@@ -112,6 +112,12 @@ pub struct GazetteerMatchData {
   /// its gazetteer.
   #[serde(default)]
   pub terms: Vec<String>,
+  /// Per row, whether a kept `person` label names the row's spelling, so
+  /// person word orders (surname first) match even when the row reports
+  /// another label. Empty (older configs, or no such row) means only rows
+  /// labelled `person`.
+  #[serde(default)]
+  pub person_forms: Vec<bool>,
 }
 
 /// Inflected forms a gazetteer entry's words may take besides their folded

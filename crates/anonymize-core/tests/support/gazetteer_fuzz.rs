@@ -2,12 +2,8 @@
 //! Fixed opaque envelopes keep the privacy invariant meaningful with empty
 //! fuzz input or input that contains no useful gazetteer term.
 
-#[path = "gazetteer_policy.rs"]
-mod gazetteer_policy;
-
-use gazetteer_policy::{
-  edges_are_free, in_marker, in_template_field, touches_identifier,
-};
+use super::gazetteer_policy::CandidatePolicy;
+use super::gazetteer_reference;
 
 use super::gazetteer;
 
@@ -98,6 +94,20 @@ pub(super) fn exercise(data: &[u8]) {
     "manufactured plain gazetteer term was not detected"
   );
 
+  // Probe every Unicode boundary, including rejected candidates, rather than
+  // checking only spans that the matcher already admitted.
+  let policy = CandidatePolicy::new(&text);
+  for (start, ch) in text.char_indices() {
+    let end = start + ch.len_utf8();
+    assert_eq!(
+      (
+        policy.edges_are_free(start, end),
+        policy.in_identifier(start, end)
+      ),
+      gazetteer_reference::acceptance(&text, start..end),
+      "production/reference candidate policy divergence"
+    );
+  }
   for entity in entities {
     let start = usize::try_from(entity.start).expect("entity start fits usize");
     let end = usize::try_from(entity.end).expect("entity end fits usize");
@@ -109,24 +119,50 @@ pub(super) fn exercise(data: &[u8]) {
     assert!(text.is_char_boundary(end), "entity end splits UTF-8");
 
     assert!(
-      edges_are_free(&text, start, end),
+      policy.edges_are_free(start, end),
       "gazetteer span splits a word"
     );
 
+    // Arbitrary caller entries may cover normalized complete identifiers or
+    // eligible subsegments. Only the injected short seed has fixed rejection
+    // semantics in these envelopes; assert that independently of the policy.
     assert!(
       protected.iter().all(|(opaque_start, opaque_end)| {
-        end <= *opaque_start || start >= *opaque_end
-          // Caller-specified identifier values may match exactly in full.
-          || (start <= *opaque_start && end >= *opaque_end
-            && entries.iter().any(|entry| text.get(start..end) == Some(entry.as_str())))
+        text
+          .get(*opaque_start..*opaque_end)
+          .into_iter()
+          .flat_map(|opaque| opaque.match_indices(OPAQUE_TERM))
+          .all(|(offset, term)| {
+            start != opaque_start.saturating_add(offset)
+              || end
+                != opaque_start
+                  .saturating_add(offset)
+                  .saturating_add(term.len())
+          })
       }),
-      "gazetteer span overlaps a protected opaque token"
+      "injected seed matched inside a protected opaque token"
     );
     assert!(
-      !in_marker(&text, start, end)
-        && !in_template_field(&text, start, end)
-        && !touches_identifier(&text, start, end),
+      !policy.identifier(start..end, || {
+        text.get(start..end).is_some_and(shows_a_name)
+      }),
       "gazetteer span is joined to an identifier segment"
     );
   }
+}
+
+/// Whether `surface` shows a name: a capital letter, or letters only of
+/// scripts without case or written in one case (Georgian Mkhedruli). A template field kept as a name must show one
+/// (`[[Zeta2024]]`, `[[محمد2024]]`).
+fn shows_a_name(surface: &str) -> bool {
+  let letters = surface
+    .chars()
+    .filter(|character| character.is_alphabetic())
+    .collect::<Vec<_>>();
+  !letters.is_empty()
+    && (letters.iter().any(|character| character.is_uppercase())
+      || letters.iter().all(|character| {
+        !character.is_lowercase()
+          || ('\u{10D0}'..='\u{10FF}').contains(character)
+      }))
 }

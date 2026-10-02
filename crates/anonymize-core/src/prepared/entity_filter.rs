@@ -1,5 +1,5 @@
 use crate::byte_offsets::ByteOffsets;
-use crate::resolution::{PipelineEntity, SourceDetail};
+use crate::resolution::{DetectionSource, PipelineEntity, SourceDetail};
 use crate::types::{Error, Result};
 
 const NEAR_MISS_BAND: f64 = 0.15;
@@ -69,6 +69,15 @@ pub(super) fn clear_internal_source_details(entities: &mut [PipelineEntity]) {
   }
 }
 
+/// A value the caller named exactly: an exact gazetteer hit or a custom
+/// deny-list hit. The caller asked for it to be redacted, so no confidence
+/// threshold discards it; fuzzy gazetteer hits and custom regex hits, whose
+/// scores the caller or the matcher chose, keep the threshold.
+const fn named_exactly_by_caller(entity: &PipelineEntity) -> bool {
+  (matches!(entity.source, DetectionSource::Gazetteer) && entity.exact_entry)
+    || matches!(entity.source_detail, Some(SourceDetail::CustomDenyList))
+}
+
 fn filter_entities_for_threshold(
   entities: Vec<PipelineEntity>,
   threshold: f64,
@@ -78,6 +87,7 @@ fn filter_entities_for_threshold(
     .filter(|entity| {
       entity.score >= threshold
         || entity.source_detail == Some(SourceDetail::AddressContext)
+        || named_exactly_by_caller(entity)
     })
     .collect()
 }
@@ -102,7 +112,7 @@ fn boost_near_miss_entities(
 
   let mut boosted = Vec::with_capacity(entities.len());
   for mut entity in entities {
-    if entity.score >= threshold {
+    if entity.score >= threshold || named_exactly_by_caller(&entity) {
       boosted.push(entity);
       continue;
     }

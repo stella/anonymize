@@ -673,6 +673,7 @@ fn prepared_engine_runs_normalized_literal_pass() {
       legal_form_suffixes: vec![String::from("s.r.o.")],
       inflection: GazetteerInflection::None,
       terms: Vec::new(),
+      person_forms: Vec::new(),
     }),
     country_data: None,
     hotword_data: None,
@@ -1504,6 +1505,7 @@ fn prepared_engine_artifacts_match_direct_prepare() {
       legal_form_suffixes: vec![String::from("s.r.o.")],
       inflection: GazetteerInflection::None,
       terms: Vec::new(),
+      person_forms: Vec::new(),
     }),
     country_data: None,
     hotword_data: None,
@@ -1563,6 +1565,7 @@ fn prepared_engine_artifacts_roundtrip_bytes() {
       legal_form_suffixes: vec![String::from("s.r.o.")],
       inflection: GazetteerInflection::None,
       terms: Vec::new(),
+      person_forms: Vec::new(),
     }),
     ..empty_config(PreparedEngineSlices::default())
   };
@@ -1595,6 +1598,7 @@ fn artifact_gazetteer_config(terms: Vec<String>) -> PreparedEngineConfig {
       legal_form_suffixes: Vec::new(),
       inflection: GazetteerInflection::CzechSlovak,
       terms,
+      person_forms: Vec::new(),
     }),
     ..empty_config(PreparedEngineSlices::default())
   }
@@ -1663,6 +1667,17 @@ fn turkey_country_match_data() -> CountryMatchData {
   }
 }
 
+/// One exact `organization` row that may extend over `s.r.o.`.
+fn organization_gazetteer_data() -> GazetteerMatchData {
+  GazetteerMatchData {
+    labels: vec![String::from("organization")],
+    is_fuzzy: vec![false],
+    legal_form_suffixes: vec![String::from("s.r.o.")],
+    inflection: GazetteerInflection::None,
+    terms: Vec::new(),
+    person_forms: Vec::new(),
+  }
+}
 #[test]
 fn prepared_engine_emits_static_detector_entities() {
   let prepared = PreparedEngine::new(prepared_config! {
@@ -1730,13 +1745,7 @@ fn prepared_engine_emits_static_detector_entities() {
     }],
     deny_list_data: None,
     false_positive_filters: None,
-    gazetteer_data: Some(GazetteerMatchData {
-      labels: vec![String::from("organization")],
-      is_fuzzy: vec![false],
-      legal_form_suffixes: vec![String::from("s.r.o.")],
-      inflection: GazetteerInflection::None,
-      terms: Vec::new(),
-    }),
+    gazetteer_data: Some(organization_gazetteer_data()),
     country_data: Some(turkey_country_match_data()),
     hotword_data: None,
     trigger_data: None,
@@ -1794,6 +1803,7 @@ fn prepared_engine_extends_gazetteer_legal_form_in_text_offsets() {
       legal_form_suffixes: vec![String::from("spółka jawna")],
       inflection: GazetteerInflection::None,
       terms: Vec::new(),
+      person_forms: Vec::new(),
     }),
     ..empty_config(PreparedEngineSlices::default())
   })
@@ -2579,13 +2589,7 @@ fn prepared_engine_redacts_static_entities_end_to_end() {
     custom_regex_meta: vec![],
     deny_list_data: None,
     false_positive_filters: None,
-    gazetteer_data: Some(GazetteerMatchData {
-      labels: vec![String::from("organization")],
-      is_fuzzy: vec![false],
-      legal_form_suffixes: vec![String::from("s.r.o.")],
-      inflection: GazetteerInflection::None,
-      terms: Vec::new(),
-    }),
+    gazetteer_data: Some(organization_gazetteer_data()),
     country_data: Some(turkey_country_match_data()),
     hotword_data: None,
     trigger_data: None,

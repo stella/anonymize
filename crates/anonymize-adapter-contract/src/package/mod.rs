@@ -734,13 +734,13 @@ mod tests {
 
   #[test]
   fn prepared_package_schema_versions_track_the_current_payload_shape() {
-    assert_eq!(BINDING_PACKAGE_SCHEMA_VERSION, 15);
-    assert_eq!(CORE_PACKAGE_SCHEMA_VERSION, 15);
+    assert_eq!(BINDING_PACKAGE_SCHEMA_VERSION, 16);
+    assert_eq!(CORE_PACKAGE_SCHEMA_VERSION, 16);
   }
 
   #[test]
   fn prepared_package_readers_reject_previous_schema_payloads() {
-    const PREVIOUS_RELEASED_SCHEMA_VERSION: u32 = 14;
+    const PREVIOUS_RELEASED_SCHEMA_VERSION: u32 = 15;
     let binding_payload = prepared_search_package_payload_to_bytes(
       &package_test_config(),
       b"artifacts",
@@ -1157,6 +1157,7 @@ mod tests {
           legal_form_suffixes: Vec::new(),
           inflection: BindingGazetteerInflection::None,
           terms: Vec::new(),
+          person_forms: Vec::new(),
         }),
         country_data: None,
         ..package_test_config()

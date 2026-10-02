@@ -66,6 +66,7 @@ fn multi_detector_engine() -> PreparedEngine {
       legal_form_suffixes: vec![String::from("s.r.o.")],
       inflection: GazetteerInflection::None,
       terms: Vec::new(),
+      person_forms: Vec::new(),
     }),
     country_data: None,
     hotword_data: None,

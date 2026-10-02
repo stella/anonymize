@@ -42,6 +42,12 @@ const ENTRIES: &[(&str, &str, &[&str])] = &[
   ("Will", PERSON, &[]),
   ("Grant", PERSON, &[]),
   ("Augusts", PERSON, &[]),
+  ("McDonald", PERSON, &[]),
+  ("Jan van Dijk", PERSON, &[]),
+  ("J. Dvořák", PERSON, &[]),
+  ("محمد", PERSON, &[]),
+  ("東京", ORGANIZATION, &[]),
+  ("თბილისი", ORGANIZATION, &[]),
   (FORCED_ID, IDENTIFIER, &[]),
 ];
 
@@ -187,6 +193,19 @@ const CASES: &[Case] = &[
   hit(Class::Templates, "Šablona {{Acme}} zde.", "Acme"),
   hit(Class::Templates, "Šablona <<Novák>> zde.", "Novák"),
   hit(Class::Templates, "Odkaz [[Orbis]] zde.", "Orbis"),
+  hit(Class::Templates, "Odkaz [[Zeta2024]] zde.", "Zeta"),
+  hit(Class::Templates, "Šablona {{Acme2024}} zde.", "Acme"),
+  miss(Class::Templates, "Šablona {{acme_01}} zde.", "acme"),
+  hit(Class::Templates, "Odkaz [[McDonald2024]] zde.", "McDonald"),
+  hit(Class::Templates, "Odkaz [[Jan van Dijk2024]] zde.", "Jan van Dijk"),
+  hit(Class::Templates, "Odkaz [[J. Dvořák2024]] zde.", "J. Dvořák"),
+  hit(Class::Templates, "Odkaz [[McDonalda2024]] zde.", "McDonalda"),
+  hit(Class::Templates, "Odkaz [[Jan van Dijka2024]] zde.", "Jan van Dijka"),
+  hit(Class::Templates, "Odkaz [[محمد2024]] zde.", "محمد"),
+  hit(Class::Templates, "Odkaz {{東京2024}} zde.", "東京"),
+  hit(Class::Templates, "Odkaz [[თბილისი2024]] zde.", "თბილისი"),
+  miss(Class::Templates, "Odkaz [[mcdonald2024]] zde.", "mcdonald"),
+  miss(Class::Templates, "Viz <<token:zeta9>> a {{mcdonald2024}}.", "mcdonald"),
   // Person entries that are also common words, scored on the resolved
   // (redacted) output: an exact entry is always redacted.
   hit(Class::CommonWordNames, "Hello Mark there.", "Mark"),
@@ -342,6 +361,7 @@ fn configs_without_the_newer_gazetteer_fields_still_load() {
   gazetteer.remove("legal_form_suffixes");
   gazetteer.remove("inflection");
   gazetteer.remove("terms");
+  gazetteer.remove("person_forms");
   let binding: BindingPreparedSearchConfig = serde_json::from_value(json)
     .expect("a config without the newer fields should deserialize");
   let engine = PreparedEngine::new(
@@ -350,6 +370,192 @@ fn configs_without_the_newer_gazetteer_fields_still_load() {
   )
   .expect("old-shape config should prepare");
   assert_eq!(gazetteer_texts(&engine, "Předáno Novákovi."), ["Novákovi"]);
+}
+
+/// A gazetteer-only pipeline over `(canonical, label)` entries.
+struct LabelledRedaction<'a> {
+  /// Labels the pipeline keeps (every label when empty).
+  labels: &'a [&'a str],
+  hotword_rules: bool,
+  entries: &'a [(&'a str, &'a str)],
+  text: &'a str,
+}
+
+/// Resolved `(text, label)` spans after label filtering.
+fn redacted_under_labels(
+  LabelledRedaction {
+    labels,
+    hotword_rules,
+    entries,
+    text,
+  }: LabelledRedaction<'_>,
+) -> Vec<(String, String)> {
+  let config: PipelineConfig = serde_json::from_value(serde_json::json!({
+    "threshold": 0.3,
+    "enableTriggerPhrases": false,
+    "enableRegex": false,
+    "enableLegalForms": false,
+    "enableNameCorpus": false,
+    "enableDenyList": false,
+    "enableGazetteer": true,
+    "enableCountries": false,
+    "enableConfidenceBoost": false,
+    "enableCoreference": false,
+    "enableZoneClassification": false,
+    "enableHotwordRules": hotword_rules,
+    "labels": labels,
+    "workspaceId": "gazetteer-matching-test"
+  }))
+  .expect("config should deserialize");
+  let gazetteer: Vec<GazetteerEntry> = entries
+    .iter()
+    .enumerate()
+    .map(|(index, (canonical, label))| {
+      serde_json::from_value(serde_json::json!({
+        "id": format!("gaz-{index}"),
+        "canonical": canonical,
+        "label": label,
+        "variants": [],
+        "workspaceId": "gazetteer-matching-test",
+        "createdAt": 1_700_000_000_000_i64,
+        "source": "manual",
+      }))
+      .expect("entry should deserialize")
+    })
+    .collect();
+  let binding = assemble_static_search_config(&config, None, &gazetteer)
+    .expect("config should assemble");
+  let engine = PreparedEngine::new(
+    prepared_search_config_from_binding(binding)
+      .expect("assembled config should convert"),
+  )
+  .expect("pipeline should prepare");
+  engine
+    .redact_static_entities(text, &OperatorConfig::default())
+    .expect("redaction should succeed")
+    .resolved_entities
+    .into_iter()
+    .map(|entity| (entity.text, entity.label))
+    .collect()
+}
+
+#[test]
+fn a_spelling_under_several_labels_keeps_each_label() {
+  let text = "Smlouvu podepsala Acme dnes.";
+  for kept in [ORGANIZATION, PERSON] {
+    for entries in [
+      [("Acme", ORGANIZATION), ("Acme", PERSON)],
+      [("Acme", PERSON), ("Acme", ORGANIZATION)],
+      // Spellings the matcher folds together count as one.
+      [("Acme", ORGANIZATION), ("ACME", PERSON)],
+      [("ÁCME", PERSON), ("acme", ORGANIZATION)],
+    ] {
+      assert_eq!(
+        redacted_under_labels(LabelledRedaction {
+          labels: &[kept],
+          hotword_rules: false,
+          entries: &entries,
+          text,
+        }),
+        [("Acme".to_owned(), kept.to_owned())],
+        "{kept} {entries:?}"
+      );
+    }
+  }
+  // Without a label filter the label is the alphabetically first, whatever
+  // the entry order.
+  for entries in [
+    [("Acme", ORGANIZATION), ("Acme", PERSON)],
+    [("Acme", PERSON), ("Acme", ORGANIZATION)],
+    [("ACME", PERSON), ("Acme", ORGANIZATION)],
+    [("Acme", PERSON), ("Ácme", ORGANIZATION)],
+  ] {
+    assert_eq!(
+      redacted_under_labels(LabelledRedaction {
+        labels: &[],
+        hotword_rules: false,
+        entries: &entries,
+        text,
+      }),
+      [("Acme".to_owned(), ORGANIZATION.to_owned())],
+      "{entries:?}"
+    );
+  }
+}
+
+#[test]
+fn a_kept_person_label_keeps_person_word_orders() {
+  // Reported as an organization, `John Smith` is still a person's name and
+  // also matches surname first.
+  let text = "Podpis: Smith, John, jednatel.";
+  for labels in [[ORGANIZATION, PERSON], [PERSON, ORGANIZATION]] {
+    for entries in [
+      [("John Smith", ORGANIZATION), ("John Smith", PERSON)],
+      [("John Smith", PERSON), ("John Smith", ORGANIZATION)],
+    ] {
+      let redacted = redacted_under_labels(LabelledRedaction {
+        labels: &labels,
+        hotword_rules: false,
+        entries: &entries,
+        text,
+      });
+      assert_eq!(
+        redacted,
+        [("Smith, John".to_owned(), labels[0].to_owned())],
+        "{labels:?} {entries:?}"
+      );
+    }
+  }
+  // Without a kept person label the person word orders do not apply.
+  let redacted = redacted_under_labels(LabelledRedaction {
+    labels: &[ORGANIZATION],
+    hotword_rules: false,
+    entries: &[("John Smith", ORGANIZATION), ("John Smith", PERSON)],
+    text,
+  });
+  assert_eq!(redacted, []);
+}
+
+#[test]
+fn a_spelling_keeps_a_label_that_hotword_rules_reclassify() {
+  // `date` is not requested, but hotword rules search for it so a date next to
+  // `narozen` becomes a `date of birth`; the spelling must keep that label.
+  let text = "Klient narozen Orbis dnes.";
+  for entries in [
+    [("Orbis", "date"), ("Orbis", "address")],
+    [("Orbis", "address"), ("Orbis", "date")],
+  ] {
+    assert_eq!(
+      redacted_under_labels(LabelledRedaction {
+        labels: &["date of birth"],
+        hotword_rules: true,
+        entries: &entries,
+        text,
+      }),
+      [("Orbis".to_owned(), "date of birth".to_owned())],
+      "{entries:?}"
+    );
+    // Without hotword rules neither label is searched for or kept.
+    assert_eq!(
+      redacted_under_labels(LabelledRedaction {
+        labels: &["date of birth"],
+        hotword_rules: false,
+        entries: &entries,
+        text,
+      }),
+      []
+    );
+    assert_eq!(
+      redacted_under_labels(LabelledRedaction {
+        labels: &["date"],
+        hotword_rules: false,
+        entries: &entries,
+        text,
+      }),
+      [("Orbis".to_owned(), "date".to_owned())],
+      "{entries:?}"
+    );
+  }
 }
 
 #[test]
