@@ -142,8 +142,12 @@ const result = await rewriteDocxForAnonymizedExport({
 
 Planner offsets are UTF-16 code-unit offsets into each sanitized block. The
 export profile preserves ordinary paragraph, run, table, section, header,
-footer, style, numbering, font, and theme formatting. Documents whose visible
-rendering depends on rejected content must use another output format.
+footer, style, numbering, font, and theme formatting. Values that render or
+persist without reaching the planner are normalized: list, page, note, and
+line-number start values become 0 or 1; header, footer, and theme part
+numbers and relationship identifiers are renumbered; theme PANOSE values are
+dropped. Non-breaking and soft hyphen controls are rejected. Documents whose
+visible rendering depends on rejected content must use another output format.
 
 ## Session-backed restoration
 
