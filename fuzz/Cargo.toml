@@ -18,6 +18,7 @@ cargo-fuzz = true
 [dependencies]
 libfuzzer-sys = "0.4"
 unicode-normalization = { version = "0.1.25", default-features = false }
+unicode-properties = "0.1.4"
 stella-anonymize-core = { path = "../crates/anonymize-core" }
 stella-anonymize-adapter-contract = { path = "../crates/anonymize-adapter-contract" }
 

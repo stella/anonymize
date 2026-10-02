@@ -667,6 +667,7 @@ dependencies = [
  "stella-anonymize-adapter-contract",
  "stella-anonymize-core",
  "unicode-normalization",
+ "unicode-properties",
 ]
 
 [[package]]
