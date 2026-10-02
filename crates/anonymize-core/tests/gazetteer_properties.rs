@@ -16,6 +16,10 @@ mod properties {
   mod gazetteer;
   #[path = "support/gazetteer_fuzz.rs"]
   mod gazetteer_fuzz;
+  #[path = "support/gazetteer_policy.rs"]
+  mod gazetteer_policy;
+  #[path = "support/gazetteer_reference.rs"]
+  mod gazetteer_reference;
 
   use std::collections::{BTreeMap, BTreeSet};
   use std::fmt::Write;
@@ -745,6 +749,124 @@ mod properties {
         .any(|entity| { entity.start == 0 && entity.end == 1 })
     );
     gazetteer_fuzz::exercise("a\nb\nc\nd\na\u{06dd}".as_bytes());
+  }
+
+  proptest! {
+    #![proptest_config(ProptestConfig {
+      cases: PROPERTY_CASES,
+      rng_seed: RngSeed::Fixed(0x532),
+      ..ProptestConfig::default()
+    })]
+
+    #[test]
+    fn candidate_policy_matches_independent_reference(
+      chars in prop::collection::vec(
+        prop_oneof![
+          any::<char>(),
+          sample::select(vec!['a', '1', 'B', '-', '_', '⟦', '⟧', ' ' , '\u{301}', '界']),
+        ],
+        0..64,
+      ),
+      first in any::<usize>(),
+      second in any::<usize>(),
+    ) {
+      let text = chars.into_iter().collect::<String>();
+      let mut offsets = text.char_indices().map(|(offset, _)| offset).collect::<Vec<_>>();
+      offsets.push(text.len());
+      let a = offsets[first % offsets.len()];
+      let b = offsets[second % offsets.len()];
+      let start = a.min(b);
+      let end = a.max(b);
+      let policy = gazetteer_policy::CandidatePolicy::new(&text);
+      prop_assert_eq!(
+        (policy.edges_are_free(start, end), policy.in_identifier(start, end)),
+        gazetteer_reference::acceptance(&text, start..end)
+      );
+    }
+  }
+
+  #[test]
+  fn independent_reference_covers_policy_contract_classes() {
+    for text in [
+      "123Luma456",
+      "xLuma",
+      "Luma0a1b",
+      "Luma.letters",
+      "a1b2-dead-c3d4",
+      "a1b-dead-1234",
+      "QWNtZUEvb3J1-dead",
+      "QWNtZUEvb3J-dead",
+      "dead_0000",
+      "dead/2024",
+      "dead++a1b2",
+      "⟦dead⟧",
+      "⟦⟦dead⟧⟧",
+      "⟦⟦dead⟧",
+      "⟦dead ⟧",
+      "⟧dead⟦",
+      "⟦a⟧⟦dead⟧",
+      "e\u{301}Luma",
+      "Luma\u{903}",
+      "a\u{06dd}",
+      "界Luma界",
+      "ไทยLuma",
+      "Luma🦀",
+    ] {
+      let policy = gazetteer_policy::CandidatePolicy::new(text);
+      let mut offsets = text
+        .char_indices()
+        .map(|(offset, _)| offset)
+        .collect::<Vec<_>>();
+      offsets.push(text.len());
+      for &start in &offsets {
+        for &end in offsets.iter().filter(|&&end| end >= start) {
+          assert_eq!(
+            (
+              policy.edges_are_free(start, end),
+              policy.in_identifier(start, end)
+            ),
+            gazetteer_reference::acceptance(text, start..end),
+            "contract reference differs at {start}..{end}"
+          );
+        }
+      }
+    }
+  }
+
+  #[test]
+  fn independent_reference_rejects_policy_mutations() {
+    // Moving the left edge one byte outward admits the otherwise split word.
+    let edge_text = "xLuma";
+    let edge_policy = gazetteer_policy::CandidatePolicy::new(edge_text);
+    let reference = gazetteer_reference::acceptance(edge_text, 1..5);
+    assert_eq!(
+      (
+        edge_policy.edges_are_free(1, 5),
+        edge_policy.in_identifier(1, 5)
+      ),
+      reference
+    );
+    assert_ne!(
+      (
+        edge_policy.edges_are_free(0, 5),
+        edge_policy.in_identifier(1, 5)
+      ),
+      reference
+    );
+
+    // Omitting the identifier predicate admits an edge-valid protected seed.
+    let identifier_text = "a1b2-dead-c3d4";
+    let identifier_policy =
+      gazetteer_policy::CandidatePolicy::new(identifier_text);
+    let reference = gazetteer_reference::acceptance(identifier_text, 5..9);
+    assert_eq!(
+      (
+        identifier_policy.edges_are_free(5, 9),
+        identifier_policy.in_identifier(5, 9)
+      ),
+      reference
+    );
+    assert_ne!((identifier_policy.edges_are_free(5, 9), false), reference);
   }
 
   // The stable harness compiles and exercises the same bounded driver as libFuzzer.

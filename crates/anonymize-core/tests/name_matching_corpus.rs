@@ -58,6 +58,52 @@ mod corpus {
     }
   }
 
+  #[derive(Clone, Copy)]
+  enum UncoveredLanguage {
+    De,
+    Es,
+    Fr,
+    Hu,
+    It,
+    Lv,
+    Pl,
+    PtBr,
+    Ro,
+    Sv,
+  }
+
+  impl UncoveredLanguage {
+    const fn code(self) -> &'static str {
+      match self {
+        Self::De => "de",
+        Self::Es => "es",
+        Self::Fr => "fr",
+        Self::Hu => "hu",
+        Self::It => "it",
+        Self::Lv => "lv",
+        Self::Pl => "pl",
+        Self::PtBr => "pt-br",
+        Self::Ro => "ro",
+        Self::Sv => "sv",
+      }
+    }
+  }
+
+  // This synthetic corpus exercises caller-owned names in cs/sk/en scopes;
+  // it does not claim vocabulary coverage for other production languages.
+  const UNCOVERED_LANGUAGES: [UncoveredLanguage; 10] = [
+    UncoveredLanguage::De,
+    UncoveredLanguage::Es,
+    UncoveredLanguage::Fr,
+    UncoveredLanguage::Hu,
+    UncoveredLanguage::It,
+    UncoveredLanguage::Lv,
+    UncoveredLanguage::Pl,
+    UncoveredLanguage::PtBr,
+    UncoveredLanguage::Ro,
+    UncoveredLanguage::Sv,
+  ];
+
   #[derive(Deserialize)]
   #[serde(deny_unknown_fields)]
   struct Case {
@@ -1236,14 +1282,47 @@ mod corpus {
   }
 
   #[test]
-  fn forced_positive_cases_cover_every_isolated_supported_language()
+  fn forced_positive_language_matrix_accounts_for_production_support()
   -> Result<(), Box<dyn Error>> {
     let corpus: Corpus =
       serde_json::from_str(include_str!("fixtures/name_matching/corpus.json"))?;
-    let supported = scoped_engines(&[])?
+    let covered = scoped_engines(&[])?
       .into_keys()
       .filter(|scope| scope.len() == 1)
       .collect::<BTreeSet<_>>();
+    let covered_codes = covered
+      .iter()
+      .flatten()
+      .map(|language| language.code())
+      .collect::<BTreeSet<_>>();
+    let uncovered_codes = UNCOVERED_LANGUAGES
+      .into_iter()
+      .map(UncoveredLanguage::code)
+      .collect::<BTreeSet<_>>();
+    assert_eq!(uncovered_codes.len(), UNCOVERED_LANGUAGES.len());
+    assert!(
+      covered_codes.is_disjoint(&uncovered_codes),
+      "covered and explicitly uncovered languages must be disjoint"
+    );
+    // pipeline-language.ts derives SUPPORTED_LANGUAGES from this same file.
+    let production: serde_json::Value = serde_json::from_str(include_str!(
+      "../../../packages/anonymize/src/data/language-scopes.json"
+    ))?;
+    let supported_codes = production
+      .get("languages")
+      .and_then(serde_json::Value::as_object)
+      .ok_or("production language scopes must contain a languages object")?
+      .keys()
+      .map(String::as_str)
+      .collect::<BTreeSet<_>>();
+    let accounted_codes = covered_codes
+      .union(&uncovered_codes)
+      .copied()
+      .collect::<BTreeSet<_>>();
+    assert_eq!(
+      accounted_codes, supported_codes,
+      "every production language must be covered or explicitly uncovered"
+    );
     let mut coverage = BTreeMap::<_, BTreeSet<_>>::new();
     for case in &corpus.forced_cases {
       if case.expectation == Expectation::Redact {
@@ -1256,8 +1335,8 @@ mod corpus {
     assert!(!coverage.is_empty());
     for languages in coverage.values() {
       assert!(
-        *languages == supported,
-        "each forced positive class must cover every isolated language"
+        *languages == covered,
+        "each forced positive class must cover every isolated corpus language"
       );
     }
     Ok(())

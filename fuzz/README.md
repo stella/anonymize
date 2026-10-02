@@ -32,8 +32,14 @@ oracle, not full Unicode segmentation. The integration property checks UAX
 word boundaries for spaced Latin-name contexts where those definitions agree.
 Balanced outermost `⟦...⟧` markers protect their contents. The driver
 includes the same production policy source as the matcher for boundaries,
-numeric glue, joined identifiers, and marker containment; there is no mirrored
-acceptance implementation. Arbitrary caller entries may match normalized full
+numeric glue, joined identifiers, and marker containment. Separately,
+`gazetteer_reference.rs` implements a deliberately simple character-by-character
+reference without production helpers or marker indexes. Every fuzz run compares
+both predicates at every single-character span, including rejected spans;
+generated properties compare arbitrary UTF-8 spans and exhaustively probe
+synthetic boundary, identifier, and marker cases. No policy exceptions are
+excluded. Mutation witnesses reject a one-byte edge shift and a skipped
+identifier check. Arbitrary caller entries may match normalized full
 identifiers or eligible subsegments (for example `a1b2` before the plain `dead`
 segment in `a1b2-dead-c3d4`). Independently, the injected short `dead` seed must
 never match its protected occurrences, and a manufactured plain term must be

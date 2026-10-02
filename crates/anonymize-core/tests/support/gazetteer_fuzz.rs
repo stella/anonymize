@@ -4,6 +4,8 @@
 
 #[path = "gazetteer_policy.rs"]
 mod gazetteer_policy;
+#[path = "gazetteer_reference.rs"]
+mod gazetteer_reference;
 
 use gazetteer_policy::CandidatePolicy;
 
@@ -96,7 +98,20 @@ pub(super) fn exercise(data: &[u8]) {
     "manufactured plain gazetteer term was not detected"
   );
 
+  // Probe every Unicode boundary, including rejected candidates, rather than
+  // checking only spans that the matcher already admitted.
   let policy = CandidatePolicy::new(&text);
+  for (start, ch) in text.char_indices() {
+    let end = start + ch.len_utf8();
+    assert_eq!(
+      (
+        policy.edges_are_free(start, end),
+        policy.in_identifier(start, end)
+      ),
+      gazetteer_reference::acceptance(&text, start..end),
+      "production/reference candidate policy divergence"
+    );
+  }
   for entity in entities {
     let start = usize::try_from(entity.start).expect("entity start fits usize");
     let end = usize::try_from(entity.end).expect("entity end fits usize");
