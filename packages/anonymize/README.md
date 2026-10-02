@@ -377,8 +377,11 @@ Each guarantee is enforced by the tests named after it, under
    redacted under any label the pipeline keeps, however common the word, after
    folding case and diacritics. When Czech or Slovak is among the content
    languages (or no language is set), its case forms and surname derivations
-   count as exact (`Novák` covers `Novákovi`, `Nováka`). Tests:
+   count as exact (`Novák` covers `Novákovi`, `Nováka`). The pipeline's
+   `threshold` and confidence boosting never discard an exact hit (or a
+   `customDenyList` hit); typo hits keep the threshold. Tests:
    `exact_entries_standing_alone_are_always_redacted`,
+   `exact_entries_ignore_the_redaction_threshold`,
    `common_word_person_entries_are_redacted`,
    `p5_czech_slovak_declensions_and_diacritics_are_exact`,
    `czech_slovak_forms_follow_the_pipeline_language`.
@@ -428,7 +431,8 @@ Each guarantee is enforced by the tests named after it, under
 5. **Adding entries never reduces coverage.** Every letter or digit redacted
    with a set of entries is still redacted after more entries are added,
    whatever their order and label filter. A spelling given under several
-   labels is redacted under the first of them that the pipeline searches for
+   labels (or spellings that differ only in case or diacritics, which match
+   as one) is redacted under the first of them that the pipeline searches for
    (its `labels`, then the labels hotword rules reclassify into them; the
    alphabetically first when no label filter applies), whatever the entry
    order. Tests: `adding_entries_never_reduces_coverage`,

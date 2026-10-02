@@ -6,10 +6,10 @@
 //! also get a fuzzy pattern whose distance scales with their length. The core
 //! matches terms as whole words, folded for case and diacritics and declined.
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
 
 use stella_anonymize_core::assemble::{AssembleError, GazetteerEntry};
-use stella_anonymize_core::gazetteer_fuzzy_distance;
+use stella_anonymize_core::{gazetteer_fuzzy_distance, gazetteer_spelling_key};
 
 use super::AssembleContext;
 use super::language::language_config_matches;
@@ -49,37 +49,41 @@ fn search_labels<'a>(ctx: &'a AssembleContext<'_>) -> &'a [String] {
 }
 
 /// One `(term, label)` row per distinct canonical or variant string, in
-/// first-seen order. A spelling given under several labels takes the first of
-/// them in the search-label order ([`search_labels`]), so label filtering never drops a
-/// spelling that a kept label names; without a label filter (or with none of
-/// its labels kept) it takes the alphabetically first. Either way the label
-/// does not depend on entry order.
+/// first-seen order. Spellings the matcher treats as one
+/// ([`gazetteer_spelling_key`]) share a label: the first label they were given
+/// under in the search-label order ([`search_labels`]), so label filtering
+/// never drops a spelling that a kept label names; without a label filter (or
+/// with none of its labels kept), the alphabetically first. Either way the
+/// label does not depend on entry order.
 fn build_search_terms(
   entries: &[GazetteerEntry],
   allowed_labels: &[String],
 ) -> Vec<(String, String)> {
-  let mut terms: Vec<(String, BTreeSet<&str>)> = Vec::new();
-  let mut position: HashMap<&str, usize> = HashMap::new();
+  let mut terms: Vec<(&str, String)> = Vec::new();
+  let mut seen: HashSet<&str> = HashSet::new();
+  let mut labels: HashMap<String, BTreeSet<&str>> = HashMap::new();
   for entry in entries {
     for term in std::iter::once(&entry.canonical).chain(&entry.variants) {
-      let index = *position.entry(term.as_str()).or_insert_with(|| {
-        terms.push((term.clone(), BTreeSet::new()));
-        terms.len().saturating_sub(1)
-      });
-      if let Some((_, labels)) = terms.get_mut(index) {
-        labels.insert(entry.label.as_str());
+      let key = gazetteer_spelling_key(term);
+      labels
+        .entry(key.clone())
+        .or_default()
+        .insert(entry.label.as_str());
+      if seen.insert(term.as_str()) {
+        terms.push((term.as_str(), key));
       }
     }
   }
   terms
     .into_iter()
-    .filter_map(|(term, labels)| {
+    .filter_map(|(term, key)| {
+      let given = labels.get(&key)?;
       let kept = allowed_labels
         .iter()
         .map(String::as_str)
-        .find(|label| labels.contains(label));
-      let label = kept.or_else(|| labels.first().copied())?;
-      Some((term, label.to_owned()))
+        .find(|label| given.contains(label));
+      let label = kept.or_else(|| given.first().copied())?;
+      Some((term.to_owned(), label.to_owned()))
     })
     .collect()
 }

@@ -434,6 +434,9 @@ fn a_spelling_under_several_labels_keeps_each_label() {
     for entries in [
       [("Acme", ORGANIZATION), ("Acme", PERSON)],
       [("Acme", PERSON), ("Acme", ORGANIZATION)],
+      // Spellings the matcher folds together count as one.
+      [("Acme", ORGANIZATION), ("ACME", PERSON)],
+      [("ÁCME", PERSON), ("acme", ORGANIZATION)],
     ] {
       assert_eq!(
         redacted_under_labels(&[kept], false, &entries, text),
@@ -447,6 +450,8 @@ fn a_spelling_under_several_labels_keeps_each_label() {
   for entries in [
     [("Acme", ORGANIZATION), ("Acme", PERSON)],
     [("Acme", PERSON), ("Acme", ORGANIZATION)],
+    [("ACME", PERSON), ("Acme", ORGANIZATION)],
+    [("Acme", PERSON), ("Ácme", ORGANIZATION)],
   ] {
     assert_eq!(
       redacted_under_labels(&[], false, &entries, text),

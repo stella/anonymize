@@ -491,9 +491,11 @@ mod properties {
 
   // Spellings repeat under different labels on purpose: a later entry for a
   // spelling must never take coverage away under a label filter.
-  const COVERAGE_POOL: [(&str, &str); 14] = [
+  const COVERAGE_POOL: [(&str, &str); 16] = [
     ("Luma", "organization"),
     ("Luma", "person"),
+    ("LUMA", "location"),
+    ("Žilóra", "person"),
     ("Luma Labs", "organization"),
     ("Luma s.r.o.", "organization"),
     ("Mivo", "person"),
@@ -587,10 +589,7 @@ mod properties {
     );
     property_runner_with(chains)
       .run(
-        &(
-          Just(everything).prop_shuffle(),
-          0..COVERAGE_LABELS.len(),
-        ),
+        &(Just(everything).prop_shuffle(), 0..COVERAGE_LABELS.len()),
         |(order, filter)| {
           let labels = COVERAGE_LABELS[filter];
           let mut previous = BTreeSet::new();

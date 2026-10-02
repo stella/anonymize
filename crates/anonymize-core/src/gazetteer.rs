@@ -97,6 +97,14 @@ pub fn gazetteer_fuzzy_distance(term: &str) -> Option<u8> {
   }
 }
 
+/// The form under which the matcher treats spellings as one: case and
+/// diacritics folded, whitespace runs collapsed (`Acme`, `ACME`, and `Ácme`
+/// share a key).
+#[must_use]
+pub fn gazetteer_spelling_key(term: &str) -> String {
+  fold(term).split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
 /// Letter case a short entry is spelled in, and a one-edit match must share.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum CaseShape {
@@ -1326,17 +1334,31 @@ fn is_word_char(ch: char) -> bool {
   !is_unspaced_script(ch) && (ch.is_alphanumeric() || is_combining_mark(ch))
 }
 
+/// Every block of the scripts written without spaces between words: Thai,
+/// Lao, Myanmar, Khmer, Hiragana, Katakana, Hangul, and CJK ideographs.
 fn is_unspaced_script(ch: char) -> bool {
   matches!(u32::from(ch),
     0x0E00..=0x0EFF // Thai, Lao
     | 0x1000..=0x109F // Myanmar
+    | 0x1100..=0x11FF // Hangul Jamo
     | 0x1780..=0x17FF // Khmer
+    | 0x19E0..=0x19FF // Khmer Symbols
+    | 0x2E80..=0x2FDF // CJK Radicals Supplement, Kangxi Radicals
     | 0x3040..=0x30FF // Hiragana, Katakana
+    | 0x3130..=0x318F // Hangul Compatibility Jamo
+    | 0x31F0..=0x31FF // Katakana Phonetic Extensions
     | 0x3400..=0x4DBF // CJK Extension A
     | 0x4E00..=0x9FFF // CJK Unified Ideographs
+    | 0xA960..=0xA97F // Hangul Jamo Extended-A
+    | 0xA9E0..=0xA9FF // Myanmar Extended-B
+    | 0xAA60..=0xAA7F // Myanmar Extended-A
     | 0xAC00..=0xD7AF // Hangul Syllables
-    | 0xF900..=0xFAFF // CJK Compatibility
-    | 0x20000..=0x323AF // CJK Extensions B-I
+    | 0xD7B0..=0xD7FF // Hangul Jamo Extended-B
+    | 0xF900..=0xFAFF // CJK Compatibility Ideographs
+    | 0xFF66..=0xFFDC // Halfwidth Katakana and Hangul
+    | 0x116D0..=0x116FF // Myanmar Extended-C
+    | 0x1AFF0..=0x1B16F // Kana Extended-B, Supplement, Extended-A, Small
+    | 0x20000..=0x323AF // CJK Extensions B-I, Compatibility Supplement
   )
 }
 
@@ -3577,8 +3599,20 @@ mod tests {
     assert_eq!(found(&[exact("東京", ORGANIZATION)], "東京都に"), ["東京"]);
     // Characters of those scripts are not word characters, so a name of any
     // script inside such a run sits on token edges.
-    for text in ["界Luma界", "ภาษาLumaไทย", "ខ្មែរLumaខ្មែរ"]
-    {
+    for text in [
+      "界Luma界",
+      "ภาษาLumaไทย",
+      "ខ្មែរLumaខ្មែរ",
+      "ᄀLumaᄀ",
+      "ㄱLumaㄱ",
+      "ꥠLumaꥠ",
+      "ힰLumaힰ",
+      "ｶLumaｶ",
+      "ﾡLumaﾡ",
+      "ㇰLumaㇰ",
+      "ꩠLumaꩠ",
+      "𛀁Luma𛀁",
+    ] {
       assert_eq!(
         found(&[exact("Luma", ORGANIZATION)], text),
         ["Luma"],
