@@ -3398,6 +3398,10 @@ mod tests {
   #[test]
   fn names_in_unspaced_scripts_keep_matching_as_substrings() {
     assert_eq!(found(&[exact("東京", ORGANIZATION)], "東京都に"), ["東京"]);
+    assert_eq!(
+      found(&[exact("佐々木", PERSON)], "売主佐々木は"),
+      ["佐々木"]
+    );
     // Characters of those scripts are not word characters, so a name of any
     // script inside such a run sits on token edges.
     for text in [
@@ -3413,6 +3417,8 @@ mod tests {
       "ㇰLumaㇰ",
       "ꩠLumaꩠ",
       "𛀁Luma𛀁",
+      "々Luma々",
+      "〻Luma〻",
     ] {
       assert_eq!(
         found(&[exact("Luma", ORGANIZATION)], text),
