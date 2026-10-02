@@ -118,6 +118,9 @@ const REMOVED_WORD_ELEMENTS: [&str; 10] = [
   "permStart",
   "sdtPr",
 ];
+// Run content beyond text, tabs and breaks is absent from the extraction the
+// planner sees, so hyphen controls (`noBreakHyphen`, `softHyphen`) are not
+// retained and reject the export.
 const SAFE_CONTENT_WORD_ELEMENTS: &[&str] = &[
   "adjustRightInd",
   "b",
@@ -181,7 +184,6 @@ const SAFE_CONTENT_WORD_ELEMENTS: &[&str] = &[
   "left",
   "lnNumType",
   "mirrorInd",
-  "noBreakHyphen",
   "noProof",
   "noWrap",
   "numId",
@@ -215,7 +217,6 @@ const SAFE_CONTENT_WORD_ELEMENTS: &[&str] = &[
   "shadow",
   "smallCaps",
   "snapToGrid",
-  "softHyphen",
   "spacing",
   "specVanish",
   "strike",
@@ -2420,6 +2421,29 @@ mod tests {
       "HIDDEN ADDIN VALUE",
     ] {
       assert!(!all_xml.contains(hidden));
+    }
+    Ok(())
+  }
+
+  #[test]
+  fn rejects_hyphen_controls_absent_from_the_extraction()
+  -> Result<(), Box<dyn std::error::Error>> {
+    let plain = ordinary_document(
+      "<w:p><w:r><w:t>Client</w:t><w:t>Record</w:t></w:r></w:p>",
+    )?;
+    prepare_docx_anonymized_export(&plain)?;
+    for control in ["<w:noBreakHyphen/>", "<w:softHyphen/>"] {
+      let source = ordinary_document(&format!(
+        "<w:p><w:r><w:t>Client</w:t>{control}<w:t>Record</w:t></w:r></w:p>"
+      ))?;
+      let failure = prepare_docx_anonymized_export(&source)
+        .err()
+        .ok_or("hyphen control was accepted")?;
+      assert_eq!(
+        failure.code(),
+        DocxRewriteErrorCode::UnsupportedReplacement,
+        "{control} must be rejected"
+      );
     }
     Ok(())
   }
