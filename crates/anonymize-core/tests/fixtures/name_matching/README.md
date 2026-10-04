@@ -9,10 +9,23 @@ A Georgian name exercises a script without letter case; Georgian is not a
 production language scope, so those cases declare `en` and check script
 handling, not Georgian morphology.
 
-The `span-boundary` class pins exact spans for names glued to Japanese and
-Thai text and for a name inside `<<…>>`. Japanese (`ja`) and Thai (`th`)
-have no production language scope: their cases run with that code alone and
-stay outside the forced-identifier language matrix.
+The `span-boundary` class pins exact spans for names glued to Japanese,
+Thai and Lao text and for names inside delimiters (`<<…>>`, `«…»`, `「…」`,
+`【…】`, parentheses): a Czech name in decomposed form, a name ending in a
+combining mark or a zero-width joiner, a Persian name with an inner
+zero-width non-joiner, Hebrew, a one-character Chinese name, Khmer, a
+mixed Latin and CJK name, and a two-letter name. Japanese (`ja`) and Thai
+(`th`) have no production language scope: their cases run with that code
+alone and stay outside the forced-identifier language matrix. Like Georgian,
+the Chinese, Hebrew, Persian, Khmer and Lao cases declare `en` and check
+script handling only.
+
+Detectors this profile disables are measured in the full profile of
+`tests/span_boundaries.rs`: person-name extension over compound surnames
+with every name joiner, initials and delimiters, and legal-form names across
+scripts, iteration marks, delimiters and possessives. Its known gaps are
+pinned with their exact output, and the release workflow runs it with this
+gate.
 
 `name_matching_corpus.rs` assembles the production native gazetteer and runs
 its complete resolution/redaction path. Unrelated dictionary, regex and

@@ -82,7 +82,7 @@
   "deny-list/language-scope": {
     "maximum_false_positives": 0,
     "metric": "false-positives",
-    "total": 225
+    "total": 237
   },
   "deny-list/legal-form-variant": {
     "metric": "recall",
@@ -126,8 +126,8 @@
   },
   "deny-list/span-boundary": {
     "metric": "recall",
-    "minimum_exact_hits": 4,
-    "total": 4
+    "minimum_exact_hits": 16,
+    "total": 16
   },
   "deny-list/split": {
     "metric": "recall",
