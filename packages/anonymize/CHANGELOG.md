@@ -1,5 +1,14 @@
 # Changelog
 
+## 3.0.6
+
+### Patch Changes
+
+- [#543](https://github.com/stella/anonymize/pull/543) [`24d2121`](https://github.com/stella/anonymize/commit/24d2121be384e6b005fae3f7b154b0745355dd17) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Compound surnames joined by a non-breaking hyphen, an en dash or a backtick
+  apostrophe are redacted in full, as are legal-form organization names
+  spelled with an iteration mark (`佐々木`), ending in a combining mark, or
+  mixing scripts inside delimiters (`<<Tarsk紫苑 GmbH>>`).
+
 ## 3.0.5
 
 ### Patch Changes
