@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /** Bundle the shipped browser entry, then boot it in a page and a module worker. */
 import assert from "node:assert/strict";
-import { existsSync } from "node:fs";
-import { mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { existsSync, readFileSync } from "node:fs";
+import { mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { dirname, extname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -31,14 +31,14 @@ const root = await mkdtemp(join(packageRoot, ".vite-browser-smoke-"));
 // Preserve the installed package name: the plugin identifies its browser entry
 // by the anonymize-wasm path, just as it appears under node_modules.
 await symlink(join(packageRoot, "wasm"), join(root, "anonymize-wasm"), "dir");
-const boot = `
+const bootSource = `
 import { createPipeline } from '@stll/anonymize-wasm';
 export const boot = async () => {
   const pipeline = await createPipeline({ language: 'en' });
   return pipeline.redactText('Contact alice@example.com.').redaction.redactedText;
 };
 `;
-await writeFile(join(root, "boot.js"), boot);
+await writeFile(join(root, "boot.js"), bootSource);
 await writeFile(
   join(root, "worker.js"),
   `import { boot } from './boot.js';
@@ -97,7 +97,7 @@ try {
       build: { outDir, emptyOutDir: true, minify: false },
     });
     const requests = [];
-    const server = createServer(async (request, response) => {
+    const server = createServer((request, response) => {
       const pathname = new URL(request.url, "http://localhost").pathname;
       requests.push(pathname);
       const path = resolve(
@@ -109,7 +109,7 @@ try {
         return;
       }
       try {
-        const bytes = await readFile(path);
+        const bytes = readFileSync(path);
         response.setHeader(
           "Content-Type",
           contentTypes.get(extname(path)) ?? "application/octet-stream",
@@ -125,9 +125,9 @@ try {
     });
     let page;
     try {
-      await new Promise((resolve, reject) => {
+      await new Promise((onListening, reject) => {
         server.once("error", reject);
-        server.listen(0, "127.0.0.1", resolve);
+        server.listen(0, "127.0.0.1", onListening);
       });
       page = await browser.newPage();
       page.setDefaultTimeout(timeout);
@@ -146,12 +146,13 @@ try {
       await page.waitForFunction(() => typeof window.bootWorker === "function");
       for (const context of ["page", "worker"]) {
         requests.length = 0;
-        const text = await page.evaluate(async (context) => {
-          const boot = context === "page" ? window.bootPage : window.bootWorker;
+        const text = await page.evaluate(async (runtimeContext) => {
+          const bootEngine =
+            runtimeContext === "page" ? window.bootPage : window.bootWorker;
           let timer;
           try {
             return await Promise.race([
-              boot(),
+              bootEngine(),
               new Promise((_, reject) => {
                 timer = setTimeout(
                   () => reject(new Error("engine boot timed out")),
@@ -190,8 +191,8 @@ try {
     } finally {
       await page?.close();
       server.closeAllConnections();
-      await new Promise((resolve, reject) => {
-        server.close((error) => (error ? reject(error) : resolve()));
+      await new Promise((onClosed, reject) => {
+        server.close((error) => (error ? reject(error) : onClosed()));
       });
     }
   }
