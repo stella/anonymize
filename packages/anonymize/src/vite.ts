@@ -188,9 +188,11 @@ export default function stllAnonymizeWasmVite(
         // `assetUrl` resolves `new URL(fileName, <base>)`; pointing the base
         // at the emitted anchor file keeps the last-path-segment replacement
         // trick: `new URL(fileName, …/native/index.js)` -> `native/<fileName>`.
+        // Vite can emit a root-relative URL here; resolve it against the module
+        // for both page chunks and module-worker chunks.
         code: code.replace(
           ASSET_URL_BASE,
-          `new URL(import.meta.ROLLUP_FILE_URL_${anchorRef})`,
+          `new URL(import.meta.ROLLUP_FILE_URL_${anchorRef}, import.meta.url)`,
         ),
         map: null,
       };
