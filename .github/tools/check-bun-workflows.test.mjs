@@ -153,3 +153,93 @@ void test("malformed job structure is a finding rather than an empty census", ()
     [],
   );
 });
+
+void test("publishing tokens and their artifact chain reject cached Bun setup", () => {
+  const rawSetup = {
+    uses: "oven-sh/setup-bun@fixture",
+    with: { "bun-version-file": "package.json" },
+  };
+  const cachedSetup = {
+    ...rawSetup,
+    uses: "stella/.github/actions/setup-bun-cached@fixture",
+  };
+  for (const permission of ["contents", "packages", "id-token"]) {
+    assert.equal(
+      bunCacheProblems({
+        jobs: {
+          publish: {
+            permissions: { [permission]: "write" },
+            steps: [cachedSetup],
+          },
+        },
+      }).length,
+      1,
+    );
+    assert.deepEqual(
+      bunCacheProblems({
+        jobs: {
+          publish: {
+            permissions: { [permission]: "write" },
+            steps: [rawSetup],
+          },
+        },
+      }),
+      [],
+    );
+  }
+  assert.equal(
+    bunCacheProblems({
+      permissions: "write-all",
+      jobs: { publish: { steps: [cachedSetup] } },
+    }).length,
+    1,
+  );
+  assert.deepEqual(
+    bunCacheProblems({
+      permissions: { contents: "write" },
+      jobs: {
+        ordinary: { permissions: { contents: "read" }, steps: [cachedSetup] },
+      },
+    }),
+    [],
+  );
+  for (const needs of ["verify", ["verify"]]) {
+    const workflow = {
+      jobs: {
+        build: {
+          steps: [cachedSetup, { uses: "actions/upload-artifact@fixture" }],
+        },
+        verify: { needs: "build", steps: [] },
+        publish: { permissions: { "id-token": "write" }, needs, steps: [] },
+        ordinary: { steps: [cachedSetup] },
+      },
+    };
+    assert.equal(bunCacheProblems(workflow).length, 1);
+    workflow.jobs.build.steps[0] = rawSetup;
+    assert.deepEqual(bunCacheProblems(workflow), []);
+  }
+  const consumers = {
+    jobs: {
+      build: {
+        permissions: { contents: "write" },
+        steps: [rawSetup, { uses: "actions/upload-artifact@fixture" }],
+      },
+      externalPublish: {
+        steps: [cachedSetup, { uses: "actions/download-artifact@fixture" }],
+      },
+    },
+  };
+  assert.equal(bunCacheProblems(consumers).length, 1);
+  const artifacts = {
+    jobs: {
+      build: {
+        steps: [cachedSetup, { uses: "actions/upload-artifact@fixture" }],
+      },
+      publish: {
+        permissions: { packages: "write" },
+        steps: [{ uses: "actions/download-artifact@fixture" }],
+      },
+    },
+  };
+  assert.equal(bunCacheProblems(artifacts).length, 1);
+});

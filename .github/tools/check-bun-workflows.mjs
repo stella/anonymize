@@ -76,20 +76,93 @@ export const bunPinProblems = (source) => {
 const isRecord = (value) =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
+const hasPublishToken = (workflow, job) => {
+  if (!isRecord(job)) return false;
+  const permissions =
+    job["permissions"] ??
+    (isRecord(workflow) ? workflow["permissions"] : undefined);
+  if (typeof permissions === "string") return permissions !== "read-all";
+  return (
+    isRecord(permissions) &&
+    ["id-token", "contents", "packages"].some(
+      (key) =>
+        permissions[key] === "write" ||
+        (typeof permissions[key] === "string" &&
+          permissions[key].includes("$" + "{{")),
+    )
+  );
+};
+
+const hasArtifactStep = (job, operation) =>
+  isRecord(job) &&
+  Array.isArray(job["steps"]) &&
+  job["steps"].some(
+    (step) =>
+      isRecord(step) &&
+      typeof step["uses"] === "string" &&
+      step["uses"].startsWith(`actions/${operation}-artifact@`),
+  );
+
+// Protect the full dependency chain of a publishing token. Artifact readers
+// can consume uploads without a needs edge, so include those producers too.
+const publishingJobNames = (workflow) => {
+  if (!isRecord(workflow) || !isRecord(workflow["jobs"])) return new Set();
+  const jobs = workflow["jobs"];
+  const protectedJobs = new Set(
+    Object.keys(jobs).filter((name) => hasPublishToken(workflow, jobs[name])),
+  );
+  const pending = [...protectedJobs];
+  while (pending.length > 0) {
+    const name = pending.pop();
+    if (name === undefined) continue;
+    const job = jobs[name];
+    if (!isRecord(job)) continue;
+    const needs = job["needs"];
+    const dependencies = Array.isArray(needs)
+      ? needs.filter((dependency) => typeof dependency === "string")
+      : [];
+    if (typeof needs === "string") dependencies.push(needs);
+    if (hasArtifactStep(job, "download")) {
+      dependencies.push(
+        ...Object.keys(jobs).filter((candidate) =>
+          hasArtifactStep(jobs[candidate], "upload"),
+        ),
+      );
+    }
+    if (hasArtifactStep(job, "upload")) {
+      dependencies.push(
+        ...Object.keys(jobs).filter((candidate) =>
+          hasArtifactStep(jobs[candidate], "download"),
+        ),
+      );
+    }
+    for (const dependency of dependencies) {
+      if (protectedJobs.has(dependency)) continue;
+      if (!isRecord(jobs[dependency])) continue;
+      protectedJobs.add(dependency);
+      pending.push(dependency);
+    }
+  }
+  return protectedJobs;
+};
+
 export const bunCacheProblems = (workflow) => {
   if (!isRecord(workflow) || !isRecord(workflow.jobs))
     return ["Invalid workflow jobs"];
+  const publishing = publishingJobNames(workflow);
   return Object.entries(workflow.jobs).flatMap(([name, job]) => {
     if (!isRecord(job)) return [`Invalid job ${name}`];
     if (typeof job.uses === "string") return [];
     if (!Array.isArray(job.steps) || !job.steps.every(isRecord))
       return [`Invalid steps in ${name}`];
-    const noCache = job.steps.some(
-      (step) =>
-        SETUP_BUN_RE.test(step.uses ?? "") &&
-        isRecord(step.with) &&
-        step.with["no-cache"] === true,
-    );
+    const noCache =
+      publishing.has(name) ||
+      job.steps.some(
+        (step) =>
+          SETUP_BUN_RE.test(step.uses ?? "") &&
+          isRecord(step.with) &&
+          step.with["no-cache"] === true,
+      );
     return job.steps.flatMap((step) => {
       const uses = typeof step.uses === "string" ? step.uses : "";
       const inputs = isRecord(step.with) ? step.with : {};
@@ -102,7 +175,11 @@ export const bunCacheProblems = (workflow) => {
           `${name}: ${uses} must use bun-version-file: "package.json"`,
         );
       }
-      if (RAW_BUN_RE.test(uses) && inputs["no-cache"] !== true) {
+      if (
+        RAW_BUN_RE.test(uses) &&
+        !publishing.has(name) &&
+        inputs["no-cache"] !== true
+      ) {
         problems.push(
           `${name}: raw setup needs the shared install-cache action or explicit no-cache: true`,
         );
