@@ -1,6 +1,6 @@
 {
   "name": "@stll/anonymize",
-  "version": "3.0.6",
+  "version": "3.0.7",
   "description": "Deterministic PII detection and anonymization with regex, deny lists, and coreference resolution",
   "keywords": [
     "anonymization",
@@ -101,18 +101,18 @@
     "smoke:wasm-package": "node scripts/smoke-wasm-package.mjs",
     "smoke:wasm-runtimes": "node scripts/smoke-wasm-runtimes.mjs",
     "smoke:wasm-compiled": "node scripts/smoke-wasm-compiled.mjs",
-    "smoke:wasm-browser": "node scripts/smoke-wasm-browser.mjs",
+    "smoke:wasm-browser": "node scripts/smoke-wasm-browser.mjs && node scripts/smoke-wasm-vite.mjs",
     "format": "oxfmt ."
   },
   "dependencies": {
     "@stll/anonymize-data": "^0.0.10"
   },
   "optionalDependencies": {
-    "@stll/anonymize-darwin-arm64": "3.0.6",
-    "@stll/anonymize-darwin-x64": "3.0.6",
-    "@stll/anonymize-linux-arm64-gnu": "3.0.6",
-    "@stll/anonymize-linux-x64-gnu": "3.0.6",
-    "@stll/anonymize-win32-x64-msvc": "3.0.6"
+    "@stll/anonymize-darwin-arm64": "3.0.7",
+    "@stll/anonymize-darwin-x64": "3.0.7",
+    "@stll/anonymize-linux-arm64-gnu": "3.0.7",
+    "@stll/anonymize-linux-x64-gnu": "3.0.7",
+    "@stll/anonymize-win32-x64-msvc": "3.0.7"
   },
   "devDependencies": {
     "@napi-rs/cli": "^3.10.5",
