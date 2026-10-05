@@ -1,5 +1,11 @@
 # @stll/anonymize-wasm
 
+## 3.0.7
+
+### Patch Changes
+
+- [#549](https://github.com/stella/anonymize/pull/549) [`c39680e`](https://github.com/stella/anonymize/commit/c39680e2e4d4aaed7b6e8dfd365046a2c393b21e) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Resolve native assets relative to their emitting module in bundled pages and module workers.
+
 ## 3.0.6
 
 No changes in this release.

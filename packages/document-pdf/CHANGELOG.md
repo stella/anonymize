@@ -1,5 +1,12 @@
 # @stll/anonymize-pdf
 
+## 3.0.7
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @stll/anonymize@3.0.7
+
 ## 3.0.6
 
 ### Patch Changes
