@@ -19,14 +19,23 @@ runs:
     - if: inputs.repository-checks == 'true'
       name: Verify Bun workflow pin
       shell: bash
-      run: node .github/tools/check-bun-workflows.mjs
+      run: |
+        node .github/tools/check-bun-workflows.mjs
+        node --test .github/tools/check-bun-workflows.test.mjs
 
-    - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+    - uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
       with:
         bun-version-file: package.json
 
+    - if: inputs.repository-checks == 'true'
+      name: Verify workflow cache policy
+      shell: bash
+      run: bun .github/tools/check-bun-workflows.mjs --cache-policy
+
     - name: Turbo remote cache
       uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
+      with:
+        server-port: "0"
 
     - name: Install dependencies
       shell: bash

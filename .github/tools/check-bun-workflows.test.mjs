@@ -1,0 +1,251 @@
+import assert from "node:assert/strict";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import test from "node:test";
+
+import {
+  bunCacheProblems,
+  bunPinProblems,
+  bunWorkflowFiles,
+} from "./check-bun-workflows.mjs";
+
+const raw = {
+  uses: "oven-sh/setup-bun@fixture",
+  with: { "bun-version-file": "package.json" },
+};
+const cached = {
+  ...raw,
+  uses: "stella/.github/actions/setup-bun-cached@fixture",
+};
+const noCache = { ...raw, with: { ...raw.with, "no-cache": true } };
+const workflow = (steps) => ({ jobs: { fixture: { steps } } });
+
+void test("ordinary setup uses the cache owner and explicit no-cache remains raw", () => {
+  assert.equal(bunCacheProblems(workflow([raw])).length, 1);
+  assert.deepEqual(bunCacheProblems(workflow([cached])), []);
+  assert.deepEqual(bunCacheProblems(workflow([noCache])), []);
+  assert.equal(
+    bunCacheProblems(workflow([{ ...cached, with: noCache.with }])).length,
+    1,
+  );
+  for (const uses of [
+    cached.uses,
+    "actions/cache@fixture",
+    "actions/cache/restore@fixture",
+    "actions/cache/save@fixture",
+  ]) {
+    assert.equal(
+      bunCacheProblems(workflow([noCache, { ...cached, uses }])).length,
+      1,
+    );
+  }
+});
+
+void test("one no-cache declaration does not authorize other raw setups or exempt another job", () => {
+  assert.equal(bunCacheProblems(workflow([noCache, raw])).length, 1);
+  assert.equal(
+    bunCacheProblems({
+      jobs: { protected: { steps: [noCache] }, ordinary: { steps: [raw] } },
+    }).length,
+    1,
+  );
+  assert.deepEqual(
+    bunCacheProblems({
+      jobs: { protected: { steps: [noCache] }, ordinary: { steps: [cached] } },
+    }),
+    [],
+  );
+});
+
+void test("both setup implementations retain the runtime pin contract", () => {
+  for (const setup of [noCache, cached]) {
+    for (const versionFile of [undefined, "other.json"]) {
+      const findings = bunCacheProblems(
+        workflow([
+          {
+            ...setup,
+            with: { ...setup.with, "bun-version-file": versionFile },
+          },
+        ]),
+      );
+      assert.equal(findings.length, 1);
+      assert.match(findings[0], /must use bun-version-file/);
+    }
+  }
+});
+
+void test("Turbo cache servers require an available string port", () => {
+  const uses = "rharkor/caching-for-turbo@fixture";
+  for (const port of [undefined, "41230", 0]) {
+    assert.equal(
+      bunCacheProblems(workflow([{ uses, with: { "server-port": port } }]))
+        .length,
+      1,
+    );
+  }
+  assert.deepEqual(
+    bunCacheProblems(workflow([{ uses, with: { "server-port": "0" } }])),
+    [],
+  );
+});
+
+void test("the pre-runtime pin check cannot borrow an input from a later conditional or run step", () => {
+  for (const uses of [raw.uses, cached.uses]) {
+    const valid = `steps:\n  - uses: ${uses}\n    with:\n      bun-version-file: package.json\n`;
+    assert.deepEqual(bunPinProblems(valid), []);
+    for (const next of [
+      "if: success()",
+      "run: echo ready",
+      "name: Next setup",
+    ]) {
+      const nextSetup = next.startsWith("run:")
+        ? `${next}\n  - uses: ${cached.uses}`
+        : `${next}\n    uses: ${cached.uses}`;
+      const invalid = `steps:\n  - uses: ${uses}\n  - ${nextSetup}\n    with:\n      bun-version-file: package.json\n`;
+      assert.equal(bunPinProblems(invalid).length, 1);
+    }
+  }
+  assert.equal(bunPinProblems("env:\n  BUN_VERSION: 1.4.2\n").length, 1);
+  assert.equal(bunPinProblems("with:\n  bun-version: 1.4.2\n").length, 1);
+  assert.deepEqual(bunPinProblems("# bun-version: 1.4.2\n"), []);
+});
+
+void test("the census includes every workflow and nested composite action without a filename list", () => {
+  const root = mkdtempSync(join(tmpdir(), "bun-workflow-census-"));
+  try {
+    for (const path of [".github/workflows", ".github/actions/nested/deeper"])
+      mkdirSync(join(root, path), { recursive: true });
+    const files = [
+      ".github/workflows/first.yml",
+      ".github/workflows/second.yaml",
+      ".github/actions/nested/action.yaml",
+      ".github/actions/nested/deeper/action.yml",
+    ];
+    for (const file of [
+      ...files,
+      ".github/workflows/README.md",
+      ".github/actions/nested/README.md",
+    ])
+      writeFileSync(join(root, file), "fixture");
+    assert.deepEqual(
+      bunWorkflowFiles(root),
+      files
+        .map((file) => join(root, file))
+        .toSorted((left, right) => {
+          if (left < right) return -1;
+          if (left > right) return 1;
+          return 0;
+        }),
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+void test("malformed job structure is a finding rather than an empty census", () => {
+  for (const value of [
+    null,
+    {},
+    { jobs: { fixture: null } },
+    { jobs: { fixture: { steps: [null] } } },
+  ]) {
+    assert.equal(bunCacheProblems(value).length, 1);
+  }
+  assert.deepEqual(
+    bunCacheProblems({
+      jobs: { reusable: { uses: "./.github/workflows/reusable.yml" } },
+    }),
+    [],
+  );
+});
+
+void test("publishing tokens and their artifact chain reject cached Bun setup", () => {
+  const rawSetup = {
+    uses: "oven-sh/setup-bun@fixture",
+    with: { "bun-version-file": "package.json" },
+  };
+  const cachedSetup = {
+    ...rawSetup,
+    uses: "stella/.github/actions/setup-bun-cached@fixture",
+  };
+  for (const permission of ["contents", "packages", "id-token"]) {
+    assert.equal(
+      bunCacheProblems({
+        jobs: {
+          publish: {
+            permissions: { [permission]: "write" },
+            steps: [cachedSetup],
+          },
+        },
+      }).length,
+      1,
+    );
+    assert.deepEqual(
+      bunCacheProblems({
+        jobs: {
+          publish: {
+            permissions: { [permission]: "write" },
+            steps: [rawSetup],
+          },
+        },
+      }),
+      [],
+    );
+  }
+  assert.equal(
+    bunCacheProblems({
+      permissions: "write-all",
+      jobs: { publish: { steps: [cachedSetup] } },
+    }).length,
+    1,
+  );
+  assert.deepEqual(
+    bunCacheProblems({
+      permissions: { contents: "write" },
+      jobs: {
+        ordinary: { permissions: { contents: "read" }, steps: [cachedSetup] },
+      },
+    }),
+    [],
+  );
+  for (const needs of ["verify", ["verify"]]) {
+    const publishingWorkflow = {
+      jobs: {
+        build: {
+          steps: [cachedSetup, { uses: "actions/upload-artifact@fixture" }],
+        },
+        verify: { needs: "build", steps: [] },
+        publish: { permissions: { "id-token": "write" }, needs, steps: [] },
+        ordinary: { steps: [cachedSetup] },
+      },
+    };
+    assert.equal(bunCacheProblems(publishingWorkflow).length, 1);
+    publishingWorkflow.jobs.build.steps[0] = rawSetup;
+    assert.deepEqual(bunCacheProblems(publishingWorkflow), []);
+  }
+  const consumers = {
+    jobs: {
+      build: {
+        permissions: { contents: "write" },
+        steps: [rawSetup, { uses: "actions/upload-artifact@fixture" }],
+      },
+      externalPublish: {
+        steps: [cachedSetup, { uses: "actions/download-artifact@fixture" }],
+      },
+    },
+  };
+  assert.equal(bunCacheProblems(consumers).length, 1);
+  const artifacts = {
+    jobs: {
+      build: {
+        steps: [cachedSetup, { uses: "actions/upload-artifact@fixture" }],
+      },
+      publish: {
+        permissions: { packages: "write" },
+        steps: [{ uses: "actions/download-artifact@fixture" }],
+      },
+    },
+  };
+  assert.equal(bunCacheProblems(artifacts).length, 1);
+});
