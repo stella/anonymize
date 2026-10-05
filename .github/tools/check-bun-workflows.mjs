@@ -27,7 +27,11 @@ export const bunWorkflowFiles = (root = ".") => {
           .filter((file) => /^action\.ya?ml$/.test(basename(file)))
           .map((file) => join(actions, file))
       : []),
-  ].toSorted();
+  ].toSorted((left, right) => {
+    if (left < right) return -1;
+    if (left > right) return 1;
+    return 0;
+  });
 };
 
 // Any next step ends the block, including an `if` or `run` step. Inputs from

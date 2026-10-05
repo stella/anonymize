@@ -130,7 +130,13 @@ void test("the census includes every workflow and nested composite action withou
       writeFileSync(join(root, file), "fixture");
     assert.deepEqual(
       bunWorkflowFiles(root),
-      files.map((file) => join(root, file)).toSorted(),
+      files
+        .map((file) => join(root, file))
+        .toSorted((left, right) => {
+          if (left < right) return -1;
+          if (left > right) return 1;
+          return 0;
+        }),
     );
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -204,7 +210,7 @@ void test("publishing tokens and their artifact chain reject cached Bun setup", 
     [],
   );
   for (const needs of ["verify", ["verify"]]) {
-    const workflow = {
+    const publishingWorkflow = {
       jobs: {
         build: {
           steps: [cachedSetup, { uses: "actions/upload-artifact@fixture" }],
@@ -214,9 +220,9 @@ void test("publishing tokens and their artifact chain reject cached Bun setup", 
         ordinary: { steps: [cachedSetup] },
       },
     };
-    assert.equal(bunCacheProblems(workflow).length, 1);
-    workflow.jobs.build.steps[0] = rawSetup;
-    assert.deepEqual(bunCacheProblems(workflow), []);
+    assert.equal(bunCacheProblems(publishingWorkflow).length, 1);
+    publishingWorkflow.jobs.build.steps[0] = rawSetup;
+    assert.deepEqual(bunCacheProblems(publishingWorkflow), []);
   }
   const consumers = {
     jobs: {
