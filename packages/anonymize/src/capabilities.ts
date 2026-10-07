@@ -34,6 +34,7 @@ export const CAPABILITY_SURFACES = [
   { id: "session.encrypted-archive", profile: "core" },
   { id: "document.docx.extract", profile: "document" },
   { id: "document.docx.rewrite", profile: "document" },
+  { id: "document.docx.anonymized-export", profile: "document" },
   { id: "document.docx.anonymize", profile: "document" },
   { id: "document.docx.restore", profile: "document" },
   { id: "document.pdf.inspect", profile: "core" },

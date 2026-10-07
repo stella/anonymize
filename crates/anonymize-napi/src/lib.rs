@@ -48,7 +48,9 @@ use stella_anonymize_core::{
 use stella_anonymize_docx_core::{
   DocxBlockRewrite, DocxRestorationErrorCode, DocxRewriteErrorCode,
   extract_docx_text as extract_docx_text_core,
+  finalize_docx_anonymized_export as finalize_docx_anonymized_export_core,
   plan_docx_restoration as plan_docx_restoration_core,
+  prepare_docx_anonymized_export as prepare_docx_anonymized_export_core,
   rewrite_docx_text as rewrite_docx_text_core,
 };
 use stella_anonymize_pdf_core::{
@@ -217,6 +219,13 @@ pub struct JsDocxRewriteResult {
   pub applied_replacement_count: u32,
 }
 
+#[napi(object)]
+pub struct JsDocxAnonymizedExportPreparation {
+  pub document: Buffer,
+  pub extraction_json: String,
+  pub report_json: String,
+}
+
 const fn docx_rewrite_code(code: DocxRewriteErrorCode) -> &'static str {
   match code {
     DocxRewriteErrorCode::ArchiveLimitExceeded => "archive-limit-exceeded",
@@ -272,6 +281,42 @@ pub fn rewrite_docx_text_native(
     applied_replacement_count: u32::try_from(result.applied_replacement_count)
       .map_err(|_| Error::from_reason("DOCX replacement count overflowed"))?,
   })
+}
+
+#[napi]
+#[allow(clippy::needless_pass_by_value)]
+pub fn prepare_docx_anonymized_export_native(
+  document: BufferSlice<'_>,
+) -> Result<JsDocxAnonymizedExportPreparation> {
+  let prepared =
+    prepare_docx_anonymized_export_core(&document).map_err(|error| {
+      Error::from_reason(format!(
+        "{}: {error}",
+        docx_rewrite_code(error.code())
+      ))
+    })?;
+  Ok(JsDocxAnonymizedExportPreparation {
+    document: prepared.document.into(),
+    extraction_json: serde_json::to_string(&prepared.extraction)
+      .map_err(|error| to_napi_serde_error(&error))?,
+    report_json: serde_json::to_string(&prepared.report)
+      .map_err(|error| to_napi_serde_error(&error))?,
+  })
+}
+
+#[napi]
+#[allow(clippy::needless_pass_by_value)]
+pub fn finalize_docx_anonymized_export_native(
+  document: BufferSlice<'_>,
+) -> Result<Buffer> {
+  finalize_docx_anonymized_export_core(&document)
+    .map(Into::into)
+    .map_err(|error| {
+      Error::from_reason(format!(
+        "{}: {error}",
+        docx_rewrite_code(error.code())
+      ))
+    })
 }
 
 #[napi]
