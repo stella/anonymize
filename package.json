@@ -57,7 +57,9 @@
     "@hono/node-server": "2.0.10",
     "emnapi": "1.11.1",
     "fast-uri": "3.1.8",
-    "qs": "6.16.0"
+    "qs": "6.16.0",
+    "shell-quote": "1.11.0",
+    "source-map-js": "1.2.2"
   },
   "devDependencies": {
     "@changesets/changelog-github": "^1.0.1",
@@ -66,10 +68,10 @@
     "@stll/oxlint-config": "0.7.0",
     "@stll/typescript-config": "0.6.0",
     "@typescript/native": "npm:typescript@7.0.2",
-    "lefthook": "^2.1.14",
-    "oxfmt": "^0.70.0",
-    "oxlint": "1.85.0",
+    "lefthook": "^2.1.16",
+    "oxfmt": "^0.71.0",
+    "oxlint": "1.86.0",
     "oxlint-tsgolint": "7.0.2003",
-    "turbo": "^2.11.4"
+    "turbo": "^2.11.6"
   }
 }
