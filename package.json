@@ -66,12 +66,12 @@
     "@changesets/cli": "^3.0.3",
     "@stll/anonymize-data": "workspace:*",
     "@stll/oxlint-config": "0.7.0",
-    "@stll/typescript-config": "0.6.0",
+    "@stll/typescript-config": "0.7.0",
     "@typescript/native": "npm:typescript@7.0.2",
     "lefthook": "^2.1.16",
     "oxfmt": "^0.71.0",
     "oxlint": "1.86.0",
     "oxlint-tsgolint": "7.0.2003",
-    "turbo": "^2.11.6"
+    "turbo": "^2.11.7"
   }
 }
