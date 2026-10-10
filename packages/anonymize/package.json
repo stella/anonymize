@@ -115,7 +115,7 @@
     "@stll/anonymize-win32-x64-msvc": "3.0.7"
   },
   "devDependencies": {
-    "@napi-rs/cli": "^3.10.6",
+    "@napi-rs/cli": "^3.10.7",
     "bun-types": "1.4.3",
     "fast-check": "^4.10.2",
     "fflate": "^0.8.3",
