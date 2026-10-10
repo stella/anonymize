@@ -506,7 +506,7 @@ jobs:
         && needs.pack-data.result == 'success'
         && (github.event_name == 'push'
             || inputs.publish_to_npm == true))
-    uses: stella/.github/.github/workflows/npm-artifact-publish.yml@636b7841096c8f0cc5a1572077b78768ef8fea42
+    uses: stella/.github/.github/workflows/npm-artifact-publish.yml@608900bde4c0847e5224a0dd93a5cc4c911960d6
     with:
       artifact-name: data-package-stll-anonymize-data
       package-name: "@stll/anonymize-data"
@@ -662,7 +662,7 @@ jobs:
       id-token: write # Required only for PyPI trusted publishing.
     steps:
       - name: Prepare exact Python wheel set
-        uses: stella/.github/.github/actions/pypi-publish-hardened@636b7841096c8f0cc5a1572077b78768ef8fea42
+        uses: stella/.github/.github/actions/pypi-publish-hardened@608900bde4c0847e5224a0dd93a5cc4c911960d6
         with:
           expected-version: ${{ needs.verify.outputs.version }}
           project-name: stella-anonymize-core
@@ -675,7 +675,7 @@ jobs:
           packages-dir: dist
           skip-existing: true
       - name: Verify published PyPI files
-        uses: stella/.github/.github/actions/pypi-publish-hardened/verify@636b7841096c8f0cc5a1572077b78768ef8fea42
+        uses: stella/.github/.github/actions/pypi-publish-hardened/verify@608900bde4c0847e5224a0dd93a5cc4c911960d6
         with:
           expected-version: ${{ needs.verify.outputs.version }}
           project-name: stella-anonymize-core
@@ -691,7 +691,7 @@ jobs:
         && needs.publish-pypi.result == 'success'
         && (github.event_name == 'push'
             || inputs.publish_to_npm == true))
-    uses: stella/.github/.github/workflows/npm-version-finalize.yml@636b7841096c8f0cc5a1572077b78768ef8fea42
+    uses: stella/.github/.github/workflows/npm-version-finalize.yml@608900bde4c0847e5224a0dd93a5cc4c911960d6
     with:
       package-files: |
         packages/anonymize/package.json
