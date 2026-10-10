@@ -1,8 +1,8 @@
 # Pinned dependencies for the Microsoft Presidio adapter.
 # Install into a Python 3.11 virtualenv; see REPRODUCING.md.
-presidio-analyzer==2.2.360
-presidio-anonymizer==2.2.360
-spacy==3.8.7
+presidio-analyzer==2.2.364
+presidio-anonymizer==2.2.364
+spacy==3.8.16
 click>=8.1
 # spaCy models are installed separately from pinned release wheels:
 #   en_core_web_lg==3.8.0
