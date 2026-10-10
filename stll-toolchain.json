@@ -1,0 +1,9 @@
+{
+  "engineFloors": [
+    {
+      "package": "packages/mcp",
+      "workflow": ".github/workflows/ci.yml",
+      "job": "mcp-node22"
+    }
+  ]
+}

@@ -41,6 +41,7 @@ a pull request, run the applicable full gates:
 bun run lint
 bun run format:check
 bun run typecheck
+bun run check:typecheck-parity
 bun run test
 bun run check:version
 ```
@@ -126,3 +127,7 @@ exception file-specific, documented, and removed with that file's migration.
 - Complete the CLA check on the pull request.
 
 Describe only public engineering context visible in the repository and diff.
+
+## TypeScript tooling
+
+Workspace typechecks use `bun check --no-pretty --all --project=<tsconfig>` for production, test, and WASM configurations. CI compares diagnostic coverage with TypeScript using `bun run check:typecheck-parity`. Editors retain the TypeScript language service because Bun has no language server. Keep TypeScript for editors and tsdown declaration generation and diagnostic parity.

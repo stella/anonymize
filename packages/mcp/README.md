@@ -4,8 +4,8 @@ Local, path-only MCP tools for stella anonymization. The server uses stdio only,
 performs no network I/O, accepts no document text in tool arguments, and never
 returns document text or plaintext session mappings.
 
-Requires Node.js 20 or newer. This requirement applies to the MCP package only;
-its native advisory-lock loader does not support Node.js 18.
+Requires Node.js 22 or newer. CI tests the MCP runtime and packed executable
+on Node.js 22.23.3.
 
 ```json
 {

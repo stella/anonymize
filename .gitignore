@@ -25,7 +25,6 @@ scripts/*
 !scripts/link-codex-skills.sh
 !scripts/sync-changeset-version.mjs
 !scripts/sync-ai-skills.sh
-!scripts/tsc-native.ts
 packages/data/scripts/
 package-lock.json
 

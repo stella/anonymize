@@ -276,7 +276,7 @@ No changes in this release.
 
 - [#416](https://github.com/stella/anonymize/pull/416) [`b561bac`](https://github.com/stella/anonymize/commit/b561bac2edc4e9e0205e1958fc826e42d7183d6b) Thanks [@cursor](https://github.com/apps/cursor)! - Detect title-led person names whose surname is written in uppercase even when
   that surname is absent from dictionary evidence (for example `Ing. Firstname
-SURNAME` and hyphenated trading forms like `SURNAME-VL`).
+  SURNAME` and hyphenated trading forms like `SURNAME-VL`).
 
 ## 2.6.2
 
