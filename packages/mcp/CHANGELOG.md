@@ -1,5 +1,19 @@
 # @stll/anonymize-mcp
 
+## 4.0.0
+
+### Major Changes
+
+- [#563](https://github.com/stella/anonymize/pull/563) [`4e9aefe`](https://github.com/stella/anonymize/commit/4e9aefebf761d4abae3dad58bc8022b5adc238dc) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Require Node.js 22 or newer for the MCP server.
+
+### Patch Changes
+
+- [#553](https://github.com/stella/anonymize/pull/553) [`0f8bd2c`](https://github.com/stella/anonymize/commit/0f8bd2c1b8bb12c3d19173582a485f61fc28afc0) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update the MCP SDK dependency.
+- Updated dependencies []:
+  - @stll/anonymize@4.0.0
+  - @stll/anonymize-docx@4.0.0
+  - @stll/anonymize-pdf@4.0.0
+
 ## 3.0.7
 
 ### Patch Changes
