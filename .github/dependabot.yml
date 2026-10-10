@@ -1,48 +1,136 @@
 version: 2
-
 updates:
-  - package-ecosystem: "github-actions"
-    directory: "/"
+  - package-ecosystem: bun
+    directory: /
     schedule:
-      interval: "cron"
-      cronjob: "0 3 * * *"
-      timezone: "Europe/Prague"
+      interval: weekly
+      day: saturday
+      time: "07:00"
+      timezone: Europe/Prague
     cooldown:
       default-days: 5
     groups:
-      minor-and-patch:
+      dependencies:
         patterns:
           - "*"
         update-types:
-          - "minor"
-          - "patch"
-    labels:
-      - "📦 dependencies"
-    commit-message:
-      prefix: "chore"
-    reviewers:
-      - "jan-kubica"
-
-  - package-ecosystem: "bun"
-    directories:
-      - "/"
+          - minor
+          - patch
+    ignore:
+      - dependency-name: oxlint
+      - dependency-name: oxlint-tsgolint
+      - dependency-name: "@oxlint/plugins"
+      - dependency-name: "@stll/oxlint-plugin"
+      - dependency-name: oxfmt
+      - dependency-name: lefthook
+      - dependency-name: typescript
+      - dependency-name: "@typescript/native"
+      - dependency-name: typescript-compat
+      - dependency-name: bun-types
+  - package-ecosystem: cargo
+    directory: /
     schedule:
-      interval: "cron"
-      cronjob: "0 3 * * *"
-      timezone: "Europe/Prague"
+      interval: weekly
+      day: saturday
+      time: "07:00"
+      timezone: Europe/Prague
     cooldown:
       default-days: 5
-    open-pull-requests-limit: 10
     groups:
-      minor-and-patch:
+      dependencies:
         patterns:
           - "*"
         update-types:
-          - "minor"
-          - "patch"
-    labels:
-      - "📦 dependencies"
-    commit-message:
-      prefix: "chore"
-    reviewers:
-      - "jan-kubica"
+          - minor
+          - patch
+  - package-ecosystem: cargo
+    directory: /fuzz
+    schedule:
+      interval: weekly
+      day: saturday
+      time: "07:00"
+      timezone: Europe/Prague
+    cooldown:
+      default-days: 5
+    groups:
+      dependencies:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+  - package-ecosystem: cargo
+    directory: /packages/benchmark/native/nym-adapter
+    schedule:
+      interval: weekly
+      day: saturday
+      time: "07:00"
+      timezone: Europe/Prague
+    cooldown:
+      default-days: 5
+    groups:
+      dependencies:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+  - package-ecosystem: pip
+    directory: /crates/anonymize-py
+    schedule:
+      interval: weekly
+      day: saturday
+      time: "07:00"
+      timezone: Europe/Prague
+    cooldown:
+      default-days: 5
+    groups:
+      dependencies:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+  - package-ecosystem: pip
+    directory: /packages/benchmark/python
+    schedule:
+      interval: weekly
+      day: saturday
+      time: "07:00"
+      timezone: Europe/Prague
+    cooldown:
+      default-days: 5
+    groups:
+      dependencies:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: saturday
+      time: "07:00"
+      timezone: Europe/Prague
+    cooldown:
+      default-days: 5
+    groups:
+      dependencies:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+    ignore:
+      - dependency-name: actions/checkout
+      - dependency-name: oven-sh/setup-bun
+      - dependency-name: actions/setup-node
+      - dependency-name: actions/setup-python
+      - dependency-name: astral-sh/setup-uv
+      - dependency-name: actions/cache
+      - dependency-name: actions/cache/restore
+      - dependency-name: actions/cache/save
+      - dependency-name: actions/upload-artifact
+      - dependency-name: actions/download-artifact
