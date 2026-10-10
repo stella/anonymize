@@ -68,12 +68,12 @@
     "@changesets/cli": "^3.0.3",
     "@stll/anonymize-data": "workspace:*",
     "@stll/oxlint-config": "0.12.0",
-    "@stll/typescript-config": "0.6.0",
+    "@stll/typescript-config": "0.7.0",
     "typescript": "7.0.2",
     "lefthook": "2.1.16",
     "oxfmt": "0.72.0",
     "oxlint": "1.87.0",
     "oxlint-tsgolint": "7.0.2003",
-    "turbo": "^2.11.6"
+    "turbo": "^2.11.7"
   }
 }
