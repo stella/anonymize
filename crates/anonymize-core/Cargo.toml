@@ -16,7 +16,7 @@ chacha20poly1305 = { version = "0.11", default-features = false, features = [
   "alloc",
   "zeroize",
 ] }
-fancy-regex = "0.18"
+fancy-regex = "0.19"
 getrandom = "0.4"
 regex = "1"
 serde = { version = "1", features = ["derive"] }
