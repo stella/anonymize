@@ -63,7 +63,7 @@
     "build": "tsdown",
     "prepublishOnly": "bun run build",
     "test": "bun test",
-    "typecheck": "bun ../../scripts/tsc-native.ts --noEmit",
+    "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
     "generate:city-loaders": "bun run scripts/generate-city-loaders.ts",
     "validate:triggers": "bun run scripts/validate-triggers.ts",
     "check:mirror": "node scripts/check-mirror.mjs",

@@ -321,6 +321,8 @@ jobs:
         run: bun run format:check
       - name: Typecheck
         run: bun run typecheck:built
+      - name: Typecheck diagnostic parity
+        run: bun run check:typecheck-parity
       - name: Knip (unused/undeclared deps)
         run: bun run check:knip
 

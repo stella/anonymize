@@ -12,6 +12,7 @@
     "build": "turbo run build",
     "check:fast": "bun run sync-ai:check:optional && bun run --filter @stll/anonymize typecheck && bun run --filter @stll/anonymize-data typecheck && bun run --filter @stll/anonymize test:fast",
     "typecheck": "turbo run typecheck",
+    "check:typecheck-parity": "bun test ./.github/tools/typecheck-policy.test.ts && stll-typecheck-parity --project packages/anonymize/tsconfig.json --project packages/anonymize/tsconfig.test.json --project packages/anonymize/tsconfig.wasm.json --project packages/benchmark/tsconfig.json --project packages/cli/tsconfig.json --project packages/cli/tsconfig.test.json --project packages/corpus/tsconfig.json --project packages/corpus/tsconfig.test.json --project packages/data/tsconfig.json --project packages/document-docx/tsconfig.json --project packages/document-docx/tsconfig.test.json --project packages/document-pdf/tsconfig.json --project packages/document-pdf/tsconfig.test.json --project packages/mcp/tsconfig.json --project packages/mcp/tsconfig.test.json",
     "typecheck:built": "turbo run typecheck --only",
     "lint": "turbo run lint && bun run lint:oxlint && bun run check:brand-case && bun run check:vocab && bun run test:vocab",
     "lint:oxlint": "bun test oxlint.plugin.test.ts && bun run lint:prepare && bun --bun oxlint -c oxlint.config.ts --deny-warnings --type-aware .",
@@ -66,12 +67,12 @@
     "@changesets/changelog-github": "^1.0.1",
     "@changesets/cli": "^3.0.3",
     "@stll/anonymize-data": "workspace:*",
-    "@stll/oxlint-config": "0.8.0",
+    "@stll/oxlint-config": "0.10.0",
     "@stll/typescript-config": "0.6.0",
     "@typescript/native": "npm:typescript@7.0.2",
     "lefthook": "^2.1.16",
-    "oxfmt": "^0.71.0",
-    "oxlint": "1.86.0",
+    "oxfmt": "0.72.0",
+    "oxlint": "1.87.0",
     "oxlint-tsgolint": "7.0.2003",
     "turbo": "^2.11.6"
   }
