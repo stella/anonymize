@@ -1597,14 +1597,15 @@ dependencies = [
 
 [[package]]
 name = "stella-docx-kernel"
-version = "0.7.0"
+version = "0.31.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e775b975592a875ea1dbbfe92ec00fed84caff44941ad075cd7068cfe4d723cb"
+checksum = "a4a4792596ed0bdf97cc6437490397c8652b1f56d1be85479a0b4f6d22e18714"
 dependencies = [
  "miniz_oxide",
  "quick-xml",
  "rawzip",
  "thiserror",
+ "unicode-script",
 ]
 
 [[package]]
@@ -1704,7 +1705,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.3.4",
+ "getrandom 0.4.3",
  "once_cell",
  "rustix",
  "windows-sys",
@@ -1817,6 +1818,12 @@ name = "unicode-properties"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7df058c713841ad818f1dc5d3fd88063241cc61f49f5fbea4b951e8cf5a8d71d"
+
+[[package]]
+name = "unicode-script"
+version = "0.5.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "383ad40bb927465ec0ce7720e033cb4ca06912855fc35db31b5755d0de75b1ee"
 
 [[package]]
 name = "unicode-segmentation"
