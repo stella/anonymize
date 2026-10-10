@@ -625,7 +625,7 @@ dependencies = [
 
 [[package]]
 name = "stella-anonymize-adapter-contract"
-version = "3.0.3"
+version = "3.0.7"
 dependencies = [
  "blake3",
  "lz4_flex",
@@ -640,7 +640,7 @@ dependencies = [
 
 [[package]]
 name = "stella-anonymize-core"
-version = "3.0.3"
+version = "3.0.7"
 dependencies = [
  "bon",
  "chacha20poly1305",
@@ -694,8 +694,8 @@ dependencies = [
 
 [[package]]
 name = "stella-stdnum-core"
-version = "2.1.3"
-source = "git+https://github.com/stella/stdnum?tag=v2.1.3#50798ef8f962f41e2cba1539e85b8f41605a7e71"
+version = "2.3.2"
+source = "git+https://github.com/stella/stdnum?tag=v2.3.2#0701f9c92f0afbc1449846a6a48cc9b6171c6d24"
 dependencies = [
  "regex",
  "sha2",
