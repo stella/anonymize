@@ -334,7 +334,7 @@ jobs:
             exit 1
           fi
           cat "$RUNNER_TEMP/typecheck-proof.log"
-          rg -q 'TS2322' "$RUNNER_TEMP/typecheck-proof.log"
+          grep -q 'TS2322' "$RUNNER_TEMP/typecheck-proof.log"
           rm "$fixture"
           trap - EXIT
           bun run --filter @stll/anonymize-data typecheck
