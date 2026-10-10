@@ -321,6 +321,23 @@ jobs:
         run: bun run format:check
       - name: Typecheck
         run: bun run typecheck:built
+      - name: Verify typecheck rejects a seeded error
+        shell: bash
+        run: |
+          fixture=packages/data/dictionaries/typecheck-proof.ts
+          test ! -e "$fixture"
+          trap 'rm -f "$fixture"' EXIT
+          printf 'export const typecheckProof: number = "wrong";\n' > "$fixture"
+          if bun run --filter @stll/anonymize-data typecheck > "$RUNNER_TEMP/typecheck-proof.log" 2>&1; then
+            cat "$RUNNER_TEMP/typecheck-proof.log"
+            echo "Typecheck accepted a seeded type error"
+            exit 1
+          fi
+          cat "$RUNNER_TEMP/typecheck-proof.log"
+          rg -q 'TS2322' "$RUNNER_TEMP/typecheck-proof.log"
+          rm "$fixture"
+          trap - EXIT
+          bun run --filter @stll/anonymize-data typecheck
       - name: Typecheck diagnostic parity
         run: bun run check:typecheck-parity
       - name: Knip (unused/undeclared deps)
