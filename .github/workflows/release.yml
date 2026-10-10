@@ -662,7 +662,7 @@ jobs:
       id-token: write # Required only for PyPI trusted publishing.
     steps:
       - name: Prepare exact Python wheel set
-        uses: stella/.github/.github/actions/pypi-publish-hardened@636b7841096c8f0cc5a1572077b78768ef8fea42
+        uses: stella/.github/.github/actions/pypi-publish-hardened@77914b407c334cdebcaf21c69457075c9b255a8b
         with:
           expected-version: ${{ needs.verify.outputs.version }}
           project-name: stella-anonymize-core
