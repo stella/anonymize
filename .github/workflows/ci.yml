@@ -436,8 +436,8 @@ jobs:
       - name: Native default SDK parity and timings
         run: bun run --cwd packages/anonymize perf:native-default
 
-  mcp-node20:
-    name: MCP Node 20
+  mcp-node22:
+    name: MCP Node 22
     needs: build
     runs-on: ubuntu-latest
     permissions:
@@ -454,10 +454,10 @@ jobs:
       - name: Setup minimum supported Node for MCP
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: "20.20.2"
+          node-version: "22.23.3"
           registry-url: https://registry.npmjs.org
           scope: "@stll"
-      - name: MCP Node 20 native-lock and packed-bin smoke
+      - name: MCP Node 22 native-lock and packed-bin smoke
         run: bun run --cwd packages/mcp test:node-runtime
 
   validate:
@@ -473,7 +473,7 @@ jobs:
       - python
       - packages
       - parity
-      - mcp-node20
+      - mcp-node22
     runs-on: ubuntu-latest
     permissions: {}
     steps:
@@ -489,7 +489,7 @@ jobs:
           PYTHON: ${{ needs.python.result }}
           PACKAGES: ${{ needs.packages.result }}
           PARITY: ${{ needs.parity.result }}
-          MCP_NODE20: ${{ needs.mcp-node20.result }}
+          MCP_NODE22: ${{ needs.mcp-node22.result }}
         run: |
           set -euo pipefail
           for result in \
@@ -502,7 +502,7 @@ jobs:
             "$PYTHON" \
             "$PACKAGES" \
             "$PARITY" \
-            "$MCP_NODE20"; do
+            "$MCP_NODE22"; do
             if [[ "$result" != "success" ]]; then
               echo "::error::Validation lane finished with '$result'"
               exit 1
