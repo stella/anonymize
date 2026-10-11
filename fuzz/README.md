@@ -1,6 +1,6 @@
 # Fuzzing the anonymize core
 
-Fuzz target code for boundary-sensitive parts of the anonymization
+Coverage-guided fuzz targets for boundary-sensitive parts of the anonymization
 pipeline: artifact decoding, search normalization, and gazetteer matching.
 
 This crate is its **own workspace** (empty `[workspace]` in `Cargo.toml`) so it
@@ -10,6 +10,7 @@ its target dependencies never touch the default build.
 ## Requirements
 
 - The repository Rust 1.99.0 toolchain.
+- `cargo-fuzz`: `cargo install cargo-fuzz --version 0.13.2 --locked`
 
 ## Targets
 
@@ -51,30 +52,36 @@ and the remaining fields form host text (up to 512 characters).
 
 ## Running
 
-Compile every target on the pinned stable toolchain:
+From this directory, run coverage-guided fuzzing on the pinned stable toolchain
+with sanitizers disabled:
 
 ```sh
-cargo check --manifest-path fuzz/Cargo.toml --bins
+cargo fuzz run artifact_decode --sanitizer none -- -max_total_time=10
+cargo fuzz run normalize_text --sanitizer none -- -max_total_time=30
+cargo fuzz run gazetteer_match --sanitizer none -- -max_total_time=30
+
+# Longer campaign:
+cargo fuzz run artifact_decode --sanitizer none -- -max_total_time=600
 ```
 
-Run the target without sanitizer or coverage instrumentation:
+The stable code-generation options retain coverage instrumentation. CI smoke-runs
+all three targets with `--sanitizer none` and a bounded run count.
+
+List targets with `cargo fuzz list`. Crashes land in
+`artifacts/<target>/`; reproduce with:
 
 ```sh
-cargo run --manifest-path fuzz/Cargo.toml --locked --bin artifact_decode -- -runs=1000 -seed=20261011 -max_len=768
+cargo fuzz run artifact_decode --sanitizer none artifacts/artifact_decode/<crash-file>
 ```
 
-CI exercises all three targets this way. The smoke runs check target execution;
-they do not provide coverage-guided exploration. Run deterministic generated
-inputs through the integration property tests:
+Discovered corpus lives in `corpus/<target>/`. These outputs are git-ignored;
+commit a minimized reproducer through the shared property-test drivers instead
+of the raw corpus. Deterministic generated inputs remain available through:
 
 ```sh
-cargo test -p stella-anonymize-core --test gazetteer_properties
-cargo test -p stella-anonymize-core --test primitives_properties
+cargo test --manifest-path ../Cargo.toml -p stella-anonymize-core --test gazetteer_properties
+cargo test --manifest-path ../Cargo.toml -p stella-anonymize-core --test primitives_properties
 ```
-
-Coverage-guided cargo-fuzz execution requires compiler features unavailable on
-stable Rust. The stable path compiles the targets and exercises the shared
-property-test drivers without sanitizer instrumentation.
 
 ## Adding a target
 
