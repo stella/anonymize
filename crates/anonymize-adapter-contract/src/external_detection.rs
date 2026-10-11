@@ -424,15 +424,17 @@ fn validate_digest(document_bytes: &[u8], expected: &str) -> Result<()> {
     ));
   }
   let actual = Sha256::digest(document_bytes);
-  let matches = expected.as_bytes().chunks_exact(2).zip(actual.iter()).all(
-    |(pair, actual_byte)| {
-      let high = pair.first().and_then(|byte| hex_nibble(*byte));
-      let low = pair.get(1).and_then(|byte| hex_nibble(*byte));
-      high
-        .zip(low)
+  let matches = expected
+    .as_bytes()
+    .as_chunks::<2>()
+    .0
+    .iter()
+    .zip(actual.iter())
+    .all(|([high, low], actual_byte)| {
+      hex_nibble(*high)
+        .zip(hex_nibble(*low))
         .is_some_and(|(high, low)| (high << 4) | low == *actual_byte)
-    },
-  );
+    });
   if !matches {
     return Err(invalid("document.sha256 does not match input bytes"));
   }

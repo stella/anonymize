@@ -485,7 +485,6 @@ impl<'a> PreparedSearchPackageParts<'a> {
         let verify_start = web_time::Instant::now();
         verify_prepared_search_package_digest(digest, payload)?;
         timings.verify = Some(elapsed_us(verify_start));
-        Ok(())
       }
       Self::Compressed {
         compression,
@@ -500,9 +499,9 @@ impl<'a> PreparedSearchPackageParts<'a> {
           payload,
         )?;
         timings.verify = Some(elapsed_us(verify_start));
-        Ok(())
       }
     }
+    Ok(())
   }
 }
 
