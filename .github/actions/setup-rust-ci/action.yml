@@ -54,14 +54,14 @@ runs:
           target/
           fuzz/target/
           packages/benchmark/native/nym-adapter/target/
-        key: ${{ runner.os }}-cargo-${{ inputs.cache-scope }}-1.99.0-tools-v2-${{ hashFiles('Cargo.lock', 'fuzz/Cargo.lock', 'packages/benchmark/native/nym-adapter/Cargo.lock') }}
+        key: ${{ runner.os }}-cargo-${{ inputs.cache-scope }}-1.99.0-source-lint-a1bd81740ecb4b66999f56d1716e1190c4e7272f-${{ hashFiles('Cargo.lock', 'fuzz/Cargo.lock', 'packages/benchmark/native/nym-adapter/Cargo.lock') }}
         restore-keys: |
-          ${{ runner.os }}-cargo-${{ inputs.cache-scope }}-1.99.0-tools-v2-
+          ${{ runner.os }}-cargo-${{ inputs.cache-scope }}-1.99.0-source-lint-a1bd81740ecb4b66999f56d1716e1190c4e7272f-
 
     - if: inputs.profile == 'quality'
       name: Install stable Rust source lint
       shell: bash
-      run: cargo install --git https://github.com/stella/tooling --rev 4154cc5f9b46795bc63ec9710047843fb763e524 --locked stella_source_lint
+      run: cargo install --git https://github.com/stella/tooling --rev a1bd81740ecb4b66999f56d1716e1190c4e7272f --locked stella_source_lint
 
     - if: inputs.profile == 'quality'
       uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776

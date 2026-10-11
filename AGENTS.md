@@ -517,7 +517,7 @@ default alias), and the pinned Rust 1.96.0 toolchain with the
   `get.nexte.st` (CI installs the pinned prebuilt). Doctests run separately via
   `cargo ci-test-doc` on stock cargo. `bun run rust:check` also runs
   `cargo ci-stella-lint` on the pinned stable toolchain. Install its binary with
-  `cargo install --git https://github.com/stella/tooling --rev 4154cc5f9b46795bc63ec9710047843fb763e524 --locked stella_source_lint`.
+  `cargo install --git https://github.com/stella/tooling --rev a1bd81740ecb4b66999f56d1716e1190c4e7272f --locked stella_source_lint`.
 - **Python surface is optional** and needs `uv` (not preinstalled);
   `python:typecheck`/`python:wheel` and the Python parity tests are skipped
   without it.

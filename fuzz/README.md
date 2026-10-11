@@ -57,7 +57,15 @@ Compile every target on the pinned stable toolchain:
 cargo check --manifest-path fuzz/Cargo.toml --bins
 ```
 
-Run deterministic generated inputs through the integration property tests:
+Run the target without sanitizer or coverage instrumentation:
+
+```sh
+cargo run --manifest-path fuzz/Cargo.toml --locked --bin artifact_decode -- -runs=1000 -seed=20261011 -max_len=768
+```
+
+CI exercises all three targets this way. The smoke runs check target execution;
+they do not provide coverage-guided exploration. Run deterministic generated
+inputs through the integration property tests:
 
 ```sh
 cargo test -p stella-anonymize-core --test gazetteer_properties
