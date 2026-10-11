@@ -2357,7 +2357,7 @@ fn validate_name_tree(
           "PDF name-tree Names must contain key/value pairs",
         ));
       }
-      for pair in names.as_chunks::<2>().0.iter() {
+      for pair in names.as_chunks::<2>().0 {
         pair
           .first()
           .and_then(|key| key.as_str().ok())
@@ -2512,7 +2512,7 @@ fn validate_file_spec(
             "PDF related-file arrays must contain name/payload pairs",
           ));
         }
-        for pair in related_array.as_chunks::<2>().0.iter() {
+        for pair in related_array.as_chunks::<2>().0 {
           inventory.charge_node()?;
           pair
             .first()
@@ -2637,7 +2637,7 @@ fn catalog_xfa_count(document: &Document) -> Result<u32, PdfInspectionError> {
       "PDF AcroForm XFA packet arrays must contain name/stream pairs",
     ));
   }
-  for pair in packets.as_chunks::<2>().0.iter() {
+  for pair in packets.as_chunks::<2>().0 {
     pair
       .first()
       .and_then(|name| name.as_str().ok())
