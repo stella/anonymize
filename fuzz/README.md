@@ -1,17 +1,15 @@
 # Fuzzing the anonymize core
 
-Coverage-guided fuzz targets for boundary-sensitive parts of the anonymization
+Fuzz target code for boundary-sensitive parts of the anonymization
 pipeline: artifact decoding, search normalization, and gazetteer matching.
 
 This crate is its **own workspace** (empty `[workspace]` in `Cargo.toml`) so it
 stays out of the main `--workspace` build and the strict release lints, and so
-its nightly-only sanitizer dependencies never touch the default build.
+its target dependencies never touch the default build.
 
 ## Requirements
 
-- A nightly toolchain (already vendored for dylint):
-  `nightly-2026-04-16` or plain `nightly`.
-- `cargo-fuzz`: `cargo install cargo-fuzz --locked`
+- The repository Rust 1.99.0 toolchain.
 
 ## Targets
 
@@ -53,24 +51,22 @@ and the remaining fields form host text (up to 512 characters).
 
 ## Running
 
+Compile every target on the pinned stable toolchain:
+
 ```sh
-# From this directory. Short local smoke run:
-cargo +nightly fuzz run artifact_decode -- -max_total_time=30
-
-# Longer campaign:
-cargo +nightly fuzz run normalize_text -- -max_total_time=600
-
-# Gazetteer spans stay bounded, whole-word, and outside synthetic opaque tokens.
-cargo +nightly fuzz run gazetteer_match -- -max_total_time=600
+cargo check --manifest-path fuzz/Cargo.toml --bins
 ```
 
-List targets with `cargo +nightly fuzz list`.
+Run deterministic generated inputs through the integration property tests:
 
-Crashes land in `fuzz/artifacts/<target>/`; reproduce with
-`cargo +nightly fuzz run <target> fuzz/artifacts/<target>/<crash-file>`.
-Discovered corpus lives in `fuzz/corpus/<target>/`. Both directories are
-git-ignored (see `.gitignore`); commit a minimized reproducer as a regression
-test in `crates/anonymize-core/tests/` instead of the raw corpus.
+```sh
+cargo test -p stella-anonymize-core --test gazetteer_properties
+cargo test -p stella-anonymize-core --test primitives_properties
+```
+
+Coverage-guided cargo-fuzz execution requires compiler features unavailable on
+stable Rust. The stable path compiles the targets and exercises the shared
+property-test drivers without sanitizer instrumentation.
 
 ## Adding a target
 

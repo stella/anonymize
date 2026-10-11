@@ -134,3 +134,4 @@ updates:
       - dependency-name: actions/cache/save
       - dependency-name: actions/upload-artifact
       - dependency-name: actions/download-artifact
+      - dependency-name: "stella/.github/.github/workflows/package-consumer-compat.yml"

@@ -54,8 +54,12 @@ bun run rust:lint
 bun run rust:test
 ```
 
-The full `bun run rust:check` additionally runs the repository's Dylint rules
-and requires the pinned nightly and Dylint tooling used by CI.
+The full `bun run rust:check` additionally runs `cargo ci-stella-lint` on the
+pinned stable toolchain. Install the shared source lint with:
+
+```sh
+cargo install --git https://github.com/stella/tooling --rev 4154cc5f9b46795bc63ec9710047843fb763e524 --locked stella_source_lint
+```
 
 ## Choose the right change location
 

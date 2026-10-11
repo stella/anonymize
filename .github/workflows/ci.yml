@@ -141,7 +141,7 @@ jobs:
           mkdir -p "$install_dir"
           tar -xzf "$archive" -C "$install_dir" --strip-components=1
           echo "$install_dir" >> "$GITHUB_PATH"
-          rustup toolchain install "$HAWK_RUST_TOOLCHAIN" --profile minimal
+          rustup toolchain install 1.97.1 --profile minimal # cargo-hawk exception tracked in stll-toolchain.json
       - name: Rust checks
         run: bun run rust:check
       - name: Hawk visibility lint

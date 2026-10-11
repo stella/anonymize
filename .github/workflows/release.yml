@@ -609,7 +609,7 @@ jobs:
           target: ${{ matrix.target }}
           # Ignored on macOS/Windows; drives the manylinux container on Linux.
           manylinux: ${{ matrix.manylinux || 'auto' }}
-          rust-toolchain: "1.96.0"
+          rust-toolchain: "1.99.0"
           args: >-
             --release
             --locked
