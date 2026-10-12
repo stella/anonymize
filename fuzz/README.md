@@ -52,6 +52,9 @@ and the remaining fields form host text (up to 512 characters).
 
 ## Running
 
+CI compiles every fuzz target on pull requests and main pushes. The `Nightly fuzz`
+workflow runs coverage-guided fuzzing nightly and on demand.
+
 From this directory, run coverage-guided fuzzing on the pinned stable toolchain
 with sanitizers disabled:
 

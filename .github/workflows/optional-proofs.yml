@@ -1,0 +1,52 @@
+name: Optional proofs and timings
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  proofs:
+    name: Compiler proofs and native timings
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-bun-workspace
+      - uses: ./.github/actions/setup-rust-ci
+        with:
+          profile: build
+          cache-scope: build
+      - name: Setup browser WebAssembly tools
+        uses: ./.github/actions/setup-browser-wasm
+      - name: Build
+        run: bun run build
+      - name: Verify typecheck rejects a seeded error
+        shell: bash
+        run: |
+          fixture=packages/data/dictionaries/typecheck-proof.ts
+          test ! -e "$fixture"
+          trap 'rm -f "$fixture"' EXIT
+          printf 'export const typecheckProof: number = "wrong";\n' > "$fixture"
+          if bun run --filter @stll/anonymize-data typecheck > "$RUNNER_TEMP/typecheck-proof.log" 2>&1; then
+            cat "$RUNNER_TEMP/typecheck-proof.log"
+            echo "Typecheck accepted a seeded type error"
+            exit 1
+          fi
+          cat "$RUNNER_TEMP/typecheck-proof.log"
+          grep -q 'TS2322' "$RUNNER_TEMP/typecheck-proof.log"
+          rm "$fixture"
+          trap - EXIT
+          bun run --filter @stll/anonymize-data typecheck
+      - name: Typecheck diagnostic parity
+        run: bun run check:typecheck-parity
+      - name: Native adapter parity and timings
+        run: bun run --cwd packages/anonymize perf:native-adapters
+      - name: Native default SDK parity and timings
+        run: bun run --cwd packages/anonymize perf:native-default
