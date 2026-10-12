@@ -566,7 +566,10 @@ mod tests {
         .iter()
         .any(|word| word == "apt.")
     );
-    assert!(unit_abbreviations(&["de"])?.is_empty());
+    assert_eq!(
+      unit_abbreviations(&["de"])?,
+      Vec::<std::string::String>::new()
+    );
     Ok(())
   }
 
@@ -577,7 +580,10 @@ mod tests {
       directional_abbreviations(&["en"])?,
       ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
     );
-    assert!(directional_abbreviations(&["de"])?.is_empty());
+    assert_eq!(
+      directional_abbreviations(&["de"])?,
+      Vec::<std::string::String>::new()
+    );
     Ok(())
   }
 
@@ -634,7 +640,10 @@ mod tests {
   #[test]
   fn standalone_street_data_is_absent_without_scoped_street_types()
   -> Result<(), AssembleError> {
-    assert!(standalone_street_words(&["ja"])?.is_empty());
+    assert_eq!(
+      standalone_street_words(&["ja"])?,
+      Vec::<std::string::String>::new()
+    );
     Ok(())
   }
 
@@ -703,7 +712,10 @@ mod tests {
         .iter()
         .any(|state| state == "DE")
     );
-    assert!(state_abbreviations(&["DE"])?.is_empty());
+    assert_eq!(
+      state_abbreviations(&["DE"])?,
+      Vec::<std::string::String>::new()
+    );
     Ok(())
   }
 
@@ -724,7 +736,10 @@ mod tests {
         .iter()
         .any(|state| state == "DE")
     );
-    assert!(scoped_state_abbreviations(&["GB"], &["Europe"])?.is_empty());
+    assert_eq!(
+      scoped_state_abbreviations(&["GB"], &["Europe"])?,
+      Vec::<std::string::String>::new()
+    );
     Ok(())
   }
 

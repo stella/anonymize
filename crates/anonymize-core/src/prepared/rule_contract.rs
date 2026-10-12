@@ -153,7 +153,7 @@ mod tests {
     assert_eq!(SPEC.id(), TestId::Alpha);
     assert_eq!(SPEC.stage(), TestStage::Find);
     assert_eq!(SPEC.declared_inputs(), &[TestInput::Text]);
-    assert!(SPEC.dependencies().is_empty());
+    assert_eq!(SPEC.dependencies(), []);
     assert_eq!(SPEC.support_resources(), &[TestResource::Vocabulary]);
     assert_eq!(SPEC.additive_scaling_domains(), &[TestInput::Text]);
   }

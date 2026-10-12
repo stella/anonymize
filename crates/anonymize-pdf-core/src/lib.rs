@@ -2770,7 +2770,7 @@ mod tests {
       inspection.coverage.status,
       PdfInspectionCoverageStatus::Full
     );
-    assert!(inspection.coverage.gaps.is_empty());
+    assert_eq!(inspection.coverage.gaps, Vec::<PdfInspectionGap>::new());
   }
 
   #[test]

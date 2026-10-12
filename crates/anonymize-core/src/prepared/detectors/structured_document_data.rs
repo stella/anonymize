@@ -487,6 +487,7 @@ mod tests {
   use proptest::prelude::*;
 
   use super::{check_digit, detect, optional_digit_matches};
+  use crate::PipelineEntity;
 
   const TD3: &str = "P<UTOERIKSSON<<ANNA<MARIA<<<<<<<<<<<<<<<<<<<\nL898902C36UTO7408122F1204159ZE184226B<<<<<10";
   const TD1: &str = "I<UTOD231458907<<<<<<<<<<<<<<<\n7408122F1204159UTO<<<<<<<<<<<6\nERIKSSON<<ANNA<MARIA<<<<<<<<<<";
@@ -526,7 +527,7 @@ mod tests {
       TRACK1.replacen("4111111111111111", "4111111111111112", 1),
       TRACK2.replacen("4111111111111111", "4111111111111112", 1),
     );
-    assert!(detect(&text, &[]).unwrap().is_empty());
+    assert_eq!(detect(&text, &[]).unwrap(), Vec::<PipelineEntity>::new());
   }
 
   #[test]
@@ -557,10 +558,10 @@ mod tests {
       format!("{}A?", track_one.strip_suffix('?').unwrap());
     let overlong_track_two =
       format!("{}1?", track_two.strip_suffix('?').unwrap());
-    assert!(
+    assert_eq!(
       detect(&format!("{overlong_track_one}\n{overlong_track_two}"), &[])
-        .unwrap()
-        .is_empty()
+        .unwrap(),
+      Vec::<PipelineEntity>::new()
     );
   }
 
@@ -689,7 +690,7 @@ mod tests {
     let text = format!(
       "{malformed_suffix}{late_terminator}{repeated_sentinels}{track_one_lowercase}{track_two_non_numeric}"
     );
-    assert!(detect(&text, &[]).unwrap().is_empty());
+    assert_eq!(detect(&text, &[]).unwrap(), Vec::<PipelineEntity>::new());
   }
 
   proptest! {

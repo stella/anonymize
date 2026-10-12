@@ -3331,6 +3331,7 @@ mod tests {
     split_embedded_legal_form_list, trim_embedded_legal_form_list_prefix,
     trim_leading_clause, trim_role_head,
   };
+  use crate::PipelineEntity;
   use crate::processors::PatternSlice;
   use crate::types::SearchMatch;
   use proptest::prelude::*;
@@ -4252,8 +4253,14 @@ mod tests {
 
   #[test]
   fn short_legal_forms_still_require_a_trailing_boundary() {
-    assert!(legal_form_entities("Minha AGÊNCIA", &["AG"], &[]).is_empty());
-    assert!(legal_form_entities("PLANO DE SAÚDE", &["SA"], &[]).is_empty());
+    assert_eq!(
+      legal_form_entities("Minha AGÊNCIA", &["AG"], &[]),
+      Vec::<String>::new()
+    );
+    assert_eq!(
+      legal_form_entities("PLANO DE SAÚDE", &["SA"], &[]),
+      Vec::<String>::new()
+    );
   }
 
   #[test]
@@ -4262,7 +4269,10 @@ mod tests {
       ("Zapsaná v obchodním rejstříku vedeném u KS", "KS"),
       ("191 KW, benzín BA", "BA"),
     ] {
-      assert!(legal_form_entities(text, &[suffix], &[]).is_empty());
+      assert_eq!(
+        legal_form_entities(text, &[suffix], &[]),
+        Vec::<String>::new()
+      );
     }
   }
 
@@ -4277,14 +4287,14 @@ mod tests {
       ),
       ["Řeka SE"]
     );
-    assert!(
+    assert_eq!(
       legal_form_entities_with_short_suffix_scope(
         "Škoda Octavia 110 PS",
         &["SE", "PS"],
         &[],
         &["SE"],
-      )
-      .is_empty()
+      ),
+      Vec::<String>::new()
     );
     assert_eq!(
       legal_form_entities_with_short_suffix_scope(
@@ -4419,14 +4429,19 @@ mod tests {
 
   #[test]
   fn institutional_heads_do_not_emit_bare_generic_references() {
-    assert!(institutional_head_entities("the Court held", "Court").is_empty());
-    assert!(
-      institutional_head_entities("an Agency responded", "Agency").is_empty()
+    let empty = Vec::<String>::new();
+    assert_eq!(
+      institutional_head_entities("the Court held", "Court"),
+      empty
     );
-    assert!(institutional_head_entities("This is Court", "Court").is_empty());
-    assert!(
-      institutional_head_entities("The claimant was an Agency", "Agency")
-        .is_empty()
+    assert_eq!(
+      institutional_head_entities("an Agency responded", "Agency"),
+      empty
+    );
+    assert_eq!(institutional_head_entities("This is Court", "Court"), empty);
+    assert_eq!(
+      institutional_head_entities("The claimant was an Agency", "Agency"),
+      empty
     );
     for (text, head) in [
       ("A Court may decide", "Court"),
@@ -4488,12 +4503,12 @@ mod tests {
       ),
       ["Parent&rsquo;s Board of Directors"]
     );
-    assert!(
+    assert_eq!(
       institutional_head_entities(
         "its Chairman of the Board reporting to the Board of Directors",
         "Board",
-      )
-      .is_empty()
+      ),
+      empty
     );
     assert_eq!(
       institutional_head_entities(
@@ -4502,9 +4517,9 @@ mod tests {
       ),
       ["St. Jude Children's Research Hospital"]
     );
-    assert!(
-      institutional_head_entities("reporting to St. Hospital", "Hospital")
-        .is_empty()
+    assert_eq!(
+      institutional_head_entities("reporting to St. Hospital", "Hospital"),
+      empty
     );
     assert_eq!(
       institutional_head_entities(
@@ -4531,15 +4546,15 @@ mod tests {
       end: u32::try_from(suffix_start + suffix.len()).unwrap(),
     };
 
-    assert!(
+    assert_eq!(
       process_legal_form_matches(
         &[found],
         PatternSlice { start: 0, end: 1 },
         text,
         &data,
       )
-      .unwrap()
-      .is_empty()
+      .unwrap(),
+      Vec::<PipelineEntity>::new()
     );
   }
 

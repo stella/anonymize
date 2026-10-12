@@ -795,7 +795,7 @@ mod tests {
 
     let merged = merge_and_dedup_with_document(&[entity], &document)?;
 
-    assert!(merged.is_empty());
+    assert_eq!(merged, Vec::<PipelineEntity>::new());
     Ok(())
   }
 

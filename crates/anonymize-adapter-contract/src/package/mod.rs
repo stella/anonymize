@@ -917,7 +917,7 @@ mod tests {
       128,
     );
 
-    assert!(events.is_empty());
+    assert_eq!(events, Vec::<stella_anonymize_core::DiagnosticEvent>::new());
   }
   #[test]
   fn prepared_search_compressed_package_roundtrips_config_and_artifacts() {
@@ -1383,7 +1383,7 @@ mod tests {
     let package = prepared_search_core_package_from_bytes(&bytes).unwrap();
     let data = package.config.detectors.deny_list_data.unwrap();
 
-    assert!(data.originals.is_empty());
+    assert_eq!(data.originals, Vec::<std::string::String>::new());
     assert_eq!(data.pattern_meta.len(), 2);
     let first = data.pattern_meta.first().unwrap();
     let second = data.pattern_meta.get(1).unwrap();
@@ -1420,7 +1420,7 @@ mod tests {
     let package = prepared_search_core_package_from_bytes(&bytes).unwrap();
     let data = package.config.detectors.deny_list_data.unwrap();
 
-    assert!(data.originals.is_empty());
+    assert_eq!(data.originals, Vec::<std::string::String>::new());
     assert_eq!(data.pattern_meta.len(), 2);
 
     let entities = process_deny_list_matches(

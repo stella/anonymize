@@ -3159,7 +3159,7 @@ mod tests {
       vec![String::from("person")],
     ]);
 
-    assert!(groups.groups.is_empty());
+    assert_eq!(groups.groups, Vec::<SmallVec<[u32; 2]>>::new());
     assert_eq!(groups.group_table.len(), 2);
     assert_eq!(groups.group_refs, vec![0, 0, 1, 0]);
     assert_eq!(
@@ -3202,10 +3202,10 @@ mod tests {
     let groups = StringGroups::empty_groups(4);
 
     assert_eq!(groups.len(), 4);
-    assert!(groups.table.is_empty());
-    assert!(groups.groups.is_empty());
-    assert!(groups.group_table.is_empty());
-    assert!(groups.group_refs.is_empty());
+    assert_eq!(groups.table, Vec::<String>::new());
+    assert_eq!(groups.groups, Vec::<SmallVec<[u32; 2]>>::new());
+    assert_eq!(groups.group_table, Vec::<SmallVec<[u32; 2]>>::new());
+    assert_eq!(groups.group_refs, Vec::<u32>::new());
     assert_eq!(groups.get(0).unwrap().to_strings(), Vec::<String>::new());
     assert_eq!(groups.get(3).unwrap().to_strings(), Vec::<String>::new());
     assert!(groups.get(4).is_none());
@@ -3471,7 +3471,7 @@ mod tests {
       filters: Some(DenyListFilterData::default()),
     };
     data.compact_runtime_patterns();
-    assert!(data.originals.is_empty());
+    assert_eq!(data.originals, Vec::<String>::new());
 
     let entities = process_deny_list_matches(
       &matches,
@@ -3579,7 +3579,7 @@ mod tests {
     )
     .unwrap();
 
-    assert!(entities.is_empty());
+    assert_eq!(entities, Vec::<PipelineEntity>::new());
   }
 
   #[test]
@@ -3612,7 +3612,7 @@ mod tests {
     )
     .unwrap();
 
-    assert!(entities.is_empty());
+    assert_eq!(entities, Vec::<PipelineEntity>::new());
   }
 
   #[test]
@@ -3732,7 +3732,7 @@ mod tests {
     )
     .unwrap();
 
-    assert!(entities.is_empty());
+    assert_eq!(entities, Vec::<PipelineEntity>::new());
   }
 
   #[test]
@@ -3834,7 +3834,7 @@ mod tests {
     )
     .unwrap();
 
-    assert!(entities.is_empty());
+    assert_eq!(entities, Vec::<PipelineEntity>::new());
   }
 
   #[test]
@@ -3867,7 +3867,7 @@ mod tests {
     )
     .unwrap();
 
-    assert!(entities.is_empty());
+    assert_eq!(entities, Vec::<PipelineEntity>::new());
   }
 
   #[test]
@@ -3944,7 +3944,7 @@ mod tests {
     )
     .unwrap();
 
-    assert!(entities.is_empty());
+    assert_eq!(entities, Vec::<PipelineEntity>::new());
   }
 
   #[test]

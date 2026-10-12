@@ -497,6 +497,8 @@ mod tests {
 
   use std::fmt::Write as _;
 
+  use crate::BindingCallerDetection;
+
   use serde_json::{Value, json};
   use sha2::{Digest, Sha256};
 
@@ -744,32 +746,32 @@ mod tests {
       batch["detections"] = json!([]);
     });
     let batch_json = serde_json::to_string(&batch).unwrap();
-    assert!(
+    assert_eq!(
       external_detection_batch_to_caller_request(
         document.as_bytes(),
         &batch_json
       )
       .unwrap()
-      .detections
-      .is_empty()
+      .detections,
+      Vec::<BindingCallerDetection>::new()
     );
-    assert!(
+    assert_eq!(
       external_detection_batch_to_utf16_caller_request(
         document.as_bytes(),
         &batch_json
       )
       .unwrap()
-      .detections
-      .is_empty()
+      .detections,
+      Vec::<BindingCallerDetection>::new()
     );
-    assert!(
+    assert_eq!(
       external_detection_batch_to_character_caller_request(
         document.as_bytes(),
         &batch_json
       )
       .unwrap()
-      .detections
-      .is_empty()
+      .detections,
+      Vec::<BindingCallerDetection>::new()
     );
     assert!(
       resolve_requested_boundaries(
