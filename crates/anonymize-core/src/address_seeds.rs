@@ -3644,15 +3644,15 @@ mod tests {
         vec![0]
       );
       assert_eq!(data.boundary_starts(&phrase.replace(' ', "\n"))?, vec![0]);
-      assert!(data.boundary_starts(&format!("{phrase}foo"))?.is_empty());
+      assert_eq!(
+        data.boundary_starts(&format!("{phrase}foo"))?,
+        Vec::<usize>::new()
+      );
     }
-    assert!(
-      data
+    assert_eq!(data
         .boundary_starts(
           "nonstop xor emailed to recipient or emailed toxin or sentry xcon C.I.F.",
-        )?
-        .is_empty()
-    );
+        )?, Vec::<usize>::new());
     Ok(())
   }
 

@@ -581,7 +581,7 @@ fn metadata_is_neutral_rule_input_with_precise_invalidation() {
       ))],
     ))
     .unwrap();
-  assert!(session.analyze().unwrap().findings().is_empty());
+  assert_eq!(session.analyze().unwrap().findings(), []);
 
   let counts = counters.snapshot();
   assert_eq!(counts.block_analysis(), 0);

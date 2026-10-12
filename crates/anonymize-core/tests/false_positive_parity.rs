@@ -231,10 +231,14 @@ fn rejects_only_ambiguous_street_type_trigger_addresses() {
   })
   .unwrap();
 
-  assert!(
-    resolved_texts(&prepared, "demeurant au cours du contrat.").is_empty()
+  assert_eq!(
+    resolved_texts(&prepared, "demeurant au cours du contrat."),
+    Vec::<std::string::String>::new()
   );
-  assert!(resolved_texts(&prepared, "demeurant Cours.").is_empty());
+  assert_eq!(
+    resolved_texts(&prepared, "demeurant Cours."),
+    Vec::<std::string::String>::new()
+  );
   assert_eq!(
     resolved_texts(&prepared, "demeurant Cours Mirabeau."),
     [String::from("Cours Mirabeau")]

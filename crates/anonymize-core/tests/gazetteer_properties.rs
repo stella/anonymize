@@ -371,7 +371,7 @@ mod properties {
         })
         .collect::<Vec<_>>();
       let boundaries = boundaries(&text);
-      assert!(!dropped.is_empty());
+      assert_ne!(dropped, Vec::<std::ops::Range<usize>>::new());
       assert!(dropped.iter().all(|span| {
         boundaries.contains(&span.start) && boundaries.contains(&span.end)
       }));
@@ -747,7 +747,7 @@ mod properties {
     // P1/P2: substring matching cuts a production-shaped identifier.
     let identifier_text = "IDLuma72";
     let identifier_spans = substring_matcher(identifier_text, "Luma");
-    assert!(!identifier_spans.is_empty());
+    assert_ne!(identifier_spans, Vec::<std::ops::Range<usize>>::new());
     assert!(
       !identifier_spans
         .iter()
@@ -858,13 +858,13 @@ mod properties {
         "non-joined identifier segment must retain exact detection recall"
       );
     }
-    assert!(
+    assert_eq!(
       engine
         .detect_static_entities("⟦a1b2-dead-c3d4⟧")
         .unwrap()
         .entities
-        .all_entities()
-        .is_empty()
+        .all_entities(),
+      Vec::<stella_anonymize_core::PipelineEntity>::new()
     );
     gazetteer_fuzz::exercise(b"a1b2\nb\nc\nd\n");
   }

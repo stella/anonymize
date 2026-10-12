@@ -29,8 +29,8 @@ jobs:
 
       - name: Setup Rust
         run: |
-          rustup toolchain install 1.96.0 --profile minimal
-          rustup default 1.96.0
+          rustup toolchain install 1.99.0 --profile minimal
+          rustup default 1.99.0
 
       - name: Install pinned Rust tools (checksum-verified)
         # nextest is the test runner used by cargo-mutants. taiki-e/install-action
@@ -48,9 +48,9 @@ jobs:
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
             target/
-          key: ${{ runner.os }}-mutants-1.96.0-${{ hashFiles('Cargo.lock') }}
+          key: ${{ runner.os }}-mutants-1.99.0-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-mutants-1.96.0-
+            ${{ runner.os }}-mutants-1.99.0-
 
       - name: Run cargo-mutants
         # Scoped to the offset/redaction/normalization logic (~200 mutants),

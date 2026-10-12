@@ -141,7 +141,7 @@ jobs:
           mkdir -p "$install_dir"
           tar -xzf "$archive" -C "$install_dir" --strip-components=1
           echo "$install_dir" >> "$GITHUB_PATH"
-          rustup toolchain install "$HAWK_RUST_TOOLCHAIN" --profile minimal
+          rustup toolchain install 1.97.1 --profile minimal # cargo-hawk exception tracked in stll-toolchain.json
       - name: Rust checks
         run: bun run rust:check
       - name: Hawk visibility lint
@@ -172,6 +172,15 @@ jobs:
           check
       - name: Fuzz targets compile (anti-bitrot)
         run: cargo check --manifest-path fuzz/Cargo.toml --bins
+      - name: Install stable fuzz runner
+        run: cargo install cargo-fuzz --version 0.13.2 --locked
+
+      - name: Stable coverage-guided fuzz smoke runs
+        working-directory: fuzz
+        run: |
+          cargo fuzz run artifact_decode --sanitizer none -- -runs=1000 -seed=20261011 -max_len=768
+          cargo fuzz run normalize_text --sanitizer none -- -runs=1000 -seed=20261011 -max_len=768
+          cargo fuzz run gazetteer_match --sanitizer none -- -runs=1000 -seed=20261011 -max_len=768
       - name: Native Nym benchmark adapter
         run: |
           cargo fmt --check --manifest-path packages/benchmark/native/nym-adapter/Cargo.toml

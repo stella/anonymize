@@ -1047,7 +1047,10 @@ mod tests {
     let prepared = PreparedEngine::new_with_diagnostics(
       stella_anonymize_core::PreparedEngineConfig::default(),
     )?;
-    assert!(!prepared.diagnostics.events.is_empty());
+    assert_ne!(
+      prepared.diagnostics.events,
+      Vec::<stella_anonymize_core::DiagnosticEvent>::new()
+    );
     let oversized =
       "a".repeat(stella_anonymize_core::REDACTION_TEXT_MAX_BYTES + 1);
     let mut batch_count = 0usize;
