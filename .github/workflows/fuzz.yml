@@ -1,0 +1,36 @@
+name: Nightly fuzz
+
+on:
+  schedule:
+    - cron: "23 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fuzz:
+    name: Stable coverage-guided fuzz
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-rust-ci
+        with:
+          profile: detached
+          cache-scope: detached
+      - name: Install stable fuzz runner
+        run: cargo install cargo-fuzz --version 0.13.2 --locked
+
+      - name: Stable coverage-guided fuzz smoke runs
+        working-directory: fuzz
+        run: |
+          cargo fuzz run artifact_decode --sanitizer none -- -runs=1000 -seed=20261011 -max_len=768
+          cargo fuzz run normalize_text --sanitizer none -- -runs=1000 -seed=20261011 -max_len=768
+          cargo fuzz run gazetteer_match --sanitizer none -- -runs=1000 -seed=20261011 -max_len=768

@@ -1,27 +1,6 @@
 name: Canonical performance
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "Cargo.lock"
-      - "Cargo.toml"
-      - "bun.lock"
-      - "crates/**"
-      - "package.json"
-      - "packages/anonymize/**"
-      - "packages/data/**"
-      - "packages/benchmark/package.json"
-      - "packages/benchmark/src/**"
-      - "packages/benchmark/python/provider_performance_worker.py"
-      - "packages/benchmark/python/requirements-datafog.txt"
-      - "packages/benchmark/python/requirements-datafog.lock"
-      - "packages/benchmark/python/requirements-scrubadub.txt"
-      - "packages/benchmark/python/requirements-scrubadub.lock"
-      - "packages/benchmark/fixtures/**"
-      - ".github/tools/verify-performance-host.ts"
-      - ".github/workflows/performance.yml"
-      - "rust-toolchain.toml"
   workflow_dispatch:
 
 concurrency:
@@ -33,7 +12,7 @@ permissions:
 
 jobs:
   benchmark:
-    if: vars.ANONYMIZE_PERF_RUNNER_ENABLED == 'true' && github.repository == 'stella/anonymize' && github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || github.event_name == 'push')
+    if: vars.ANONYMIZE_PERF_RUNNER_ENABLED == 'true' && github.repository == 'stella/anonymize' && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
     runs-on: [self-hosted, anonymize-perf-v1]
     timeout-minutes: 120
     env:

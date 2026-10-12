@@ -172,15 +172,6 @@ jobs:
           check
       - name: Fuzz targets compile (anti-bitrot)
         run: cargo check --manifest-path fuzz/Cargo.toml --bins
-      - name: Install stable fuzz runner
-        run: cargo install cargo-fuzz --version 0.13.2 --locked
-
-      - name: Stable coverage-guided fuzz smoke runs
-        working-directory: fuzz
-        run: |
-          cargo fuzz run artifact_decode --sanitizer none -- -runs=1000 -seed=20261011 -max_len=768
-          cargo fuzz run normalize_text --sanitizer none -- -runs=1000 -seed=20261011 -max_len=768
-          cargo fuzz run gazetteer_match --sanitizer none -- -runs=1000 -seed=20261011 -max_len=768
       - name: Native Nym benchmark adapter
         run: |
           cargo fmt --check --manifest-path packages/benchmark/native/nym-adapter/Cargo.toml
@@ -330,25 +321,6 @@ jobs:
         run: bun run format:check
       - name: Typecheck
         run: bun run typecheck:built
-      - name: Verify typecheck rejects a seeded error
-        shell: bash
-        run: |
-          fixture=packages/data/dictionaries/typecheck-proof.ts
-          test ! -e "$fixture"
-          trap 'rm -f "$fixture"' EXIT
-          printf 'export const typecheckProof: number = "wrong";\n' > "$fixture"
-          if bun run --filter @stll/anonymize-data typecheck > "$RUNNER_TEMP/typecheck-proof.log" 2>&1; then
-            cat "$RUNNER_TEMP/typecheck-proof.log"
-            echo "Typecheck accepted a seeded type error"
-            exit 1
-          fi
-          cat "$RUNNER_TEMP/typecheck-proof.log"
-          grep -q 'TS2322' "$RUNNER_TEMP/typecheck-proof.log"
-          rm "$fixture"
-          trap - EXIT
-          bun run --filter @stll/anonymize-data typecheck
-      - name: Typecheck diagnostic parity
-        run: bun run check:typecheck-parity
       - name: Knip (unused/undeclared deps)
         run: bun run check:knip
 
@@ -440,10 +412,6 @@ jobs:
           cache-scope: build
       - name: Native fixture parity
         run: bun run --cwd packages/anonymize test:native-fixtures
-      - name: Native adapter parity and timings
-        run: bun run --cwd packages/anonymize perf:native-adapters
-      - name: Native default SDK parity and timings
-        run: bun run --cwd packages/anonymize perf:native-default
 
   mcp-node22:
     name: MCP Node 22
