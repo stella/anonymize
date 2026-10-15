@@ -20,7 +20,7 @@ stella-anonymize-binding-core = { path = "../anonymize-binding-core", default-fe
 stella-anonymize-core = { path = "../anonymize-core" }
 stella-anonymize-docx-core = { path = "../anonymize-docx-core" }
 stella-anonymize-pdf-core = { path = "../anonymize-pdf-core" }
-wasm-bindgen = "0.2.126"
+wasm-bindgen = "0.2.129"
 
 [lints]
 workspace = true
