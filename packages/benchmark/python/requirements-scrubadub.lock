@@ -110,9 +110,9 @@ numpy==2.4.6 \
     # via
     #   scikit-learn
     #   scipy
-phonenumbers==8.13.55 \
-    --hash=sha256:25feaf46135f0fb1e61b69513dc97c477285ba98a69204bf5a8cf241a844a718 \
-    --hash=sha256:57c989dda3eabab1b5a9e3d24438a39ebd032fa0172bf68bfd90ab70b3d5e08b
+phonenumbers==9.0.41 \
+    --hash=sha256:ccf2ea44f8aa35c487f26146a31520ecedf8e1af1f57c803678ecb5ef5c01668 \
+    --hash=sha256:dfa6f74eeac67c044b75313fe0af10774d7d1e1242241437279d4c2fb8027c01
     # via
     #   -r packages/benchmark/python/requirements-scrubadub.txt
     #   scrubadub
