@@ -139,8 +139,8 @@ mod tests {
     // search exponential against a long non-matching tail (a nested `(a+)+`
     // is simplified by the engine and no longer qualifies). The step budget
     // must turn it into a typed error quickly instead of hanging.
-    let regex = BoundedRegex::new(r"^(a|aa)+\1$")
-      .expect("pathological pattern compiles");
+    let regex =
+      BoundedRegex::new(r"^(a|aa)+\1$").expect("pathological pattern compiles");
     assert!(matches!(regex, BoundedRegex::Backtracking(_)));
     let haystack = format!("{}c", "a".repeat(40));
     let error = regex
