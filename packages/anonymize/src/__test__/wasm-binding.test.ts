@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
+import { OPERATOR_TYPES } from "../constants";
+import type { CanonicalStaticRedactionResult } from "../native";
+
 import {
   createWasmBinding,
   isRawWasmModule,
@@ -100,39 +103,85 @@ describe("WASM result and byte contracts", () => {
     expect(called).toBe(false);
   });
 
-  test("rejects an unknown operator in a raw redaction result", () => {
-    const raw = fakeRawModule();
-    const resultJson = JSON.stringify({
-      resolved_entities: [],
+  test("normalizes every declared operator and rejects unknown values at the raw result boundary", () => {
+    const text = "x".repeat(OPERATOR_TYPES.length);
+    const result = {
+      resolved_entities: OPERATOR_TYPES.map((_operator, index) => ({
+        start: index,
+        end: index + 1,
+        label: "person",
+        text: "x",
+        score: 1,
+        source: "regex",
+      })),
       redaction: {
-        redacted_text: "",
-        redaction_map: [],
-        operator_map: [{ placeholder: "<X>", operator: "unknown" }],
-        entity_count: 0,
+        redacted_text: OPERATOR_TYPES.map((operator) => `<${operator}>`).join(
+          "",
+        ),
+        redaction_map: OPERATOR_TYPES.map((operator) => ({
+          placeholder: `<${operator}>`,
+          original: "x",
+        })),
+        operator_map: OPERATOR_TYPES.map((operator) => ({
+          placeholder: `<${operator}>`,
+          operator,
+        })),
+        entity_count: OPERATOR_TYPES.length,
       },
-    });
-    raw.WasmPreparedSearch.fromConfigJsonBytes = () => ({
-      prepareDiagnosticsJson: () => "{}",
-      warmLazyRegex: () => undefined,
-      warmLazyRegexDiagnosticsJson: () => "{}",
-      createRedactionSession: unavailable,
-      createRedactionSessionWithLifecycle: unavailable,
-      restoreRedactionSession: unavailable,
-      restoreEncryptedRedactionSession: unavailable,
-      redactStaticEntitiesJson: () => resultJson,
-      redactStaticEntitiesWithCallerDetectionsJson: () => resultJson,
-      redactStaticEntitiesWithCallerDetectionsDiagnosticsJson: () => "{}",
-      redactStaticEntitiesDiagnosticsJson: () => "{}",
-      redactStaticEntitiesSummaryDiagnosticsJson: () => "{}",
-      redactStaticEntitiesResultStreamJson: () => resultJson,
-      redactStaticEntitiesDiagnosticsStreamJson: () => "{}",
-    });
-    const prepared = createWasmBinding(
-      raw,
-    ).NativePreparedSearch.fromConfigJsonBytes(new Uint8Array());
-    expect(() => prepared.redactStaticEntities("text")).toThrow(
-      "Unknown redaction operator: unknown",
+    } satisfies CanonicalStaticRedactionResult;
+    const preparedForResult = (resultJson: string) => {
+      const raw = fakeRawModule();
+      raw.WasmPreparedSearch.fromConfigJsonBytes = () => ({
+        prepareDiagnosticsJson: () => "{}",
+        warmLazyRegex: () => undefined,
+        warmLazyRegexDiagnosticsJson: () => "{}",
+        createRedactionSession: unavailable,
+        createRedactionSessionWithLifecycle: unavailable,
+        restoreRedactionSession: unavailable,
+        restoreEncryptedRedactionSession: unavailable,
+        redactStaticEntitiesJson: () => resultJson,
+        redactStaticEntitiesWithCallerDetectionsJson: () => resultJson,
+        redactStaticEntitiesWithCallerDetectionsDiagnosticsJson: () => "{}",
+        redactStaticEntitiesDiagnosticsJson: () => "{}",
+        redactStaticEntitiesSummaryDiagnosticsJson: () => "{}",
+        redactStaticEntitiesResultStreamJson: () => resultJson,
+        redactStaticEntitiesDiagnosticsStreamJson: () => "{}",
+      });
+      return createWasmBinding(raw).NativePreparedSearch.fromConfigJsonBytes(
+        new Uint8Array(),
+      );
+    };
+    const prepared = preparedForResult(JSON.stringify(result));
+    const normalized = prepared.redactStaticEntities(text);
+    expect(normalized.redaction.operatorMap).toEqual(
+      result.redaction.operator_map,
     );
+    expect(
+      normalized.redaction.operatorMap.map(({ operator }) => operator),
+    ).toEqual([...OPERATOR_TYPES]);
+    for (const [
+      index,
+      { operator },
+    ] of result.redaction.operator_map.entries()) {
+      const malformed = {
+        ...result,
+        redaction: {
+          ...result.redaction,
+          operator_map: result.redaction.operator_map.map((entry, position) =>
+            position === index
+              ? { placeholder: entry.placeholder, operator: "unknown" }
+              : entry,
+          ),
+        },
+      };
+      expect(
+        () =>
+          preparedForResult(JSON.stringify(malformed)).redactStaticEntities(
+            text,
+          ),
+        operator,
+      ).toThrow("Invalid native CanonicalStaticRedactionResult");
+    }
   });
 
   test("serializes typed caller detections only at the raw WASM boundary", () => {
