@@ -413,9 +413,7 @@ type SessionArchiveLock = {
   release: () => Promise<void>;
 };
 
-type OperationResult =
-  | { type: "succeeded" }
-  | { type: "failed"; error: unknown };
+type OperationResult = { type: "succeeded" } | { type: "failed"; error: Error };
 
 const captureOperationResult = async (
   operation: Promise<void>,
@@ -424,7 +422,13 @@ const captureOperationResult = async (
     await operation;
     return { type: "succeeded" };
   } catch (error) {
-    return { type: "failed", error };
+    return {
+      type: "failed",
+      error:
+        error instanceof Error
+          ? error
+          : new Error("Session archive operation failed", { cause: error }),
+    };
   }
 };
 
