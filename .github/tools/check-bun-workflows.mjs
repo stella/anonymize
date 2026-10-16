@@ -83,8 +83,7 @@ const isRecord = (value) =>
 const hasPublishToken = (workflow, job) => {
   if (!isRecord(job)) return false;
   const permissions =
-    job["permissions"] ??
-    (isRecord(workflow) ? workflow["permissions"] : undefined);
+    job.permissions ?? (isRecord(workflow) ? workflow.permissions : undefined);
   if (typeof permissions === "string") return permissions !== "read-all";
   return (
     isRecord(permissions) &&
@@ -99,19 +98,19 @@ const hasPublishToken = (workflow, job) => {
 
 const hasArtifactStep = (job, operation) =>
   isRecord(job) &&
-  Array.isArray(job["steps"]) &&
-  job["steps"].some(
+  Array.isArray(job.steps) &&
+  job.steps.some(
     (step) =>
       isRecord(step) &&
-      typeof step["uses"] === "string" &&
-      step["uses"].startsWith(`actions/${operation}-artifact@`),
+      typeof step.uses === "string" &&
+      step.uses.startsWith(`actions/${operation}-artifact@`),
   );
 
 // Protect the full dependency chain of a publishing token. Artifact readers
 // can consume uploads without a needs edge, so include those producers too.
 const publishingJobNames = (workflow) => {
-  if (!isRecord(workflow) || !isRecord(workflow["jobs"])) return new Set();
-  const jobs = workflow["jobs"];
+  if (!isRecord(workflow) || !isRecord(workflow.jobs)) return new Set();
+  const jobs = workflow.jobs;
   const protectedJobs = new Set(
     Object.keys(jobs).filter((name) => hasPublishToken(workflow, jobs[name])),
   );
@@ -121,7 +120,7 @@ const publishingJobNames = (workflow) => {
     if (name === undefined) continue;
     const job = jobs[name];
     if (!isRecord(job)) continue;
-    const needs = job["needs"];
+    const needs = job.needs;
     const dependencies = Array.isArray(needs)
       ? needs.filter((dependency) => typeof dependency === "string")
       : [];

@@ -648,8 +648,9 @@ const toNativeAnonymizeBinding = (loaded: unknown): NativeAnonymizeBinding => {
 };
 
 const pickBindingCandidate = (loaded: unknown): unknown => {
-  if (isRecord(loaded) && isNativeAnonymizeBinding(loaded["default"])) {
-    return loaded["default"];
+  if (isRecord(loaded)) {
+    const { default: binding } = loaded;
+    if (isNativeAnonymizeBinding(binding)) return binding;
   }
   return loaded;
 };

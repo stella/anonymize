@@ -332,14 +332,16 @@ let watchMode = false;
 const inputs: string[] = [];
 
 for (let i = 0; i < args.length; i++) {
-  const arg = args[i];
-  if (arg === "--output" && args[i + 1]) {
-    outputPath = args[i + 1]!;
+  const arg = args.at(i);
+  if (arg === undefined) throw new Error("Missing evaluation argument");
+  const next = args.at(i + 1);
+  if (arg === "--output" && next !== undefined && next !== "") {
+    outputPath = next;
     i++;
   } else if (arg === "--watch" || arg === "-w") {
     watchMode = true;
   } else {
-    inputs.push(arg!);
+    inputs.push(arg);
   }
 }
 

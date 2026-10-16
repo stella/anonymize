@@ -307,7 +307,8 @@ describe("rewriteDocxText", () => {
       value: throwingIterator,
     });
     const location = cyclicPlan.location as unknown as Record<string, unknown>;
-    Object.defineProperty(location["xmlPath"], Symbol.iterator, {
+    const { xmlPath } = location;
+    Object.defineProperty(xmlPath, Symbol.iterator, {
       value: throwingIterator,
     });
     expect(
