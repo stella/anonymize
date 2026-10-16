@@ -439,9 +439,7 @@ const renderAdhoc = ({
     lines.push("## Excluded libraries");
     lines.push("");
     for (const o of unavailable) {
-      if (o.status === "unavailable") {
-        lines.push(`- **${o.name}**: ${o.reason}`);
-      }
+      lines.push(`- **${o.name}**: ${o.reason}`);
     }
     lines.push("");
   }
