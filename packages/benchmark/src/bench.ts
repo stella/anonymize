@@ -27,7 +27,6 @@ import {
   type ThroughputReport,
 } from "./report";
 import {
-  COMMON_LABELS,
   DATAFOG_MAPPING,
   type CommonLabel,
   type NativeMapping,
