@@ -25,3 +25,10 @@ test("uses committed history and shared detector to select workspace parity", ()
   expect(lint).toContain("bun run lint");
   expect(lint).toContain("bun run format:check");
 });
+
+// Keep underlying project diagnostics visible when another static check fails.
+test("typecheck still runs after a preceding static check fails", () => {
+  expect(workflow).toContain(
+    "- name: Typecheck\n        if: ${{ !cancelled() }}\n        run: bun run typecheck:built",
+  );
+});
