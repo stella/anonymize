@@ -55,6 +55,20 @@ test("declares runtime-only generated cloud setup with Rust checks", () => {
   expect(settings.hooks.SessionStart).toHaveLength(1);
 });
 
+test("workspaces importing Node modules declare their own Node types", () => {
+  const owners = new Set<string>();
+  for (const file of new Bun.Glob("packages/*/{src,scripts}/**/*.{ts,mts,cts,mjs}").scanSync()) {
+    if (!/\b(?:from\s*|import\s*\()\s*["']node:/u.test(read(file))) continue;
+    const owner = file.split("/").slice(0, 2).join("/");
+    owners.add(owner);
+    const manifest = JSON.parse(read(`${owner}/package.json`));
+    expect(manifest.devDependencies["@types/node"], owner).toBeDefined();
+    expect(Bun.resolveSync("@types/node/package.json", `${process.cwd()}/${owner}`)).toContain("@types");
+  }
+  expect(owners.has("packages/anonymize")).toBe(true);
+  expect(owners.has("packages/data")).toBe(true);
+});
+
 test("keeps third-party quarantine and exact first-party tooling exemptions", () => {
   const bunfig = Bun.TOML.parse(read("bunfig.toml"));
   expect(bunfig.install.minimumReleaseAge).toBe(432_000);

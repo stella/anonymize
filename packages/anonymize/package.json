@@ -123,6 +123,7 @@
     "tsdown": "0.23.0",
     "typescript": "7.0.2",
     "vite": "^8.3.2",
-    "@stll/typescript-config": "0.8.0"
+    "@stll/typescript-config": "0.8.0",
+    "@types/node": "26.6.4"
   }
 }

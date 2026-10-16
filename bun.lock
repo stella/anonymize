@@ -34,6 +34,7 @@
       "devDependencies": {
         "@napi-rs/cli": "^3.10.6",
         "@stll/typescript-config": "0.8.0",
+        "@types/node": "26.6.4",
         "bun-types": "1.4.3",
         "fast-check": "^4.10.2",
         "fflate": "^0.8.3",
@@ -140,6 +141,7 @@
       "version": "0.0.10",
       "devDependencies": {
         "@stll/typescript-config": "0.8.0",
+        "@types/node": "26.6.4",
         "bun-types": "1.4.3",
         "stopwords-iso": "1.1.0",
         "tsdown": "0.23.0",
