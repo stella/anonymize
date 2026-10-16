@@ -187,7 +187,7 @@ const preflightRewritePlan = (
   const serializableRewrites: DocxBlockRewrite[] = [];
   for (let rewriteIndex = 0; rewriteIndex < rewriteCount; rewriteIndex += 1) {
     const rewrite = rewrites[rewriteIndex];
-    if (rewrite === undefined) {
+    if (typeof rewrite !== "function") {
       throw new DocxRewriteError(
         DOCX_REWRITE_ERROR_CODES.invalidReplacement,
         "DOCX rewrite plans must not contain sparse blocks",
@@ -289,7 +289,7 @@ export const rewriteDocxText = (
   rewrites: readonly DocxBlockRewrite[],
 ): DocxRewriteResult => {
   const rewrite = loadNativeAnonymizeBinding().rewriteDocxTextNative;
-  if (rewrite === undefined) {
+  if (typeof rewrite !== "function") {
     throw new Error(
       "The native anonymize binding does not expose DOCX rewriting",
     );

@@ -163,9 +163,6 @@ const buildDetector = (): Detector => {
     };
     for (const { label, regex } of compiled) {
       for (const match of working.matchAll(regex)) {
-        if (match.index === undefined) {
-          continue;
-        }
         const value = match[0];
         if (value.length === 0) {
           continue;

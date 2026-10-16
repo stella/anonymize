@@ -250,9 +250,10 @@ describe("local Poppler/Tesseract PDF provider", () => {
       tesseractPath,
     });
 
-    const observation = rendered.pages[0]?.observation;
-    expect(observation?.widthPoints).toBeCloseTo(595.28, 4);
-    expect(observation?.heightPoints).toBeCloseTo(841.89, 4);
+    const page = rendered.pages.at(0);
+    if (page === undefined) throw new Error("expected one rendered PDF page");
+    expect(page.observation.widthPoints).toBeCloseTo(595.28, 4);
+    expect(page.observation.heightPoints).toBeCloseTo(841.89, 4);
   });
 
   test("bounds hung executables with a timeout", async () => {
