@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 import { watch } from "fs";
+import { parseEvalHtmlArgs } from "./.github/tools/eval-html-args";
 import {
   runPipeline,
   redactText,
@@ -326,24 +327,9 @@ const buildHtml = (docs: DocResult[]): string => {
 
 // ── CLI ─────────────────────────────────────────
 
-const args = process.argv.slice(2);
-let outputPath = "/tmp/eval-report.html";
-let watchMode = false;
-const inputs: string[] = [];
-
-for (let i = 0; i < args.length; i++) {
-  const arg = args.at(i);
-  if (arg === undefined) throw new Error("Missing evaluation argument");
-  const next = args.at(i + 1);
-  if (arg === "--output" && next !== undefined && next !== "") {
-    outputPath = next;
-    i++;
-  } else if (arg === "--watch" || arg === "-w") {
-    watchMode = true;
-  } else {
-    inputs.push(arg);
-  }
-}
+const { outputPath, watchMode, inputs } = parseEvalHtmlArgs(
+  process.argv.slice(2),
+);
 
 if (inputs.length === 0) {
   console.error(
