@@ -82,9 +82,16 @@ test("every first-party quarantine exemption carries an exact UTC annotation", (
       /^\s*"(?<name>@stll\/[^"*]+)"\s*,?\s*#\s*quarantine-excluded-since:\s*(?<timestamp>\S+)\s*$/gm,
     ),
   );
-  expect(entries.map((entry) => entry.groups?.name).toSorted()).toEqual(
-    parsed.install.minimumReleaseAgeExcludes.toSorted(),
-  );
+  const names = entries.map((entry) => {
+    const name = entry.groups?.name;
+    if (name === undefined) throw new Error("Missing exemption package name");
+    return name;
+  });
+  const exclusions: unknown = parsed.install.minimumReleaseAgeExcludes;
+  if (!Array.isArray(exclusions) || !exclusions.every((entry: unknown) => typeof entry === "string"))
+    throw new Error("Quarantine exclusions must be package names");
+  const compare = (left: string, right: string) => left.localeCompare(right);
+  expect(names.toSorted(compare)).toEqual(exclusions.toSorted(compare));
   for (const entry of entries) {
     const timestamp = entry.groups?.timestamp;
     if (timestamp === undefined) throw new Error("Missing exemption timestamp");
