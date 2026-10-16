@@ -21,9 +21,29 @@ test("uses shared library defaults and the complete portable safety pack", async
     ...portableSafetyPluginSpecifiers,
     "./oxlint.plugin.ts",
   ]);
-  for (const path of new Bun.Glob("packages/*/tsconfig.json").scanSync()) {
+  // Select the environment of the complete program: shipped Node adapters,
+  // Bun benchmark/corpus programs, and runtime-neutral dictionary data.
+  const environments = new Map(
+    Object.entries({
+      "packages/anonymize/tsconfig.json": "node",
+      "packages/benchmark/tsconfig.json": "bun",
+      "packages/cli/tsconfig.json": "node",
+      "packages/corpus/tsconfig.json": "bun",
+      "packages/data/tsconfig.json": "library",
+      "packages/document-docx/tsconfig.json": "node",
+      "packages/document-pdf/tsconfig.json": "node",
+      "packages/mcp/tsconfig.json": "node",
+    }),
+  );
+  const projects = [...new Bun.Glob("packages/*/tsconfig.json").scanSync()];
+  expect(projects.toSorted()).toEqual([...environments.keys()].toSorted());
+  for (const path of projects) {
+    const environment = environments.get(path);
+    if (environment === undefined)
+      throw new Error(`Unclassified program: ${path}`);
     const tsconfig = await Bun.file(path).json();
-    expect(tsconfig.extends).toBe("@stll/typescript-config/library.json");
+    const preset = `@stll/typescript-config/${environment}.json`;
+    expect(tsconfig.extends).toBe(preset);
     expect(Object.keys(tsconfig.compilerOptions ?? {})).toEqual(
       path === "packages/anonymize/tsconfig.json" ? ["lib"] : [],
     );
@@ -32,11 +52,24 @@ test("uses shared library defaults and the complete portable safety pack", async
     ).json();
     expect(manifest.devDependencies["@stll/typescript-config"]).toBe("0.8.0");
     expect(
-      Bun.resolveSync(
-        "@stll/typescript-config/library.json",
-        path.replace("tsconfig.json", ""),
-      ),
+      Bun.resolveSync(preset, path.replace("tsconfig.json", "")),
     ).toContain("@stll");
+  }
+});
+
+test("test and data-tool programs use the shared Bun environment", async () => {
+  for (const path of [
+    "packages/anonymize/tsconfig.test.json",
+    "packages/cli/tsconfig.test.json",
+    "packages/mcp/tsconfig.test.json",
+    "packages/document-docx/tsconfig.test.json",
+    "packages/document-pdf/tsconfig.test.json",
+    "packages/data/__test__/tsconfig.json",
+    "packages/data/scripts/tsconfig.json",
+  ]) {
+    const tsconfig = await Bun.file(path).json();
+    expect(tsconfig.extends).toBe("@stll/typescript-config/bun.json");
+    expect(tsconfig.compilerOptions).toBeUndefined();
   }
 });
 
