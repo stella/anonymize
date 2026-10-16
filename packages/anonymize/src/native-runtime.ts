@@ -13,9 +13,12 @@ export const isBunRuntime = (): boolean =>
 /**
  * Resolve the N-API binding used by both Node.js and Bun.
  */
-export const loadDefaultNativeBinding = async (
+export const loadDefaultNativeBinding = (
   options: LoadNativeBindingOptions = {},
-): Promise<NativeAnonymizeBinding> => loadNativeAnonymizeBinding(options);
+): Promise<NativeAnonymizeBinding> =>
+  new Promise((resolve) => {
+    resolve(loadNativeAnonymizeBinding(options));
+  });
 
 let preloadPromise: Promise<void> | undefined;
 
@@ -28,5 +31,5 @@ export const preloadNativeBinding = async (): Promise<void> => {
     loadNativeAnonymizeBinding();
     return undefined;
   });
-  return preloadPromise;
+  return await preloadPromise;
 };

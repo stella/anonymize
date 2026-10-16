@@ -206,7 +206,7 @@ export const readNativePipelinePackageFile = (
 
 export const readNativePipelinePackageFileAsync = async (
   packagePath: string,
-): Promise<Uint8Array> => readFile(packagePath);
+): Promise<Uint8Array> => await readFile(packagePath);
 
 export const native_package_version = (
   options: NativeSdkOptions = {},

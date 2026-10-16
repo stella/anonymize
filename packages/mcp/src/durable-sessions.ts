@@ -338,7 +338,7 @@ export class DurableSessionStore {
 
   async close(): Promise<void> {
     if (this.#closePromise !== undefined) {
-      return this.#closePromise;
+      return await this.#closePromise;
     }
     this.#state = "closing";
     this.#closePromise = (async () => {
@@ -347,12 +347,12 @@ export class DurableSessionStore {
       await this.#lockHandle.close();
       this.#state = "closed";
     })();
-    return this.#closePromise;
+    return await this.#closePromise;
   }
 
   async load(sessionId: string): Promise<StoredSessionArchive | undefined> {
     this.#assertOpen();
-    return this.#withMutation(() => this.#load(sessionId));
+    return await this.#withMutation(() => this.#load(sessionId));
   }
 
   async #load(sessionId: string): Promise<StoredSessionArchive | undefined> {
@@ -397,7 +397,7 @@ export class DurableSessionStore {
 
   async save(sessionId: string, archive: Uint8Array): Promise<void> {
     this.#assertOpen();
-    return this.#withMutation(() => this.#save(sessionId, archive));
+    return await this.#withMutation(() => this.#save(sessionId, archive));
   }
 
   async #save(sessionId: string, archive: Uint8Array): Promise<void> {
@@ -478,7 +478,7 @@ export class DurableSessionStore {
 
   async delete(sessionId: string): Promise<void> {
     this.#assertOpen();
-    return this.#withMutation(() => this.#delete(sessionId));
+    return await this.#withMutation(() => this.#delete(sessionId));
   }
 
   async #delete(sessionId: string): Promise<void> {

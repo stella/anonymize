@@ -329,7 +329,7 @@ try {
       });
     });
     send(message);
-    return response;
+    return await response;
   };
   const serverExit = new Promise((resolve, reject) => {
     server.once("error", reject);

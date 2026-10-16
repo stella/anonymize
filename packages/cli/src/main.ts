@@ -887,13 +887,14 @@ const prepareCliRuntime = async (
 ): Promise<CliRuntime> => {
   const pipeline = await prepareNativeCliPipeline(api, config);
   return {
-    redact: async (fullText, operators) => {
-      const result = pipeline.redactText(fullText, operators);
-      return {
-        entities: result.resolvedEntities,
-        redaction: result.redaction,
-      };
-    },
+    redact: (fullText, operators) =>
+      new Promise((resolve) => {
+        const result = pipeline.redactText(fullText, operators);
+        resolve({
+          entities: result.resolvedEntities,
+          redaction: result.redaction,
+        });
+      }),
   };
 };
 

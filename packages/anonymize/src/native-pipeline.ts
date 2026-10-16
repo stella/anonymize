@@ -188,31 +188,34 @@ const assemblePackageBytes = (
   return assemble(pipelineConfigJson, dictionariesJson, gazetteerJson);
 };
 
-export const prepareNativePipelineConfig = async ({
+export const prepareNativePipelineConfig = ({
   binding,
   config,
   gazetteerEntries = [],
 }: Omit<
   NativePipelineBuildOptions,
   "context"
->): Promise<NativePreparedSearchConfig> => {
-  const scopedConfig = applyPipelineLanguageScope(config);
-  assertNativePipelineSupported(scopedConfig);
-  const assemble = binding.assembleStaticSearchConfigJson;
-  if (assemble === undefined) {
-    throw new Error(
-      "Native anonymize binding does not support static-search config assembly",
+>): Promise<NativePreparedSearchConfig> =>
+  new Promise((resolve) => {
+    const scopedConfig = applyPipelineLanguageScope(config);
+    assertNativePipelineSupported(scopedConfig);
+    const assemble = binding.assembleStaticSearchConfigJson;
+    if (assemble === undefined) {
+      throw new Error(
+        "Native anonymize binding does not support static-search config assembly",
+      );
+    }
+    const { pipelineConfigJson, dictionariesJson, gazetteerJson } =
+      toAssembleInputs(scopedConfig, gazetteerEntries);
+    const configJson = assemble(
+      pipelineConfigJson,
+      dictionariesJson,
+      gazetteerJson,
     );
-  }
-  const { pipelineConfigJson, dictionariesJson, gazetteerJson } =
-    toAssembleInputs(scopedConfig, gazetteerEntries);
-  const configJson = assemble(
-    pipelineConfigJson,
-    dictionariesJson,
-    gazetteerJson,
-  );
-  return parseNativePreparedSearchConfig(new TextDecoder().decode(configJson));
-};
+    resolve(
+      parseNativePreparedSearchConfig(new TextDecoder().decode(configJson)),
+    );
+  });
 
 export const prepareNativePipelinePackage = async ({
   binding,
@@ -322,11 +325,11 @@ const getCachedNativePipelinePackage = async ({
   return packageBytes;
 };
 
-// `async` so the shared package cache can store the in-flight value and dedupe
+// A promise lets the shared package cache store the in-flight value and dedupe
 // concurrent builds for the same key, and so assembly failures (an older
 // binding without the assemble functions, or a config the assembler rejects)
 // surface as a rejected promise rather than a synchronous throw mid-cache-flow.
-const buildNativePipelinePackage = async ({
+const buildNativePipelinePackage = ({
   binding,
   config,
   gazetteerEntries,
@@ -334,11 +337,15 @@ const buildNativePipelinePackage = async ({
 }: Required<
   Omit<NativePipelinePackageOptions, "context">
 >): Promise<Uint8Array> =>
-  assemblePackageBytes(
-    binding,
-    toAssembleInputs(config, gazetteerEntries),
-    compressed,
-  );
+  new Promise((resolve) => {
+    resolve(
+      assemblePackageBytes(
+        binding,
+        toAssembleInputs(config, gazetteerEntries),
+        compressed,
+      ),
+    );
+  });
 
 type NativePackageCacheKeyOptions = {
   binding: NativeAnonymizeBinding;
