@@ -624,24 +624,36 @@ const isNativePreparedSearchConfig = (
 const normalizeOptionalFields = (value: unknown): unknown => {
   if (Array.isArray(value)) return value.map(normalizeOptionalFields);
   if (!isRecord(value)) return value;
-  return Object.fromEntries(Object.entries(value)
-    .filter(([, entry]) => entry !== null)
-    .map(([key, entry]) => [key, normalizeOptionalFields(entry)]));
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([, entry]) => entry !== null)
+      .map(([key, entry]) => [key, normalizeOptionalFields(entry)]),
+  );
 };
 
 export const parseNativePreparedSearchConfig = (
   json: string,
 ): NativePreparedSearchConfig => {
   const input: unknown = JSON.parse(json);
-  if (!isRecord(input)) throw new TypeError("Invalid native prepared search config");
+  if (!isRecord(input))
+    throw new TypeError("Invalid native prepared search config");
   const defaults = {
-    regex_patterns: [], custom_regex_patterns: [], literal_patterns: [],
-    regex_options: {}, custom_regex_options: {}, literal_options: {},
-    allowed_labels: [], threshold: 0, confidence_boost: false,
-    slices: {}, regex_meta: [], custom_regex_meta: [],
+    regex_patterns: [],
+    custom_regex_patterns: [],
+    literal_patterns: [],
+    regex_options: {},
+    custom_regex_options: {},
+    literal_options: {},
+    allowed_labels: [],
+    threshold: 0,
+    confidence_boost: false,
+    slices: {},
+    regex_meta: [],
+    custom_regex_meta: [],
   } satisfies NativePreparedSearchConfig;
   const value = normalizeOptionalFields({
-    ...defaults, ...input,
+    ...defaults,
+    ...input,
     regex_options: input.regex_options ?? {},
     custom_regex_options: input.custom_regex_options ?? {},
     literal_options: input.literal_options ?? {},

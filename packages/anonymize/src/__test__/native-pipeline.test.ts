@@ -17,7 +17,10 @@ import fc from "fast-check";
 
 import { createPipelineContext } from "../context";
 import { applyPipelineLanguageScope } from "../language-scope";
-import { createNativeAnonymizerFromConfig, type NativeAnonymizeBinding } from "../native";
+import {
+  createNativeAnonymizerFromConfig,
+  type NativeAnonymizeBinding,
+} from "../native";
 import { loadNativeAnonymizeBinding } from "../native-node";
 import {
   assertNativePipelineSupported,
@@ -65,15 +68,38 @@ describe("prepareNativePipelineConfig", () => {
   });
 
   test("native-produced configs remain valid across detector lane subsets", async () => {
-    const lanes = ["enableRegex", "enableTriggerPhrases", "enableLegalForms", "enableNameCorpus", "enableDenyList", "enableGazetteer", "enableCountries", "enableCoreference", "enableHotwordRules", "enableZoneClassification"] as const satisfies readonly (keyof PipelineConfig)[];
-    await fc.assert(fc.asyncProperty(fc.subarray(lanes), async (enabled) => {
-      const config = baseConfig();
-      for (const lane of lanes) config[lane] = enabled.includes(lane);
-      const prepared = await prepareNativePipelineConfig({ binding, config });
-      const engine = createNativeAnonymizerFromConfig({ binding, config: prepared });
-      expect(() => engine.redactStaticEntities("Email legal@example.test")).not.toThrow();
-    }), { numRuns: 32 });
-  });
+    const laneMap = {
+      enableRegex: true,
+      enableTriggerPhrases: true,
+      enableLegalForms: true,
+      enableNameCorpus: true,
+      enableDenyList: true,
+      enableGazetteer: true,
+      enableCountries: true,
+      enableCoreference: true,
+      enableHotwordRules: true,
+      enableZoneClassification: true,
+      enableConfidenceBoost: true,
+    } satisfies Record<Extract<keyof PipelineConfig, `enable${string}`>, true>;
+    const isLane = (key: string): key is keyof typeof laneMap =>
+      Object.hasOwn(laneMap, key);
+    const lanes = Object.keys(laneMap).filter(isLane);
+    await fc.assert(
+      fc.asyncProperty(fc.subarray(lanes), async (enabled) => {
+        const config = baseConfig();
+        for (const lane of lanes) config[lane] = enabled.includes(lane);
+        const prepared = await prepareNativePipelineConfig({ binding, config });
+        const engine = createNativeAnonymizerFromConfig({
+          binding,
+          config: prepared,
+        });
+        expect(() =>
+          engine.redactStaticEntities("Email legal@example.test"),
+        ).not.toThrow();
+      }),
+      { numRuns: 32, examples: [[[]], [["enableRegex"]], [[...lanes]]] },
+    );
+  }, 60_000);
 
   test("rejects a stray untyped enableNer request instead of ignoring it", () => {
     for (const stale of [true, 1, "true"]) {
