@@ -48,7 +48,7 @@ const render = (codes: readonly string[]): string => {
   const entries = codes
     .map(
       (cc) =>
-        `  ${cc}: async () => import("./cities/${cc}.json") as Promise<CityJsonModule>,`,
+        `  ${cc}: () => import("./cities/${cc}.json") as Promise<CityJsonModule>,`,
     )
     .join("\n");
 
