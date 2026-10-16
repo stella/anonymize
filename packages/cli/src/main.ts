@@ -888,9 +888,9 @@ const prepareCliRuntime = async (
   const pipeline = await prepareNativeCliPipeline(api, config);
   return {
     redact: (fullText, operators) =>
-      new Promise((resolve) => {
+      new Promise((resolveRedaction) => {
         const result = pipeline.redactText(fullText, operators);
-        resolve({
+        resolveRedaction({
           entities: result.resolvedEntities,
           redaction: result.redaction,
         });

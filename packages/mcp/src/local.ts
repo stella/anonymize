@@ -844,7 +844,8 @@ export class LocalAnonymizeService {
 
   async close(): Promise<void> {
     if (this.#closePromise !== undefined) {
-      return await this.#closePromise;
+      await this.#closePromise;
+      return;
     }
     this.#state = "closing";
     this.#closePromise = (async () => {
@@ -857,7 +858,7 @@ export class LocalAnonymizeService {
       await this.#durableSessions?.close();
       this.#state = "closed";
     })();
-    return await this.#closePromise;
+    await this.#closePromise;
   }
 
   async #runOperation<Result>(

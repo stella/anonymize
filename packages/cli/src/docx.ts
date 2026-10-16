@@ -357,10 +357,7 @@ const assertDistinctPaths = (
   }
 };
 
-const isNodeError = (
-  error: unknown,
-  code: string,
-): error is NodeJS.ErrnoException =>
+const isNodeError = (error: unknown, code: string): boolean =>
   error instanceof Error && "code" in error && error.code === code;
 
 const assertPathDoesNotExist = async (
@@ -670,7 +667,13 @@ const runDocxAnonymize = async (
     }
     outputSummary(command, "anonymized", result.summary);
   } catch (error) {
-    workflowResult = { type: "failed", error };
+    workflowResult = {
+      type: "failed",
+      error:
+        error instanceof Error
+          ? error
+          : new Error("DOCX workflow failed", { cause: error }),
+    };
   } finally {
     key?.fill(0);
     await Promise.all([
@@ -685,10 +688,7 @@ const runDocxAnonymize = async (
     throw workflowResult.error;
   }
   if (lockReleaseResult.type === "failed") {
-    const message =
-      lockReleaseResult.error instanceof Error
-        ? lockReleaseResult.error.message
-        : String(lockReleaseResult.error);
+    const message = lockReleaseResult.error.message;
     throw new Error(
       `DOCX and session outputs were published, but the session archive lock could not be released: ${message}`,
     );
