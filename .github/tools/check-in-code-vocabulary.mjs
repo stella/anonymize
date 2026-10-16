@@ -56,9 +56,14 @@ const FLAT_ARRAY = /\[[^[\]]*\]/gs;
 const IDENT_ASSIGN = /([A-Za-z_]\w*)\s*(?::[^=]*)?=\s*&?\s*$/s;
 const IDENT_FIELD = /([A-Za-z_]\w*)\s*:\s*&?\s*$/s;
 
+/** @param {string} value */
 export const isNaturalLanguageWord = (value) =>
   CASED_WORD.test(value) || CASELESS_WORD.test(value);
 
+/**
+ * @param {string} file
+ * @param {string} raw
+ */
 export const findInCodeVocabularies = (file, raw) => {
   const findings = [];
   // Rust inline `#[cfg(test)]` modules hold test fixtures, not production
@@ -107,6 +112,7 @@ export const findInCodeVocabularies = (file, raw) => {
   return findings;
 };
 
+/** @param {ReturnType<typeof findInCodeVocabularies>[number]} finding */
 const reportFinding = ({ file, line, column, ident, words }) => {
   console.error(
     `${file}:${line}:${column} in-code vocabulary${ident ? ` "${ident}"` : ""} ` +
@@ -146,6 +152,7 @@ if (
   run();
 }
 
+/** @param {string} file */
 function isSource(file) {
   if (!SOURCE_PREFIXES.some((prefix) => file.startsWith(prefix))) {
     return false;
@@ -159,6 +166,7 @@ function isSource(file) {
   return !IGNORED_SUBSTRINGS.some((part) => file.includes(part));
 }
 
+/** @param {string} literal */
 function decode(literal) {
   return literal.slice(1, -1).replace(/\\(.)/g, "$1");
 }
@@ -166,6 +174,7 @@ function decode(literal) {
 // Drop line and block comments so words quoted in prose do not trip the check.
 // Blank comments to spaces (never delete characters) so every offset in the
 // returned text still maps to the same offset in the original source.
+/** @param {string} text */
 function stripComments(text) {
   const blanked = text.replace(/\/\*[\s\S]*?\*\//g, (m) =>
     m.replace(/[^\n]/g, " "),
@@ -181,6 +190,10 @@ function stripComments(text) {
     .join("\n");
 }
 
+/**
+ * @param {string} text
+ * @param {number} index
+ */
 function lineColumnFor(text, index) {
   let line = 1;
   let column = 1;

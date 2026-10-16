@@ -246,6 +246,10 @@ function isLinuxCpu(value) {
   return value === "arm64" || value === "x64";
 }
 
+/**
+ * @param {string} directory
+ * @param {boolean} condition
+ */
 function assertKnownTarget(directory, condition) {
   if (!condition) {
     fail(`Unsupported native sidecar target: ${directory}`);

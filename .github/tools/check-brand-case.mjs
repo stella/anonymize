@@ -47,6 +47,7 @@ if (hasFailure) {
   process.exit(1);
 }
 
+/** @param {string} file */
 function isIgnored(file) {
   if (IGNORED_PATHS.has(file)) {
     return true;
@@ -60,6 +61,10 @@ function isIgnored(file) {
   });
 }
 
+/**
+ * @param {string} text
+ * @param {number} index
+ */
 function lineColumnFor(text, index) {
   let line = 1;
   let column = 1;

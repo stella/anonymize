@@ -67,6 +67,7 @@ const escapeRegExp = (value) => value.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const readTextFile = (file) =>
   readFileSync(file, "utf8").replaceAll("\r\n", "\n");
 
+/** @param {{ dependencyRange: unknown, exactCoRelease: boolean }} options */
 const synchronizedDependencyRange = ({ dependencyRange, exactCoRelease }) => {
   if (!exactCoRelease) {
     return `^${version}`;
