@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import process from "node:process";
+import { parseJsonObject } from "./json-values.mjs";
 
 const APACHE_LICENSE = "Apache-2.0";
 const LEGAL_FILES = ["LICENSE", "NOTICE"];
@@ -102,6 +103,12 @@ function assertRustPackages() {
   }
 }
 
+/**
+ * @param {string} directory
+ * @param {string} file
+ * @param {string} rootContents
+ * @param {string} label
+ */
 function assertFileMatchesRoot(directory, file, rootContents, label) {
   let contents;
   try {
@@ -121,12 +128,21 @@ function assertEqual(actual, expected, label) {
   }
 }
 
+/**
+ * @param {string} contents
+ * @param {string} expected
+ * @param {string} label
+ */
 function assertIncludes(contents, expected, label) {
   if (!contents.includes(expected)) {
     errors.push(`${label} must include ${JSON.stringify(expected)}`);
   }
 }
 
+/**
+ * @param {string} start
+ * @param {string} filename
+ */
 function findFiles(start, filename) {
   const matches = [];
   const pending = [start];
@@ -150,10 +166,17 @@ function findFiles(start, filename) {
   return matches.sort((left, right) => left.localeCompare(right));
 }
 
+/**
+ * @param {string} path
+ */
 function readJson(path) {
-  return JSON.parse(readFileSync(path, "utf8"));
+  return parseJsonObject(readFileSync(path, "utf8"));
 }
 
+/**
+ * @param {string} contents
+ * @param {string} section
+ */
 function readTomlSection(contents, section) {
   const lines = contents.split("\n");
   const start = lines.indexOf(`[${section}]`);

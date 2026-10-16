@@ -11,6 +11,7 @@ import {
 import { basename, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import process from "node:process";
+import { parseStringList } from "./json-values.mjs";
 
 const profile = process.env.ANONYMIZE_PYTHON_WHEEL_PROFILE ?? "ci";
 // When set, verify an already-built wheel (e.g. a matrix artifact produced by
@@ -117,8 +118,9 @@ function buildAndCheckWheel() {
   }
 }
 
+/** @param {string} wheelPath */
 function assertWheelContents(wheelPath) {
-  const files = new Set(JSON.parse(readWheelFiles(wheelPath)));
+  const files = new Set(parseStringList(readWheelFiles(wheelPath)));
   const required = [
     "stella_anonymize/__init__.py",
     "stella_anonymize/__init__.pyi",
@@ -210,6 +212,7 @@ function assertPythonAttributionMatchesRuntimePackage() {
   throw new Error(`${pythonAttributionFile} must match ${attributionSource}`);
 }
 
+/** @param {string} wheelPath */
 function readWheelFiles(wheelPath) {
   return execFileSync(
     "python3",
@@ -226,6 +229,10 @@ function readWheelFiles(wheelPath) {
   );
 }
 
+/**
+ * @param {string} wheelPath
+ * @param {string} entry
+ */
 function readWheelEntry(wheelPath, entry) {
   return execFileSync(
     "python3",
@@ -243,6 +250,7 @@ function readWheelEntry(wheelPath, entry) {
   );
 }
 
+/** @param {string} wheelPath */
 function smokeInstalledWheel(wheelPath) {
   execFileSync(
     "uv",
@@ -374,6 +382,7 @@ function smokeInstalledWheel(wheelPath) {
   );
 }
 
+/** @param {string} file */
 function isNativeExtension(file) {
   return (
     file.startsWith("stella_anonymize/_native.") &&

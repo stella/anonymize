@@ -855,6 +855,7 @@ function diagnosticScopeFromStageSummary({ stage, slot }) {
   return "step";
 }
 
+/** @param {string} stage */
 function diagnosticPhaseFromStage(stage) {
   if (stage.startsWith("prepare.")) {
     return "prepare";
