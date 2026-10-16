@@ -39,6 +39,7 @@ console.log(
   }),
 );
 
+/** @param {string[]} values */
 function parseArgs(values) {
   const result = {};
   for (let index = 0; index < values.length; index += 1) {
@@ -95,6 +96,11 @@ function parseArgs(values) {
   return result;
 }
 
+/**
+ * @param {string[]} values
+ * @param {number} index
+ * @param {string} option
+ */
 function requiredValue(values, index, option) {
   const value = values[index + 1];
   if (value === undefined || value.startsWith("--")) {
@@ -103,6 +109,7 @@ function requiredValue(values, index, option) {
   return value;
 }
 
+/** @param {ReturnType<typeof parseArgs>} options */
 async function loadPackageInput(options) {
   const input = await loadBasePackageInput(options);
   const scopedConfig = applyPipelineLanguageScope(
@@ -121,6 +128,7 @@ async function loadPackageInput(options) {
   return withDictionaries;
 }
 
+/** @param {ReturnType<typeof parseArgs>} options */
 async function loadBasePackageInput(options) {
   if (!options.config) {
     return { config: defaultNativePipelineConfig(), gazetteerEntries: [] };
