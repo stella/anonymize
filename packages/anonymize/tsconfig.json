@@ -2,9 +2,7 @@
   "$schema": "https://json.schemastore.org/tsconfig",
   "extends": "@stll/typescript-config/library.json",
   "compilerOptions": {
-    "lib": ["ESNext", "DOM"],
-    "noEmit": true,
-    "target": "ES2023"
+    "lib": ["ESNext", "DOM"]
   },
   "include": ["src/**/*.ts"],
   "exclude": [

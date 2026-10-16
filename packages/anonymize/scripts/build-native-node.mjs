@@ -127,7 +127,7 @@ async function writeDefaultPipelineInput() {
     { DEFAULT_NATIVE_PIPELINE_CONFIG, SUPPORTED_LANGUAGES },
     { loadDictionaryBundle },
   ] = await Promise.all([
-    // eslint-disable-next-line stll/no-dynamic-import-specifier -- This build script imports its just-generated local SDK entry by absolute URL.
+    // oxlint-disable-next-line stll/no-dynamic-import-specifier -- This build script imports its just-generated local SDK entry by absolute URL.
     import(pathToFileURL(join(packageRoot, "dist", "index.mjs")).href),
     import("@stll/anonymize-data/cities"),
   ]);

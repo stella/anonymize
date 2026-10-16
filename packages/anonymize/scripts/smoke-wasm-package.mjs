@@ -64,9 +64,9 @@ for (const [label, path] of [
   }
 }
 
-// eslint-disable-next-line stll/no-dynamic-import-specifier
+// oxlint-disable-next-line stll/no-dynamic-import-specifier -- Resolve verified emitted assets at runtime.
 const entry = await import(pathToFileURL(entryPath).href);
-// eslint-disable-next-line stll/no-dynamic-import-specifier
+// oxlint-disable-next-line stll/no-dynamic-import-specifier -- Resolve verified emitted assets at runtime.
 const nativeNodeEntry = await import(pathToFileURL(nativeNodeEntryPath).href);
 
 const {

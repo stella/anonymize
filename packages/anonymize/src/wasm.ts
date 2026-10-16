@@ -167,7 +167,7 @@ export const getBinding = (): Promise<NativeAnonymizeBinding> => {
 
 const loadWasmBinding = async (): Promise<NativeAnonymizeBinding> => {
   const glueUrl = assetUrl(GLUE_MODULE);
-  // eslint-disable-next-line stll/no-dynamic-import-specifier
+  // oxlint-disable-next-line stll/no-dynamic-import-specifier -- Resolve verified emitted assets at runtime.
   const loaded: unknown = await import(/* @vite-ignore */ glueUrl.href);
   if (!isRawWasmModule(loaded)) {
     throw new Error("wasm module does not expose the expected binding surface");
@@ -303,7 +303,7 @@ const isMissingFileError = (error: unknown): boolean =>
  * value so the bundler leaves it alone, mirroring the runtime glue import in
  * {@link loadWasmBinding}, so browser bundles never pull in node:fs. */
 const readFileUrlBytes = async (fileUrl: string): Promise<Uint8Array> => {
-  // eslint-disable-next-line stll/no-dynamic-import-specifier
+  // oxlint-disable-next-line stll/no-dynamic-import-specifier -- Resolve verified emitted assets at runtime.
   const { readFile } = await import(/* @vite-ignore */ NODE_FS_MODULE);
   return new Uint8Array(await readFile(new URL(fileUrl)));
 };

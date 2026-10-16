@@ -126,7 +126,7 @@ async function loadBasePackageInput(options) {
     return { config: defaultNativePipelineConfig(), gazetteerEntries: [] };
   }
   const moduleUrl = pathToFileURL(resolve(options.config)).href;
-  // eslint-disable-next-line stll/no-dynamic-import-specifier
+  // oxlint-disable-next-line stll/no-dynamic-import-specifier -- Resolve verified emitted assets at runtime.
   const loaded = await import(moduleUrl);
   const exportName = options.exportName ?? "default";
   const candidate =

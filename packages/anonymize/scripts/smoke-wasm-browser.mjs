@@ -397,7 +397,7 @@ const withTimeout = (promise, ms, label) =>
 
 const main = async () => {
   requireBuilt();
-  // eslint-disable-next-line stll/no-dynamic-import-specifier
+  // oxlint-disable-next-line stll/no-dynamic-import-specifier -- Resolve verified emitted assets at runtime.
   const nativeNodeEntry = await import(pathToFileURL(nativeNodeEntryPath).href);
   const nodeBinding = nativeNodeEntry.loadNativeAnonymizeBinding();
   const pdfBytes = new Uint8Array(readFileSync(pdfFixturePath));
