@@ -878,7 +878,7 @@ const detectNativeLibc = (platform: string): NativeLibc | undefined => {
   if (platform !== "linux") {
     return undefined;
   }
-  const report = process.report?.getReport();
+  const report = process.report.getReport();
   const header =
     isPropertyBag(report) && isPropertyBag(report["header"])
       ? report["header"]

@@ -31,5 +31,5 @@ export const preloadNativeBinding = async (): Promise<void> => {
     loadNativeAnonymizeBinding();
     return undefined;
   });
-  return await preloadPromise;
+  await preloadPromise;
 };
