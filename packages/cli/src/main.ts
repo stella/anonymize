@@ -121,7 +121,7 @@ type NamedInput = {
 
 const readInputs = async (files: string[]): Promise<NamedInput[]> => {
   if (files.length === 0) {
-    if (process.stdin.isTTY) {
+    if (process.stdin.isTTY === true) {
       throw new UsageError(
         "no input files and stdin is a terminal (see --help)",
       );
@@ -436,7 +436,7 @@ const writeOutput = async ({
   if (path === undefined) {
     await new Promise<void>((complete, reject) => {
       process.stdout.write(content, (error) => {
-        if (error) {
+        if (error !== undefined && error !== null) {
           reject(error);
           return;
         }

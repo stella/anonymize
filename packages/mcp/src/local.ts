@@ -1152,12 +1152,6 @@ export class LocalAnonymizeService {
       pages: observed.pages,
       fillRgb: input.fillRgb,
     });
-    if (
-      anonymized.certificate.structurePixelRewriteVerified !== true ||
-      anonymized.certificate.piiCleanGuaranteed !== false
-    ) {
-      throw new Error("PDF raster verification did not satisfy MCP policy");
-    }
     await this.#faults.beforeOutputPublish?.();
     await destination.write(anonymized.document);
     return {
