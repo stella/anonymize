@@ -53,7 +53,7 @@
     "sync-ai:check": "bash scripts/sync-ai-skills.sh --check",
     "sync-ai:check:optional": "bash scripts/sync-ai-skills.sh --check --optional",
     "cloud:setup": "stll-cloud-setup",
-    "test:tooling": "bun test ./.github/tools/tooling-adoption.test.ts ./.github/tools/tooling-workflow.test.ts packages/anonymize/src/__test__/native-json-codec.test.ts"
+    "test:tooling": "bun test ./.github/tools/tooling-adoption.test.ts ./.github/tools/tooling-workflow.test.ts packages/anonymize/src/__test__/native-json-codec.test.ts scripts/eval-html-args.test.ts && node --test .github/tools/json-values.test.mjs"
   },
   "overrides": {
     "@emnapi/core": "1.11.1",
