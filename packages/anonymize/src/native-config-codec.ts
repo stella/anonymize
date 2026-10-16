@@ -38,6 +38,7 @@ import type {
 import {
   arrayOf,
   isBoolean,
+  isRecord,
   isNumber,
   isString,
   objectOf,
@@ -574,14 +575,14 @@ const checkNativePreparedSearchConfig = objectOf({
   threshold: isNumber,
   confidence_boost: isBoolean,
   slices: objectOf({
-    regex: (value: unknown) => isPatternSlice(value),
-    custom_regex: (value: unknown) => isPatternSlice(value),
+    regex: optional((value: unknown) => isPatternSlice(value)),
+    custom_regex: optional((value: unknown) => isPatternSlice(value)),
     legal_forms: optional((value: unknown) => isPatternSlice(value)),
     triggers: optional((value: unknown) => isPatternSlice(value)),
-    deny_list: (value: unknown) => isPatternSlice(value),
+    deny_list: optional((value: unknown) => isPatternSlice(value)),
     street_types: optional((value: unknown) => isPatternSlice(value)),
-    gazetteer: (value: unknown) => isPatternSlice(value),
-    countries: (value: unknown) => isPatternSlice(value),
+    gazetteer: optional((value: unknown) => isPatternSlice(value)),
+    countries: optional((value: unknown) => isPatternSlice(value)),
     hotwords: optional((value: unknown) => isPatternSlice(value)),
   } satisfies Fields<NativePreparedSearchConfig["slices"]>),
   regex_meta: arrayOf((value: unknown) => isNativeRegexMatchMeta(value)),
@@ -618,10 +619,33 @@ const isNativePreparedSearchConfig = (
 ): value is NativePreparedSearchConfig =>
   checkNativePreparedSearchConfig(value);
 
+// Serde represents absent Option fields as null. Keep the TypeScript domain
+// model optional, including nested pattern metadata and inactive lane slices.
+const normalizeOptionalFields = (value: unknown): unknown => {
+  if (Array.isArray(value)) return value.map(normalizeOptionalFields);
+  if (!isRecord(value)) return value;
+  return Object.fromEntries(Object.entries(value)
+    .filter(([, entry]) => entry !== null)
+    .map(([key, entry]) => [key, normalizeOptionalFields(entry)]));
+};
+
 export const parseNativePreparedSearchConfig = (
   json: string,
 ): NativePreparedSearchConfig => {
-  const value: unknown = JSON.parse(json);
+  const input: unknown = JSON.parse(json);
+  if (!isRecord(input)) throw new TypeError("Invalid native prepared search config");
+  const defaults = {
+    regex_patterns: [], custom_regex_patterns: [], literal_patterns: [],
+    regex_options: {}, custom_regex_options: {}, literal_options: {},
+    allowed_labels: [], threshold: 0, confidence_boost: false,
+    slices: {}, regex_meta: [], custom_regex_meta: [],
+  } satisfies NativePreparedSearchConfig;
+  const value = normalizeOptionalFields({
+    ...defaults, ...input,
+    regex_options: input.regex_options ?? {},
+    custom_regex_options: input.custom_regex_options ?? {},
+    literal_options: input.literal_options ?? {},
+  });
   if (!isNativePreparedSearchConfig(value))
     throw new TypeError("Invalid native prepared search config");
   return value;

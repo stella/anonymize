@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import fc from "fast-check";
 
 import { parseNativePreparedSearchConfig } from "../native-config-codec";
 import { isRecord } from "../native-json-codec";
@@ -143,7 +145,7 @@ describe("native JSON boundaries", () => {
     }
   });
 
-  test("optional config fields may be omitted and every required root field is checked", () => {
+  test("prepared config defaults match the native deserializer", () => {
     const minimal = {
       regex_patterns: [],
       custom_regex_patterns: [],
@@ -167,15 +169,40 @@ describe("native JSON boundaries", () => {
     expect(parseNativePreparedSearchConfig(JSON.stringify(minimal))).toEqual(
       minimal,
     );
-    for (const removed of Object.keys(minimal)) {
-      const incomplete = Object.fromEntries(
-        Object.entries(minimal).filter(([key]) => key !== removed),
-      );
-      expect(
-        () => parseNativePreparedSearchConfig(JSON.stringify(incomplete)),
-        removed,
-      ).toThrow(TypeError);
+    const defaults = parseNativePreparedSearchConfig("{}");
+    expect(defaults).toEqual({ ...minimal, slices: {} });
+    for (const key of Object.keys(defaults)) {
+      const malformed = { ...defaults, [key]: null };
+      if (["regex_options", "custom_regex_options", "literal_options"].includes(key)) {
+        expect(parseNativePreparedSearchConfig(JSON.stringify(malformed))).toEqual(defaults);
+      } else {
+        expect(() => parseNativePreparedSearchConfig(JSON.stringify(malformed)), key).toThrow(TypeError);
+      }
     }
+  });
+
+  test("every native optional lane accepts null across subsets", () => {
+    const rust = readFileSync(new URL("../../../../crates/anonymize-adapter-contract/src/types.rs", import.meta.url), "utf8");
+    const optionalFields = (name: string) => {
+      const body = rust.split(`pub struct ${name} {`).at(1)?.split("\n}").at(0);
+      if (body === undefined) throw new Error(`Missing native struct ${name}`);
+      return Array.from(body.matchAll(/pub (\w+): Option</gu), (match) => match.at(1) ?? "");
+    };
+    const rootFields = optionalFields("BindingPreparedSearchConfig");
+    const sliceFields = optionalFields("BindingPreparedSearchSlices");
+    expect(rootFields.length).toBeGreaterThan(15);
+    expect(sliceFields).toHaveLength(9);
+    fc.assert(fc.property(fc.subarray(rootFields), fc.subarray(sliceFields), (rootAbsent, sliceAbsent) => {
+      const wire = { ...nativeConfigFixture,
+        ...Object.fromEntries(rootAbsent.map((key) => [key, null])),
+        slices: { ...nativeConfigFixture.slices, ...Object.fromEntries(sliceAbsent.map((key) => [key, null])) },
+      };
+      const decoded = parseNativePreparedSearchConfig(JSON.stringify(wire));
+      for (const key of rootAbsent) {
+        expect(Object.hasOwn(decoded, key)).toBe(["regex_options", "custom_regex_options", "literal_options"].includes(key));
+      }
+      for (const key of sliceAbsent) expect(Object.hasOwn(decoded.slices, key)).toBe(false);
+    }), { numRuns: 100 });
   });
 
   test("closed session status rejects unknown values and accepts every declared state", () => {

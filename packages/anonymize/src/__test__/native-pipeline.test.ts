@@ -13,10 +13,11 @@
  * - Language scope is applied end-to-end through the new Rust path.
  */
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
 
 import { createPipelineContext } from "../context";
 import { applyPipelineLanguageScope } from "../language-scope";
-import type { NativeAnonymizeBinding } from "../native";
+import { createNativeAnonymizerFromConfig, type NativeAnonymizeBinding } from "../native";
 import { loadNativeAnonymizeBinding } from "../native-node";
 import {
   assertNativePipelineSupported,
@@ -61,6 +62,17 @@ describe("prepareNativePipelineConfig", () => {
     expect(prepared.allowed_labels).toEqual([...DEFAULT_ENTITY_LABELS]);
     // Enabling regex must produce at least one baked regex pattern.
     expect(prepared.regex_patterns.length).toBeGreaterThan(0);
+  });
+
+  test("native-produced configs remain valid across detector lane subsets", async () => {
+    const lanes = ["enableRegex", "enableTriggerPhrases", "enableLegalForms", "enableNameCorpus", "enableDenyList", "enableGazetteer", "enableCountries", "enableCoreference", "enableHotwordRules", "enableZoneClassification"] as const satisfies readonly (keyof PipelineConfig)[];
+    await fc.assert(fc.asyncProperty(fc.subarray(lanes), async (enabled) => {
+      const config = baseConfig();
+      for (const lane of lanes) config[lane] = enabled.includes(lane);
+      const prepared = await prepareNativePipelineConfig({ binding, config });
+      const engine = createNativeAnonymizerFromConfig({ binding, config: prepared });
+      expect(() => engine.redactStaticEntities("Email legal@example.test")).not.toThrow();
+    }), { numRuns: 32 });
   });
 
   test("rejects a stray untyped enableNer request instead of ignoring it", () => {
