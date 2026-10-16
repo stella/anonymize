@@ -1,3 +1,7 @@
+import {
+  parseCanonicalStaticRedactionResult,
+  parseExternalDetections,
+} from "./native-result-codec";
 import type {
   NativeAnonymizeBinding,
   NativeCallerDetection,
@@ -235,14 +239,9 @@ export const createWasmBinding = (
   raw: RawWasmModule,
 ): NativeAnonymizeBinding => ({
   convertExternalDetectionBatch: (document, batchJson) => {
-    const detections: Array<{
-      start: number;
-      end: number;
-      label: string;
-      score: number;
-      provider_id: string;
-      detection_id: string;
-    }> = JSON.parse(raw.convertExternalDetectionBatchJson(document, batchJson));
+    const detections = parseExternalDetections(
+      raw.convertExternalDetectionBatchJson(document, batchJson),
+    );
     return detections.map(
       ({ start, end, label, score, provider_id, detection_id }) =>
         ({
@@ -342,7 +341,9 @@ const wrapPrepared = (raw: RawPreparedSearch): NativePreparedSearchBinding => ({
     ),
   redactStaticEntities: (fullText, operators) =>
     canonicalResult(
-      JSON.parse(raw.redactStaticEntitiesJson(fullText, json(operators))),
+      parseCanonicalStaticRedactionResult(
+        raw.redactStaticEntitiesJson(fullText, json(operators)),
+      ),
     ),
   redactStaticEntitiesJson: (fullText, operators) =>
     raw.redactStaticEntitiesJson(fullText, json(operators)),

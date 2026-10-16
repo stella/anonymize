@@ -1,3 +1,4 @@
+import { parseNativePreparedSearchConfig } from "./native-config-codec";
 import type { PipelineContext } from "./context";
 import { defaultContext } from "./context";
 import { applyPipelineLanguageScope } from "./language-scope";
@@ -210,7 +211,7 @@ export const prepareNativePipelineConfig = async ({
     dictionariesJson,
     gazetteerJson,
   );
-  return JSON.parse(new TextDecoder().decode(configJson));
+  return parseNativePreparedSearchConfig(new TextDecoder().decode(configJson));
 };
 
 export const prepareNativePipelinePackage = async ({
