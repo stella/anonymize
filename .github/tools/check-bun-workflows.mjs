@@ -13,6 +13,7 @@ const SETUP_BUN_RE =
 const RAW_BUN_RE = /^oven-sh\/setup-bun@/;
 const CACHED_BUN_RE = /^stella\/\.github\/actions\/setup-bun-cached@/;
 const TURBO_CACHE_RE = /^rharkor\/caching-for-turbo@/;
+/** @param {string} line */
 const isConfigLine = (line) => !line.trimStart().startsWith("#");
 
 export const bunWorkflowFiles = (root = ".") => {
@@ -36,6 +37,7 @@ export const bunWorkflowFiles = (root = ".") => {
 
 // Any next step ends the block, including an `if` or `run` step. Inputs from
 // a later setup must never satisfy this setup's runtime or cache policy.
+/** @param {string[]} lines */
 const stepBlocks = (lines) =>
   lines.flatMap((line, index) => {
     const start = /^(\s*)-\s+[\w-]+:/.exec(line);
@@ -48,6 +50,7 @@ const stepBlocks = (lines) =>
     return [lines.slice(index, end === -1 ? undefined : end)];
   });
 
+/** @param {string} source */
 export const bunPinProblems = (source) => {
   const lines = source.split("\n");
   const problems = [];
@@ -77,13 +80,22 @@ export const bunPinProblems = (source) => {
   return problems;
 };
 
+/**
+ * @param {unknown} value
+ * @returns {value is Record<string, unknown>}
+ */
 const isRecord = (value) =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
+/**
+ * @param {unknown} workflow
+ * @param {unknown} job
+ */
 const hasPublishToken = (workflow, job) => {
   if (!isRecord(job)) return false;
   const permissions =
-    job.permissions ?? (isRecord(workflow) ? workflow.permissions : undefined);
+    job["permissions"] ??
+    (isRecord(workflow) ? workflow["permissions"] : undefined);
   if (typeof permissions === "string") return permissions !== "read-all";
   return (
     isRecord(permissions) &&
@@ -96,21 +108,26 @@ const hasPublishToken = (workflow, job) => {
   );
 };
 
+/**
+ * @param {unknown} job
+ * @param {"upload" | "download"} operation
+ */
 const hasArtifactStep = (job, operation) =>
   isRecord(job) &&
-  Array.isArray(job.steps) &&
-  job.steps.some(
+  Array.isArray(job["steps"]) &&
+  job["steps"].some(
     (step) =>
       isRecord(step) &&
-      typeof step.uses === "string" &&
-      step.uses.startsWith(`actions/${operation}-artifact@`),
+      typeof step["uses"] === "string" &&
+      step["uses"].startsWith(`actions/${operation}-artifact@`),
   );
 
 // Protect the full dependency chain of a publishing token. Artifact readers
 // can consume uploads without a needs edge, so include those producers too.
+/** @param {unknown} workflow */
 const publishingJobNames = (workflow) => {
-  if (!isRecord(workflow) || !isRecord(workflow.jobs)) return new Set();
-  const jobs = workflow.jobs;
+  if (!isRecord(workflow) || !isRecord(workflow["jobs"])) return new Set();
+  const jobs = workflow["jobs"];
   const protectedJobs = new Set(
     Object.keys(jobs).filter((name) => hasPublishToken(workflow, jobs[name])),
   );
@@ -120,7 +137,7 @@ const publishingJobNames = (workflow) => {
     if (name === undefined) continue;
     const job = jobs[name];
     if (!isRecord(job)) continue;
-    const needs = job.needs;
+    const needs = job["needs"];
     const dependencies = Array.isArray(needs)
       ? needs.filter((dependency) => typeof dependency === "string")
       : [];
@@ -149,26 +166,28 @@ const publishingJobNames = (workflow) => {
   return protectedJobs;
 };
 
+/** @param {unknown} workflow */
 export const bunCacheProblems = (workflow) => {
-  if (!isRecord(workflow) || !isRecord(workflow.jobs))
+  if (!isRecord(workflow) || !isRecord(workflow["jobs"]))
     return ["Invalid workflow jobs"];
   const publishing = publishingJobNames(workflow);
-  return Object.entries(workflow.jobs).flatMap(([name, job]) => {
+  return Object.entries(workflow["jobs"]).flatMap(([name, job]) => {
     if (!isRecord(job)) return [`Invalid job ${name}`];
-    if (typeof job.uses === "string") return [];
-    if (!Array.isArray(job.steps) || !job.steps.every(isRecord))
+    if (typeof job["uses"] === "string") return [];
+    if (!Array.isArray(job["steps"]) || !job["steps"].every(isRecord))
       return [`Invalid steps in ${name}`];
     const noCache =
       publishing.has(name) ||
-      job.steps.some(
+      job["steps"].some(
         (step) =>
-          SETUP_BUN_RE.test(step.uses ?? "") &&
-          isRecord(step.with) &&
-          step.with["no-cache"] === true,
+          typeof step["uses"] === "string" &&
+          SETUP_BUN_RE.test(step["uses"]) &&
+          isRecord(step["with"]) &&
+          step["with"]["no-cache"] === true,
       );
-    return job.steps.flatMap((step) => {
-      const uses = typeof step.uses === "string" ? step.uses : "";
-      const inputs = isRecord(step.with) ? step.with : {};
+    return job["steps"].flatMap((step) => {
+      const uses = typeof step["uses"] === "string" ? step["uses"] : "";
+      const inputs = isRecord(step["with"]) ? step["with"] : {};
       const problems = [];
       if (
         SETUP_BUN_RE.test(uses) &&
@@ -201,12 +220,13 @@ export const bunCacheProblems = (workflow) => {
   });
 };
 
+/** @param {string} source */
 const cacheDocumentProblems = (source) => {
   const document = globalThis.Bun.YAML.parse(source);
-  if (isRecord(document) && isRecord(document.runs)) {
-    return document.runs.using === "composite"
+  if (isRecord(document) && isRecord(document["runs"])) {
+    return document["runs"]["using"] === "composite"
       ? bunCacheProblems({
-          jobs: { composite: { steps: document.runs.steps } },
+          jobs: { composite: { steps: document["runs"]["steps"] } },
         })
       : [];
   }
