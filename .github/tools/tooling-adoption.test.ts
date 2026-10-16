@@ -73,3 +73,22 @@ test("keeps third-party quarantine and exact first-party tooling exemptions", ()
     ),
   ).toBe(true);
 });
+
+test("every first-party quarantine exemption carries an exact UTC annotation", () => {
+  const source = read("bunfig.toml");
+  const parsed = Bun.TOML.parse(source);
+  const entries = Array.from(
+    source.matchAll(
+      /^\s*"(?<name>@stll\/[^"*]+)"\s*,?\s*#\s*quarantine-excluded-since:\s*(?<timestamp>\S+)\s*$/gm,
+    ),
+  );
+  expect(entries.map((entry) => entry.groups?.name).toSorted()).toEqual(
+    parsed.install.minimumReleaseAgeExcludes.toSorted(),
+  );
+  for (const entry of entries) {
+    const timestamp = entry.groups?.timestamp;
+    if (timestamp === undefined) throw new Error("Missing exemption timestamp");
+    expect(new Date(timestamp).toISOString()).toBe(timestamp);
+    expect(Date.parse(timestamp)).toBeLessThanOrEqual(Date.now());
+  }
+});
