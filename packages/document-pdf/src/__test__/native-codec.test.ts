@@ -109,4 +109,20 @@ describe("native PDF codecs", () => {
       ).toThrow("does not match contract version 2");
     }
   });
+
+  test("rejects certificates without verified structural pixel rewriting", () => {
+    expect(() =>
+      decodePdfRasterRewriteCertificate(
+        JSON.stringify({ ...certificate, structurePixelRewriteVerified: false }),
+      ),
+    ).toThrow("does not match contract version 2");
+  });
+
+  test("rejects certificates that promise guaranteed PII removal", () => {
+    expect(() =>
+      decodePdfRasterRewriteCertificate(
+        JSON.stringify({ ...certificate, piiCleanGuaranteed: true }),
+      ),
+    ).toThrow("does not match contract version 2");
+  });
 });
