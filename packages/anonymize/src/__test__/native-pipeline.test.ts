@@ -328,7 +328,7 @@ describe("createNativePipelineFromConfig", () => {
     expect(diagnosticsJson).toContain('"detection_id":"person-1"');
     const diagnosticsResult: {
       diagnostics: { events: Array<{ text?: string }> };
-    } = JSON.parse(diagnosticsJson ?? "{}");
+    } = JSON.parse(diagnosticsJson);
     expect(
       diagnosticsResult.diagnostics.events.every(
         ({ text }) => text === undefined,
@@ -545,7 +545,7 @@ describe("shared prepared-package cache bound", () => {
       assembleStaticSearchPackageBytes: (...args) => {
         buildCount += 1;
         const assemble = binding.assembleStaticSearchPackageBytes;
-        if (assemble === undefined) {
+        if (typeof assemble !== "function") {
           throw new Error(
             "binding does not support assembleStaticSearchPackageBytes",
           );

@@ -180,7 +180,7 @@ const assemblePackageBytes = (
   const assemble = compressed
     ? binding.assembleStaticSearchCompressedPackageBytes
     : binding.assembleStaticSearchPackageBytes;
-  if (assemble === undefined) {
+  if (typeof assemble !== "function") {
     throw new Error(
       "Native anonymize binding does not support static-search config assembly",
     );
@@ -200,7 +200,7 @@ export const prepareNativePipelineConfig = ({
     const scopedConfig = applyPipelineLanguageScope(config);
     assertNativePipelineSupported(scopedConfig);
     const assemble = binding.assembleStaticSearchConfigJson;
-    if (assemble === undefined) {
+    if (typeof assemble !== "function") {
       throw new Error(
         "Native anonymize binding does not support static-search config assembly",
       );
