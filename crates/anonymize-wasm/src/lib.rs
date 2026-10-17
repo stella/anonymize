@@ -39,7 +39,9 @@ use stella_anonymize_core::{
 use stella_anonymize_docx_core::{
   DocxBlockRewrite, DocxRestorationErrorCode, DocxRewriteErrorCode,
   extract_docx_text as extract_docx_text_core,
+  finalize_docx_anonymized_export as finalize_docx_anonymized_export_core,
   plan_docx_restoration as plan_docx_restoration_core,
+  prepare_docx_anonymized_export as prepare_docx_anonymized_export_core,
   rewrite_docx_text as rewrite_docx_text_core,
 };
 use stella_anonymize_pdf_core::{
@@ -119,6 +121,31 @@ pub fn rewrite_docx_text_native(
   })
 }
 
+#[wasm_bindgen(js_name = prepareDocxAnonymizedExportNative)]
+pub fn prepare_docx_anonymized_export_native(
+  document: &[u8],
+) -> WasmResult<WasmDocxAnonymizedExportPreparation> {
+  let prepared =
+    prepare_docx_anonymized_export_core(document).map_err(|error| {
+      js_error(format!("{}: {error}", docx_rewrite_code(error.code())))
+    })?;
+  Ok(WasmDocxAnonymizedExportPreparation {
+    document: prepared.document,
+    extraction_json: serde_json::to_string(&prepared.extraction)
+      .map_err(js_error)?,
+    report_json: serde_json::to_string(&prepared.report).map_err(js_error)?,
+  })
+}
+
+#[wasm_bindgen(js_name = finalizeDocxAnonymizedExportNative)]
+pub fn finalize_docx_anonymized_export_native(
+  document: &[u8],
+) -> WasmResult<Vec<u8>> {
+  finalize_docx_anonymized_export_core(document).map_err(|error| {
+    js_error(format!("{}: {error}", docx_rewrite_code(error.code())))
+  })
+}
+
 #[wasm_bindgen(js_name = planDocxRestorationJson)]
 pub fn plan_docx_restoration_json(
   document: &[u8],
@@ -189,6 +216,34 @@ pub struct WasmDocumentRewriteResult {
   document: Vec<u8>,
   rewritten_block_count: u32,
   applied_replacement_count: u32,
+}
+
+#[wasm_bindgen]
+pub struct WasmDocxAnonymizedExportPreparation {
+  document: Vec<u8>,
+  extraction_json: String,
+  report_json: String,
+}
+
+#[wasm_bindgen]
+impl WasmDocxAnonymizedExportPreparation {
+  #[wasm_bindgen(getter)]
+  #[must_use]
+  pub fn document(&self) -> Uint8Array {
+    Uint8Array::from(&self.document[..])
+  }
+
+  #[wasm_bindgen(getter, js_name = extractionJson)]
+  #[must_use]
+  pub fn extraction_json(&self) -> String {
+    self.extraction_json.clone()
+  }
+
+  #[wasm_bindgen(getter, js_name = reportJson)]
+  #[must_use]
+  pub fn report_json(&self) -> String {
+    self.report_json.clone()
+  }
 }
 
 #[wasm_bindgen]
