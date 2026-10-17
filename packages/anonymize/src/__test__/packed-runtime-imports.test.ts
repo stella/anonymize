@@ -125,7 +125,7 @@ test("declared extensionless bins traverse their static runtime imports", () => 
 });
 
 test("all declared entry kinds traverse extensionless intermediate modules", () => {
-  for (const manifest of [
+  for (const entryManifest of [
     { bin: { cli: "bin/entry" } },
     { main: "bin/entry" },
     { exports: { ".": "./bin/entry" } },
@@ -142,7 +142,7 @@ test("all declared entry kinds traverse extensionless intermediate modules", () 
         ["bin/binding.node", "opaque native binary"],
       ]);
       const options = {
-        manifest,
+        manifest: entryManifest,
         packedFiles: new Set(files.keys()),
         readSource: (path: string) => files.get(path),
       };

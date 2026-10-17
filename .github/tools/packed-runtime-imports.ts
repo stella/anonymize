@@ -73,7 +73,7 @@ export const assertPackedRuntimeImports = ({
     const source = readSource(path);
     if (source === undefined)
       throw new Error(`Packed runtime source is missing: ${path}`);
-    for (const dependency of scanner.scanImports(source)) {
+    for (const dependency of scanner.scan(source).imports) {
       if (
         dependency.kind !== "import-statement" &&
         dependency.kind !== "require-call" &&
