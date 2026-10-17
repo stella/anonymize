@@ -9,8 +9,14 @@
  * Run after `bun run build`: `bun run smoke:dist`.
  */
 import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import path from "node:path";
+
+import {
+  copyPublishedFiles,
+  parsePublishedFiles,
+} from "./pruned-runtime-files.mjs";
 
 import {
   createPipelineContext,
@@ -199,15 +205,17 @@ const runPrunedBundleSmoke = async () => {
     const installedSidecar = path.join(scopeRoot, sidecarDirectory);
     mkdirSync(installedPackage, { recursive: true });
     mkdirSync(installedSidecar, { recursive: true });
-    for (const entry of ["dist", "index.cjs", "package.json"]) {
-      cpSync(
-        path.join(packageRoot, entry),
-        path.join(installedPackage, entry),
-        {
-          recursive: true,
-        },
-      );
-    }
+    const publishedFiles = parsePublishedFiles(
+      execFileSync("npm", ["pack", "--dry-run", "--ignore-scripts", "--json"], {
+        cwd: packageRoot,
+        encoding: "utf8",
+      }),
+    );
+    copyPublishedFiles({
+      sourceRoot: packageRoot,
+      targetRoot: installedPackage,
+      files: publishedFiles,
+    });
     const sidecarRoot = path.resolve(packageRoot, "..", sidecarDirectory);
     for (const entry of [
       "index.cjs",

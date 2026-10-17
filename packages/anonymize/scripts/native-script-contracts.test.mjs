@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { detectNativeLibc } from "../native-libc.mjs";
 
 import {
   NATIVE_LIBRARY_FILES,
   assertBuiltCapabilities,
   nativeLibraryName,
-  nativeLibcFromReport,
   readNativePackageInput,
 } from "./native-script-contracts.mjs";
 
@@ -35,7 +35,9 @@ void test("native build libraries cover supported hosts and reject every other p
 
 void test("report libc detection validates the unknown header before consuming its glibc marker", () => {
   assert.equal(
-    nativeLibcFromReport({ header: { glibcVersionRuntime: "2.36" } }),
+    detectNativeLibc("linux", () => ({
+      header: { glibcVersionRuntime: "2.36" },
+    })),
     "gnu",
   );
   for (const report of [
@@ -49,7 +51,10 @@ void test("report libc detection validates the unknown header before consuming i
     { header: { glibcVersionRuntime: 2.36 } },
     { header: { glibcVersionRuntime: "" } },
   ])
-    assert.equal(nativeLibcFromReport(report), "musl");
+    assert.equal(
+      detectNativeLibc("linux", () => report),
+      "musl",
+    );
 });
 
 void test("built capability assertions validate runtime values independently of declaration literals", () => {
