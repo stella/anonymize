@@ -390,11 +390,15 @@ describe("multilingual clinical identifiers", () => {
         const id = `${language}-clinical-${family}`;
         const entry = entriesById.get(id);
         expect(entry, `${id} is missing`).toBeDefined();
-        expect(entry?.label).toBe("registration number");
-        expect(entry?.strategy?.type).toBe("company-id-value");
-        expect(entry?.triggers).toBeArray();
-        expect((entry?.triggers as unknown[])?.length).toBeGreaterThan(0);
-        expect(entry?.validations).toContainEqual({ type: "has-digits" });
+        if (entry === undefined) throw new Error(`${id} is missing`);
+        expect(entry.label).toBe("registration number");
+        expect(entry.strategy?.type).toBe("company-id-value");
+        expect(entry.triggers).toBeArray();
+        if (!Array.isArray(entry.triggers)) {
+          throw new TypeError(`${id} triggers must contain an array`);
+        }
+        expect(entry.triggers.length).toBeGreaterThan(0);
+        expect(entry.validations).toContainEqual({ type: "has-digits" });
       }
     }
   });

@@ -236,9 +236,7 @@ export const renderMarkdown = (result: BenchResult): string => {
     lines.push("## Excluded libraries");
     lines.push("");
     for (const lib of unavailable) {
-      if (lib.status === "unavailable") {
-        lines.push(`- **${lib.name}**: ${lib.reason}`);
-      }
+      lines.push(`- **${lib.name}**: ${lib.reason}`);
     }
     lines.push("");
   }

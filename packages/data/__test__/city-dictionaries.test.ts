@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
+import { spawnSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { CITY_LOADERS } from "../dictionaries/city-loaders";
 
 import {
   CITY_DICTIONARY_COUNTRIES,
@@ -14,6 +17,23 @@ const DICTIONARIES_DIR = join(__dirname, "..", "dictionaries");
 const CITIES_DIR = join(DICTIONARIES_DIR, "cities");
 
 describe("city dictionary loading", () => {
+  test("the committed loader map matches its generator", () => {
+    const result = spawnSync(
+      process.execPath,
+      [join(__dirname, "..", "scripts", "generate-city-loaders.ts"), "--check"],
+      { encoding: "utf8" },
+    );
+    expect(result.stderr).toBe("");
+    expect(result.status).toBe(0);
+  });
+
+  test("every generated loader retains its Promise contract", async () => {
+    const pending = Object.values(CITY_LOADERS).map((load) => load());
+    for (const promise of pending) expect(promise).toBeInstanceOf(Promise);
+    const modules = await Promise.all(pending);
+    expect(modules.every((module) => module.default.length > 0)).toBe(true);
+  });
+
   test("covers every bundled cities/*.json", () => {
     const files = readdirSync(CITIES_DIR)
       .map((name) => name.replace(/\.json$/, ""))

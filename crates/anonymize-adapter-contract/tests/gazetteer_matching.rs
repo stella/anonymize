@@ -572,7 +572,10 @@ fn a_spelling_keeps_a_label_that_hotword_rules_reclassify() {
 fn czech_slovak_forms_follow_the_pipeline_language() {
   const ANA: &[(&str, &str, &[&str])] = &[("Ana", PERSON, &[])];
   let english = engine_for(Some("en"), ANA);
-  assert!(gazetteer_texts(&english, "Is there any news?").is_empty());
+  assert_eq!(
+    gazetteer_texts(&english, "Is there any news?"),
+    Vec::<std::string::String>::new()
+  );
   assert_eq!(gazetteer_texts(&english, "Ana arrived."), ["Ana"]);
   for language in [Some("cs"), Some("sk"), None] {
     let engine = engine_for(language, ANA);

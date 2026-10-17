@@ -1,3 +1,9 @@
+import {
+  parseCanonicalSessionMetadata,
+  parseCanonicalSessionDeletionSummary,
+  parseCanonicalStaticRedactionResult,
+  parseCanonicalSessionRedactionPlanResult,
+} from "./native-result-codec";
 import type { NativePreparedSearchConfig } from "./native-search-config";
 import type { OperatorSelection, OperatorType } from "./types";
 
@@ -34,12 +40,12 @@ type NativeBindingOpenSessionArchiveOptions = {
 export type NativeDiagnosticsBatchCallback = (diagnosticsJson: string) => void;
 export type NativeResultEventCallback = (eventJson: string) => void;
 
-type NativeBindingRedactionEntry = {
+export type NativeBindingRedactionEntry = {
   placeholder: string;
   original: string;
 };
 
-type NativeBindingOperatorEntry = {
+export type NativeBindingOperatorEntry = {
   placeholder: string;
   operator: OperatorType;
 };
@@ -68,7 +74,7 @@ type NativeBindingStaticRedactionResult = {
   redaction: NativeBindingRedactionResult;
 };
 
-type CanonicalPipelineEntity = {
+export type CanonicalPipelineEntity = {
   start: number;
   end: number;
   label: string;
@@ -80,7 +86,7 @@ type CanonicalPipelineEntity = {
   detection_id?: string | null;
 };
 
-type CanonicalStaticRedactionResult = {
+export type CanonicalStaticRedactionResult = {
   resolved_entities: CanonicalPipelineEntity[];
   redaction: {
     redacted_text: string;
@@ -90,7 +96,7 @@ type CanonicalStaticRedactionResult = {
   };
 };
 
-type CanonicalSessionMetadata = {
+export type CanonicalSessionMetadata = {
   session_id: string;
   created_at_epoch_seconds: number | null;
   expires_at_epoch_seconds: number | null;
@@ -98,12 +104,12 @@ type CanonicalSessionMetadata = {
   status: NativeSessionStatus;
 };
 
-type CanonicalSessionDeletionSummary = {
+export type CanonicalSessionDeletionSummary = {
   session_id: string;
   deleted_mapping_count: number;
 };
 
-type CanonicalSessionRedactionPlanResult = {
+export type CanonicalSessionRedactionPlanResult = {
   replacements: Array<{ start: number; end: number; replacement: string }>;
   entity_count: number;
   caller_entity_count: number;
@@ -1013,7 +1019,7 @@ export class PreparedNativeRedactionSession {
   }
 
   inspect(observedAtEpochSeconds?: number): NativeSessionMetadata {
-    const metadata: CanonicalSessionMetadata = JSON.parse(
+    const metadata = parseCanonicalSessionMetadata(
       this.#session.inspectJson(observedAtEpochSeconds),
     );
     return {
@@ -1026,7 +1032,7 @@ export class PreparedNativeRedactionSession {
   }
 
   delete(): NativeSessionDeletionSummary {
-    const summary: CanonicalSessionDeletionSummary = JSON.parse(
+    const summary = parseCanonicalSessionDeletionSummary(
       this.#session.deleteJson(),
     );
     return {
@@ -1039,7 +1045,7 @@ export class PreparedNativeRedactionSession {
     fullText: string,
     operators?: NativeOperatorConfig,
   ): NativeStaticRedactionResult {
-    const result: CanonicalStaticRedactionResult = JSON.parse(
+    const result = parseCanonicalStaticRedactionResult(
       this.redact_text_json(fullText, operators),
     );
     return fromCanonicalStaticRedactionResult(result);
@@ -1073,7 +1079,7 @@ export class PreparedNativeRedactionSession {
   redactStaticEntitiesAt(
     options: NativeSessionRedactionAtOptions,
   ): NativeStaticRedactionResult {
-    const result: CanonicalStaticRedactionResult = JSON.parse(
+    const result = parseCanonicalStaticRedactionResult(
       this.redactTextJsonAt(options),
     );
     return fromCanonicalStaticRedactionResult(result);
@@ -1138,9 +1144,7 @@ export class PreparedNativeSessionRedactionPlan {
 
   constructor(plan: NativePreparedSessionRedactionPlanBinding) {
     this.#plan = plan;
-    const blocks: CanonicalSessionRedactionPlanResult[] = JSON.parse(
-      plan.resultJson(),
-    );
+    const blocks = parseCanonicalSessionRedactionPlanResult(plan.resultJson());
     this.blocks = blocks.map(
       ({ caller_entity_count, entity_count, replacements }) => ({
         replacements,
@@ -1287,7 +1291,7 @@ export class PreparedNativeAnonymizer {
       options.detections,
     );
     const operators = toBindingOperatorConfig(options.operators);
-    const result: CanonicalStaticRedactionResult = JSON.parse(
+    const result = parseCanonicalStaticRedactionResult(
       this.#prepared.redactStaticEntitiesWithCallerDetectionsJson(fullText, {
         requestJson,
         ...(operators ? { operators } : {}),

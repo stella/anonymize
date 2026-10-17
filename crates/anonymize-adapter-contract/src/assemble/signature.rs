@@ -407,17 +407,21 @@ mod tests {
       vec![String::from("Jan Novák")]
     );
 
-    assert!(detected_people("zastoupen name: Main Street", "cs").is_empty());
-    assert!(
-      detected_trigger_people("zastoupen name: Main Street", "cs").is_empty()
+    assert_eq!(
+      detected_people("zastoupen name: Main Street", "cs"),
+      Vec::<std::string::String>::new()
+    );
+    assert_eq!(
+      detected_trigger_people("zastoupen name: Main Street", "cs"),
+      Vec::<std::string::String>::new()
     );
     assert_eq!(
       detected_trigger_people("zastoupen Jméno: Jan Novák", "cs"),
       vec![String::from("Jan Novák")]
     );
-    assert!(
-      detected_trigger_people("represented by seller: Acme Trading", "en",)
-        .is_empty()
+    assert_eq!(
+      detected_trigger_people("represented by seller: Acme Trading", "en",),
+      Vec::<std::string::String>::new()
     );
     assert_eq!(
       detected_party_people_without_name_corpus("Seller: Imani Nwosu", "en"),
@@ -434,28 +438,28 @@ mod tests {
       detected_people("Jméno: Jan Příjmení: Novák", "cs"),
       vec![String::from("Jan"), String::from("Novák")]
     );
-    assert!(
-      detected_party_people_without_name_corpus("Seller: Acme Trading", "en")
-        .is_empty()
+    assert_eq!(
+      detected_party_people_without_name_corpus("Seller: Acme Trading", "en"),
+      Vec::<std::string::String>::new()
     );
-    assert!(
-      detected_party_people_without_name_corpus("Seller: General Lender", "en")
-        .is_empty()
+    assert_eq!(
+      detected_party_people_without_name_corpus("Seller: General Lender", "en"),
+      Vec::<std::string::String>::new()
     );
-    assert!(
-      detected_party_people_without_name_corpus("Customer: Harbor Legal", "en")
-        .is_empty()
+    assert_eq!(
+      detected_party_people_without_name_corpus("Customer: Harbor Legal", "en"),
+      Vec::<std::string::String>::new()
     );
 
     let mut signature =
       build_signature_data(Some(&[String::from("en")]), None).unwrap();
     signature.labels.push(String::from("seller"));
-    assert!(
+    assert_eq!(
       detected_people_with_signature_data(
         "represented by seller: Acme Trading",
         signature,
-      )
-      .is_empty()
+      ),
+      Vec::<std::string::String>::new()
     );
   }
 
@@ -471,9 +475,18 @@ mod tests {
       detected_scoped_party_people("Borrower:\nZofia Wrona"),
       ["Zofia Wrona"]
     );
-    assert!(detected_scoped_party_people("Seller: Acme Trading").is_empty());
-    assert!(detected_scoped_party_people("Seller: General Lender").is_empty());
-    assert!(detected_scoped_party_people("Imani Nwosu").is_empty());
+    assert_eq!(
+      detected_scoped_party_people("Seller: Acme Trading"),
+      Vec::<std::string::String>::new()
+    );
+    assert_eq!(
+      detected_scoped_party_people("Seller: General Lender"),
+      Vec::<std::string::String>::new()
+    );
+    assert_eq!(
+      detected_scoped_party_people("Imani Nwosu"),
+      Vec::<std::string::String>::new()
+    );
   }
 
   #[test]

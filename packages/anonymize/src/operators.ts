@@ -24,6 +24,11 @@ const getTextEncoder = (): TextEncoder => {
 
 type MaskSelection = Extract<OperatorSelection, { type: "mask" }>;
 
+const validateMaskDirection = (direction: unknown): void => {
+  if (direction !== "start" && direction !== "end")
+    throw new RangeError("direction must be either start or end");
+};
+
 export const requireMaskSelection = (
   selection: OperatorSelection,
 ): MaskSelection => {
@@ -41,9 +46,7 @@ const maskSegments = (selection: MaskSelection, text: string) => {
   ) {
     throw new RangeError("charactersToMask must be a positive 32-bit integer");
   }
-  if (selection.direction !== "start" && selection.direction !== "end") {
-    throw new RangeError("direction must be either start or end");
-  }
+  validateMaskDirection(selection.direction);
   if (
     getTextEncoder().encode(selection.maskingCharacter).length >
     MAX_MASKING_CHARACTER_BYTES

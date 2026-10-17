@@ -18,81 +18,60 @@ updates:
           - patch
     ignore:
       - dependency-name: oxlint
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
       - dependency-name: oxlint-tsgolint
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
       - dependency-name: "@oxlint/plugins"
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
       - dependency-name: "@stll/oxlint-plugin"
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
       - dependency-name: oxfmt
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
       - dependency-name: lefthook
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
       - dependency-name: typescript
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
       - dependency-name: "@typescript/native"
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
       - dependency-name: typescript-compat
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
       - dependency-name: bun-types
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
   - package-ecosystem: cargo
-    directory: /
-    schedule:
-      interval: weekly
-      day: saturday
-      time: "07:00"
-      timezone: Europe/Prague
-    cooldown:
-      default-days: 5
-    groups:
-      dependencies:
-        patterns:
-          - "*"
-        update-types:
-          - minor
-          - patch
-  - package-ecosystem: cargo
-    directory: /fuzz
-    schedule:
-      interval: weekly
-      day: saturday
-      time: "07:00"
-      timezone: Europe/Prague
-    cooldown:
-      default-days: 5
-    groups:
-      dependencies:
-        patterns:
-          - "*"
-        update-types:
-          - minor
-          - patch
-  - package-ecosystem: cargo
-    directory: /packages/benchmark/native/nym-adapter
-    schedule:
-      interval: weekly
-      day: saturday
-      time: "07:00"
-      timezone: Europe/Prague
-    cooldown:
-      default-days: 5
-    groups:
-      dependencies:
-        patterns:
-          - "*"
-        update-types:
-          - minor
-          - patch
-  - package-ecosystem: pip
-    directory: /crates/anonymize-py
-    schedule:
-      interval: weekly
-      day: saturday
-      time: "07:00"
-      timezone: Europe/Prague
-    cooldown:
-      default-days: 5
-    groups:
-      dependencies:
-        patterns:
-          - "*"
-        update-types:
-          - minor
-          - patch
-  - package-ecosystem: pip
-    directory: /packages/benchmark/python
+    directories:
+      - /
+      - /fuzz
+      - /packages/benchmark/native/nym-adapter
     schedule:
       interval: weekly
       day: saturday
@@ -125,12 +104,75 @@ updates:
           - patch
     ignore:
       - dependency-name: actions/checkout
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
       - dependency-name: oven-sh/setup-bun
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
       - dependency-name: actions/setup-node
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
       - dependency-name: actions/setup-python
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
       - dependency-name: astral-sh/setup-uv
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
       - dependency-name: actions/cache
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
       - dependency-name: actions/cache/restore
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
       - dependency-name: actions/cache/save
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
       - dependency-name: actions/upload-artifact
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
       - dependency-name: actions/download-artifact
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: stella/.github/.github/workflows/package-consumer-compat.yml
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+  - package-ecosystem: pip
+    directories:
+      - /crates/anonymize-py
+      - /packages/benchmark/python
+    schedule:
+      interval: weekly
+      day: saturday
+      time: "07:00"
+      timezone: Europe/Prague
+    cooldown:
+      default-days: 5
+    groups:
+      dependencies:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch

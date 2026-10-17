@@ -588,7 +588,7 @@ describe("sealed aggregate report contract", () => {
           `::warning title=Stale sealed benchmark source::${corpusId} report uses ${revisionFreshness.reportGitSha}; current HEAD is ${revisionFreshness.currentGitSha}\n`,
         );
       }
-      const stella = current?.libraries.find(({ name }) => name === "stella");
+      const stella = current.libraries.find(({ name }) => name === "stella");
       expect(stella?.status, `${corpusId} must include stella`).toBe("ok");
       if (stella?.status !== "ok") continue;
       const freshness = assessSealedReportVersionFreshness({

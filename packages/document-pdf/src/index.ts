@@ -88,7 +88,7 @@ export const inspectPdf = (
   options: InspectPdfOptions = {},
 ): PdfInspection => {
   const inspect = loadNativeAnonymizeBinding().inspectPdfJson;
-  if (inspect === undefined) {
+  if (typeof inspect !== "function") {
     throw new PdfInspectionError(
       PDF_INSPECTION_ERROR_CODES.invalidDocument,
       "Native anonymize binding does not expose PDF inspection",
@@ -127,7 +127,7 @@ export const rewritePdfRasterFromDetections = ({
 }: RewritePdfRasterFromDetectionsOptions): PdfRasterRewriteResult => {
   const rewrite =
     loadNativeAnonymizeBinding().rewritePdfRasterFromDetectionsJson;
-  if (rewrite === undefined) {
+  if (typeof rewrite !== "function") {
     throw new PdfRasterError(
       PDF_RASTER_ERROR_CODES.verificationFailed,
       "Native anonymize binding does not expose PDF raster rewriting",
@@ -196,7 +196,13 @@ export const anonymizePdfRaster = ({
   let totalManualRegions = 0;
   const textEncoder = new TextEncoder();
   for (const page of pages) {
-    if (typeof page.observation?.text !== "string") {
+    const observation: unknown = page.observation;
+    if (
+      typeof observation !== "object" ||
+      observation === null ||
+      !("text" in observation) ||
+      typeof observation.text !== "string"
+    ) {
       throw new PdfRasterError(
         PDF_RASTER_ERROR_CODES.invalidContract,
         "invalid-contract: PDF raster observed text is invalid",

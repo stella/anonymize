@@ -67,6 +67,7 @@ const escapeRegExp = (value) => value.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const readTextFile = (file) =>
   readFileSync(file, "utf8").replaceAll("\r\n", "\n");
 
+/** @param {{ dependencyRange: unknown, exactCoRelease: boolean }} options */
 const synchronizedDependencyRange = ({ dependencyRange, exactCoRelease }) => {
   if (!exactCoRelease) {
     return `^${version}`;
@@ -308,13 +309,12 @@ function syncNativeOptionalDependencyLockVersion(text, dependency) {
     `("${escapeRegExp(dependency)}": ")([^"]+)(")`,
     "g",
   );
-  let found = false;
+  const found = sidecarVersionRe.test(text);
   let changed = false;
   let mismatched = false;
   const syncedText = text.replaceAll(
     sidecarVersionRe,
     (match, prefix, lockedVersion, suffix) => {
-      found = true;
       if (lockedVersion === version) {
         return match;
       }
@@ -345,13 +345,12 @@ function syncDependencyRangeLockVersion(text, dependency) {
     `("${escapeRegExp(dependency)}": "\\^)([^"]+)(")`,
     "g",
   );
-  let found = false;
+  const found = dependencyRangeRe.test(text);
   let changed = false;
   let mismatched = false;
   const syncedText = text.replaceAll(
     dependencyRangeRe,
     (match, prefix, lockedVersion, suffix) => {
-      found = true;
       if (lockedVersion === version) {
         return match;
       }

@@ -84,8 +84,8 @@ const run = async (args: string[], stdin?: string): Promise<RunResult> => {
     stderr: "pipe",
   });
   if (stdin !== undefined) {
-    proc.stdin?.write(stdin);
-    proc.stdin?.end();
+    await proc.stdin?.write(stdin);
+    await proc.stdin?.end();
   }
   const [out, err, code] = await Promise.all([
     new Response(proc.stdout).text(),

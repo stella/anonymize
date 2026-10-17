@@ -29,6 +29,16 @@ import {
   PathScope,
   createAnonymizeMcpServer,
 } from "../local";
+import { requirePresent } from "./require-present";
+
+const rejectionOf = async (promise: Promise<unknown>) => {
+  try {
+    await promise;
+  } catch (error) {
+    return error;
+  }
+  throw new Error("Expected promise to reject");
+};
 
 const temporaryDirectories: string[] = [];
 const execFileAsync = promisify(execFile);
@@ -142,14 +152,16 @@ describe("PathScope", () => {
     });
     expect(scopedInput.path).toBe(await realpath(input));
     expect(new TextDecoder().decode(scopedInput.bytes)).toBe("Alice");
-    await expect(
-      scope.readInput({
-        path: input,
-        extension: ".txt",
-        maximumBytes: 4,
-        label: "Text",
-      }),
-    ).rejects.toThrow("must not exceed");
+    expect(
+      await rejectionOf(
+        scope.readInput({
+          path: input,
+          extension: ".txt",
+          maximumBytes: 4,
+          label: "Text",
+        }),
+      ),
+    ).toMatchObject({ message: expect.stringContaining("must not exceed") });
     expect((await scope.output(join(root, "output.txt"), ".txt")).path).toBe(
       join(root, "output.txt"),
     );
@@ -166,17 +178,19 @@ describe("PathScope", () => {
     expect(
       (await scope.output(join(dotDotDirectory, "output.txt"), ".txt")).path,
     ).toBe(join(dotDotDirectory, "output.txt"));
-    await expect(scope.output(existing, ".txt")).rejects.toThrow(
-      "already exists",
-    );
-    await expect(
-      scope.readInput({
-        path: join(outside, "missing.txt"),
-        extension: ".txt",
-        maximumBytes: 1024,
-        label: "Text",
-      }),
-    ).rejects.toThrow();
+    expect(await rejectionOf(scope.output(existing, ".txt"))).toMatchObject({
+      message: expect.stringContaining("already exists"),
+    });
+    expect(
+      await rejectionOf(
+        scope.readInput({
+          path: join(outside, "missing.txt"),
+          extension: ".txt",
+          maximumBytes: 1024,
+          label: "Text",
+        }),
+      ),
+    ).toBeInstanceOf(Error);
   });
 
   test("rejects a symlink that escapes an allowed root", async () => {
@@ -191,27 +205,37 @@ describe("PathScope", () => {
     await symlink(target, link);
     await symlink(insideTarget, insideLink);
     const scope = await PathScope.create([root]);
-    await expect(
-      scope.readInput({
-        path: link,
-        extension: ".txt",
-        maximumBytes: 1024,
-        label: "Text",
-      }),
-    ).rejects.toThrow("outside the configured roots");
-    await expect(
-      scope.readInput({
-        path: insideLink,
-        extension: ".txt",
-        maximumBytes: 1024,
-        label: "Text",
-      }),
-    ).rejects.toThrow();
+    expect(
+      await rejectionOf(
+        scope.readInput({
+          path: link,
+          extension: ".txt",
+          maximumBytes: 1024,
+          label: "Text",
+        }),
+      ),
+    ).toMatchObject({
+      message: expect.stringContaining("outside the configured roots"),
+    });
+    expect(
+      await rejectionOf(
+        scope.readInput({
+          path: insideLink,
+          extension: ".txt",
+          maximumBytes: 1024,
+          label: "Text",
+        }),
+      ),
+    ).toBeInstanceOf(Error);
     const linkedDirectory = join(root, "linked-directory");
     await symlink(outside, linkedDirectory);
-    await expect(
-      scope.output(join(linkedDirectory, "output.txt"), ".txt"),
-    ).rejects.toThrow("outside the configured roots");
+    expect(
+      await rejectionOf(
+        scope.output(join(linkedDirectory, "output.txt"), ".txt"),
+      ),
+    ).toMatchObject({
+      message: expect.stringContaining("outside the configured roots"),
+    });
   });
 
   test("rejects publication when the validated output directory is replaced", async () => {
@@ -226,13 +250,15 @@ describe("PathScope", () => {
 
     await rename(directory, movedDirectory);
     await symlink(outside, directory);
-    await expect(output.write("sensitive output")).rejects.toThrow(
-      "Output directory changed",
-    );
-    await expect(readFile(join(outside, "output.txt"))).rejects.toThrow();
-    await expect(
-      readFile(join(movedDirectory, "output.txt")),
-    ).rejects.toThrow();
+    expect(await rejectionOf(output.write("sensitive output"))).toMatchObject({
+      message: expect.stringContaining("Output directory changed"),
+    });
+    expect(
+      await rejectionOf(readFile(join(outside, "output.txt"))),
+    ).toBeInstanceOf(Error);
+    expect(
+      await rejectionOf(readFile(join(movedDirectory, "output.txt"))),
+    ).toBeInstanceOf(Error);
   });
 
   test("rejects FIFO inputs without waiting for a writer", async () => {
@@ -244,14 +270,16 @@ describe("PathScope", () => {
     await execFileAsync("mkfifo", [fifo]);
     const scope = await PathScope.create([root]);
 
-    await expect(
-      scope.readInput({
-        path: fifo,
-        extension: ".txt",
-        maximumBytes: 1024,
-        label: "Text",
-      }),
-    ).rejects.toThrow("regular file");
+    expect(
+      await rejectionOf(
+        scope.readInput({
+          path: fifo,
+          extension: ".txt",
+          maximumBytes: 1024,
+          label: "Text",
+        }),
+      ),
+    ).toMatchObject({ message: expect.stringContaining("regular file") });
   });
 });
 
@@ -278,14 +306,18 @@ describe("local MCP surface", () => {
     expect(JSON.stringify(anonymizeResult)).not.toContain("Alice");
     expect(await readFile(anonymized, "utf8")).not.toBe("Alice Smith signed.");
     expect((await stat(anonymized)).mode & 0o777).toBe(0o600);
-    await expect(
-      service.anonymizeText({
-        inputPath: input,
-        outputPath: join(root, "language-mismatch.txt"),
-        sessionId: "local_case_1",
-        language: "de",
-      }),
-    ).rejects.toThrow("cannot change language");
+    expect(
+      await rejectionOf(
+        service.anonymizeText({
+          inputPath: input,
+          outputPath: join(root, "language-mismatch.txt"),
+          sessionId: "local_case_1",
+          language: "de",
+        }),
+      ),
+    ).toMatchObject({
+      message: expect.stringContaining("cannot change language"),
+    });
 
     const restoreResult = await service.restoreText({
       inputPath: anonymized,
@@ -378,15 +410,21 @@ describe("local MCP surface", () => {
       const batchPath = join(root, `${invalid.name}.json`);
       const output = join(root, `${invalid.name}-output.txt`);
       await writeFile(batchPath, JSON.stringify(invalid.batch));
-      await expect(
-        service.anonymizeTextWithExternalDetections({
-          inputPath: input,
-          detectionBatchPath: batchPath,
-          outputPath: output,
-          sessionId: `invalid_external_${invalid.name}`,
-        }),
-      ).rejects.toThrow("The external detection batch was rejected.");
-      await expect(readFile(output)).rejects.toThrow();
+      expect(
+        await rejectionOf(
+          service.anonymizeTextWithExternalDetections({
+            inputPath: input,
+            detectionBatchPath: batchPath,
+            outputPath: output,
+            sessionId: `invalid_external_${invalid.name}`,
+          }),
+        ),
+      ).toMatchObject({
+        message: expect.stringContaining(
+          "The external detection batch was rejected.",
+        ),
+      });
+      expect(await rejectionOf(readFile(output))).toBeInstanceOf(Error);
     }
   });
 
@@ -414,24 +452,36 @@ describe("local MCP surface", () => {
       oversizedBatch,
     ].entries()) {
       const output = join(root, `scoped-${index}.txt`);
-      await expect(
+      expect(
+        await rejectionOf(
+          service.anonymizeTextWithExternalDetections({
+            inputPath: input,
+            detectionBatchPath: batchPath,
+            outputPath: output,
+            sessionId: `scoped_external_${index}`,
+          }),
+        ),
+      ).toMatchObject({
+        message: expect.stringContaining(
+          "The external detection request paths were rejected.",
+        ),
+      });
+      expect(await rejectionOf(readFile(output))).toBeInstanceOf(Error);
+    }
+    expect(
+      await rejectionOf(
         service.anonymizeTextWithExternalDetections({
           inputPath: input,
-          detectionBatchPath: batchPath,
-          outputPath: output,
-          sessionId: `scoped_external_${index}`,
+          detectionBatchPath: collisionBatch,
+          outputPath: collisionOutput,
+          sessionId: "external_path_collision_1",
         }),
-      ).rejects.toThrow("The external detection request paths were rejected.");
-      await expect(readFile(output)).rejects.toThrow();
-    }
-    await expect(
-      service.anonymizeTextWithExternalDetections({
-        inputPath: input,
-        detectionBatchPath: collisionBatch,
-        outputPath: collisionOutput,
-        sessionId: "external_path_collision_1",
-      }),
-    ).rejects.toThrow("The external detection request paths were rejected.");
+      ),
+    ).toMatchObject({
+      message: expect.stringContaining(
+        "The external detection request paths were rejected.",
+      ),
+    });
     expect(await readFile(collisionBatch, "utf8")).toContain("fake-provider");
     expect(await readFile(collisionOutput, "utf8")).toContain("fake-provider");
   });
@@ -443,15 +493,17 @@ describe("local MCP surface", () => {
     await writeFile(input, new Uint8Array([0xc3, 0x28]));
     const service = new LocalAnonymizeService(await PathScope.create([root]));
 
-    await expect(
-      service.anonymizeText({
-        inputPath: input,
-        outputPath: output,
-        sessionId: "invalid_utf8_1",
-        language: "en",
-      }),
-    ).rejects.toThrow("valid UTF-8");
-    await expect(readFile(output)).rejects.toThrow();
+    expect(
+      await rejectionOf(
+        service.anonymizeText({
+          inputPath: input,
+          outputPath: output,
+          sessionId: "invalid_utf8_1",
+          language: "en",
+        }),
+      ),
+    ).toMatchObject({ message: expect.stringContaining("valid UTF-8") });
+    expect(await rejectionOf(readFile(output))).toBeInstanceOf(Error);
   });
 
   test("rolls back an existing session when output publication fails", async () => {
@@ -473,23 +525,29 @@ describe("local MCP surface", () => {
       language: "en",
     });
 
-    await expect(
-      service.anonymizeText({
-        inputPath: failedInput,
-        outputPath: tooLongTemporary,
-        sessionId: "rollback_case_1",
-      }),
-    ).rejects.toThrow();
+    expect(
+      await rejectionOf(
+        service.anonymizeText({
+          inputPath: failedInput,
+          outputPath: tooLongTemporary,
+          sessionId: "rollback_case_1",
+        }),
+      ),
+    ).toBeInstanceOf(Error);
     const predictedPlaceholder = "[PERSON_rollback%5Fcase%5F1_2]";
     await writeFile(probeInput, predictedPlaceholder);
-    await expect(
-      service.restoreText({
-        inputPath: probeInput,
-        outputPath: probeOutput,
-        sessionId: "rollback_case_1",
-      }),
-    ).rejects.toThrow("unknown session placeholder");
-    await expect(readFile(probeOutput)).rejects.toThrow();
+    expect(
+      await rejectionOf(
+        service.restoreText({
+          inputPath: probeInput,
+          outputPath: probeOutput,
+          sessionId: "rollback_case_1",
+        }),
+      ),
+    ).toMatchObject({
+      message: expect.stringContaining("unknown session placeholder"),
+    });
+    expect(await rejectionOf(readFile(probeOutput))).toBeInstanceOf(Error);
     await service.restoreText({
       inputPath: firstOutput,
       outputPath: recoveredOutput,
@@ -514,9 +572,9 @@ describe("local MCP surface", () => {
       join(root, "external-b-output.txt"),
     ];
     for (const index of [0, 1] as const) {
-      await writeFile(inputs[index], documents[index]);
+      await writeFile(requirePresent(inputs[index]), documents[index]);
       await writeFile(
-        batches[index],
+        requirePresent(batches[index]),
         JSON.stringify(externalBatch(documents[index])),
       );
     }
@@ -545,45 +603,57 @@ describe("local MCP surface", () => {
       },
     });
     const first = service.anonymizeTextWithExternalDetections({
-      inputPath: inputs[0],
-      detectionBatchPath: batches[0],
-      outputPath: outputs[0],
+      inputPath: requirePresent(inputs[0]),
+      detectionBatchPath: requirePresent(batches[0]),
+      outputPath: requirePresent(outputs[0]),
       sessionId: "external_concurrent_1",
       language: "en",
     });
     await firstPublicationReached;
     try {
-      await expect(
-        service.anonymizeTextWithExternalDetections({
-          inputPath: inputs[1],
-          detectionBatchPath: batches[1],
-          outputPath: outputs[1],
-          sessionId: "external_concurrent_1",
-          language: "en",
-        }),
-      ).rejects.toThrow("The external detection session was rejected.");
+      expect(
+        await rejectionOf(
+          service.anonymizeTextWithExternalDetections({
+            inputPath: requirePresent(inputs[1]),
+            detectionBatchPath: requirePresent(batches[1]),
+            outputPath: requirePresent(outputs[1]),
+            sessionId: "external_concurrent_1",
+            language: "en",
+          }),
+        ),
+      ).toMatchObject({
+        message: expect.stringContaining(
+          "The external detection session was rejected.",
+        ),
+      });
     } finally {
       releaseFirstPublication();
     }
-    await expect(first).resolves.toMatchObject({ outputCreated: true });
+    expect(await first).toMatchObject({ outputCreated: true });
     const successfulIndex = 0;
 
     failPublication = true;
     const failedOutput = join(root, "external-failed-output.txt");
-    await expect(
-      service.anonymizeTextWithExternalDetections({
-        inputPath: inputs[1 - successfulIndex],
-        detectionBatchPath: batches[1 - successfulIndex],
-        outputPath: failedOutput,
-        sessionId: "external_concurrent_1",
-      }),
-    ).rejects.toThrow("The external detection operation failed safely.");
-    await expect(readFile(failedOutput)).rejects.toThrow();
+    expect(
+      await rejectionOf(
+        service.anonymizeTextWithExternalDetections({
+          inputPath: requirePresent(inputs[1 - successfulIndex]),
+          detectionBatchPath: requirePresent(batches[1 - successfulIndex]),
+          outputPath: failedOutput,
+          sessionId: "external_concurrent_1",
+        }),
+      ),
+    ).toMatchObject({
+      message: expect.stringContaining(
+        "The external detection operation failed safely.",
+      ),
+    });
+    expect(await rejectionOf(readFile(failedOutput))).toBeInstanceOf(Error);
     failPublication = false;
 
     const restored = join(root, "external-concurrent-restored.txt");
     await service.restoreText({
-      inputPath: outputs[successfulIndex],
+      inputPath: requirePresent(outputs[successfulIndex]),
       outputPath: restored,
       sessionId: "external_concurrent_1",
     });
@@ -593,13 +663,17 @@ describe("local MCP surface", () => {
     const predicted = join(root, "external-predicted.txt");
     const predictedOutput = join(root, "external-predicted-output.txt");
     await writeFile(predicted, "[PERSON_external%5Fconcurrent%5F1_2]");
-    await expect(
-      service.restoreText({
-        inputPath: predicted,
-        outputPath: predictedOutput,
-        sessionId: "external_concurrent_1",
-      }),
-    ).rejects.toThrow("unknown session placeholder");
+    expect(
+      await rejectionOf(
+        service.restoreText({
+          inputPath: predicted,
+          outputPath: predictedOutput,
+          sessionId: "external_concurrent_1",
+        }),
+      ),
+    ).toMatchObject({
+      message: expect.stringContaining("unknown session placeholder"),
+    });
   });
 
   test("anonymizes and restores DOCX through path-only operations", async () => {
@@ -751,16 +825,22 @@ try {
     const service = new LocalAnonymizeService(await PathScope.create([root]));
 
     expect((await service.inspectDocx(input)).coverageStatus).toBe("partial");
-    await expect(
-      service.anonymizeDocx({
-        inputPath: input,
-        outputPath: rejectedAnonymized,
-        sessionId: "local_partial_docx_1",
-        language: "de",
-        allowPartialCoverage: false,
-      }),
-    ).rejects.toThrow("outside the fully supported");
-    await expect(readFile(rejectedAnonymized)).rejects.toThrow();
+    expect(
+      await rejectionOf(
+        service.anonymizeDocx({
+          inputPath: input,
+          outputPath: rejectedAnonymized,
+          sessionId: "local_partial_docx_1",
+          language: "de",
+          allowPartialCoverage: false,
+        }),
+      ),
+    ).toMatchObject({
+      message: expect.stringContaining("outside the fully supported"),
+    });
+    expect(await rejectionOf(readFile(rejectedAnonymized))).toBeInstanceOf(
+      Error,
+    );
     const anonymizeResult = await service.anonymizeDocx({
       inputPath: input,
       outputPath: anonymized,
@@ -769,15 +849,17 @@ try {
       allowPartialCoverage: true,
     });
     expect(anonymizeResult.coverageStatus).toBe("partial");
-    await expect(
-      service.restoreDocx({
-        inputPath: anonymized,
-        outputPath: rejectedRestore,
-        sessionId: "local_partial_docx_1",
-        allowPartialCoverage: false,
-      }),
-    ).rejects.toThrow("partial coverage");
-    await expect(readFile(rejectedRestore)).rejects.toThrow();
+    expect(
+      await rejectionOf(
+        service.restoreDocx({
+          inputPath: anonymized,
+          outputPath: rejectedRestore,
+          sessionId: "local_partial_docx_1",
+          allowPartialCoverage: false,
+        }),
+      ),
+    ).toMatchObject({ message: expect.stringContaining("partial coverage") });
+    expect(await rejectionOf(readFile(rejectedRestore))).toBeInstanceOf(Error);
 
     const restoreResult = await service.restoreDocx({
       inputPath: anonymized,

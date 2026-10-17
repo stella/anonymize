@@ -16,16 +16,21 @@ import {
   CAPABILITY_PARITY_PROFILES,
   CAPABILITY_SURFACES,
   type CapabilityRuntime,
-  type CapabilitySurfaceId,
+  type CapabilitySurface,
 } from "../capabilities";
 import * as native from "../native";
 import * as nativeNode from "../native-node";
 import * as wasm from "../wasm";
 
-type RuntimeSurface = Record<CapabilitySurfaceId, unknown>;
+// Document wrapper adapters are covered by their package suites; this map
+// covers the core and local native surfaces implemented by JavaScript bindings.
+type RuntimeSurface = Record<
+  Extract<CapabilitySurface, { profile: "core" | "local" }>["id"],
+  unknown
+>;
 
-const sessionPrototype = native.PreparedNativeRedactionSession?.prototype;
-const preparedPrototype = native.PreparedNativeAnonymizer?.prototype;
+const sessionPrototype = native.PreparedNativeRedactionSession.prototype;
+const preparedPrototype = native.PreparedNativeAnonymizer.prototype;
 const prototypeMethod = (
   prototype: object | undefined,
   name: string,
@@ -72,9 +77,10 @@ const nodeSurface = {
     sessionPrototype,
     "toEncryptedArchive",
   ),
-} satisfies Partial<RuntimeSurface>;
+} satisfies RuntimeSurface;
 
 const wasmSurface = {
+  "package.load-file": null,
   "package.prepare": wasm.prepare_search_package,
   "package.load": wasm.load_prepared_package,
   "text.normalize": wasm.normalize_for_search,
@@ -83,39 +89,40 @@ const wasmSurface = {
   "text.diagnostics": wasm.diagnostics_json,
   "text.summary-diagnostics": wasm.summary_diagnostics_json,
   "text.caller-detections": prototypeMethod(
-    wasm.PreparedNativeAnonymizer?.prototype,
+    wasm.PreparedNativeAnonymizer.prototype,
     "redact_text_with_caller_detections",
   ),
   "text.external-detection-batch": wasm.convert_external_detection_batch,
   "text.operators": prototypeMethod(
-    wasm.PreparedNativeAnonymizer?.prototype,
+    wasm.PreparedNativeAnonymizer.prototype,
     "redact_text",
   ),
   "package.default": wasm.createPipeline,
   "session.cross-document": prototypeMethod(
-    wasm.PreparedNativeAnonymizer?.prototype,
+    wasm.PreparedNativeAnonymizer.prototype,
     "createRedactionSession",
   ),
   "session.lifecycle": prototypeMethod(
-    wasm.PreparedNativeAnonymizer?.prototype,
+    wasm.PreparedNativeAnonymizer.prototype,
     "createRedactionSessionWithLifecycle",
   ),
   "session.plaintext-transfer": prototypeMethod(
-    wasm.PreparedNativeRedactionSession?.prototype,
+    wasm.PreparedNativeRedactionSession.prototype,
     "toPlaintextJson",
   ),
   "session.encrypted-archive": prototypeMethod(
-    wasm.PreparedNativeRedactionSession?.prototype,
+    wasm.PreparedNativeRedactionSession.prototype,
     "toEncryptedArchive",
   ),
   "document.pdf.inspect": wasm.inspect_pdf_json,
-} satisfies Partial<RuntimeSurface>;
+} satisfies RuntimeSurface;
 
 const runtimeSurfaces = {
   node: nodeSurface,
   wasm: wasmSurface,
-} as const satisfies Partial<
-  Record<CapabilityRuntime, Partial<RuntimeSurface>>
+} as const satisfies Record<
+  Exclude<CapabilityRuntime, "python">,
+  RuntimeSurface
 >;
 
 const invokeWasmCreatePipeline = (options: unknown) =>
@@ -135,13 +142,18 @@ const captureWasmCreatePipelineFailure = async (options: unknown) => {
 describe("full runtime surface parity", () => {
   for (const runtime of ["node", "wasm"] as const) {
     test(`${runtime} exposes every surface in its parity profiles`, () => {
-      const implemented: Partial<RuntimeSurface> = runtimeSurfaces[runtime];
+      const implemented: RuntimeSurface = runtimeSurfaces[runtime];
       const expected = CAPABILITY_SURFACES.filter(
-        ({ id, profile }) =>
-          (profile === "core" || !id.startsWith("document.")) &&
-          CAPABILITY_PARITY_PROFILES[profile].some(
-            (candidate) => candidate === runtime,
-          ),
+        (
+          surface,
+        ): surface is Extract<
+          CapabilitySurface,
+          { profile: "core" | "local" }
+        > => surface.profile === "core" || surface.profile === "local",
+      ).filter(({ profile }) =>
+        CAPABILITY_PARITY_PROFILES[profile].some(
+          (candidate) => candidate === runtime,
+        ),
       );
 
       for (const { id } of expected) {
@@ -150,17 +162,15 @@ describe("full runtime surface parity", () => {
     });
   }
 
-  test("WASM rejects injected bindings missing core PDF inspection", () =>
-    expect(
-      wasm.inspect_pdf_json(new Uint8Array([0]), undefined, {
-        binding: {
-          ...nativeNode.loadNativeAnonymizeBinding(),
-          inspectPdfJson: undefined,
-        } as unknown as native.NativeAnonymizeBinding,
-      }),
+  test("WASM rejects injected bindings missing core PDF inspection", () => {
+    const binding = { ...nativeNode.loadNativeAnonymizeBinding() };
+    expect(Reflect.deleteProperty(binding, "inspectPdfJson")).toBe(true);
+    return expect(
+      wasm.inspect_pdf_json(new Uint8Array([0]), undefined, { binding }),
     ).rejects.toThrow(
       "wasm binding module does not expose the native anonymize surface",
-    ));
+    );
+  });
 
   test("WASM pipeline factory matches Node for exact language scopes", async () => {
     const nodeBinding = nativeNode.loadNativeAnonymizeBinding();

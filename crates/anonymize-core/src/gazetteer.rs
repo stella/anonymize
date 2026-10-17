@@ -2313,9 +2313,9 @@ mod tests {
     };
     assert_eq!(detect("by Wintermte today", 3, 12), ["Wintermte"]);
     assert_eq!(detect("by  Wintermte today", 3, 13), ["Wintermte"]);
-    assert!(detect("by xWintermte today", 4, 13).is_empty());
-    assert!(detect("by Wintermtex today", 3, 12).is_empty());
-    assert!(detect("by Winterbite today", 3, 13).is_empty());
+    assert_eq!(detect("by xWintermte today", 4, 13), Vec::<String>::new());
+    assert_eq!(detect("by Wintermtex today", 3, 12), Vec::<String>::new());
+    assert_eq!(detect("by Winterbite today", 3, 13), Vec::<String>::new());
   }
 
   fn found_with(
@@ -2336,9 +2336,9 @@ mod tests {
   #[test]
   fn czech_slovak_forms_follow_the_language_scope() {
     let entries = [exact("Ana", PERSON)];
-    assert!(
-      found_with(&entries, GazetteerInflection::None, "Is there any news?")
-        .is_empty()
+    assert_eq!(
+      found_with(&entries, GazetteerInflection::None, "Is there any news?"),
+      Vec::<String>::new()
     );
     assert_eq!(
       found_with(&entries, GazetteerInflection::None, "Ana arrived."),
@@ -2398,13 +2398,19 @@ mod tests {
     }
     let upper = [short_entry("ORBIS")];
     assert_eq!(engine_found(&upper, "Klient ORBYS zaplatil."), ["ORBYS"]);
-    assert!(engine_found(&upper, "Klient Orbys zaplatil.").is_empty());
+    assert_eq!(
+      engine_found(&upper, "Klient Orbys zaplatil."),
+      Vec::<String>::new()
+    );
   }
 
   #[test]
   fn four_letter_entries_stay_exact() {
     let entries = [short_entry("Zeta")];
-    assert!(engine_found(&entries, "Klient Zeda zaplatil.").is_empty());
+    assert_eq!(
+      engine_found(&entries, "Klient Zeda zaplatil."),
+      Vec::<String>::new()
+    );
   }
 
   #[test]
@@ -2427,13 +2433,19 @@ mod tests {
       engine_found(&nine, "Signed by Lindqvyst today."),
       ["Lindqvyst"]
     );
-    assert!(engine_found(&nine, "Signed by Lyndqvyst today.").is_empty());
+    assert_eq!(
+      engine_found(&nine, "Signed by Lyndqvyst today."),
+      Vec::<String>::new()
+    );
     let ten = [fuzzy_entry("Wintermute")];
     assert_eq!(
       engine_found(&ten, "Signed by Wyntermyte today."),
       ["Wyntermyte"]
     );
-    assert!(engine_found(&ten, "Signed by Wyntarmyte today.").is_empty());
+    assert_eq!(
+      engine_found(&ten, "Signed by Wyntarmyte today."),
+      Vec::<String>::new()
+    );
   }
 
   #[test]
@@ -2442,7 +2454,7 @@ mod tests {
       format!("{} Acme {}", "<< ⟦".repeat(50_000), ">>".repeat(50_000));
     let found_markers = markers(&text);
     assert_eq!(found_markers.template.len(), 1);
-    assert!(found_markers.opaque.is_empty());
+    assert_eq!(found_markers.opaque, Vec::<(usize, usize)>::new());
     for repeats in [1_000, 10_000, 100_000] {
       for unit in ["<< ⟦", "⟦<<\u{a0}", "{{[[ ⟦⟦ ", "⟦ << \n"] {
         let repeated = unit.repeat(repeats);
@@ -2641,7 +2653,10 @@ mod tests {
   #[test]
   fn edge_punctuation_stays_part_of_the_entry() {
     let entries = [exact("C++", ORGANIZATION), exact("@alice", PERSON)];
-    assert!(found(&entries, "Plan C and alice agreed.").is_empty());
+    assert_eq!(
+      found(&entries, "Plan C and alice agreed."),
+      Vec::<String>::new()
+    );
     assert_eq!(found(&entries, "Use C++ today."), ["C++"]);
     assert_eq!(found(&entries, "Ping @alice today."), ["@alice"]);
   }
@@ -2699,7 +2714,7 @@ mod tests {
         .collect::<Vec<_>>()
     };
     assert_eq!(fuzzy(0, "by Wintermte today", 12), ["Wintermte"]);
-    assert!(fuzzy(1, "by acne today", 7).is_empty());
+    assert_eq!(fuzzy(1, "by acne today", 7), Vec::<String>::new());
   }
 
   #[test]
@@ -2803,7 +2818,7 @@ mod tests {
       );
     }
     let marked = format!("x ⟦{}⟧ y", "Acme,".repeat(NAMES));
-    assert!(found(&entries, &marked).is_empty());
+    assert_eq!(found(&entries, &marked), Vec::<String>::new());
   }
 
   #[test]
@@ -2826,7 +2841,10 @@ mod tests {
     ] {
       assert_eq!(found(&entries, text).len(), 1, "{text:?}");
     }
-    assert!(found(&entries, "Marie\r\n\r\nDvořáková").is_empty());
+    assert_eq!(
+      found(&entries, "Marie\r\n\r\nDvořáková"),
+      Vec::<String>::new()
+    );
   }
 
   /// Hits the real search index reports for `entries`, with the options the
@@ -2955,11 +2973,9 @@ mod tests {
       })
       .collect::<Vec<_>>();
     let guard = Guard::new(&text);
-    assert!(
-      prepared
-        .detect_with_guard(&hits, &guard)
-        .unwrap()
-        .is_empty()
+    assert_eq!(
+      prepared.detect_with_guard(&hits, &guard).unwrap(),
+      Vec::<PipelineEntity>::new()
     );
     let steps = guard.fuzzy_steps.get();
     assert!(
@@ -3357,7 +3373,10 @@ mod tests {
     ] {
       assert_eq!(found(&entries, text).len(), 1, "{text}");
     }
-    assert!(found(&entries, "Firma A/B Co Holding dnes").is_empty());
+    assert_eq!(
+      found(&entries, "Firma A/B Co Holding dnes"),
+      Vec::<String>::new()
+    );
   }
 
   #[test]

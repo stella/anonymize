@@ -5,13 +5,12 @@ pipeline: artifact decoding, search normalization, and gazetteer matching.
 
 This crate is its **own workspace** (empty `[workspace]` in `Cargo.toml`) so it
 stays out of the main `--workspace` build and the strict release lints, and so
-its nightly-only sanitizer dependencies never touch the default build.
+its target dependencies never touch the default build.
 
 ## Requirements
 
-- A nightly toolchain (already vendored for dylint):
-  `nightly-2026-04-16` or plain `nightly`.
-- `cargo-fuzz`: `cargo install cargo-fuzz --locked`
+- The repository Rust 1.99.0 toolchain.
+- `cargo-fuzz`: `cargo install cargo-fuzz --version 0.13.2 --locked`
 
 ## Targets
 
@@ -53,24 +52,36 @@ and the remaining fields form host text (up to 512 characters).
 
 ## Running
 
+From this directory, run coverage-guided fuzzing on the pinned stable toolchain
+with sanitizers disabled:
+
 ```sh
-# From this directory. Short local smoke run:
-cargo +nightly fuzz run artifact_decode -- -max_total_time=30
+cargo fuzz run artifact_decode --sanitizer none -- -max_total_time=10
+cargo fuzz run normalize_text --sanitizer none -- -max_total_time=30
+cargo fuzz run gazetteer_match --sanitizer none -- -max_total_time=30
 
 # Longer campaign:
-cargo +nightly fuzz run normalize_text -- -max_total_time=600
-
-# Gazetteer spans stay bounded, whole-word, and outside synthetic opaque tokens.
-cargo +nightly fuzz run gazetteer_match -- -max_total_time=600
+cargo fuzz run artifact_decode --sanitizer none -- -max_total_time=600
 ```
 
-List targets with `cargo +nightly fuzz list`.
+The stable code-generation options retain coverage instrumentation. CI smoke-runs
+all three targets with `--sanitizer none` and a bounded run count.
 
-Crashes land in `fuzz/artifacts/<target>/`; reproduce with
-`cargo +nightly fuzz run <target> fuzz/artifacts/<target>/<crash-file>`.
-Discovered corpus lives in `fuzz/corpus/<target>/`. Both directories are
-git-ignored (see `.gitignore`); commit a minimized reproducer as a regression
-test in `crates/anonymize-core/tests/` instead of the raw corpus.
+List targets with `cargo fuzz list`. Crashes land in
+`artifacts/<target>/`; reproduce with:
+
+```sh
+cargo fuzz run artifact_decode --sanitizer none artifacts/artifact_decode/<crash-file>
+```
+
+Discovered corpus lives in `corpus/<target>/`. These outputs are git-ignored;
+commit a minimized reproducer through the shared property-test drivers instead
+of the raw corpus. Deterministic generated inputs remain available through:
+
+```sh
+cargo test --manifest-path ../Cargo.toml -p stella-anonymize-core --test gazetteer_properties
+cargo test --manifest-path ../Cargo.toml -p stella-anonymize-core --test primitives_properties
+```
 
 ## Adding a target
 
