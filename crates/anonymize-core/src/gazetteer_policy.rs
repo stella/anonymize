@@ -22,8 +22,11 @@ pub(super) fn is_word_char(ch: char) -> bool {
 }
 
 /// Every block of the scripts written without spaces between words: Thai,
-/// Lao, Myanmar, Khmer, Hiragana, Katakana, Hangul, and CJK ideographs.
-pub(super) fn is_unspaced_script(ch: char) -> bool {
+/// Lao, Myanmar, Khmer, Hiragana, Katakana, Hangul, and CJK ideographs,
+/// plus the ideographic iteration marks outside those blocks (`佐々木`).
+/// Span resolution and the legal-form and person-name scans share this
+/// class, so no stage infers a word edge inside such a run.
+pub(crate) fn is_unspaced_script(ch: char) -> bool {
   matches!(u32::from(ch),
     0x0E00..=0x0EFF // Thai, Lao
     | 0x1000..=0x109F // Myanmar
@@ -31,7 +34,8 @@ pub(super) fn is_unspaced_script(ch: char) -> bool {
     | 0x1780..=0x17FF // Khmer
     | 0x19E0..=0x19FF // Khmer Symbols
     | 0x2E80..=0x2FDF // CJK Radicals Supplement, Kangxi Radicals
-    | 0x3040..=0x30FF // Hiragana, Katakana
+    | 0x3005 | 0x303B // Ideographic iteration marks 々 〻
+    | 0x3040..=0x30FF // Hiragana, Katakana (with ゝ ゞ ヽ ヾ)
     | 0x3130..=0x318F // Hangul Compatibility Jamo
     | 0x31F0..=0x31FF // Katakana Phonetic Extensions
     | 0x3400..=0x4DBF // CJK Extension A

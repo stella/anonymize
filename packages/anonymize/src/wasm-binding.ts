@@ -1,4 +1,9 @@
+import {
+  parseCanonicalStaticRedactionResult,
+  parseExternalDetections,
+} from "./native-result-codec";
 import type {
+  CanonicalStaticRedactionResult,
   NativeAnonymizeBinding,
   NativeCallerDetection,
   NativePreparedRedactionSessionBinding,
@@ -6,7 +11,6 @@ import type {
   NativePreparedSessionRedactionPlanBinding,
 } from "./native";
 import { SESSION_CALLER_INPUTS_JSON_MAX_BYTES } from "./native";
-import type { OperatorType } from "./types";
 
 type OperatorConfig = Parameters<
   NativePreparedSearchBinding["redactStaticEntities"]
@@ -247,14 +251,9 @@ export const createWasmBinding = (
   raw: RawWasmModule,
 ): NativeAnonymizeBinding => ({
   convertExternalDetectionBatch: (document, batchJson) => {
-    const detections: Array<{
-      start: number;
-      end: number;
-      label: string;
-      score: number;
-      provider_id: string;
-      detection_id: string;
-    }> = JSON.parse(raw.convertExternalDetectionBatchJson(document, batchJson));
+    const detections = parseExternalDetections(
+      raw.convertExternalDetectionBatchJson(document, batchJson),
+    );
     return detections.map(
       ({ start, end, label, score, provider_id, detection_id }) =>
         ({
@@ -363,7 +362,9 @@ const wrapPrepared = (raw: RawPreparedSearch): NativePreparedSearchBinding => ({
     ),
   redactStaticEntities: (fullText, operators) =>
     canonicalResult(
-      JSON.parse(raw.redactStaticEntitiesJson(fullText, json(operators))),
+      parseCanonicalStaticRedactionResult(
+        raw.redactStaticEntitiesJson(fullText, json(operators)),
+      ),
     ),
   redactStaticEntitiesJson: (fullText, operators) =>
     raw.redactStaticEntitiesJson(fullText, json(operators)),
@@ -453,27 +454,9 @@ const wrapSession = (
 const json = (value: OperatorConfig | undefined): string | undefined =>
   value === undefined ? undefined : JSON.stringify(value);
 
-type CanonicalResult = {
-  resolved_entities: Array<{
-    start: number;
-    end: number;
-    label: string;
-    text: string;
-    score: number;
-    source: string;
-    source_detail?: string | null;
-    provider_id?: string | null;
-    detection_id?: string | null;
-  }>;
-  redaction: {
-    redacted_text: string;
-    redaction_map: Array<{ placeholder: string; original: string }>;
-    operator_map: Array<{ placeholder: string; operator: string }>;
-    entity_count: number;
-  };
-};
-
-const canonicalResult = (result: CanonicalResult): BindingResult => ({
+const canonicalResult = (
+  result: CanonicalStaticRedactionResult,
+): BindingResult => ({
   resolvedEntities: result.resolved_entities.map(
     ({ source_detail, provider_id, detection_id, ...entity }) => ({
       ...entity,
@@ -485,27 +468,10 @@ const canonicalResult = (result: CanonicalResult): BindingResult => ({
   redaction: {
     redactedText: result.redaction.redacted_text,
     redactionMap: result.redaction.redaction_map,
-    operatorMap: result.redaction.operator_map.map(
-      ({ placeholder, operator }) => ({
-        placeholder,
-        operator: parseOperatorType(operator),
-      }),
-    ),
+    operatorMap: result.redaction.operator_map,
     entityCount: result.redaction.entity_count,
   },
 });
-
-const parseOperatorType = (operator: string): OperatorType => {
-  switch (operator) {
-    case "keep":
-    case "mask":
-    case "redact":
-    case "replace":
-      return operator;
-    default:
-      throw new TypeError(`Unknown redaction operator: ${operator}`);
-  }
-};
 
 const assertPdfPixelPages = (pagePixels: readonly Uint8Array[]): void => {
   for (const [index, page] of pagePixels.entries()) {

@@ -287,7 +287,7 @@ const runInPage = async ({ sample, externalDetectionDocument, pdfBase64 }) => {
   try {
     await module.inspect_pdf_json(new Uint8Array([0]));
   } catch (error) {
-    pdfError = String(error?.message ?? error);
+    pdfError = error instanceof Error ? error.message : String(error);
   }
   return {
     singleThread: !sharedMemory,
@@ -308,6 +308,11 @@ const runInPage = async ({ sample, externalDetectionDocument, pdfBase64 }) => {
   };
 };
 
+/**
+ * @param {Awaited<ReturnType<typeof runInPage>>} result
+ * @param {string} expectedPdfJson
+ * @param {string} expectedPdfError
+ */
 const validate = (result, expectedPdfJson, expectedPdfError) => {
   const {
     singleThread,
@@ -397,7 +402,7 @@ const withTimeout = (promise, ms, label) =>
 
 const main = async () => {
   requireBuilt();
-  // eslint-disable-next-line stll/no-dynamic-import-specifier
+  // oxlint-disable-next-line stll/no-dynamic-import-specifier -- Resolve verified emitted assets at runtime.
   const nativeNodeEntry = await import(pathToFileURL(nativeNodeEntryPath).href);
   const nodeBinding = nativeNodeEntry.loadNativeAnonymizeBinding();
   const pdfBytes = new Uint8Array(readFileSync(pdfFixturePath));
@@ -406,7 +411,7 @@ const main = async () => {
   try {
     nodeBinding.inspectPdfJson(new Uint8Array([0]));
   } catch (error) {
-    expectedPdfError = String(error?.message ?? error);
+    expectedPdfError = error instanceof Error ? error.message : String(error);
   }
   if (!expectedPdfError) {
     throw new Error("native Node PDF inspection did not reject invalid bytes");

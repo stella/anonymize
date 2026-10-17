@@ -339,7 +339,8 @@ This is a Bun-first TypeScript monorepo for text anonymization. The library hand
 - `bun install`
 - `bun run lint`
 - `bun run format:check`
-- `bun run typecheck`
+- `bun run typecheck` (`bun check --no-pretty --all --project=<tsconfig>` for each checked project)
+- `bun run check:typecheck-parity`
 - `bun run test`
 - `bun run build`
 - `bun run check:version`
@@ -515,9 +516,12 @@ default alias), and the pinned Rust 1.96.0 toolchain with the
   `cargo install cargo-nextest --locked` or the prebuilt binary from
   `get.nexte.st` (CI installs the pinned prebuilt). Doctests run separately via
   `cargo ci-test-doc` on stock cargo. `bun run rust:check` also runs
-  `cargo ci-dylint`, which needs `nightly-2026-04-16` plus
-  `cargo-dylint`/`dylint-link` 6.0.1 (see `.github/workflows/ci.yml`). Install
-  the dylint tooling only when changing Rust lints.
+  `cargo ci-stella-lint` on the pinned stable toolchain. Install its binary with
+  `cargo install --git https://github.com/stella/tooling --rev a1bd81740ecb4b66999f56d1716e1190c4e7272f --locked stella_source_lint`.
 - **Python surface is optional** and needs `uv` (not preinstalled);
   `python:typecheck`/`python:wheel` and the Python parity tests are skipped
   without it.
+
+### TypeScript Tooling
+
+Use Bun for every TypeScript typecheck, including test and WASM configurations. CI runs `bun run check:typecheck-parity` for every configuration checked by workspace scripts. Editors keep the TypeScript language service because Bun has no language server. Keep `typescript` for editor support and declaration generation through tsdown and diagnostic parity.

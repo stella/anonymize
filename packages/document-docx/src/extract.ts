@@ -54,7 +54,7 @@ const nativeExtractionErrorCode = (
 
 export const extractDocxText = (archive: Uint8Array): DocxExtraction => {
   const extract = loadNativeAnonymizeBinding().extractDocxTextJson;
-  if (extract === undefined) {
+  if (typeof extract !== "function") {
     throw new DocxExtractionError(
       DOCX_EXTRACTION_ERROR_CODES.invalidPackage,
       "Native anonymize binding does not expose DOCX extraction",

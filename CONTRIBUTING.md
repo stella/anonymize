@@ -41,6 +41,7 @@ a pull request, run the applicable full gates:
 bun run lint
 bun run format:check
 bun run typecheck
+bun run check:typecheck-parity
 bun run test
 bun run check:version
 ```
@@ -53,8 +54,12 @@ bun run rust:lint
 bun run rust:test
 ```
 
-The full `bun run rust:check` additionally runs the repository's Dylint rules
-and requires the pinned nightly and Dylint tooling used by CI.
+The full `bun run rust:check` additionally runs `cargo ci-stella-lint` on the
+pinned stable toolchain. Install the shared source lint with:
+
+```sh
+cargo install --git https://github.com/stella/tooling --rev a1bd81740ecb4b66999f56d1716e1190c4e7272f --locked stella_source_lint
+```
 
 ## Choose the right change location
 
@@ -126,3 +131,7 @@ exception file-specific, documented, and removed with that file's migration.
 - Complete the CLA check on the pull request.
 
 Describe only public engineering context visible in the repository and diff.
+
+## TypeScript tooling
+
+Workspace typechecks use `bun check --no-pretty --all --project=<tsconfig>` for production, test, and WASM configurations. CI compares diagnostic coverage with TypeScript using `bun run check:typecheck-parity`. Editors retain the TypeScript language service because Bun has no language server. Keep TypeScript for editors and tsdown declaration generation and diagnostic parity.

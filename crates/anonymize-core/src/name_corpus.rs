@@ -1312,7 +1312,7 @@ mod tests {
       .detect_supplemental("Agreement signed by Mina Roe.", &[])
       .expect("supplemental name-corpus detection should succeed");
 
-    assert!(entities.is_empty());
+    assert_eq!(entities, Vec::<PipelineEntity>::new());
   }
 
   #[test]
@@ -1357,7 +1357,7 @@ mod tests {
       .detect_supplemental(text, &[deny])
       .expect("cjk detection should succeed");
 
-    assert!(entities.is_empty());
+    assert_eq!(entities, Vec::<PipelineEntity>::new());
   }
 
   #[test]

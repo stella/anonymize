@@ -37,14 +37,14 @@ jobs:
     runs-on: [self-hosted, anonymize-perf-v1]
     timeout-minutes: 120
     env:
-      RUSTUP_TOOLCHAIN: 1.96.0
+      RUSTUP_TOOLCHAIN: 1.99.0
       UV_VERSION: 0.10.1
       PYTHON_VERSION: 3.11.12
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
           bun-version-file: "package.json"
 
@@ -55,8 +55,7 @@ jobs:
 
       - name: Setup Rust
         run: |
-          rustup toolchain install 1.96.0 --profile minimal \
-            --target wasm32-unknown-unknown
+          rustup toolchain install 1.99.0 --profile minimal --target wasm32-unknown-unknown
 
       - name: Setup browser WebAssembly tools
         uses: ./.github/actions/setup-browser-wasm

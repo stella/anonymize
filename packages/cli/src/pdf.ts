@@ -227,10 +227,7 @@ const canonicalPath = (path: string): string => {
   }
 };
 
-const isNodeError = (
-  error: unknown,
-  code: string,
-): error is NodeJS.ErrnoException =>
+const isNodeError = (error: unknown, code: string): boolean =>
   error instanceof Error && "code" in error && error.code === code;
 
 const preflight = async (

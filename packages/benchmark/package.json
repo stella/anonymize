@@ -6,7 +6,7 @@
   "type": "module",
   "license": "Apache-2.0",
   "scripts": {
-    "typecheck": "bun ../../scripts/tsc-native.ts --noEmit -p tsconfig.json",
+    "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
     "test": "bun test",
     "format": "oxfmt . \"!results/**\" \"!vendor/**\"",
     "bench:compare": "bun src/bench.ts",
@@ -34,11 +34,12 @@
     "@stll/anonymize": "workspace:^",
     "@stll/anonymize-data": "^0.0.10",
     "fflate": "0.8.3",
-    "hyparquet": "1.31.1"
+    "hyparquet": "1.31.2"
   },
   "devDependencies": {
-    "@types/node": "^26.6.2",
-    "bun-types": "1.4.2",
-    "typescript": "7.0.2"
+    "@types/node": "^26.6.4",
+    "bun-types": "1.4.3",
+    "typescript": "7.0.2",
+    "@stll/typescript-config": "0.8.0"
   }
 }

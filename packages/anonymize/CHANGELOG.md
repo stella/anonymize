@@ -1,5 +1,31 @@
 # Changelog
 
+## 3.0.7
+
+No changes in this release.
+
+## 3.0.6
+
+### Patch Changes
+
+- [#543](https://github.com/stella/anonymize/pull/543) [`24d2121`](https://github.com/stella/anonymize/commit/24d2121be384e6b005fae3f7b154b0745355dd17) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Compound surnames joined by a non-breaking hyphen, an en dash or a backtick
+  apostrophe are redacted in full, as are legal-form organization names
+  spelled with an iteration mark (`佐々木`), ending in a combining mark, or
+  mixing scripts inside delimiters (`<<Tarsk紫苑 GmbH>>`).
+
+## 3.0.5
+
+### Patch Changes
+
+- [#540](https://github.com/stella/anonymize/pull/540) [`41eae7b`](https://github.com/stella/anonymize/commit/41eae7b35f1647fab24d0eb6e426b3931bddfe9e) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Redaction spans keep to their entity. In scripts written without spaces
+  (Japanese, Chinese, Korean, Thai, Lao, Khmer, Myanmar) a span stays on the
+  matched characters instead of growing over the surrounding run, and every
+  span starts and ends on a grapheme cluster boundary, so no combining mark is
+  split off. A name or legal-form organization inside delimiters (`<<…>>`,
+  `«…»`, `„…“`, `「…」`, `（…）`, quotes) leaves the closing delimiter in place,
+  and person and legal-form name scans stop where Latin-script text meets an
+  unspaced script.
+
 ## 3.0.4
 
 ### Patch Changes
@@ -250,7 +276,7 @@
 
 - [#416](https://github.com/stella/anonymize/pull/416) [`b561bac`](https://github.com/stella/anonymize/commit/b561bac2edc4e9e0205e1958fc826e42d7183d6b) Thanks [@cursor](https://github.com/apps/cursor)! - Detect title-led person names whose surname is written in uppercase even when
   that surname is absent from dictionary evidence (for example `Ing. Firstname
-SURNAME` and hyphenated trading forms like `SURNAME-VL`).
+  SURNAME` and hyphenated trading forms like `SURNAME-VL`).
 
 ## 2.6.2
 

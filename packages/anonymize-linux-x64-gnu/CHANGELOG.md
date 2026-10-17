@@ -1,5 +1,17 @@
 # @stll/anonymize-linux-x64-gnu
 
+## 3.0.7
+
+No changes in this release.
+
+## 3.0.6
+
+No changes in this release.
+
+## 3.0.5
+
+No changes in this release.
+
 ## 3.0.4
 
 No changes in this release.

@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use crate::byte_offsets::ByteOffsets;
 use crate::signatures::PersonSpanTerminators;
@@ -7,7 +7,7 @@ use crate::types::Result;
 #[cfg(test)]
 use super::common::contains_span;
 use super::common::{byte_len, entity_len, is_caller_owned};
-use super::document::{CharSpan, ResolutionDocument};
+use super::document::{ResolutionDocument, WordAnalysis};
 use super::{DetectionSource, PipelineEntity};
 
 /// Inputs to the boundary pass. `person_terminators` is empty when the
@@ -41,13 +41,7 @@ pub(crate) fn enforce_boundary_consistency_with_document(
   person_terminators: PersonSpanTerminators<'_>,
 ) -> Result<Vec<PipelineEntity>> {
   let offsets = document.offsets();
-  let analysis = document.word_analysis();
-  let fixed = fix_partial_words(
-    entities,
-    &offsets,
-    &analysis.spans,
-    &analysis.boundaries,
-  )?;
+  let fixed = fix_partial_words(entities, &offsets, document.word_analysis())?;
   // Truncation runs after word-boundary expansion so expansion cannot push a
   // person span back across a terminator it was just pulled behind.
   let truncated = truncate_person_spans(
@@ -546,21 +540,21 @@ impl BoundaryOverlapIndexes {
   }
 }
 
+/// Extends an edge that cuts a word or a grapheme cluster to its end. An
+/// edge between two words, between two clusters of an unspaced script, or
+/// next to punctuation stays where the detector put it.
 fn fix_partial_words(
   entities: Vec<PipelineEntity>,
   offsets: &ByteOffsets<'_>,
-  spans: &[CharSpan],
-  boundaries: &BTreeSet<u32>,
+  words: &WordAnalysis,
 ) -> Result<Vec<PipelineEntity>> {
-  fix_partial_words_with_stats(entities, offsets, spans, boundaries)
-    .map(|(fixed, _)| fixed)
+  fix_partial_words_with_stats(entities, offsets, words).map(|(fixed, _)| fixed)
 }
 
 fn fix_partial_words_with_stats(
   mut entities: Vec<PipelineEntity>,
   offsets: &ByteOffsets<'_>,
-  spans: &[CharSpan],
-  boundaries: &BTreeSet<u32>,
+  words: &WordAnalysis,
 ) -> Result<(Vec<PipelineEntity>, BoundaryFixStats)> {
   entities.sort_by_key(|entity| entity.start);
   let indexes = BoundaryOverlapIndexes::new(&entities);
@@ -578,8 +572,8 @@ fn fix_partial_words_with_stats(
       continue;
     }
 
-    let mut new_start = word_start_at(entity.start, boundaries, spans);
-    let mut new_end = word_end_at(entity.end, boundaries, spans);
+    let mut new_start = words.word_start_at(entity.start);
+    let mut new_end = words.word_end_at(entity.end);
 
     {
       let label_id = indexes.label_ids.get(index).copied().unwrap_or_default();
@@ -1430,48 +1424,6 @@ fn remove_nested_same_label(
   result
 }
 
-fn word_start_at(
-  position: u32,
-  boundaries: &BTreeSet<u32>,
-  spans: &[CharSpan],
-) -> u32 {
-  let mut cursor = position;
-  while cursor > 0 && !boundaries.contains(&cursor) {
-    let index = spans.partition_point(|span| span.end <= cursor);
-    if index == 0 {
-      return cursor;
-    }
-    let Some(previous) = spans.get(index.saturating_sub(1)) else {
-      return cursor;
-    };
-    if is_word_start_stop(previous.ch) {
-      return cursor;
-    }
-    cursor = previous.start;
-  }
-  cursor
-}
-
-fn word_end_at(
-  position: u32,
-  boundaries: &BTreeSet<u32>,
-  spans: &[CharSpan],
-) -> u32 {
-  let mut cursor = position;
-  let text_end = spans.last().map_or(0, |span| span.end);
-  while cursor < text_end && !boundaries.contains(&cursor) {
-    let index = spans.partition_point(|span| span.start < cursor);
-    let Some(next) = spans.get(index) else {
-      return cursor;
-    };
-    if is_word_end_stop(next.ch) {
-      return cursor;
-    }
-    cursor = next.end;
-  }
-  cursor
-}
-
 fn merge_into_previous(
   entities: &mut [PipelineEntity],
   previous_index: usize,
@@ -1506,17 +1458,6 @@ fn is_mergeable_gap(gap: &str) -> bool {
   gap.is_empty()
     || (byte_len(gap) <= 3
       && gap.chars().all(|ch| matches!(ch, ' ' | '\t' | ',' | '-')))
-}
-
-const fn is_word_start_stop(ch: char) -> bool {
-  matches!(ch, '\n' | '\r' | ',' | ';' | '(' | ')' | '[' | ']' | '&')
-}
-
-const fn is_word_end_stop(ch: char) -> bool {
-  matches!(
-    ch,
-    '\n' | '\r' | ',' | ';' | '.' | '(' | ')' | '[' | ']' | '&'
-  )
 }
 
 #[cfg(test)]
@@ -1577,8 +1518,7 @@ mod tests {
   fn fix_partial_words_legacy(
     entities: &[PipelineEntity],
     offsets: &ByteOffsets<'_>,
-    spans: &[CharSpan],
-    boundaries: &BTreeSet<u32>,
+    words: &WordAnalysis,
   ) -> Result<Vec<PipelineEntity>> {
     let mut sorted = entities.to_vec();
     sorted.sort_by_key(|entity| entity.start);
@@ -1594,8 +1534,8 @@ mod tests {
         continue;
       }
 
-      let mut new_start = word_start_at(entity.start, boundaries, spans);
-      let mut new_end = word_end_at(entity.end, boundaries, spans);
+      let mut new_start = words.word_start_at(entity.start);
+      let mut new_end = words.word_end_at(entity.end);
       for (other_index, other) in sorted.iter().enumerate() {
         if other_index == index || other.label == entity.label {
           continue;
@@ -1736,14 +1676,12 @@ mod tests {
         fix_partial_words(
           entities.clone(),
           &offsets,
-          &analysis.spans,
-          &analysis.boundaries,
+          analysis,
         )?,
         fix_partial_words_legacy(
           &entities,
           &offsets,
-          &analysis.spans,
-          &analysis.boundaries,
+          analysis,
         )?,
       );
     }
@@ -1927,12 +1865,8 @@ mod tests {
       })
       .collect::<Vec<_>>();
 
-    let (fixed, stats) = fix_partial_words_with_stats(
-      entities,
-      &offsets,
-      &analysis.spans,
-      &analysis.boundaries,
-    )?;
+    let (fixed, stats) =
+      fix_partial_words_with_stats(entities, &offsets, analysis)?;
 
     assert_eq!(fixed.len(), SAME_LABEL_SCALING_ENTITY_COUNT);
     assert!(

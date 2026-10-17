@@ -63,7 +63,7 @@
     "build": "tsdown",
     "prepublishOnly": "bun run build",
     "test": "bun test",
-    "typecheck": "bun ../../scripts/tsc-native.ts --noEmit",
+    "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
     "generate:city-loaders": "bun run scripts/generate-city-loaders.ts",
     "validate:triggers": "bun run scripts/validate-triggers.ts",
     "check:mirror": "node scripts/check-mirror.mjs",
@@ -74,6 +74,9 @@
   "devDependencies": {
     "stopwords-iso": "1.1.0",
     "tsdown": "0.23.0",
-    "typescript": "7.0.2"
+    "typescript": "7.0.2",
+    "@stll/typescript-config": "0.8.0",
+    "bun-types": "1.4.3",
+    "@types/node": "26.6.4"
   }
 }

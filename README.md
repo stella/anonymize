@@ -157,7 +157,7 @@ status rather than document contents or plaintext mappings.
 }
 ```
 
-The server requires Node.js 20+. It supports text, DOCX, PDF, and
+The server requires Node.js 22+. It supports text, DOCX, PDF, and
 provider-neutral external-detection sidecars for text. Encrypted durable
 sessions are optional and currently limited to macOS and Linux. PDF tools need
 local Poppler and Tesseract installations; their executable paths can be set at

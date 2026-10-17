@@ -29,14 +29,14 @@ jobs:
 
       - name: Setup Rust
         run: |
-          rustup toolchain install 1.96.0 --profile minimal
-          rustup default 1.96.0
+          rustup toolchain install 1.99.0 --profile minimal
+          rustup default 1.99.0
 
       - name: Install pinned Rust tools (checksum-verified)
         # nextest is the test runner used by cargo-mutants. taiki-e/install-action
         # verifies release checksums, unlike a raw `curl | tar`. Version-pinned
         # for reproducibility, matching the exact-version pins above.
-        uses: taiki-e/install-action@94c31af3204a9f15ab40b35ad084410b905bbc73 # v2.87.17
+        uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
         with:
           tool: nextest@0.9.145,cargo-mutants@27.1.0
 
@@ -48,9 +48,9 @@ jobs:
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
             target/
-          key: ${{ runner.os }}-mutants-1.96.0-${{ hashFiles('Cargo.lock') }}
+          key: ${{ runner.os }}-mutants-1.99.0-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-mutants-1.96.0-
+            ${{ runner.os }}-mutants-1.99.0-
 
       - name: Run cargo-mutants
         # Scoped to the offset/redaction/normalization logic (~200 mutants),

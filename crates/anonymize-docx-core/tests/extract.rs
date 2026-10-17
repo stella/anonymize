@@ -7,7 +7,7 @@ use stella_anonymize_docx_core::{
   DocxCoverageItem, DocxErrorCode, DocxInlineContext, DocxPartType,
   extract_docx_text,
 };
-use zip::{ZipWriter, write::SimpleFileOptions};
+use zip::{ZipArchive, ZipWriter, write::SimpleFileOptions};
 
 const CONTENT_TYPES_NAMESPACE: &str =
   "http://schemas.openxmlformats.org/package/2006/content-types";
@@ -103,6 +103,58 @@ fn extracts_structural_blocks_and_utf16_segments()
     .and_then(|segments| segments.get(1))
     .and_then(|segment| segment.get("start"));
   assert_eq!(segment_start, Some(&serde_json::json!(3)));
+  Ok(())
+}
+
+#[test]
+fn rejects_invalid_utf8_entry_names_before_package_validation()
+-> Result<(), Box<dyn std::error::Error>> {
+  let path = "word/documént.xml";
+  let mut writer = ZipWriter::new(Cursor::new(Vec::new()));
+  writer.start_file(path, SimpleFileOptions::default())?;
+  writer.write_all(b"<document/>")?;
+  let original = writer.finish()?.into_inner();
+  let name_offsets = original
+    .windows(path.len())
+    .enumerate()
+    .filter_map(|(offset, bytes)| (bytes == path.as_bytes()).then_some(offset))
+    .collect::<Vec<_>>();
+  // ZIP stores the UTF-8 name in both local and central directory headers.
+  assert_eq!(name_offsets.len(), 2);
+  let character_offset =
+    path.find('é').ok_or("missing UTF-8 fixture character")?;
+  let mut readable = ZipArchive::new(Cursor::new(&original))?;
+  assert_eq!(readable.by_index(0)?.name()?, path);
+  let incomplete = extract_docx_text(&original)
+    .err()
+    .ok_or("expected incomplete package error")?;
+  assert_eq!(incomplete.code(), DocxErrorCode::InvalidPackage);
+  for (invalid_byte, decoded_name) in [
+    (0xff, "word/docum\u{a0}⌐nt.xml"),
+    (0x80, "word/documÇ⌐nt.xml"),
+    (0xc0, "word/docum└⌐nt.xml"),
+  ] {
+    let mut document = original.clone();
+    for offset in &name_offsets {
+      *document
+        .get_mut(offset + character_offset)
+        .ok_or("missing ZIP filename byte")? = invalid_byte;
+    }
+    // ZIP 9 accepts these bytes through its CP437 fallback; the DOCX
+    // boundary must reject them before validating the incomplete package.
+    let mut archive = ZipArchive::new(Cursor::new(&document))?;
+    let entry = archive.by_index(0)?;
+    assert!(std::str::from_utf8(entry.name_raw()).is_err());
+    assert_eq!(entry.name()?, decoded_name);
+    let failure = extract_docx_text(&document)
+      .err()
+      .ok_or("expected invalid entry name error")?;
+    assert_eq!(failure.code(), DocxErrorCode::InvalidArchive);
+    assert_eq!(
+      failure.to_string(),
+      "DOCX archive contains an invalid entry name"
+    );
+  }
   Ok(())
 }
 

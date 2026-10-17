@@ -1,21 +1,41 @@
-use std::collections::BTreeSet;
 use std::ops::Range;
 use std::sync::OnceLock;
 
+use unicode_normalization::char::is_combining_mark;
+use unicode_segmentation::UnicodeSegmentation;
+
 use crate::byte_offsets::ByteOffsets;
+use crate::gazetteer::is_unspaced_script;
 use crate::types::Result;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) struct CharSpan {
-  pub(super) start: u32,
-  pub(super) end: u32,
-  pub(super) ch: char,
-}
-
+/// The stretches of a document no entity edge may cut: words of spaced
+/// scripts, joined across an inner apostrophe (`O'Connor`), and every other
+/// grapheme cluster of more than one character (`ซื้`, `e\u{301}`).
+/// A character of a script written without spaces is never part of a word:
+/// its word edges are not in the text, so only its clusters are kept whole.
 #[derive(Debug)]
 pub(super) struct WordAnalysis {
-  pub(super) spans: Vec<CharSpan>,
-  pub(super) boundaries: BTreeSet<u32>,
+  /// Sorted, disjoint byte ranges.
+  units: Vec<Range<u32>>,
+}
+
+impl WordAnalysis {
+  /// Start of the unit `position` sits strictly inside, else `position`.
+  pub(super) fn word_start_at(&self, position: u32) -> u32 {
+    self
+      .unit_around(position)
+      .map_or(position, |unit| unit.start)
+  }
+
+  /// End of the unit `position` sits strictly inside, else `position`.
+  pub(super) fn word_end_at(&self, position: u32) -> u32 {
+    self.unit_around(position).map_or(position, |unit| unit.end)
+  }
+
+  fn unit_around(&self, position: u32) -> Option<&Range<u32>> {
+    let index = self.units.partition_point(|unit| unit.end <= position);
+    self.units.get(index).filter(|unit| unit.start < position)
+  }
 }
 
 pub(crate) struct ResolutionDocument<'a> {
@@ -144,10 +164,8 @@ impl<'a> ResolutionDocument<'a> {
   }
 
   pub(super) fn word_analysis(&self) -> &WordAnalysis {
-    self.word_analysis.get_or_init(|| {
-      let spans = char_spans(self.text);
-      let boundaries = word_boundaries(&spans);
-      WordAnalysis { spans, boundaries }
+    self.word_analysis.get_or_init(|| WordAnalysis {
+      units: word_units(self.text),
     })
   }
 }
@@ -165,88 +183,73 @@ const fn is_line_delimiter(ch: char) -> bool {
   matches!(ch, '\r' | '\n' | '\u{2028}' | '\u{2029}')
 }
 
-fn char_spans(text: &str) -> Vec<CharSpan> {
-  let mut spans = Vec::new();
-  let mut offset = 0_u32;
-
-  for ch in text.chars() {
-    let width = u32::try_from(ch.len_utf8()).unwrap_or(u32::MAX);
-    let end = offset.saturating_add(width);
-    spans.push(CharSpan {
-      start: offset,
-      end,
-      ch,
-    });
-    offset = end;
-  }
-
-  spans
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum ClusterClass {
+  Word,
+  Connector,
+  Other,
 }
 
-fn word_boundaries(spans: &[CharSpan]) -> BTreeSet<u32> {
-  let mut boundaries = BTreeSet::new();
-  let mut run_start = None::<u32>;
-  let mut run_end = None::<u32>;
+fn cluster_class(cluster: &str) -> ClusterClass {
+  let Some(first) = cluster.chars().next() else {
+    return ClusterClass::Other;
+  };
+  if is_unspaced_script(first) {
+    ClusterClass::Other
+  } else if first.is_alphanumeric() || is_combining_mark(first) {
+    ClusterClass::Word
+  } else if cluster.chars().count() == 1 && is_word_connector(first) {
+    ClusterClass::Connector
+  } else {
+    ClusterClass::Other
+  }
+}
 
-  for (index, span) in spans.iter().enumerate() {
-    if is_word_body(span.ch) || is_word_connector_between(spans, index) {
-      if run_start.is_none() {
-        run_start = Some(span.start);
+fn word_units(text: &str) -> Vec<Range<u32>> {
+  let mut units = Vec::new();
+  let mut word = None::<Range<usize>>;
+  // A connector joins only when a word cluster follows it.
+  let mut pending_connector = false;
+  let mut push = |range: Range<usize>| {
+    if let (Ok(start), Ok(end)) =
+      (u32::try_from(range.start), u32::try_from(range.end))
+    {
+      units.push(start..end);
+    }
+  };
+
+  for (start, cluster) in text.grapheme_indices(true) {
+    let end = start.saturating_add(cluster.len());
+    let class = cluster_class(cluster);
+    if class == ClusterClass::Word {
+      pending_connector = false;
+      match word.as_mut() {
+        Some(run) => run.end = end,
+        None => word = Some(start..end),
       }
-      run_end = Some(span.end);
       continue;
     }
-
-    if let (Some(start), Some(end)) = (run_start.take(), run_end.take()) {
-      boundaries.insert(start);
-      boundaries.insert(end);
+    if class == ClusterClass::Connector && word.is_some() && !pending_connector
+    {
+      pending_connector = true;
+      continue;
+    }
+    if let Some(run) = word.take() {
+      push(run);
+    }
+    pending_connector = false;
+    if cluster.chars().nth(1).is_some() {
+      push(start..end);
     }
   }
-
-  if let (Some(start), Some(end)) = (run_start, run_end) {
-    boundaries.insert(start);
-    boundaries.insert(end);
+  if let Some(run) = word {
+    push(run);
   }
-
-  boundaries
-}
-
-fn is_word_connector_between(spans: &[CharSpan], index: usize) -> bool {
-  let Some(span) = spans.get(index) else {
-    return false;
-  };
-  if !is_word_connector(span.ch) {
-    return false;
-  }
-
-  let Some(previous) = index.checked_sub(1).and_then(|prev| spans.get(prev))
-  else {
-    return false;
-  };
-  let Some(next) = spans.get(index.saturating_add(1)) else {
-    return false;
-  };
-
-  is_word_body(previous.ch) && is_word_body(next.ch)
+  units
 }
 
 const fn is_word_connector(ch: char) -> bool {
   matches!(ch, '\'' | '\u{2018}' | '\u{2019}' | '\u{02bc}' | '\u{ff07}')
-}
-
-fn is_word_body(ch: char) -> bool {
-  ch.is_alphanumeric() || is_combining_mark(ch)
-}
-
-const fn is_combining_mark(ch: char) -> bool {
-  matches!(
-    ch,
-    '\u{0300}'..='\u{036f}'
-      | '\u{1ab0}'..='\u{1aff}'
-      | '\u{1dc0}'..='\u{1dff}'
-      | '\u{20d0}'..='\u{20ff}'
-      | '\u{fe20}'..='\u{fe2f}'
-  )
 }
 
 #[cfg(test)]
@@ -331,8 +334,30 @@ mod tests {
     let second = document.word_analysis();
 
     assert!(std::ptr::eq(first, second));
-    assert!(first.boundaries.contains(&0));
-    assert!(first.boundaries.contains(&12));
+    assert_eq!(first.word_start_at(10), 5);
+    assert_eq!(first.word_end_at(6), 12);
+    assert_eq!(first.word_end_at(4), 4);
+  }
+
+  #[test]
+  fn word_units_keep_clusters_whole_and_never_cross_non_word_text() {
+    let cases: [(&str, u32, u32, u32); 6] = [
+      // Edges inside a spaced word extend to the word.
+      ("Kontaktujte Novák prosím.", 15, 12, 18),
+      // A run of an unspaced script is no word: only clusters stay whole.
+      ("本契約は紫苑工房と締結", 12, 12, 12),
+      ("ผู้ซื้อคือกมลวรรณ", 30, 30, 30),
+      ("ผู้ซื้อ", 12, 9, 18),
+      // Punctuation between two edges is never absorbed.
+      ("<<Beta s.r.o.>> je", 13, 13, 13),
+      ("„Beta s.r.o.“ je", 14, 14, 14),
+    ];
+    for (text, position, start, end) in cases {
+      let document = ResolutionDocument::new(text);
+      let analysis = document.word_analysis();
+      assert_eq!(analysis.word_start_at(position), start, "{text}");
+      assert_eq!(analysis.word_end_at(position), end, "{text}");
+    }
   }
 
   #[test]

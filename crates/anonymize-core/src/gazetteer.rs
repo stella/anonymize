@@ -20,14 +20,17 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 
 use unicode_normalization::char::{decompose_canonical, is_combining_mark};
 
+use crate::name_joiners::NameJoiner;
+
 #[path = "gazetteer_policy.rs"]
 mod policy;
+pub(crate) use policy::is_unspaced_script;
 #[cfg(test)]
 use policy::{
   COMPOUND_JOINERS, MarkerKind, Markers, encloses, glue_is_free,
   is_identifier_segment, marker_spans, markers,
 };
-use policy::{CandidatePolicy, is_unspaced_script, is_word_char};
+use policy::{CandidatePolicy, is_word_char};
 
 use crate::declension::{expand_name_declensions, expand_surname_derivations};
 use crate::labels::PERSON_LABEL;
@@ -1371,12 +1374,8 @@ const fn is_horizontal_space(ch: char) -> bool {
   ch.is_whitespace() && !is_line_break(ch)
 }
 
-const fn canonical_punctuation(ch: char) -> char {
-  match ch {
-    '\u{2019}' | '\u{02bc}' | '`' => '\'',
-    '\u{2010}' | '\u{2011}' | '\u{2013}' => '-',
-    other => other,
-  }
+fn canonical_punctuation(ch: char) -> char {
+  NameJoiner::of(ch).map_or(ch, NameJoiner::canonical)
 }
 
 /// Lower case without combining marks, so `Ľubomír` and `lubomir` agree.
@@ -1938,6 +1937,7 @@ mod tests {
   use proptest::test_runner::RngSeed;
 
   use super::*;
+  use crate::name_joiners::NAME_JOINERS;
 
   const ORGANIZATION: &str = "organization";
   const PERSON: &str = PERSON_LABEL;
@@ -2313,9 +2313,9 @@ mod tests {
     };
     assert_eq!(detect("by Wintermte today", 3, 12), ["Wintermte"]);
     assert_eq!(detect("by  Wintermte today", 3, 13), ["Wintermte"]);
-    assert!(detect("by xWintermte today", 4, 13).is_empty());
-    assert!(detect("by Wintermtex today", 3, 12).is_empty());
-    assert!(detect("by Winterbite today", 3, 13).is_empty());
+    assert_eq!(detect("by xWintermte today", 4, 13), Vec::<String>::new());
+    assert_eq!(detect("by Wintermtex today", 3, 12), Vec::<String>::new());
+    assert_eq!(detect("by Winterbite today", 3, 13), Vec::<String>::new());
   }
 
   fn found_with(
@@ -2336,9 +2336,9 @@ mod tests {
   #[test]
   fn czech_slovak_forms_follow_the_language_scope() {
     let entries = [exact("Ana", PERSON)];
-    assert!(
-      found_with(&entries, GazetteerInflection::None, "Is there any news?")
-        .is_empty()
+    assert_eq!(
+      found_with(&entries, GazetteerInflection::None, "Is there any news?"),
+      Vec::<String>::new()
     );
     assert_eq!(
       found_with(&entries, GazetteerInflection::None, "Ana arrived."),
@@ -2398,13 +2398,19 @@ mod tests {
     }
     let upper = [short_entry("ORBIS")];
     assert_eq!(engine_found(&upper, "Klient ORBYS zaplatil."), ["ORBYS"]);
-    assert!(engine_found(&upper, "Klient Orbys zaplatil.").is_empty());
+    assert_eq!(
+      engine_found(&upper, "Klient Orbys zaplatil."),
+      Vec::<String>::new()
+    );
   }
 
   #[test]
   fn four_letter_entries_stay_exact() {
     let entries = [short_entry("Zeta")];
-    assert!(engine_found(&entries, "Klient Zeda zaplatil.").is_empty());
+    assert_eq!(
+      engine_found(&entries, "Klient Zeda zaplatil."),
+      Vec::<String>::new()
+    );
   }
 
   #[test]
@@ -2427,13 +2433,19 @@ mod tests {
       engine_found(&nine, "Signed by Lindqvyst today."),
       ["Lindqvyst"]
     );
-    assert!(engine_found(&nine, "Signed by Lyndqvyst today.").is_empty());
+    assert_eq!(
+      engine_found(&nine, "Signed by Lyndqvyst today."),
+      Vec::<String>::new()
+    );
     let ten = [fuzzy_entry("Wintermute")];
     assert_eq!(
       engine_found(&ten, "Signed by Wyntermyte today."),
       ["Wyntermyte"]
     );
-    assert!(engine_found(&ten, "Signed by Wyntarmyte today.").is_empty());
+    assert_eq!(
+      engine_found(&ten, "Signed by Wyntarmyte today."),
+      Vec::<String>::new()
+    );
   }
 
   #[test]
@@ -2442,7 +2454,7 @@ mod tests {
       format!("{} Acme {}", "<< ⟦".repeat(50_000), ">>".repeat(50_000));
     let found_markers = markers(&text);
     assert_eq!(found_markers.template.len(), 1);
-    assert!(found_markers.opaque.is_empty());
+    assert_eq!(found_markers.opaque, Vec::<(usize, usize)>::new());
     for repeats in [1_000, 10_000, 100_000] {
       for unit in ["<< ⟦", "⟦<<\u{a0}", "{{[[ ⟦⟦ ", "⟦ << \n"] {
         let repeated = unit.repeat(repeats);
@@ -2641,7 +2653,10 @@ mod tests {
   #[test]
   fn edge_punctuation_stays_part_of_the_entry() {
     let entries = [exact("C++", ORGANIZATION), exact("@alice", PERSON)];
-    assert!(found(&entries, "Plan C and alice agreed.").is_empty());
+    assert_eq!(
+      found(&entries, "Plan C and alice agreed."),
+      Vec::<String>::new()
+    );
     assert_eq!(found(&entries, "Use C++ today."), ["C++"]);
     assert_eq!(found(&entries, "Ping @alice today."), ["@alice"]);
   }
@@ -2699,7 +2714,7 @@ mod tests {
         .collect::<Vec<_>>()
     };
     assert_eq!(fuzzy(0, "by Wintermte today", 12), ["Wintermte"]);
-    assert!(fuzzy(1, "by acne today", 7).is_empty());
+    assert_eq!(fuzzy(1, "by acne today", 7), Vec::<String>::new());
   }
 
   #[test]
@@ -2803,7 +2818,7 @@ mod tests {
       );
     }
     let marked = format!("x ⟦{}⟧ y", "Acme,".repeat(NAMES));
-    assert!(found(&entries, &marked).is_empty());
+    assert_eq!(found(&entries, &marked), Vec::<String>::new());
   }
 
   #[test]
@@ -2826,7 +2841,10 @@ mod tests {
     ] {
       assert_eq!(found(&entries, text).len(), 1, "{text:?}");
     }
-    assert!(found(&entries, "Marie\r\n\r\nDvořáková").is_empty());
+    assert_eq!(
+      found(&entries, "Marie\r\n\r\nDvořáková"),
+      Vec::<String>::new()
+    );
   }
 
   /// Hits the real search index reports for `entries`, with the options the
@@ -2955,11 +2973,9 @@ mod tests {
       })
       .collect::<Vec<_>>();
     let guard = Guard::new(&text);
-    assert!(
-      prepared
-        .detect_with_guard(&hits, &guard)
-        .unwrap()
-        .is_empty()
+    assert_eq!(
+      prepared.detect_with_guard(&hits, &guard).unwrap(),
+      Vec::<PipelineEntity>::new()
     );
     let steps = guard.fuzzy_steps.get();
     assert!(
@@ -3357,7 +3373,10 @@ mod tests {
     ] {
       assert_eq!(found(&entries, text).len(), 1, "{text}");
     }
-    assert!(found(&entries, "Firma A/B Co Holding dnes").is_empty());
+    assert_eq!(
+      found(&entries, "Firma A/B Co Holding dnes"),
+      Vec::<String>::new()
+    );
   }
 
   #[test]
@@ -3370,8 +3389,38 @@ mod tests {
   }
 
   #[test]
+  fn every_name_joiner_matches_an_entry_spelled_with_another() {
+    for (spelling, joiner) in NAME_JOINERS {
+      assert_eq!(canonical_punctuation(spelling), joiner.canonical());
+      // MODIFIER LETTER APOSTROPHE is a letter: it never splits a word, so
+      // an entry spelled with it matches only that spelling.
+      let entry = if spelling.is_alphanumeric() {
+        format!("Tarsk{spelling}Velmor")
+      } else {
+        format!("Tarsk{}Velmor", joiner.canonical())
+      };
+      let surname = format!("Tarsk{spelling}Velmor");
+      assert_eq!(
+        found(
+          &[exact(&entry, PERSON)],
+          &format!("Smlouvu podepsal {surname} dnes"),
+        ),
+        [surname],
+        "{spelling:?}"
+      );
+    }
+    for other in ['\u{2014}', '"', '\u{201c}', '\u{2018}'] {
+      assert_eq!(canonical_punctuation(other), other);
+    }
+  }
+
+  #[test]
   fn names_in_unspaced_scripts_keep_matching_as_substrings() {
     assert_eq!(found(&[exact("東京", ORGANIZATION)], "東京都に"), ["東京"]);
+    assert_eq!(
+      found(&[exact("佐々木", PERSON)], "売主佐々木は"),
+      ["佐々木"]
+    );
     // Characters of those scripts are not word characters, so a name of any
     // script inside such a run sits on token edges.
     for text in [
@@ -3387,6 +3436,8 @@ mod tests {
       "ㇰLumaㇰ",
       "ꩠLumaꩠ",
       "𛀁Luma𛀁",
+      "々Luma々",
+      "〻Luma〻",
     ] {
       assert_eq!(
         found(&[exact("Luma", ORGANIZATION)], text),

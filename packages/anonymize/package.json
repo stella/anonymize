@@ -1,6 +1,6 @@
 {
   "name": "@stll/anonymize",
-  "version": "3.0.4",
+  "version": "3.0.7",
   "description": "Deterministic PII detection and anonymization with regex, deny lists, and coreference resolution",
   "keywords": [
     "anonymization",
@@ -64,9 +64,11 @@
     "dist",
     "index.cjs",
     "index.d.cts",
+    "native-libc.mjs",
     "native-pipeline.stlanonpkg",
     "native-pipeline.*.stlanonpkg",
-    "scripts/build-native-pipeline-package.mjs"
+    "scripts/build-native-pipeline-package.mjs",
+    "scripts/native-script-contracts.mjs"
   ],
   "publishConfig": {
     "access": "public"
@@ -84,7 +86,7 @@
   "scripts": {
     "build": "bun run build:native-wasm && tsdown && bun scripts/build-native-node.mjs && bun run build:wasm-assets",
     "prepublishOnly": "bun run build",
-    "typecheck": "bun ../../scripts/tsc-native.ts --noEmit -p tsconfig.json && bun ../../scripts/tsc-native.ts --noEmit -p tsconfig.test.json && bun ../../scripts/tsc-native.ts --noEmit -p tsconfig.wasm.json",
+    "typecheck": "bun check --no-pretty --all --project=tsconfig.json && bun check --no-pretty --all --project=tsconfig.test.json && bun check --no-pretty --all --project=tsconfig.wasm.json",
     "test": "bun test --timeout 15000",
     "test:fast": "bun test --timeout 15000 src/__test__/capabilities.test.ts src/__test__/dictionary-bundle.test.ts src/__test__/operators.test.ts src/__test__/redact.test.ts",
     "test:native-fixtures": "ANONYMIZE_TEST_SLOW_NATIVE_FIXTURE_PARITY=1 bun test --timeout 600000 src/__test__/python-parity.test.ts",
@@ -101,27 +103,29 @@
     "smoke:wasm-package": "node scripts/smoke-wasm-package.mjs",
     "smoke:wasm-runtimes": "node scripts/smoke-wasm-runtimes.mjs",
     "smoke:wasm-compiled": "node scripts/smoke-wasm-compiled.mjs",
-    "smoke:wasm-browser": "node scripts/smoke-wasm-browser.mjs",
+    "smoke:wasm-browser": "node scripts/smoke-wasm-browser.mjs && node scripts/smoke-wasm-vite.mjs",
     "format": "oxfmt ."
   },
   "dependencies": {
     "@stll/anonymize-data": "^0.0.10"
   },
   "optionalDependencies": {
-    "@stll/anonymize-darwin-arm64": "3.0.4",
-    "@stll/anonymize-darwin-x64": "3.0.4",
-    "@stll/anonymize-linux-arm64-gnu": "3.0.4",
-    "@stll/anonymize-linux-x64-gnu": "3.0.4",
-    "@stll/anonymize-win32-x64-msvc": "3.0.4"
+    "@stll/anonymize-darwin-arm64": "3.0.7",
+    "@stll/anonymize-darwin-x64": "3.0.7",
+    "@stll/anonymize-linux-arm64-gnu": "3.0.7",
+    "@stll/anonymize-linux-x64-gnu": "3.0.7",
+    "@stll/anonymize-win32-x64-msvc": "3.0.7"
   },
   "devDependencies": {
-    "@napi-rs/cli": "^3.10.4",
-    "bun-types": "1.4.2",
+    "@napi-rs/cli": "^3.10.6",
+    "bun-types": "1.4.3",
     "fast-check": "^4.10.2",
     "fflate": "^0.8.3",
-    "puppeteer-core": "25.11.0",
+    "puppeteer-core": "25.12.0",
     "tsdown": "0.23.0",
     "typescript": "7.0.2",
-    "vite": "^8.3.0"
+    "vite": "^8.3.2",
+    "@stll/typescript-config": "0.8.0",
+    "@types/node": "26.6.4"
   }
 }

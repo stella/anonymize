@@ -288,7 +288,7 @@ fn match_pattern_trigger_requires_match_at_value_start() {
     .detect_static_entities("Telephone : 123456789 SIREN")
     .expect("static detection should succeed");
 
-  assert!(rejected.entities.trigger().is_empty());
+  assert_eq!(rejected.entities.trigger(), []);
   assert_eq!(trigger_texts(&accepted), ["123456789"]);
 }
 
@@ -348,7 +348,7 @@ fn company_id_trigger_rejects_single_digit_dotted_date() {
     .detect_static_entities("DNI 6.11.2025")
     .expect("static detection should succeed");
 
-  assert!(result.entities.trigger().is_empty());
+  assert_eq!(result.entities.trigger(), []);
 }
 
 #[test]
@@ -369,8 +369,8 @@ fn company_id_trigger_caps_leading_alpha_prefixes() {
     .detect_static_entities("Company No. Paris 123456789")
     .expect("static detection should succeed");
 
-  assert!(rejected.entities.trigger().is_empty());
-  assert!(place_after_short_trigger.entities.trigger().is_empty());
+  assert_eq!(rejected.entities.trigger(), []);
+  assert_eq!(place_after_short_trigger.entities.trigger(), []);
   assert_eq!(trigger_texts(&accepted), ["AB12345"]);
 }
 
@@ -743,7 +743,7 @@ fn company_id_trigger_rejects_partial_or_overlong_identifier() {
       "Patient number: 123-45 {structured_overlong}"
     ))
     .expect("static detection should succeed");
-  assert!(result.entities.trigger().is_empty());
+  assert_eq!(result.entities.trigger(), []);
 }
 
 #[test]
@@ -784,7 +784,7 @@ fn company_id_trigger_classifies_the_exact_length_boundary() {
   let rejected = prepared
     .detect_static_entities(&format!("Patient number: {near_limit}   34"))
     .expect("static detection should succeed");
-  assert!(rejected.entities.trigger().is_empty());
+  assert_eq!(rejected.entities.trigger(), []);
 
   for value in [["12"; 44].join(" "), vec!["12"; 10_000].join(" ")] {
     let result = prepared

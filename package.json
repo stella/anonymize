@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "license": "Apache-2.0",
-  "packageManager": "bun@1.4.2",
+  "packageManager": "bun@1.4.3",
   "workspaces": [
     "packages/*",
     "packages/anonymize/wasm"
@@ -12,6 +12,7 @@
     "build": "turbo run build",
     "check:fast": "bun run sync-ai:check:optional && bun run --filter @stll/anonymize typecheck && bun run --filter @stll/anonymize-data typecheck && bun run --filter @stll/anonymize test:fast",
     "typecheck": "turbo run typecheck",
+    "check:typecheck-parity": "bun test ./.github/tools/typecheck-policy.test.ts && stll-typecheck-parity --project packages/anonymize/tsconfig.json --project packages/anonymize/tsconfig.test.json --project packages/anonymize/tsconfig.wasm.json --project packages/benchmark/tsconfig.json --project packages/cli/tsconfig.json --project packages/cli/tsconfig.test.json --project packages/corpus/tsconfig.json --project packages/corpus/tsconfig.test.json --project packages/data/tsconfig.json --project packages/document-docx/tsconfig.json --project packages/document-docx/tsconfig.test.json --project packages/document-pdf/tsconfig.json --project packages/document-pdf/tsconfig.test.json --project packages/mcp/tsconfig.json --project packages/mcp/tsconfig.test.json",
     "typecheck:built": "turbo run typecheck --only",
     "lint": "turbo run lint && bun run lint:oxlint && bun run check:brand-case && bun run check:vocab && bun run test:vocab",
     "lint:oxlint": "bun test oxlint.plugin.test.ts && bun run lint:prepare && bun --bun oxlint -c oxlint.config.ts --deny-warnings --type-aware .",
@@ -24,11 +25,11 @@
     "rust:fmt": "cargo ci-fmt",
     "rust:lint": "cargo ci-clippy",
     "rust:hawk": "cargo +1.97.1 hawk check --target-dir target/hawk -D warnings -A hawk::dead_public -A hawk::unnecessary_public",
-    "rust:dylint": "cargo ci-dylint",
+    "rust:source-lint": "cargo ci-stella-lint",
     "rust:test": "cargo ci-test && cargo ci-test-doc",
     "rust:deny": "cargo ci-deny",
     "rust:snapshot-check": "cargo ci-snapshot",
-    "rust:check": "bun run rust:fmt && bun run rust:lint && bun run rust:dylint && bun run rust:test",
+    "rust:check": "bun run rust:fmt && bun run rust:lint && bun run rust:source-lint && bun run rust:test",
     "python:typecheck": "uvx --from ty==0.0.29 ty check --extra-search-path crates/anonymize-py/python crates/anonymize-py/typecheck",
     "python:wheel": "node .github/tools/check-python-wheel.mjs",
     "check:v1-native": "cd packages/anonymize && bun run check:v1-native",
@@ -40,6 +41,7 @@
     "changeset:version": "changeset version && node scripts/sync-changeset-version.mjs && bun scripts/check-lockfile-workspace-versions.ts --write && bun install --frozen-lockfile",
     "check:exports": "bunx publint@0.3.21 packages/anonymize && bunx @arethetypeswrong/cli@0.18.5 --pack packages/anonymize --ignore-rules no-resolution cjs-resolves-to-esm && bunx publint@0.3.21 packages/document-docx && bunx @arethetypeswrong/cli@0.18.5 --pack packages/document-docx --ignore-rules no-resolution cjs-resolves-to-esm && bunx publint@0.3.21 packages/document-pdf && bunx @arethetypeswrong/cli@0.18.5 --pack packages/document-pdf --ignore-rules no-resolution cjs-resolves-to-esm && bunx publint@0.3.21 packages/mcp && bunx @arethetypeswrong/cli@0.18.5 --pack packages/mcp --ignore-rules no-resolution cjs-resolves-to-esm",
     "check:knip": "bunx knip@6.26.0 --no-progress",
+    "check:toolchain": "stll-toolchain-check",
     "check:bun": "node .github/tools/check-bun-workflows.mjs",
     "check:brand-case": "node .github/tools/check-brand-case.mjs",
     "check:vocab": "node .github/tools/check-in-code-vocabulary.mjs",
@@ -49,7 +51,9 @@
     "hooks:uninstall": "lefthook uninstall",
     "sync-ai": "bash scripts/sync-ai-skills.sh",
     "sync-ai:check": "bash scripts/sync-ai-skills.sh --check",
-    "sync-ai:check:optional": "bash scripts/sync-ai-skills.sh --check --optional"
+    "sync-ai:check:optional": "bash scripts/sync-ai-skills.sh --check --optional",
+    "cloud:setup": "stll-cloud-setup",
+    "test:tooling": "bun test ./.github/tools/tooling-adoption.test.ts ./.github/tools/tooling-workflow.test.ts packages/anonymize/src/__test__/native-json-codec.test.ts ./.github/tools/eval-html-args.test.ts && node --test .github/tools/json-values.test.mjs"
   },
   "overrides": {
     "@emnapi/core": "1.11.1",
@@ -57,19 +61,25 @@
     "@hono/node-server": "2.0.10",
     "emnapi": "1.11.1",
     "fast-uri": "3.1.8",
-    "qs": "6.16.0"
+    "qs": "6.16.0",
+    "shell-quote": "1.11.0",
+    "source-map-js": "1.2.2"
   },
   "devDependencies": {
     "@changesets/changelog-github": "^1.0.1",
     "@changesets/cli": "^3.0.3",
     "@stll/anonymize-data": "workspace:*",
-    "@stll/oxlint-config": "0.7.0",
-    "@stll/typescript-config": "0.6.0",
-    "@typescript/native": "npm:typescript@7.0.2",
-    "lefthook": "^2.1.14",
-    "oxfmt": "^0.70.0",
-    "oxlint": "1.85.0",
-    "oxlint-tsgolint": "7.0.2002",
-    "turbo": "^2.11.2"
+    "@stll/oxlint-config": "1.4.0",
+    "@stll/typescript-config": "0.8.0",
+    "typescript": "7.0.2",
+    "lefthook": "2.1.16",
+    "oxfmt": "0.72.0",
+    "oxlint": "1.87.0",
+    "oxlint-tsgolint": "7.0.2003",
+    "turbo": "^2.11.6",
+    "@stll/oxlint-plugin": "0.2.2",
+    "@types/node": "26.6.4",
+    "bun-types": "1.4.3",
+    "tsdown": "0.23.0"
   }
 }

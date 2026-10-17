@@ -30,7 +30,7 @@ jobs:
           persist-credentials: false
 
       - name: Enforce release intent
-        uses: stella/.github/.github/actions/changeset-policy@2ac805220ed86dcaa154e332e0f3dbbc7b0e8024 # v1.7.1
+        uses: stella/.github/.github/actions/changeset-policy@37bfa04a893d1ae2b9d28379cf68e8360781c8bc # v1.8.0
         with:
           release-paths: |
             Cargo.lock
@@ -141,7 +141,7 @@ jobs:
           mkdir -p "$install_dir"
           tar -xzf "$archive" -C "$install_dir" --strip-components=1
           echo "$install_dir" >> "$GITHUB_PATH"
-          rustup toolchain install "$HAWK_RUST_TOOLCHAIN" --profile minimal
+          rustup toolchain install 1.97.1 --profile minimal # cargo-hawk exception tracked in stll-toolchain.json
       - name: Rust checks
         run: bun run rust:check
       - name: Hawk visibility lint
@@ -172,6 +172,15 @@ jobs:
           check
       - name: Fuzz targets compile (anti-bitrot)
         run: cargo check --manifest-path fuzz/Cargo.toml --bins
+      - name: Install stable fuzz runner
+        run: cargo install cargo-fuzz --version 0.13.2 --locked
+
+      - name: Stable coverage-guided fuzz smoke runs
+        working-directory: fuzz
+        run: |
+          cargo fuzz run artifact_decode --sanitizer none -- -runs=1000 -seed=20261011 -max_len=768
+          cargo fuzz run normalize_text --sanitizer none -- -runs=1000 -seed=20261011 -max_len=768
+          cargo fuzz run gazetteer_match --sanitizer none -- -runs=1000 -seed=20261011 -max_len=768
       - name: Native Nym benchmark adapter
         run: |
           cargo fmt --check --manifest-path packages/benchmark/native/nym-adapter/Cargo.toml
@@ -193,6 +202,8 @@ jobs:
       - uses: ./.github/actions/setup-bun-workspace
         with:
           repository-checks: "true"
+      - name: Check shared toolchain
+        run: bun run check:toolchain
       - name: Audit Bun dependencies
         run: bun audit
       - uses: ./.github/actions/setup-rust-ci
@@ -310,6 +321,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
       - uses: ./.github/actions/setup-built-workspace
       - name: Lint
         run: bun run lint
@@ -318,7 +330,27 @@ jobs:
       - name: Format
         run: bun run format:check
       - name: Typecheck
+        if: ${{ !cancelled() }}
         run: bun run typecheck:built
+      - name: Verify typecheck rejects a seeded error
+        run: >-
+          bunx --no-install stll-typecheck-probe
+          --project packages/data/tsconfig.json
+          --seed-dir packages/data/dictionaries
+          -- bun run --cwd packages/data typecheck
+      - name: Detect shared toolchain changes
+        id: toolchain
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.sha || github.event.before || 'unavailable-toolchain-base' }}
+        run: |
+          result=$(bunx --no-install stll-toolchain-changed --since "$BASE_REF")
+          printf '%s\n' "$result"
+          printf 'changed=%s\n' "$(printf '%s' "$result" | jq -r '.changed')" >> "$GITHUB_OUTPUT"
+      - name: Tooling adoption contract
+        run: bun run test:tooling
+      - name: Typecheck diagnostic parity
+        if: steps.toolchain.outputs.changed == 'true'
+        run: bun run check:typecheck-parity
       - name: Knip (unused/undeclared deps)
         run: bun run check:knip
 
@@ -415,8 +447,8 @@ jobs:
       - name: Native default SDK parity and timings
         run: bun run --cwd packages/anonymize perf:native-default
 
-  mcp-node20:
-    name: MCP Node 20
+  mcp-node22:
+    name: MCP Node 22
     needs: build
     runs-on: ubuntu-latest
     permissions:
@@ -433,10 +465,10 @@ jobs:
       - name: Setup minimum supported Node for MCP
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: "20.20.2"
+          node-version: "22.23.3"
           registry-url: https://registry.npmjs.org
           scope: "@stll"
-      - name: MCP Node 20 native-lock and packed-bin smoke
+      - name: MCP Node 22 native-lock and packed-bin smoke
         run: bun run --cwd packages/mcp test:node-runtime
 
   validate:
@@ -452,7 +484,7 @@ jobs:
       - python
       - packages
       - parity
-      - mcp-node20
+      - mcp-node22
     runs-on: ubuntu-latest
     permissions: {}
     steps:
@@ -468,7 +500,7 @@ jobs:
           PYTHON: ${{ needs.python.result }}
           PACKAGES: ${{ needs.packages.result }}
           PARITY: ${{ needs.parity.result }}
-          MCP_NODE20: ${{ needs.mcp-node20.result }}
+          MCP_NODE22: ${{ needs.mcp-node22.result }}
         run: |
           set -euo pipefail
           for result in \
@@ -481,7 +513,7 @@ jobs:
             "$PYTHON" \
             "$PACKAGES" \
             "$PARITY" \
-            "$MCP_NODE20"; do
+            "$MCP_NODE22"; do
             if [[ "$result" != "success" ]]; then
               echo "::error::Validation lane finished with '$result'"
               exit 1

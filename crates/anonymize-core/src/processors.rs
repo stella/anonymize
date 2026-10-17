@@ -1,10 +1,12 @@
 use std::collections::{BTreeMap, BTreeSet, HashSet, btree_map::Entry};
 
 use smallvec::SmallVec;
+use unicode_normalization::char::is_combining_mark;
 
 use crate::address_seeds::soft_wrapped_us_city_tail;
 use crate::byte_offsets::ByteOffsets;
-use crate::gazetteer::PreparedGazetteerMatchData;
+use crate::gazetteer::{PreparedGazetteerMatchData, is_unspaced_script};
+use crate::name_joiners::NameJoiner;
 use crate::prepared_metadata::{
   PreparedCountryMatchData, PreparedRegexMatchData,
 };
@@ -2292,7 +2294,7 @@ fn extend_person_name(
     }
 
     let word = read_until_whitespace(full_text, offsets, word_start)?;
-    let stripped = strip_trailing_name_punctuation(&word);
+    let stripped = leading_name_word(&word);
     // Dotted middle initials ("A.", "R.") are part of the name; keep
     // scanning so the surname after them is absorbed.
     if is_middle_initial_token(&word) {
@@ -2415,6 +2417,28 @@ fn read_until_whitespace(
 ) -> Result<String> {
   let tail = slice_from(full_text, offsets, start)?;
   Ok(tail.chars().take_while(|ch| !ch.is_whitespace()).collect())
+}
+
+/// The name word that starts `token`: letters and combining marks of a
+/// script written with spaces, joined by inner name joiners (`Smith-Jones`,
+/// `Smith\u{2011}Jones`, `O'Neil`). Punctuation, delimiters (`>>`, `»`,
+/// `)`) and unspaced-script text glued after it are not part of the name.
+fn leading_name_word(token: &str) -> &str {
+  let is_name_char = |ch: char| {
+    (ch.is_alphabetic() && !is_unspaced_script(ch)) || is_combining_mark(ch)
+  };
+  let mut end = 0_usize;
+  let mut chars = token.char_indices().peekable();
+  while let Some((index, ch)) = chars.next() {
+    let joined = end > 0
+      && NameJoiner::of(ch).is_some()
+      && chars.peek().is_some_and(|(_, next)| is_name_char(*next));
+    if !is_name_char(ch) && !joined {
+      break;
+    }
+    end = index.saturating_add(ch.len_utf8());
+  }
+  token.get(..end).unwrap_or_default()
 }
 
 fn strip_trailing_name_punctuation(word: &str) -> &str {
@@ -3135,7 +3159,7 @@ mod tests {
       vec![String::from("person")],
     ]);
 
-    assert!(groups.groups.is_empty());
+    assert_eq!(groups.groups, Vec::<SmallVec<[u32; 2]>>::new());
     assert_eq!(groups.group_table.len(), 2);
     assert_eq!(groups.group_refs, vec![0, 0, 1, 0]);
     assert_eq!(
@@ -3178,10 +3202,10 @@ mod tests {
     let groups = StringGroups::empty_groups(4);
 
     assert_eq!(groups.len(), 4);
-    assert!(groups.table.is_empty());
-    assert!(groups.groups.is_empty());
-    assert!(groups.group_table.is_empty());
-    assert!(groups.group_refs.is_empty());
+    assert_eq!(groups.table, Vec::<String>::new());
+    assert_eq!(groups.groups, Vec::<SmallVec<[u32; 2]>>::new());
+    assert_eq!(groups.group_table, Vec::<SmallVec<[u32; 2]>>::new());
+    assert_eq!(groups.group_refs, Vec::<u32>::new());
     assert_eq!(groups.get(0).unwrap().to_strings(), Vec::<String>::new());
     assert_eq!(groups.get(3).unwrap().to_strings(), Vec::<String>::new());
     assert!(groups.get(4).is_none());
@@ -3447,7 +3471,7 @@ mod tests {
       filters: Some(DenyListFilterData::default()),
     };
     data.compact_runtime_patterns();
-    assert!(data.originals.is_empty());
+    assert_eq!(data.originals, Vec::<String>::new());
 
     let entities = process_deny_list_matches(
       &matches,
@@ -3555,7 +3579,7 @@ mod tests {
     )
     .unwrap();
 
-    assert!(entities.is_empty());
+    assert_eq!(entities, Vec::<PipelineEntity>::new());
   }
 
   #[test]
@@ -3588,7 +3612,7 @@ mod tests {
     )
     .unwrap();
 
-    assert!(entities.is_empty());
+    assert_eq!(entities, Vec::<PipelineEntity>::new());
   }
 
   #[test]
@@ -3708,7 +3732,7 @@ mod tests {
     )
     .unwrap();
 
-    assert!(entities.is_empty());
+    assert_eq!(entities, Vec::<PipelineEntity>::new());
   }
 
   #[test]
@@ -3810,7 +3834,7 @@ mod tests {
     )
     .unwrap();
 
-    assert!(entities.is_empty());
+    assert_eq!(entities, Vec::<PipelineEntity>::new());
   }
 
   #[test]
@@ -3843,7 +3867,7 @@ mod tests {
     )
     .unwrap();
 
-    assert!(entities.is_empty());
+    assert_eq!(entities, Vec::<PipelineEntity>::new());
   }
 
   #[test]
@@ -3920,7 +3944,7 @@ mod tests {
     )
     .unwrap();
 
-    assert!(entities.is_empty());
+    assert_eq!(entities, Vec::<PipelineEntity>::new());
   }
 
   #[test]
@@ -4336,6 +4360,25 @@ mod tests {
           && entity.text == "Paul A. Pinkston"),
       "{entities:?}"
     );
+  }
+
+  #[test]
+  fn name_words_continue_across_every_name_joiner() {
+    for (joiner, _) in crate::name_joiners::NAME_JOINERS {
+      let word = format!("Tarsk{joiner}Velmor");
+      assert_eq!(leading_name_word(&format!("{word}.")), word);
+      // A joiner with no name letter after it ends the word, unless it is a
+      // letter itself (MODIFIER LETTER APOSTROPHE).
+      if !joiner.is_alphabetic() {
+        assert_eq!(leading_name_word(&format!("Tarsk{joiner}")), "Tarsk");
+      }
+    }
+    for separator in ['\u{2014}', '"', '\u{201d}', '/'] {
+      assert_eq!(
+        leading_name_word(&format!("Tarsk{separator}Velmor")),
+        "Tarsk"
+      );
+    }
   }
 
   #[test]

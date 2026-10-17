@@ -217,7 +217,7 @@ well.
   and `$25m` are three placeholders, not one.
 - With the all-language package an organization name may absorb prose between
   two capitalized words (`Northwind Ventures LLC invested in Acme Holdings
-Ltd.` becomes one organization) because languages such as Czech or French
+  Ltd.` becomes one organization) because languages such as Czech or French
   capitalize only the first word of a name. The `en` package closes that
   bridge to a connector set (`of`, `the`, `and`, `for`, `&`, `de`, `von`, …),
   so English prose between two organizations is left in place.

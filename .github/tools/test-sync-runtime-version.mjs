@@ -9,6 +9,7 @@ import {
 import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
+import { parseJsonObject } from "./json-values.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const syncScript = join(
@@ -102,16 +103,32 @@ const packageFiles = [
   "packages/mcp/package.json",
 ];
 
-const changesetConfig = JSON.parse(
+const changesetConfig = parseJsonObject(
   readFileSync(join(repoRoot, ".changeset", "config.json"), "utf8"),
 );
-const fixedRuntimePackages = changesetConfig.fixed?.at(0) ?? [];
-const synchronizedRuntimePackages = packageFiles.map(
-  (packageFile) =>
-    JSON.parse(readFileSync(join(repoRoot, packageFile), "utf8")).name,
-);
+/** @param {unknown} value */
+const stringList = (value) => {
+  if (!Array.isArray(value)) throw new Error("Expected a string list");
+  const strings = [];
+  for (const item of value) {
+    if (typeof item !== "string") throw new Error("Expected a string list");
+    strings.push(item);
+  }
+  return strings;
+};
+const fixedGroups = changesetConfig["fixed"];
+if (!Array.isArray(fixedGroups) || fixedGroups.length !== 1)
+  throw new Error("Expected exactly one Changesets fixed group");
+const fixedRuntimePackages = stringList(fixedGroups.at(0));
+const synchronizedRuntimePackages = packageFiles.map((packageFile) => {
+  const manifest = parseJsonObject(
+    readFileSync(join(repoRoot, packageFile), "utf8"),
+  );
+  const name = manifest["name"];
+  if (typeof name !== "string") throw new Error("Expected a package name");
+  return name;
+});
 if (
-  changesetConfig.fixed?.length !== 1 ||
   fixedRuntimePackages.length !== synchronizedRuntimePackages.length ||
   synchronizedRuntimePackages.some(
     (packageName) => !fixedRuntimePackages.includes(packageName),
