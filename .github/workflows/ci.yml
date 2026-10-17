@@ -337,7 +337,7 @@ jobs:
           bunx --no-install stll-typecheck-probe
           --project packages/data/tsconfig.json
           --seed-dir packages/data/dictionaries
-          -- bun run --filter @stll/anonymize-data typecheck
+          -- bun run --cwd packages/data typecheck
       - name: Detect shared toolchain changes
         id: toolchain
         env:

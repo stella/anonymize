@@ -19,11 +19,35 @@ test("uses committed history and shared detector to select workspace parity", ()
   expect(lint).toContain("stll-typecheck-probe");
   expect(lint).toContain("--project packages/data/tsconfig.json");
   expect(lint).toContain("--seed-dir packages/data/dictionaries");
-  expect(lint).toContain("-- bun run --filter @stll/anonymize-data typecheck");
+  expect(lint).toContain("-- bun run --cwd packages/data typecheck");
   expect(lint).not.toContain("typecheck-proof.ts");
   expect(lint).toContain("bun run test:tooling");
   expect(lint).toContain("bun run lint");
   expect(lint).toContain("bun run format:check");
+});
+
+test("Rust caches retain artifacts while registry index metadata stays fresh", () => {
+  const setup = readFileSync(
+    new URL("../actions/setup-rust-ci/action.yml", import.meta.url),
+    "utf8",
+  );
+  const paths = setup
+    .split("        path: |\n")
+    .at(1)
+    ?.split("        key:")
+    .at(0)
+    ?.trim()
+    .split("\n")
+    .map((path) => path.trim());
+  if (paths === undefined) throw new Error("Missing Rust cache paths");
+  expect(paths).toContain("~/.cargo/registry/cache/");
+  expect(paths).toContain("target/");
+  for (const path of paths) {
+    expect(path).not.toMatch(/^~\/\.cargo\/?$/u);
+    if (path.startsWith("~/.cargo/registry")) {
+      expect(path).toBe("~/.cargo/registry/cache/");
+    }
+  }
 });
 
 // Keep underlying project diagnostics visible when another static check fails.
