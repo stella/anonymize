@@ -635,30 +635,52 @@ mod tests {
     let comma_separated = spans("The hearing was on 22 July, 2026.");
     assert_eq!(comma_separated, vec!["22 July, 2026"]);
 
-    assert!(spans("The malformed date is 22 July 20260.").is_empty());
-    assert!(spans("The malformed date is 22 July, 2026A.").is_empty());
-    assert!(spans("The malformed date is 22 July\n20260.").is_empty());
-    assert!(
-      spans_for("La fecha es 12 mayo de\n20260.", "mayo", false).is_empty()
+    assert_eq!(
+      spans("The malformed date is 22 July 20260."),
+      Vec::<String>::new()
+    );
+    assert_eq!(
+      spans("The malformed date is 22 July, 2026A."),
+      Vec::<String>::new()
+    );
+    assert_eq!(
+      spans("The malformed date is 22 July\n20260."),
+      Vec::<String>::new()
+    );
+    assert_eq!(
+      spans_for("La fecha es 12 mayo de\n20260.", "mayo", false),
+      Vec::<String>::new()
     );
   }
 
   #[test]
   fn rejects_out_of_range_and_identifier_days() {
-    assert!(spans("The reference is 42 July.").is_empty());
-    assert!(spans("The reference is item22 July.").is_empty());
+    assert_eq!(spans("The reference is 42 July."), Vec::<String>::new());
+    assert_eq!(spans("The reference is item22 July."), Vec::<String>::new());
   }
 
   #[test]
   fn rejects_lowercase_words_that_overlap_month_names() {
-    assert!(spans_for("Section 12 may be amended.", "may", true).is_empty());
-    assert!(
-      spans_for("Section 12 may, upon notice, be amended.", "may", true)
-        .is_empty()
+    assert_eq!(
+      spans_for("Section 12 may be amended.", "may", true),
+      Vec::<String>::new()
     );
-    assert!(spans_for("SECTION 12 MAY BE AMENDED", "MAY", true).is_empty());
-    assert!(spans_for("Section 12 may\nbe amended.", "may", true).is_empty());
-    assert!(spans_for("Sections 11 and 12 set forth", "set", true).is_empty());
+    assert_eq!(
+      spans_for("Section 12 may, upon notice, be amended.", "may", true),
+      Vec::<String>::new()
+    );
+    assert_eq!(
+      spans_for("SECTION 12 MAY BE AMENDED", "MAY", true),
+      Vec::<String>::new()
+    );
+    assert_eq!(
+      spans_for("Section 12 may\nbe amended.", "may", true),
+      Vec::<String>::new()
+    );
+    assert_eq!(
+      spans_for("Sections 11 and 12 set forth", "set", true),
+      Vec::<String>::new()
+    );
     assert_eq!(spans_for("Due 12 may.", "may", true), vec!["12 may"]);
     assert_eq!(
       spans_for("Effective 12 May next week.", "May", true),
@@ -694,20 +716,25 @@ mod tests {
       spans_for("Audiência 12 de maio.", "maio", false),
       vec!["12 de maio"]
     );
-    assert!(
-      spans_for("Audiencia 12 de mayo, 20260.", "mayo", false).is_empty()
+    assert_eq!(
+      spans_for("Audiencia 12 de mayo, 20260.", "mayo", false),
+      Vec::<String>::new()
     );
-    assert!(
-      spans_for("Audiencia 12 de mayo de 20260.", "mayo", false).is_empty()
+    assert_eq!(
+      spans_for("Audiencia 12 de mayo de 20260.", "mayo", false),
+      Vec::<String>::new()
     );
-    assert!(
-      spans_for("Audiencia 12 de mayo de 2026A.", "mayo", false).is_empty()
+    assert_eq!(
+      spans_for("Audiencia 12 de mayo de 2026A.", "mayo", false),
+      Vec::<String>::new()
     );
-    assert!(
-      spans_for("Audiencia 12 de mayo\nde 20260.", "mayo", false).is_empty()
+    assert_eq!(
+      spans_for("Audiencia 12 de mayo\nde 20260.", "mayo", false),
+      Vec::<String>::new()
     );
-    assert!(
-      spans_for("Audiencia 12 de mayo de\n20260.", "mayo", false).is_empty()
+    assert_eq!(
+      spans_for("Audiencia 12 de mayo de\n20260.", "mayo", false),
+      Vec::<String>::new()
     );
   }
 }

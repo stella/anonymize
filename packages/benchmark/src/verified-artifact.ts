@@ -20,5 +20,5 @@ export const parseVerifiedArtifact = async <Result>({
   if (actual !== expectedSha256) {
     throw new Error(`${name} checksum mismatch before parsing`);
   }
-  return parse(bytes);
+  return await parse(bytes);
 };

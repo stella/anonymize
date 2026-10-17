@@ -1258,7 +1258,7 @@ mod tests {
           .unwrap();
 
       assert!(english.iter().any(|word| word == expected_english_word));
-      assert!(german.is_empty());
+      assert_eq!(german, Vec::<std::string::String>::new());
     }
   }
 }

@@ -1587,12 +1587,16 @@ mod tests {
     let mut output = pixels;
     assert!(fill_pixels(&mut output, 17, &[mapped], [0, 0, 0]).is_ok());
     let black_pixels = output
-      .chunks_exact(3)
-      .filter(|pixel| *pixel == [0, 0, 0])
+      .as_chunks::<3>()
+      .0
+      .iter()
+      .filter(|pixel| **pixel == [0, 0, 0])
       .count();
     let white_pixels = output
-      .chunks_exact(3)
-      .filter(|pixel| *pixel == [255, 255, 255])
+      .as_chunks::<3>()
+      .0
+      .iter()
+      .filter(|pixel| **pixel == [255, 255, 255])
       .count();
     assert_eq!(black_pixels, 36);
     assert_eq!(white_pixels, 338);

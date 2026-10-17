@@ -149,7 +149,6 @@ impl Metadata {
     self.0.get(key)
   }
 
-  #[must_use]
   pub fn iter(
     &self,
   ) -> impl ExactSizeIterator<Item = (&MetadataKey, &MetadataValue)> {

@@ -2,9 +2,9 @@
 #
 # This crate is intentionally its own workspace (empty `[workspace]` table
 # below) so it stays out of the main `--workspace` build and its strict lints.
-# It also keeps `libfuzzer-sys` and the nightly-only sanitizer instrumentation
-# off the default `cargo build`/`cargo test` path. Run it with a nightly
-# toolchain via `cargo +nightly fuzz run <target>` (see `fuzz/README.md`).
+# It also keeps `libfuzzer-sys` off the default build/test path. The stable
+# coverage-guided path is `cargo fuzz run artifact_decode --sanitizer none`
+# (see `fuzz/README.md`); shared property tests exercise the target drivers.
 
 [package]
 name = "stella-anonymize-fuzz"
@@ -23,7 +23,7 @@ stella-anonymize-core = { path = "../crates/anonymize-core" }
 stella-anonymize-adapter-contract = { path = "../crates/anonymize-adapter-contract" }
 
 # Detach from the parent workspace so `cargo build --workspace` at the repo root
-# never pulls in the fuzz targets or their nightly-only dependencies.
+# never pulls in the fuzz targets or their target dependencies.
 [workspace]
 
 [profile.release]

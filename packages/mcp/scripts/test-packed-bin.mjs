@@ -260,7 +260,10 @@ try {
   if (!help.stdout.includes("Usage: stella-anonymize-mcp")) {
     throw new Error("Packed symlinked MCP bin did not print help");
   }
-  const startup = await execFileAsync(bin, []).catch((error) => error);
+  const startup = await execFileAsync(bin, []).catch(
+    /** @param {unknown} error */
+    (error) => error,
+  );
   if (
     typeof startup !== "object" ||
     startup === null ||
@@ -329,7 +332,7 @@ try {
       });
     });
     send(message);
-    return response;
+    return await response;
   };
   const serverExit = new Promise((resolve, reject) => {
     server.once("error", reject);

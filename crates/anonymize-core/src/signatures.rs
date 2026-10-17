@@ -1644,6 +1644,7 @@ mod tests {
 
   use proptest::prelude::*;
 
+  use crate::PipelineEntity;
   use crate::name_corpus::{NameCorpusData, PreparedNameCorpusData};
 
   use super::{
@@ -1768,15 +1769,15 @@ mod tests {
       .collect::<Vec<_>>(),
       ["Zofia Wrona"]
     );
-    assert!(
+    assert_eq!(
       detect_signatures(&DetectSignaturesArgs {
         full_text: "Seller: Acme Trading",
         data: &data,
         first_names: None,
         name_corpus: Some(&names),
         title_tokens: &BTreeSet::new(),
-      })
-      .is_empty()
+      }),
+      Vec::<PipelineEntity>::new()
     );
   }
 
@@ -1832,25 +1833,25 @@ mod tests {
       .collect::<Vec<_>>(),
       ["Arnoud-Jan Smith"]
     );
-    assert!(
+    assert_eq!(
       detect_signatures(&DetectSignaturesArgs {
         full_text: "Seller: Acme Trading",
         data: &data,
         first_names: Some(&first_names),
         name_corpus: None,
         title_tokens: &BTreeSet::new(),
-      })
-      .is_empty()
+      }),
+      Vec::<PipelineEntity>::new()
     );
-    assert!(
+    assert_eq!(
       detect_signatures(&DetectSignaturesArgs {
         full_text: "Seller: Acme Imani",
         data: &data,
         first_names: Some(&first_names),
         name_corpus: None,
         title_tokens: &BTreeSet::new(),
-      })
-      .is_empty()
+      }),
+      Vec::<PipelineEntity>::new()
     );
   }
 
@@ -1877,15 +1878,15 @@ mod tests {
         .collect::<Vec<_>>(),
       ["Dr. Jane Roe"],
     );
-    assert!(
+    assert_eq!(
       detect_signatures(&DetectSignaturesArgs {
         full_text: "Seller: Dr. Acme Trading",
         data: &data,
         first_names: Some(&first_names),
         name_corpus: None,
         title_tokens: &title_tokens,
-      })
-      .is_empty(),
+      }),
+      Vec::<PipelineEntity>::new()
     );
   }
 
@@ -1916,15 +1917,15 @@ mod tests {
       .collect::<Vec<_>>(),
       ["Imani Nwosu"]
     );
-    assert!(
+    assert_eq!(
       detect_signatures(&DetectSignaturesArgs {
         full_text: "Seller: Acme Imani",
         data: &data,
         first_names: None,
         name_corpus: None,
         title_tokens: &BTreeSet::new(),
-      })
-      .is_empty()
+      }),
+      Vec::<PipelineEntity>::new()
     );
     assert_eq!(
       detect_signatures(&DetectSignaturesArgs {
@@ -1969,15 +1970,15 @@ mod tests {
         .collect::<Vec<_>>(),
       ["Abdul-Malik Smith"]
     );
-    assert!(
+    assert_eq!(
       detect_signatures(&DetectSignaturesArgs {
         full_text: "Seller: Acme Imani",
         data: &data,
         first_names: None,
         name_corpus: Some(&names),
         title_tokens: &BTreeSet::new(),
-      })
-      .is_empty()
+      }),
+      Vec::<PipelineEntity>::new()
     );
   }
 
@@ -2012,15 +2013,15 @@ mod tests {
         [expected],
       );
     }
-    assert!(
+    assert_eq!(
       detect_signatures(&DetectSignaturesArgs {
         full_text: "Seller: Acme Imani",
         data: &data,
         first_names: None,
         name_corpus: Some(&names),
         title_tokens: &BTreeSet::new(),
-      })
-      .is_empty(),
+      }),
+      Vec::<PipelineEntity>::new()
     );
     assert_eq!(
       detect_signatures(&DetectSignaturesArgs {
@@ -2144,15 +2145,15 @@ mod tests {
       .collect::<Vec<_>>(),
       ["Q. Z. Mercer"]
     );
-    assert!(
+    assert_eq!(
       detect_signatures(&DetectSignaturesArgs {
         full_text: "Name: Main Street",
         data: &data,
         first_names: None,
         name_corpus: None,
         title_tokens: &BTreeSet::new(),
-      })
-      .is_empty()
+      }),
+      Vec::<PipelineEntity>::new()
     );
   }
 
@@ -2188,7 +2189,7 @@ mod tests {
   fn rejects_overlong_capitalized_signature_tokens() {
     let entities = detect("/s/ Supercalifragilisticexpialidociousxxxx Smith");
 
-    assert!(entities.is_empty());
+    assert_eq!(entities, Vec::<PipelineEntity>::new());
   }
 
   #[test]
@@ -2557,13 +2558,19 @@ mod tests {
 
   #[test]
   fn rejects_unstructured_attention_prose_and_contact_departments() {
-    assert!(detect("Attention: General Terms").is_empty());
-    assert!(detect("Customer Service Tel: +1 555 0100").is_empty());
+    assert_eq!(
+      detect("Attention: General Terms"),
+      Vec::<PipelineEntity>::new()
+    );
+    assert_eq!(
+      detect("Customer Service Tel: +1 555 0100"),
+      Vec::<PipelineEntity>::new()
+    );
   }
 
   #[test]
   fn labelled_fields_reject_values_ending_in_another_field_label() {
-    assert!(detect("Name: General Name").is_empty());
+    assert_eq!(detect("Name: General Name"), Vec::<PipelineEntity>::new());
     assert_eq!(
       detect("/s/ General Name")
         .first()

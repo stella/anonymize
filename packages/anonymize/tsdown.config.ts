@@ -16,7 +16,7 @@ export default defineConfig([
     ],
     outDir: "dist",
     format: ["esm"],
-    deps: { neverBundle: ["../index.cjs"] },
+    deps: { neverBundle: ["../index.cjs", "../native-libc.mjs"] },
     dts: true,
     clean: true,
     sourcemap: true,

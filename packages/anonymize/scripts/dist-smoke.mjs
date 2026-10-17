@@ -9,8 +9,14 @@
  * Run after `bun run build`: `bun run smoke:dist`.
  */
 import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import path from "node:path";
+
+import {
+  copyPublishedFiles,
+  parsePublishedFiles,
+} from "./pruned-runtime-files.mjs";
 
 import {
   createPipelineContext,
@@ -24,6 +30,7 @@ import {
   createNativePipelineFromPackageFile,
   loadNativeAnonymizeBinding,
 } from "../dist/native-node.mjs";
+import { assertBuiltCapabilities } from "./native-script-contracts.mjs";
 
 if (typeof globalThis.Bun === "undefined") {
   throw new Error("dist native smoke must run under Bun");
@@ -58,12 +65,7 @@ if (typeof createPipelineContext !== "function") {
 if (createPipelineContext().nativePipelinePackage !== null) {
   throw new TypeError("dist pipeline context did not start empty");
 }
-if (
-  CAPABILITY_MANIFEST.schemaVersion !== 2 ||
-  CAPABILITY_MANIFEST.entities.length === 0
-) {
-  throw new TypeError("dist capability manifest is missing or invalid");
-}
+assertBuiltCapabilities(CAPABILITY_MANIFEST);
 
 const binding = loadNativeAnonymizeBinding();
 const nativePackageVersion = binding.nativePackageVersion();
@@ -162,7 +164,7 @@ const runStandaloneSmoke = async () => {
     });
     if (!standaloneBuild.success) {
       throw new Error(
-        `standalone compile failed: ${standaloneBuild.logs.join("\n")}`,
+        `standalone compile failed: ${standaloneBuild.logs.map((log) => log.message).join("\n")}`,
       );
     }
 
@@ -203,15 +205,17 @@ const runPrunedBundleSmoke = async () => {
     const installedSidecar = path.join(scopeRoot, sidecarDirectory);
     mkdirSync(installedPackage, { recursive: true });
     mkdirSync(installedSidecar, { recursive: true });
-    for (const entry of ["dist", "index.cjs", "package.json"]) {
-      cpSync(
-        path.join(packageRoot, entry),
-        path.join(installedPackage, entry),
-        {
-          recursive: true,
-        },
-      );
-    }
+    const publishedFiles = parsePublishedFiles(
+      execFileSync("npm", ["pack", "--dry-run", "--ignore-scripts", "--json"], {
+        cwd: packageRoot,
+        encoding: "utf8",
+      }),
+    );
+    copyPublishedFiles({
+      sourceRoot: packageRoot,
+      targetRoot: installedPackage,
+      files: publishedFiles,
+    });
     const sidecarRoot = path.resolve(packageRoot, "..", sidecarDirectory);
     for (const entry of [
       "index.cjs",
@@ -237,7 +241,9 @@ const runPrunedBundleSmoke = async () => {
       target: "bun",
     });
     if (!bundleBuild.success) {
-      throw new Error(`ordinary bundle failed: ${bundleBuild.logs.join("\n")}`);
+      throw new Error(
+        `ordinary bundle failed: ${bundleBuild.logs.map((log) => log.message).join("\n")}`,
+      );
     }
 
     const subprocess = Bun.spawn(

@@ -590,7 +590,10 @@ fn deny_list_processor_suppresses_signing_place_address() {
   )
   .unwrap();
 
-  assert!(entities.is_empty());
+  assert_eq!(
+    entities,
+    Vec::<stella_anonymize_core::PipelineEntity>::new()
+  );
 }
 
 #[test]

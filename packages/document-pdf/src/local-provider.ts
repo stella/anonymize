@@ -205,7 +205,7 @@ const inspectPageGeometry = (
     );
   }
   const inspect = loadNativeAnonymizeBinding().inspectPdfJson;
-  if (inspect === undefined) {
+  if (typeof inspect !== "function") {
     throw providerError(
       PDF_LOCAL_PROVIDER_ERROR_CODES.sourceRejected,
       "native PDF inspection is unavailable",

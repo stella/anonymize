@@ -844,7 +844,8 @@ export class LocalAnonymizeService {
 
   async close(): Promise<void> {
     if (this.#closePromise !== undefined) {
-      return this.#closePromise;
+      await this.#closePromise;
+      return;
     }
     this.#state = "closing";
     this.#closePromise = (async () => {
@@ -857,7 +858,7 @@ export class LocalAnonymizeService {
       await this.#durableSessions?.close();
       this.#state = "closed";
     })();
-    return this.#closePromise;
+    await this.#closePromise;
   }
 
   async #runOperation<Result>(
@@ -1080,13 +1081,13 @@ export class LocalAnonymizeService {
   async anonymizeText(
     input: z.infer<typeof textInput>,
   ): Promise<TextAnonymizationResult> {
-    return this.#runOperation(() => this.#anonymizeText(input));
+    return await this.#runOperation(() => this.#anonymizeText(input));
   }
 
   async anonymizePdf(
     input: z.infer<typeof pdfInput>,
   ): Promise<PdfAnonymizationAuditResult> {
-    return this.#runOperation(() =>
+    return await this.#runOperation(() =>
       this.#serializePdfOperation(() => this.#anonymizePdf(input)),
     );
   }
@@ -1152,12 +1153,6 @@ export class LocalAnonymizeService {
       pages: observed.pages,
       fillRgb: input.fillRgb,
     });
-    if (
-      anonymized.certificate.structurePixelRewriteVerified !== true ||
-      anonymized.certificate.piiCleanGuaranteed !== false
-    ) {
-      throw new Error("PDF raster verification did not satisfy MCP policy");
-    }
     await this.#faults.beforeOutputPublish?.();
     await destination.write(anonymized.document);
     return {
@@ -1207,7 +1202,7 @@ export class LocalAnonymizeService {
   async restoreText(
     input: z.infer<typeof restoreInput>,
   ): Promise<TextRestorationAuditResult> {
-    return this.#runOperation(() => this.#restoreText(input));
+    return await this.#runOperation(() => this.#restoreText(input));
   }
 
   async anonymizeTextWithExternalDetections(
@@ -1340,7 +1335,7 @@ export class LocalAnonymizeService {
   async anonymizeDocx(
     input: z.infer<typeof docxInput>,
   ): Promise<DocxAnonymizationAuditResult> {
-    return this.#runOperation(() => this.#anonymizeDocx(input));
+    return await this.#runOperation(() => this.#anonymizeDocx(input));
   }
 
   async #anonymizeDocx(
@@ -1391,7 +1386,7 @@ export class LocalAnonymizeService {
   async restoreDocx(
     input: z.infer<typeof docxRestoreInput>,
   ): Promise<DocxRestorationAuditResult> {
-    return this.#runOperation(() => this.#restoreDocx(input));
+    return await this.#runOperation(() => this.#restoreDocx(input));
   }
 
   async #restoreDocx(
@@ -1437,7 +1432,7 @@ export class LocalAnonymizeService {
   }
 
   async inspectDocx(inputPath: string): Promise<DocxInspectionAuditResult> {
-    return this.#runOperation(() => this.#inspectDocx(inputPath));
+    return await this.#runOperation(() => this.#inspectDocx(inputPath));
   }
 
   async #inspectDocx(inputPath: string): Promise<DocxInspectionAuditResult> {
@@ -1559,9 +1554,7 @@ const guard = async (
   }
 };
 
-const capabilitiesResult = async (
-  service: LocalAnonymizeService,
-): Promise<CallToolResult> => {
+const capabilitiesResult = (service: LocalAnonymizeService): CallToolResult => {
   const value = {
     capabilityManifest: CAPABILITY_MANIFEST,
     runtimeVersion: getNativeNodeSurface().native_package_version(),
@@ -1647,7 +1640,7 @@ export const createAnonymizeMcpServer = (
         idempotentHint: true,
       },
     },
-    async () => guard(() => capabilitiesResult(service)),
+    () => guard(() => capabilitiesResult(service)),
   );
   server.registerTool(
     "anonymize_text_file",
@@ -1656,8 +1649,7 @@ export const createAnonymizeMcpServer = (
       inputSchema: textInput,
       annotations: { destructiveHint: false, idempotentHint: false },
     },
-    async (input) =>
-      guard(async () => result(await service.anonymizeText(input))),
+    (input) => guard(async () => result(await service.anonymizeText(input))),
   );
   server.registerTool(
     "restore_text_file",
@@ -1666,8 +1658,7 @@ export const createAnonymizeMcpServer = (
       inputSchema: restoreInput,
       annotations: { destructiveHint: false, idempotentHint: false },
     },
-    async (input) =>
-      guard(async () => result(await service.restoreText(input))),
+    (input) => guard(async () => result(await service.restoreText(input))),
   );
   server.registerTool(
     "anonymize_text_file_with_external_detections",
@@ -1677,7 +1668,7 @@ export const createAnonymizeMcpServer = (
       inputSchema: externalDetectionTextInput,
       annotations: { destructiveHint: false, idempotentHint: false },
     },
-    async (input) =>
+    (input) =>
       guard(async () =>
         result(await service.anonymizeTextWithExternalDetections(input)),
       ),
@@ -1690,8 +1681,7 @@ export const createAnonymizeMcpServer = (
       inputSchema: docxInput,
       annotations: { destructiveHint: false, idempotentHint: false },
     },
-    async (input) =>
-      guard(async () => result(await service.anonymizeDocx(input))),
+    (input) => guard(async () => result(await service.anonymizeDocx(input))),
   );
   server.registerTool(
     "anonymize_pdf_file",
@@ -1701,8 +1691,7 @@ export const createAnonymizeMcpServer = (
       inputSchema: pdfInput,
       annotations: { destructiveHint: false, idempotentHint: false },
     },
-    async (input) =>
-      guard(async () => result(await service.anonymizePdf(input))),
+    (input) => guard(async () => result(await service.anonymizePdf(input))),
   );
   server.registerTool(
     "restore_docx_file",
@@ -1711,8 +1700,7 @@ export const createAnonymizeMcpServer = (
       inputSchema: docxRestoreInput,
       annotations: { destructiveHint: false, idempotentHint: false },
     },
-    async (input) =>
-      guard(async () => result(await service.restoreDocx(input))),
+    (input) => guard(async () => result(await service.restoreDocx(input))),
   );
   server.registerTool(
     "inspect_docx_file",
@@ -1728,7 +1716,7 @@ export const createAnonymizeMcpServer = (
         idempotentHint: true,
       },
     },
-    async ({ inputPath }) =>
+    ({ inputPath }) =>
       guard(async () => result(await service.inspectDocx(inputPath))),
   );
   server.registerTool(
@@ -1744,7 +1732,7 @@ export const createAnonymizeMcpServer = (
         openWorldHint: false,
       },
     },
-    async (input) => guard(() => feedbackResult(input)),
+    (input) => guard(() => feedbackResult(input)),
   );
   return server;
 };

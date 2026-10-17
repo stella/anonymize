@@ -1983,7 +1983,7 @@ mod tests {
     )
     .unwrap();
 
-    assert!(entities.is_empty());
+    assert_eq!(entities, Vec::<PipelineEntity>::new());
   }
 
   #[test]
@@ -2095,7 +2095,7 @@ mod tests {
     )
     .unwrap();
 
-    assert!(entities.is_empty());
+    assert_eq!(entities, Vec::<PipelineEntity>::new());
   }
 
   #[test]
@@ -2120,7 +2120,7 @@ mod tests {
     )
     .unwrap();
 
-    assert!(entities.is_empty());
+    assert_eq!(entities, Vec::<PipelineEntity>::new());
   }
 
   #[test]
@@ -2187,7 +2187,7 @@ mod tests {
     )
     .unwrap();
 
-    assert!(entities.is_empty());
+    assert_eq!(entities, Vec::<PipelineEntity>::new());
   }
 
   #[test]
@@ -2210,7 +2210,7 @@ mod tests {
     )
     .unwrap();
 
-    assert!(rejected.is_empty());
+    assert_eq!(rejected, Vec::<PipelineEntity>::new());
     assert_eq!(kept_without_english_terms.len(), 1);
   }
 
@@ -2286,7 +2286,7 @@ mod tests {
     )
     .unwrap();
 
-    assert!(entities.is_empty());
+    assert_eq!(entities, Vec::<PipelineEntity>::new());
   }
 
   #[test]
@@ -2324,7 +2324,7 @@ mod tests {
     )
     .unwrap();
 
-    assert!(entities.is_empty());
+    assert_eq!(entities, Vec::<PipelineEntity>::new());
   }
 
   #[test]
@@ -2346,7 +2346,7 @@ mod tests {
     )
     .unwrap();
 
-    assert!(entities.is_empty());
+    assert_eq!(entities, Vec::<PipelineEntity>::new());
   }
 
   #[test]
@@ -2454,7 +2454,7 @@ mod tests {
         legal_form_data: &english_data,
       })
       .unwrap();
-    assert!(scope_mismatch_entities.is_empty());
+    assert_eq!(scope_mismatch_entities, Vec::<PipelineEntity>::new());
   }
 
   #[test]
@@ -2520,7 +2520,7 @@ mod tests {
       })
       .unwrap();
 
-    assert!(scope_isolation_entities.is_empty());
+    assert_eq!(scope_isolation_entities, Vec::<PipelineEntity>::new());
 
     let labelled = "PARTY A: ACME LIMITED IS A PARTY TO THIS AGREEMENT.\n";
     let labelled_entities = filter_entity_false_positives(
@@ -2548,7 +2548,7 @@ mod tests {
       Some(&DenyListFilterData::default()),
     )
     .unwrap();
-    assert!(generic_entities.is_empty());
+    assert_eq!(generic_entities, Vec::<PipelineEntity>::new());
   }
 
   #[test]
@@ -2661,7 +2661,7 @@ mod tests {
     })
     .unwrap();
 
-    assert!(entities.is_empty());
+    assert_eq!(entities, Vec::<PipelineEntity>::new());
   }
 
   #[test]
@@ -2705,7 +2705,7 @@ mod tests {
     )
     .unwrap();
 
-    assert!(entities.is_empty());
+    assert_eq!(entities, Vec::<PipelineEntity>::new());
   }
 
   #[test]
@@ -2746,7 +2746,7 @@ mod tests {
     )
     .unwrap();
 
-    assert!(entities.is_empty());
+    assert_eq!(entities, Vec::<PipelineEntity>::new());
   }
 
   #[test]
@@ -2765,7 +2765,7 @@ mod tests {
     )
     .unwrap();
 
-    assert!(entities.is_empty());
+    assert_eq!(entities, Vec::<PipelineEntity>::new());
   }
 
   #[test]

@@ -89,7 +89,10 @@ fn caller_detections_use_the_shared_resolution_and_redaction_pipeline() {
       },
     )
     .unwrap();
-  assert!(below_threshold_result.resolved_entities.is_empty());
+  assert_eq!(
+    below_threshold_result.resolved_entities,
+    Vec::<stella_anonymize_core::PipelineEntity>::new()
+  );
   assert_eq!(
     below_threshold_result.redaction.redacted_text,
     "Alice signed."
@@ -1919,7 +1922,10 @@ fn prepared_engine_drops_person_spans_ending_in_trailing_noun() {
     )
     .unwrap();
 
-  assert!(result.resolved_entities.is_empty());
+  assert_eq!(
+    result.resolved_entities,
+    Vec::<stella_anonymize_core::PipelineEntity>::new()
+  );
 }
 
 #[test]
@@ -2304,7 +2310,7 @@ fn prepared_engine_rejects_lowercase_acronym_trigger_collisions() {
   let lower = prepared
     .detect_static_entities("Cena je stanovena ke dni 6.11.2025.")
     .unwrap();
-  assert!(lower.entities.trigger().is_empty());
+  assert_eq!(lower.entities.trigger(), []);
 
   let upper = prepared
     .detect_static_entities("Documento DNI 12345678Z.")
@@ -2987,7 +2993,10 @@ fn prepared_engine_hotword_distance_uses_utf16_offsets() {
     .redact_static_entities(&full_text, &OperatorConfig::default())
     .unwrap();
 
-  assert!(result.resolved_entities.is_empty());
+  assert_eq!(
+    result.resolved_entities,
+    Vec::<stella_anonymize_core::PipelineEntity>::new()
+  );
 }
 
 #[test]
@@ -3025,7 +3034,10 @@ fn prepared_engine_hotword_searches_original_text() {
     )
     .unwrap();
 
-  assert!(result.resolved_entities.is_empty());
+  assert_eq!(
+    result.resolved_entities,
+    Vec::<stella_anonymize_core::PipelineEntity>::new()
+  );
 }
 
 #[test]
@@ -3119,7 +3131,10 @@ fn prepared_engine_applies_allowed_labels_before_redaction() {
     .unwrap();
 
   assert_eq!(result.redaction.redacted_text, "Alice signed.");
-  assert!(result.resolved_entities.is_empty());
+  assert_eq!(
+    result.resolved_entities,
+    Vec::<stella_anonymize_core::PipelineEntity>::new()
+  );
 }
 
 #[test]
@@ -4445,5 +4460,5 @@ fn prepared_engine_rejects_dotted_citation_legal_form_substrings() {
     .detect_static_entities("See 18 U.S.C. Section 1833(b) for civil immunity.")
     .unwrap();
 
-  assert!(result.entities.legal_form().is_empty());
+  assert_eq!(result.entities.legal_form(), []);
 }

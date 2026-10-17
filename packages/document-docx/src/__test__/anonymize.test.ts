@@ -8,6 +8,7 @@ import {
   DocxAnonymizationError,
   anonymizeDocx,
   extractDocxText,
+  restoreDocxText,
   type DocxAnonymizationSession,
 } from "../index";
 
@@ -56,7 +57,7 @@ describe("anonymizeDocx", () => {
     );
   });
 
-  test("rewrites a caller detection and returns an audit-safe summary", () => {
+  test("anonymizes and restores an object rewrite plan through the native DOCX path", () => {
     const document = docx(
       "<w:p><w:r><w:t>Ali</w:t></w:r><w:r><w:t>ce signed.</w:t></w:r></w:p>",
     );
@@ -143,6 +144,18 @@ describe("anonymizeDocx", () => {
       coverage: { status: "full" },
     });
     expect(JSON.stringify(result.summary)).not.toContain("Alice");
+    const restored = restoreDocxText({
+      document: result.document,
+      expectedSessionId: "case_1",
+      session: {
+        sessionId: () => "case_1",
+        restoreText: (text) => text.replaceAll("[PERSON_case%5F1_1]", "Alice"),
+      },
+    });
+    expect(restored.restoredPlaceholderCount).toBe(1);
+    expect(extractDocxText(restored.document).blocks.at(0)?.text).toBe(
+      "Alice signed.",
+    );
   });
 
   test("does not commit the session when the DOCX rewrite fails", () => {

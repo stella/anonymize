@@ -218,12 +218,10 @@ export const currentHostSnapshot = (benchmarkCpu: number): HostSnapshot => {
 };
 
 export const assertCanonicalHost = (
-  profile: HostProfile,
+  profile: unknown,
   snapshot: HostSnapshot,
 ): void => {
-  if (profile.schemaVersion !== 1 || profile.label !== CANONICAL_HOST_LABEL) {
-    throw new Error(`host profile must declare ${CANONICAL_HOST_LABEL}`);
-  }
+  assertHostProfile(profile);
   const trustedEvent =
     (snapshot.eventName === "workflow_dispatch" ||
       snapshot.eventName === "push") &&
@@ -279,7 +277,7 @@ export const assertCanonicalHost = (
   ) {
     throw new Error("canonical CPU governor must be performance");
   }
-  if (!snapshot.turboDisabled || profile.turbo !== "disabled") {
+  if (!snapshot.turboDisabled) {
     throw new Error("canonical CPU turbo/boost must be disabled");
   }
 };

@@ -1,4 +1,4 @@
-import { expect } from "expect";
+import assert from "node:assert/strict";
 import { afterEach, describe, test } from "node:test";
 import { extractDocxText } from "@stll/anonymize-docx";
 import { getDefaultNativePipeline } from "@stll/anonymize";
@@ -31,6 +31,7 @@ import {
   type DurableSessionStoreOptions,
 } from "../durable-sessions";
 import { LocalAnonymizeService, PathScope } from "../local";
+import { requirePresent } from "./require-present";
 
 const temporaryDirectories: string[] = [];
 const openServices = new Set<LocalAnonymizeService>();
@@ -150,7 +151,7 @@ void describe("durable MCP sessions", () => {
     const store = await createStore(paths);
     const scope = await PathScope.create([paths.root]);
 
-    expect(
+    assert.throws(
       () =>
         new LocalAnonymizeService(
           scope,
@@ -158,7 +159,10 @@ void describe("durable MCP sessions", () => {
             typeof LocalAnonymizeService
           >[1],
         ),
-    ).toThrow("requires { durableSessions }");
+      (error: unknown) =>
+        error instanceof Error &&
+        error.message.includes("requires { durableSessions }"),
+    );
   });
 
   void test("restores text across server restarts without plaintext archives", async () => {
@@ -177,11 +181,12 @@ void describe("durable MCP sessions", () => {
     const archive = await readFile(
       join(paths.sessionDirectory, archiveName("durable_text_1")),
     );
-    expect(archive.toString("utf8")).not.toContain("Alice Smith");
-    expect(
+    assert.ok(!archive.toString("utf8").includes("Alice Smith"));
+    assert.strictEqual(
       (await stat(join(paths.sessionDirectory, archiveName("durable_text_1"))))
         .mode & 0o777,
-    ).toBe(0o600);
+      0o600,
+    );
 
     await initial.close();
     const restarted = await createService(paths);
@@ -190,15 +195,18 @@ void describe("durable MCP sessions", () => {
       outputPath: restored,
       sessionId: "durable_text_1",
     });
-    expect(await readFile(restored, "utf8")).toBe("Alice Smith signed.");
-    await expect(
+    assert.strictEqual(await readFile(restored, "utf8"), "Alice Smith signed.");
+    await assert.rejects(
       restarted.anonymizeText({
         inputPath: input,
         outputPath: join(paths.root, "language-not-guessed.txt"),
         sessionId: "durable_text_1",
         language: "en",
       }),
-    ).rejects.toThrow("full all-language pipeline");
+      (error: unknown) =>
+        error instanceof Error &&
+        error.message.includes("full all-language pipeline"),
+    );
     await restarted.anonymizeText({
       inputPath: input,
       outputPath: join(paths.root, "continued.txt"),
@@ -228,7 +236,8 @@ void describe("durable MCP sessions", () => {
       sessionId: "durable_docx_1",
       allowPartialCoverage: false,
     });
-    expect(extractDocxText(await readFile(restored)).blocks.at(0)?.text).toBe(
+    assert.strictEqual(
+      extractDocxText(await readFile(restored)).blocks.at(0)?.text,
       "Alice Smith signed.",
     );
   });
@@ -251,12 +260,20 @@ void describe("durable MCP sessions", () => {
       outputPath: anonymized,
       sessionId: "durable_external_1",
     });
-    expect(result).toMatchObject({
-      externalDetectionBatchStatus: "accepted",
-      externalDetectionCount: 1,
-      retainedExternalDetectionCount: 1,
-      entityCount: 2,
-    });
+    assert.deepStrictEqual(
+      {
+        externalDetectionBatchStatus: result.externalDetectionBatchStatus,
+        externalDetectionCount: result.externalDetectionCount,
+        retainedExternalDetectionCount: result.retainedExternalDetectionCount,
+        entityCount: result.entityCount,
+      },
+      {
+        externalDetectionBatchStatus: "accepted",
+        externalDetectionCount: 1,
+        retainedExternalDetectionCount: 1,
+        entityCount: 2,
+      },
+    );
     await initial.close();
 
     const restarted = await createService(paths);
@@ -265,8 +282,8 @@ void describe("durable MCP sessions", () => {
       outputPath: restored,
       sessionId: "durable_external_1",
     });
-    expect(await readFile(restored, "utf8")).toBe(original);
-    await expect(
+    assert.strictEqual(await readFile(restored, "utf8"), original);
+    await assert.rejects(
       restarted.anonymizeTextWithExternalDetections({
         inputPath: input,
         detectionBatchPath: batch,
@@ -274,7 +291,10 @@ void describe("durable MCP sessions", () => {
         sessionId: "durable_external_1",
         language: "en",
       }),
-    ).rejects.toThrow("The external detection session was rejected.");
+      (error: unknown) =>
+        error instanceof Error &&
+        error.message.includes("The external detection session was rejected."),
+    );
   });
 
   void test("rejects wrong keys and tampered archives without publishing output", async () => {
@@ -297,14 +317,17 @@ void describe("durable MCP sessions", () => {
       ...paths,
       keyFile: wrongKey,
     });
-    await expect(
+    await assert.rejects(
       wrongKeyService.restoreText({
         inputPath: anonymized,
         outputPath: wrongKeyOutput,
         sessionId: "durable_auth_1",
       }),
-    ).rejects.toThrow("durable session is unavailable");
-    await expect(readFile(wrongKeyOutput)).rejects.toThrow();
+      (error: unknown) =>
+        error instanceof Error &&
+        error.message.includes("durable session is unavailable"),
+    );
+    await assert.rejects(readFile(wrongKeyOutput), Error);
     await wrongKeyService.close();
 
     const archivePath = join(
@@ -317,29 +340,36 @@ void describe("durable MCP sessions", () => {
     );
     const mismatchedOutput = join(paths.root, "mismatched.txt");
     const mismatchedService = await createService(paths);
-    await expect(
+    await assert.rejects(
       mismatchedService.restoreText({
         inputPath: anonymized,
         outputPath: mismatchedOutput,
         sessionId: "different_session_1",
       }),
-    ).rejects.toThrow("durable session is unavailable");
-    await expect(readFile(mismatchedOutput)).rejects.toThrow();
+      (error: unknown) =>
+        error instanceof Error &&
+        error.message.includes("durable session is unavailable"),
+    );
+    await assert.rejects(readFile(mismatchedOutput), Error);
     await mismatchedService.close();
 
     const tampered = await readFile(archivePath);
-    tampered[tampered.byteLength - 1] ^= 0xff;
+    const lastByteIndex = tampered.byteLength - 1;
+    tampered[lastByteIndex] = requirePresent(tampered[lastByteIndex]) ^ 0xff;
     await writeFile(archivePath, tampered, { mode: 0o600 });
     const tamperedOutput = join(paths.root, "tampered.txt");
     const tamperedService = await createService(paths);
-    await expect(
+    await assert.rejects(
       tamperedService.restoreText({
         inputPath: anonymized,
         outputPath: tamperedOutput,
         sessionId: "durable_auth_1",
       }),
-    ).rejects.toThrow("durable session is unavailable");
-    await expect(readFile(tamperedOutput)).rejects.toThrow();
+      (error: unknown) =>
+        error instanceof Error &&
+        error.message.includes("durable session is unavailable"),
+    );
+    await assert.rejects(readFile(tamperedOutput), Error);
   });
 
   void test("enforces lifecycle expiry while lazily restoring", async () => {
@@ -360,13 +390,16 @@ void describe("durable MCP sessions", () => {
     const input = join(paths.root, "input.txt");
     await writeFile(input, "[PERSON_expired%5Fsession%5F1_1]");
 
-    await expect(
+    await assert.rejects(
       (await createService(paths)).restoreText({
         inputPath: input,
         outputPath: join(paths.root, "expired-output.txt"),
         sessionId: "expired_session_1",
       }),
-    ).rejects.toThrow("durable session is unavailable");
+      (error: unknown) =>
+        error instanceof Error &&
+        error.message.includes("durable session is unavailable"),
+    );
   });
 
   void test("requires private regular key and directory paths", async () => {
@@ -375,24 +408,35 @@ void describe("durable MCP sessions", () => {
     }
     const paths = await createStorePaths();
     await chmod(paths.keyFile, 0o644);
-    await expect(createStore(paths)).rejects.toThrow(
-      "group or other permissions",
+    await assert.rejects(
+      createStore(paths),
+      (error: unknown) =>
+        error instanceof Error &&
+        error.message.includes("group or other permissions"),
     );
     await chmod(paths.keyFile, 0o600);
     await chmod(paths.sessionDirectory, 0o755);
-    await expect(createStore(paths)).rejects.toThrow(
-      "group or other permissions",
+    await assert.rejects(
+      createStore(paths),
+      (error: unknown) =>
+        error instanceof Error &&
+        error.message.includes("group or other permissions"),
     );
     await chmod(paths.sessionDirectory, 0o700);
     const shortKey = join(paths.root, "short.key");
     await writeFile(shortKey, new Uint8Array(31), { mode: 0o600 });
-    await expect(createStore({ ...paths, keyFile: shortKey })).rejects.toThrow(
-      "exactly 32 raw bytes",
+    await assert.rejects(
+      createStore({ ...paths, keyFile: shortKey }),
+      (error: unknown) =>
+        error instanceof Error &&
+        error.message.includes("exactly 32 raw bytes"),
     );
     const linkedKey = join(paths.root, "linked.key");
     await symlink(paths.keyFile, linkedKey);
-    await expect(createStore({ ...paths, keyFile: linkedKey })).rejects.toThrow(
-      "symbolic links",
+    await assert.rejects(
+      createStore({ ...paths, keyFile: linkedKey }),
+      (error: unknown) =>
+        error instanceof Error && error.message.includes("symbolic links"),
     );
   });
 
@@ -404,20 +448,26 @@ void describe("durable MCP sessions", () => {
     );
     await writeFile(partial, "partial", { mode: 0o600 });
     const store = await createStore(paths);
-    await expect(readFile(partial)).rejects.toThrow();
-    await expect(
+    await assert.rejects(readFile(partial), Error);
+    await assert.rejects(
       store.save(
         "oversized_session_1",
         new Uint8Array(SESSION_ARCHIVE_MAX_BYTES + 1),
       ),
-    ).rejects.toThrow("byte limit");
+      (error: unknown) =>
+        error instanceof Error && error.message.includes("byte limit"),
+    );
     await store.close();
 
     for (let index = 0; index <= SESSION_ARCHIVE_MAX_COUNT; index += 1) {
       const name = `${index.toString(16).padStart(64, "0")}.stlasess`;
       await writeFile(join(paths.sessionDirectory, name), "x", { mode: 0o600 });
     }
-    await expect(createStore(paths)).rejects.toThrow("must not exceed");
+    await assert.rejects(
+      createStore(paths),
+      (error: unknown) =>
+        error instanceof Error && error.message.includes("must not exceed"),
+    );
   });
 
   void test("rejects a session directory replaced after validation", async () => {
@@ -428,16 +478,23 @@ void describe("durable MCP sessions", () => {
     await rename(paths.sessionDirectory, moved);
     await symlink(outside, paths.sessionDirectory);
 
-    await expect(
+    await assert.rejects(
       store.save("race_session_1", new Uint8Array([1])),
-    ).rejects.toThrow("session directory changed");
-    expect(await readdir(outside)).toEqual([]);
+      (error: unknown) =>
+        error instanceof Error &&
+        error.message.includes("session directory changed"),
+    );
+    assert.deepStrictEqual(await readdir(outside), []);
   });
 
   void test("holds one process-lifetime advisory lock and releases it on close", async () => {
     const paths = await createStorePaths();
     const first = await createStore(paths);
-    await expect(createStore(paths)).rejects.toThrow("already locked");
+    await assert.rejects(
+      createStore(paths),
+      (error: unknown) =>
+        error instanceof Error && error.message.includes("already locked"),
+    );
     await first.close();
     const second = await createStore(paths);
     await second.close();
@@ -465,10 +522,16 @@ void describe("durable MCP sessions", () => {
     const save = store.save("close_race_1", new Uint8Array([1]));
     await atMutation;
     const close = store.close();
-    await expect(createStore(paths)).rejects.toThrow("already locked");
-    await expect(
+    await assert.rejects(
+      createStore(paths),
+      (error: unknown) =>
+        error instanceof Error && error.message.includes("already locked"),
+    );
+    await assert.rejects(
       store.save("close_race_2", new Uint8Array([2])),
-    ).rejects.toThrow("closing or closed");
+      (error: unknown) =>
+        error instanceof Error && error.message.includes("closing or closed"),
+    );
     releaseMutation();
     await save;
     await close;
@@ -508,10 +571,16 @@ void describe("durable MCP sessions", () => {
     });
     await atMutation;
     const close = service.close();
-    await expect(
+    await assert.rejects(
       service.inspectDocx(join(paths.root, "unused.docx")),
-    ).rejects.toThrow("closing or closed");
-    await expect(createStore(paths)).rejects.toThrow("already locked");
+      (error: unknown) =>
+        error instanceof Error && error.message.includes("closing or closed"),
+    );
+    await assert.rejects(
+      createStore(paths),
+      (error: unknown) =>
+        error instanceof Error && error.message.includes("already locked"),
+    );
     releaseMutation();
     await operation;
     await close;
@@ -558,7 +627,11 @@ void describe("durable MCP sessions", () => {
         ),
       );
     });
-    await expect(createStore(paths)).rejects.toThrow("already locked");
+    await assert.rejects(
+      createStore(paths),
+      (error: unknown) =>
+        error instanceof Error && error.message.includes("already locked"),
+    );
     child.kill("SIGKILL");
     await new Promise<void>((resolvePromise) =>
       child.once("exit", () => resolvePromise()),
@@ -596,14 +669,17 @@ void describe("durable MCP sessions", () => {
       });
 
       armed = true;
-      await expect(
+      await assert.rejects(
         service.anonymizeText({
           inputPath: secondInput,
           outputPath: secondOutput,
           sessionId: "fault_session_1",
         }),
-      ).rejects.toThrow(`injected ${faultPoint}`);
-      await expect(readFile(secondOutput)).rejects.toThrow();
+        (error: unknown) =>
+          error instanceof Error &&
+          error.message.includes(`injected ${faultPoint}`),
+      );
+      await assert.rejects(readFile(secondOutput), Error);
       armed = false;
       await service.close();
 
@@ -614,7 +690,10 @@ void describe("durable MCP sessions", () => {
         outputPath: restored,
         sessionId: "fault_session_1",
       });
-      expect(await readFile(restored, "utf8")).toBe("Alice Smith signed.");
+      assert.strictEqual(
+        await readFile(restored, "utf8"),
+        "Alice Smith signed.",
+      );
     });
   }
 
@@ -647,14 +726,17 @@ void describe("durable MCP sessions", () => {
       sessionId: "publish_fault_1",
     });
     faultOutput = true;
-    await expect(
+    await assert.rejects(
       service.anonymizeText({
         inputPath: secondInput,
         outputPath: secondOutput,
         sessionId: "publish_fault_1",
       }),
-    ).rejects.toThrow("injected output publication failure");
-    await expect(readFile(secondOutput)).rejects.toThrow();
+      (error: unknown) =>
+        error instanceof Error &&
+        error.message.includes("injected output publication failure"),
+    );
+    await assert.rejects(readFile(secondOutput), Error);
     await service.close();
 
     const restarted = await createService(paths);
@@ -664,7 +746,7 @@ void describe("durable MCP sessions", () => {
       outputPath: restored,
       sessionId: "publish_fault_1",
     });
-    expect(await readFile(restored, "utf8")).toBe("Alice Smith signed.");
+    assert.strictEqual(await readFile(restored, "utf8"), "Alice Smith signed.");
   });
 
   void test("serializes same-session mutations and rolls durable state back on publication failure", async () => {
@@ -708,28 +790,32 @@ void describe("durable MCP sessions", () => {
     });
     await firstPublicationReached;
     try {
-      await expect(
+      await assert.rejects(
         service.anonymizeText({
           inputPath: secondInput,
           outputPath: secondOutput,
           sessionId: "serialized_session_1",
         }),
-      ).rejects.toThrow("still initializing");
+        (error: unknown) =>
+          error instanceof Error &&
+          error.message.includes("still initializing"),
+      );
     } finally {
       releaseFirstPublication();
     }
-    await expect(first).resolves.toMatchObject({ outputCreated: true });
+    assert.strictEqual((await first).outputCreated, true);
 
     const successfulOutput = firstOutput;
     const original = "Alice Smith signed.";
     const failedOutput = join(paths.root, `${"x".repeat(240)}.txt`);
-    await expect(
+    await assert.rejects(
       service.anonymizeText({
         inputPath: secondInput,
         outputPath: failedOutput,
         sessionId: "serialized_session_1",
       }),
-    ).rejects.toThrow();
+      Error,
+    );
     await service.close();
     const restarted = await createService(paths);
     const restored = join(paths.root, "serialized-restored.txt");
@@ -738,16 +824,19 @@ void describe("durable MCP sessions", () => {
       outputPath: restored,
       sessionId: "serialized_session_1",
     });
-    expect(await readFile(restored, "utf8")).toBe(original);
+    assert.strictEqual(await readFile(restored, "utf8"), original);
     const predicted = join(paths.root, "predicted.txt");
     const predictedRestore = join(paths.root, "predicted-restored.txt");
     await writeFile(predicted, "[PERSON_serialized%5Fsession%5F1_2]");
-    await expect(
+    await assert.rejects(
       restarted.restoreText({
         inputPath: predicted,
         outputPath: predictedRestore,
         sessionId: "serialized_session_1",
       }),
-    ).rejects.toThrow("unknown session placeholder");
+      (error: unknown) =>
+        error instanceof Error &&
+        error.message.includes("unknown session placeholder"),
+    );
   });
 });

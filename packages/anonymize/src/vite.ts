@@ -151,13 +151,13 @@ export default function stllAnonymizeWasmVite(
       const files = await readdir(nativeDir);
       const selection = resolvePackageSelection(files, packages);
       if (selection.status === "invalid") {
-        this.error(
+        return this.error(
           `stll-anonymize-wasm: invalid packages option ${JSON.stringify(selection.value)}; ` +
             `expected "all", "none", or an array like ["default", "cs"].`,
         );
       }
       if (selection.status === "missing") {
-        this.error(
+        return this.error(
           `stll-anonymize-wasm: requested package(s) not bundled: ` +
             `${selection.names.join(", ")}. Available: ${
               selection.available.join(", ") || "(none)"
