@@ -123,3 +123,36 @@ test("declared extensionless bins traverse their static runtime imports", () => 
     "bin/cli -> ./helper.mjs",
   );
 });
+
+test("all declared entry kinds traverse extensionless intermediate modules", () => {
+  for (const manifest of [
+    { bin: { cli: "bin/entry" } },
+    { main: "bin/entry" },
+    { exports: { ".": "./bin/entry" } },
+  ]) {
+    for (const source of ['import "./helper";', 'require("./helper");']) {
+      const files = new Map([
+        ["bin/entry", source],
+        [
+          "bin/helper",
+          'export { value } from "./leaf.mjs"; require("./data.json"); require("./binding.node");',
+        ],
+        ["bin/leaf.mjs", "export const value = 1;"],
+        ["bin/data.json", '{"value":"import ./not-a-module"}'],
+        ["bin/binding.node", "opaque native binary"],
+      ]);
+      const options = {
+        manifest,
+        packedFiles: new Set(files.keys()),
+        readSource: (path: string) => files.get(path),
+      };
+      expect(assertPackedRuntimeImports(options)).toEqual(
+        new Set(files.keys()),
+      );
+      options.packedFiles.delete("bin/leaf.mjs");
+      expect(() => assertPackedRuntimeImports(options)).toThrow(
+        "bin/helper -> ./leaf.mjs",
+      );
+    }
+  }
+});

@@ -55,8 +55,11 @@ export const assertPackedRuntimeImports = ({
     ...exportTargets(manifest["main"]),
     ...[...packedFiles].filter(isRuntimeScript),
   ];
-  const binScripts = new Set(binPaths.map(packagePath));
   const pending = roots.map(packagePath);
+  const isOpaqueAsset = (path: string) => /\.(?:json|node)$/u.test(path);
+  const runtimeScripts = new Set(
+    pending.filter((path) => !isOpaqueAsset(path)),
+  );
   const visited = new Set<string>();
   const scanner = new Bun.Transpiler({ loader: "tsx" });
   while (pending.length > 0) {
@@ -66,7 +69,7 @@ export const assertPackedRuntimeImports = ({
     if (!packedFiles.has(path))
       throw new Error(`Runtime file is not packed: ${path}`);
     visited.add(path);
-    if (!isRuntimeScript(path) && !binScripts.has(path)) continue;
+    if (!runtimeScripts.has(path)) continue;
     const source = readSource(path);
     if (source === undefined)
       throw new Error(`Packed runtime source is missing: ${path}`);
@@ -111,6 +114,7 @@ export const assertPackedRuntimeImports = ({
         throw new Error(
           `Static runtime import is not packed: ${path} -> ${specifier}`,
         );
+      if (!isOpaqueAsset(resolved)) runtimeScripts.add(resolved);
       pending.push(resolved);
     }
   }
