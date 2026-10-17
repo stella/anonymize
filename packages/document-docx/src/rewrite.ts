@@ -186,7 +186,7 @@ const preflightRewritePlan = (
   let estimatedBytes = rewriteCount * 256;
   const serializableRewrites: DocxBlockRewrite[] = [];
   for (let rewriteIndex = 0; rewriteIndex < rewriteCount; rewriteIndex += 1) {
-    const rewrite = rewrites[rewriteIndex];
+    const rewrite = rewrites.at(rewriteIndex);
     if (rewrite === undefined) {
       throw new DocxRewriteError(
         DOCX_REWRITE_ERROR_CODES.invalidReplacement,
@@ -289,7 +289,7 @@ export const rewriteDocxText = (
   rewrites: readonly DocxBlockRewrite[],
 ): DocxRewriteResult => {
   const rewrite = loadNativeAnonymizeBinding().rewriteDocxTextNative;
-  if (rewrite === undefined) {
+  if (typeof rewrite !== "function") {
     throw new Error(
       "The native anonymize binding does not expose DOCX rewriting",
     );

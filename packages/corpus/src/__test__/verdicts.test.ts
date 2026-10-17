@@ -66,7 +66,7 @@ describe("validateVerdicts", () => {
     const bad = span({ verdict: "maybe" as VerdictSpan["verdict"] });
     const issues = validateVerdicts({ verdicts: file([bad]), text: TEXT });
     expect(issues).toHaveLength(1);
-    expect(issues[0].message).toContain('unknown verdict "maybe"');
+    expect(issues.at(0)?.message).toContain('unknown verdict "maybe"');
   });
 });
 

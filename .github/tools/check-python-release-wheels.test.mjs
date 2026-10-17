@@ -6,6 +6,10 @@ const workflow = readFileSync(
   new URL("../workflows/release.yml", import.meta.url),
   "utf8",
 );
+/**
+ * @param {string} left
+ * @param {string} right
+ */
 const byName = (left, right) => left.localeCompare(right);
 
 const expectedContract = {
@@ -22,6 +26,7 @@ const expectedContract = {
   ],
 };
 
+/** @param {string} source */
 const assertCallerContract = (source) => {
   assert.match(
     source,

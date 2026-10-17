@@ -32,9 +32,7 @@ export type NativeDetectOptions = {
 let cachedBinding: ReturnType<typeof loadNativeAnonymizeBinding> | undefined;
 
 const getBinding = (): ReturnType<typeof loadNativeAnonymizeBinding> => {
-  if (cachedBinding === undefined) {
-    cachedBinding = loadNativeAnonymizeBinding();
-  }
+  cachedBinding ??= loadNativeAnonymizeBinding();
   return cachedBinding;
 };
 

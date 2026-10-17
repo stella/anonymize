@@ -356,12 +356,10 @@ export const redactText = (
       redactedEntity !== undefined &&
       (maskReplacement === undefined ||
         redactedEntity.start <= maskReplacement.start);
-    const start = useRedacted
-      ? (redactedEntity?.start ?? cursor)
-      : (maskReplacement?.start ?? cursor);
-    const end = useRedacted
-      ? (redactedEntity?.end ?? start)
-      : (maskReplacement?.end ?? start);
+    const selected = useRedacted ? redactedEntity : maskReplacement;
+    if (selected === undefined)
+      throw new Error("Redaction merge must select an available replacement");
+    const { start, end } = selected;
     if (start > cursor) parts.push(fullText.slice(cursor, start));
 
     if (!useRedacted && maskReplacement !== undefined) {

@@ -15,7 +15,7 @@ const git = (
     const child = Bun.spawnSync(["git", ...args], { cwd });
     return {
       ok: child.success && child.exitCode === 0,
-      stdout: child.stdout ?? new Uint8Array(),
+      stdout: child.stdout,
     };
   } catch {
     return { ok: false, stdout: new Uint8Array() };

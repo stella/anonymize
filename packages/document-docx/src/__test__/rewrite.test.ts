@@ -94,6 +94,19 @@ const rewriteForFirstBlock = (
 };
 
 describe("rewriteDocxText", () => {
+  test("rejects holes and explicit undefined blocks in object rewrite plans", () => {
+    const archive = docx("<w:p><w:r><w:t>Alice</w:t></w:r></w:p>");
+    const sparsePlan: DocxBlockRewrite[] = [];
+    sparsePlan.length = 1;
+    expect(() => rewriteDocxText(archive, sparsePlan)).toThrow(
+      "DOCX rewrite plans must not contain sparse blocks",
+    );
+    Object.defineProperty(sparsePlan, 0, { value: undefined });
+    expect(() => rewriteDocxText(archive, sparsePlan)).toThrow(
+      "DOCX rewrite plans must not contain sparse blocks",
+    );
+  });
+
   test("satisfies every shared runtime behavioral vector", () => {
     expect(runtimeParityFixture.contractVersion).toBe(1);
     for (const vector of runtimeParityFixture.successCases) {
@@ -307,7 +320,8 @@ describe("rewriteDocxText", () => {
       value: throwingIterator,
     });
     const location = cyclicPlan.location as unknown as Record<string, unknown>;
-    Object.defineProperty(location["xmlPath"], Symbol.iterator, {
+    const { xmlPath } = location;
+    Object.defineProperty(xmlPath, Symbol.iterator, {
       value: throwingIterator,
     });
     expect(

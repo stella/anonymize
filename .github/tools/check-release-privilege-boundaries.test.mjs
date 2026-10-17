@@ -6,10 +6,15 @@ const workflow = readFileSync(
   new URL("../workflows/release.yml", import.meta.url),
   "utf8",
 );
+/**
+ * @param {string} left
+ * @param {string} right
+ */
 const byName = (left, right) => left.localeCompare(right);
 const forbiddenFinalizerConfiguration =
   /CHANGELOG_APP|update-changelog|(?:pull-requests|"pull-requests"|'pull-requests')\s*:/;
 
+/** @param {string} source */
 const parseJobs = (source) => {
   const marker = source.match(/^jobs:\n/m);
   assert.ok(marker, "release workflow has no jobs section");
@@ -28,6 +33,7 @@ const parseJobs = (source) => {
 
 const jobs = parseJobs(workflow);
 
+/** @param {string} source */
 const finalizerPackageFiles = (source) => {
   const block = source.match(/^      package-files: \|\n((?:        .+\n)+)/m);
   assert.ok(block, "finalizer package-files input is missing");

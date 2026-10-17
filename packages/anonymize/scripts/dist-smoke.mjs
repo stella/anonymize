@@ -24,6 +24,7 @@ import {
   createNativePipelineFromPackageFile,
   loadNativeAnonymizeBinding,
 } from "../dist/native-node.mjs";
+import { assertBuiltCapabilities } from "./native-script-contracts.mjs";
 
 if (typeof globalThis.Bun === "undefined") {
   throw new Error("dist native smoke must run under Bun");
@@ -58,12 +59,7 @@ if (typeof createPipelineContext !== "function") {
 if (createPipelineContext().nativePipelinePackage !== null) {
   throw new TypeError("dist pipeline context did not start empty");
 }
-if (
-  CAPABILITY_MANIFEST.schemaVersion !== 2 ||
-  CAPABILITY_MANIFEST.entities.length === 0
-) {
-  throw new TypeError("dist capability manifest is missing or invalid");
-}
+assertBuiltCapabilities(CAPABILITY_MANIFEST);
 
 const binding = loadNativeAnonymizeBinding();
 const nativePackageVersion = binding.nativePackageVersion();
@@ -162,7 +158,7 @@ const runStandaloneSmoke = async () => {
     });
     if (!standaloneBuild.success) {
       throw new Error(
-        `standalone compile failed: ${standaloneBuild.logs.join("\n")}`,
+        `standalone compile failed: ${standaloneBuild.logs.map((log) => log.message).join("\n")}`,
       );
     }
 
@@ -237,7 +233,9 @@ const runPrunedBundleSmoke = async () => {
       target: "bun",
     });
     if (!bundleBuild.success) {
-      throw new Error(`ordinary bundle failed: ${bundleBuild.logs.join("\n")}`);
+      throw new Error(
+        `ordinary bundle failed: ${bundleBuild.logs.map((log) => log.message).join("\n")}`,
+      );
     }
 
     const subprocess = Bun.spawn(
