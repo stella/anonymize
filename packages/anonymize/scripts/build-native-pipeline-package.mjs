@@ -13,6 +13,7 @@ import {
   defaultDictionaryBundleOptions,
 } from "../dist/build-native-package.mjs";
 import { loadNativeAnonymizeBinding } from "../dist/native-node.mjs";
+import { readNativePackageInput } from "./native-script-contracts.mjs";
 
 const args = parseArgs(process.argv.slice(2));
 const outputPath = resolve(args.out ?? "native-pipeline.stlanonpkg");
@@ -144,16 +145,7 @@ async function loadBasePackageInput(options) {
   }
   const value =
     typeof candidate === "function" ? await candidate() : await candidate;
-  if (!value || typeof value !== "object") {
-    throw new TypeError("Native package config export must be an object");
-  }
-  if ("config" in value) {
-    return {
-      config: value.config,
-      gazetteerEntries: value.gazetteerEntries ?? [],
-    };
-  }
-  return { config: value, gazetteerEntries: [] };
+  return readNativePackageInput(value);
 }
 
 function defaultNativePipelineConfig() {

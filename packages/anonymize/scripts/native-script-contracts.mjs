@@ -48,3 +48,28 @@ export const assertBuiltCapabilities = (manifest) => {
   )
     throw new TypeError("dist capability manifest is missing or invalid");
 };
+
+/**
+ * @param {unknown} value
+ * @returns {unknown[]}
+ */
+const gazetteerValues = (value) => {
+  if (!Array.isArray(value))
+    throw new TypeError("Native package gazetteerEntries must be an array");
+  return value;
+};
+
+/** @param {unknown} value */
+export const readNativePackageInput = (value) => {
+  if (!isRecord(value))
+    throw new TypeError("Native package config export must be an object");
+  if (!("config" in value))
+    return { config: value, gazetteerEntries: gazetteerValues([]) };
+  const config = value["config"];
+  if (!isRecord(config))
+    throw new TypeError("Native package config must be an object");
+  return {
+    config,
+    gazetteerEntries: gazetteerValues(value["gazetteerEntries"] ?? []),
+  };
+};

@@ -6,6 +6,7 @@ import {
   assertBuiltCapabilities,
   nativeLibraryName,
   nativeLibcFromReport,
+  readNativePackageInput,
 } from "./native-script-contracts.mjs";
 
 void test("native build libraries cover supported hosts and reject every other platform", () => {
@@ -70,4 +71,35 @@ void test("built capability assertions validate runtime values independently of 
       () => assertBuiltCapabilities(manifest),
       /dist capability manifest/,
     );
+});
+
+void test("external package module exports preserve unknown configuration fields after envelope validation", () => {
+  const config = {
+    workspaceId: "package-input",
+    labels: ["person"],
+    threshold: 0.3,
+  };
+  const entries = [{ text: "Example Company", label: "organization" }];
+  assert.deepEqual(readNativePackageInput(config), {
+    config,
+    gazetteerEntries: [],
+  });
+  const wrapped = readNativePackageInput({ config, gazetteerEntries: entries });
+  assert.equal(wrapped.config, config);
+  assert.equal(wrapped.gazetteerEntries, entries);
+  assert.deepEqual(readNativePackageInput({ config, gazetteerEntries: null }), {
+    config,
+    gazetteerEntries: [],
+  });
+  for (const value of [
+    undefined,
+    null,
+    [],
+    false,
+    "config",
+    { config: null },
+    { config: [] },
+    { config, gazetteerEntries: "entries" },
+  ])
+    assert.throws(() => readNativePackageInput(value), TypeError);
 });
