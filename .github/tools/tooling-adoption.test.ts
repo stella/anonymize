@@ -45,7 +45,9 @@ test("uses shared library defaults and the complete portable safety pack", async
     const preset = `@stll/typescript-config/${environment}.json`;
     expect(tsconfig.extends).toBe(preset);
     expect(Object.keys(tsconfig.compilerOptions ?? {})).toEqual(
-      path === "packages/anonymize/tsconfig.json" ? ["lib"] : [],
+      path === "packages/anonymize/tsconfig.json"
+        ? ["customConditions", "lib"]
+        : [],
     );
     const manifest = await Bun.file(
       path.replace("tsconfig.json", "package.json"),
@@ -72,7 +74,13 @@ test("test and tool programs use the shared Bun environment", async () => {
   ]) {
     const tsconfig = await Bun.file(path).json();
     expect(tsconfig.extends).toBe("@stll/typescript-config/bun.json");
-    expect(tsconfig.compilerOptions).toBeUndefined();
+    if (path === "packages/anonymize/tsconfig.test.json") {
+      expect(tsconfig.compilerOptions).toEqual({
+        customConditions: ["@stll/anonymize-source"],
+      });
+    } else {
+      expect(tsconfig.compilerOptions).toBeUndefined();
+    }
   }
 });
 
