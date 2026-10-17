@@ -69,7 +69,7 @@
     "@changesets/changelog-github": "^1.0.1",
     "@changesets/cli": "^3.0.3",
     "@stll/anonymize-data": "workspace:*",
-    "@stll/oxlint-config": "1.3.1",
+    "@stll/oxlint-config": "1.4.0",
     "@stll/typescript-config": "0.8.0",
     "typescript": "7.0.2",
     "lefthook": "2.1.16",
