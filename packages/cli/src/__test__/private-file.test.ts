@@ -18,6 +18,15 @@ import {
   writeFileWithoutIdentityCollision,
 } from "../private-file";
 
+const rejectionOf = async (promise: Promise<unknown>) => {
+  try {
+    await promise;
+  } catch (error) {
+    return error;
+  }
+  throw new Error("Expected promise to reject");
+};
+
 const describeOnLinux = describe.skipIf(process.platform !== "linux");
 
 describeOnLinux("private file publication", () => {
@@ -45,13 +54,15 @@ describeOnLinux("private file publication", () => {
     const target = join(directory, "key.json");
     await writeFile(target, "existing", { mode: 0o600 });
 
-    await expect(
-      publishNewPrivateFile({
-        target,
-        content: "replacement",
-        flag: "--key",
-      }),
-    ).rejects.toBeInstanceOf(UsageError);
+    expect(
+      await rejectionOf(
+        publishNewPrivateFile({
+          target,
+          content: "replacement",
+          flag: "--key",
+        }),
+      ),
+    ).toBeInstanceOf(UsageError);
 
     expect(await readFile(target, "utf8")).toBe("existing");
     expect(await readdir(directory)).toEqual(["key.json"]);
@@ -64,13 +75,15 @@ describeOnLinux("private file publication", () => {
     await writeFile(referent, "existing", { mode: 0o600 });
     await symlink(referent, target);
 
-    await expect(
-      publishNewPrivateFile({
-        target,
-        content: "replacement",
-        flag: "--key",
-      }),
-    ).rejects.toBeInstanceOf(UsageError);
+    expect(
+      await rejectionOf(
+        publishNewPrivateFile({
+          target,
+          content: "replacement",
+          flag: "--key",
+        }),
+      ),
+    ).toBeInstanceOf(UsageError);
 
     expect((await lstat(target)).isSymbolicLink()).toBe(true);
     expect(await readFile(referent, "utf8")).toBe("existing");
@@ -108,14 +121,16 @@ describeOnLinux("private file publication", () => {
     const directory = await mkdtemp(join(tmpdir(), "anonymize-private-file-"));
     const target = join(directory, "key.json");
 
-    await expect(
-      publishNewPrivateFile({
-        target,
-        content: "sensitive",
-        flag: "--key",
-        afterPublish: () => Promise.reject(new Error("output failed")),
-      }),
-    ).rejects.toThrow("output failed");
+    expect(
+      await rejectionOf(
+        publishNewPrivateFile({
+          target,
+          content: "sensitive",
+          flag: "--key",
+          afterPublish: () => Promise.reject(new Error("output failed")),
+        }),
+      ),
+    ).toMatchObject({ message: expect.stringContaining("output failed") });
 
     expect((await stat(target)).size).toBe(0);
     if (process.platform !== "win32") {
@@ -130,21 +145,23 @@ describeOnLinux("private file publication", () => {
     const output = join(directory, "output.txt");
     await symlink(target, output);
 
-    await expect(
-      publishNewPrivateFile({
-        target,
-        content: "sensitive",
-        flag: "--key",
-        afterPublish: (identity) =>
-          writeFileWithoutIdentityCollision({
-            target: output,
-            content: "redacted",
-            targetFlag: "--output",
-            forbiddenFlag: "--key",
-            forbiddenIdentity: identity,
-          }),
-      }),
-    ).rejects.toBeInstanceOf(UsageError);
+    expect(
+      await rejectionOf(
+        publishNewPrivateFile({
+          target,
+          content: "sensitive",
+          flag: "--key",
+          afterPublish: (identity) =>
+            writeFileWithoutIdentityCollision({
+              target: output,
+              content: "redacted",
+              targetFlag: "--output",
+              forbiddenFlag: "--key",
+              forbiddenIdentity: identity,
+            }),
+        }),
+      ),
+    ).toBeInstanceOf(UsageError);
 
     expect((await lstat(output)).isSymbolicLink()).toBe(true);
     expect((await stat(target)).size).toBe(0);
@@ -155,23 +172,25 @@ describeOnLinux("private file publication", () => {
     const target = join(directory, "key.json");
     const output = join(directory, "output.txt");
 
-    await expect(
-      publishNewPrivateFile({
-        target,
-        content: "sensitive",
-        flag: "--key",
-        afterPublish: async (identity) => {
-          await link(target, output);
-          await writeFileWithoutIdentityCollision({
-            target: output,
-            content: "redacted",
-            targetFlag: "--output",
-            forbiddenFlag: "--key",
-            forbiddenIdentity: identity,
-          });
-        },
-      }),
-    ).rejects.toBeInstanceOf(UsageError);
+    expect(
+      await rejectionOf(
+        publishNewPrivateFile({
+          target,
+          content: "sensitive",
+          flag: "--key",
+          afterPublish: async (identity) => {
+            await link(target, output);
+            await writeFileWithoutIdentityCollision({
+              target: output,
+              content: "redacted",
+              targetFlag: "--output",
+              forbiddenFlag: "--key",
+              forbiddenIdentity: identity,
+            });
+          },
+        }),
+      ),
+    ).toBeInstanceOf(UsageError);
 
     expect((await stat(target)).size).toBe(0);
     expect((await stat(output)).size).toBe(0);
@@ -184,13 +203,19 @@ test.skipIf(process.platform === "linux")(
     const directory = await mkdtemp(join(tmpdir(), "anonymize-private-file-"));
     const target = join(directory, "key.json");
 
-    await expect(
-      publishNewPrivateFile({
-        target,
-        content: "sensitive",
-        flag: "--key",
-      }),
-    ).rejects.toThrow("owner-only file ACLs cannot be verified");
+    expect(
+      await rejectionOf(
+        publishNewPrivateFile({
+          target,
+          content: "sensitive",
+          flag: "--key",
+        }),
+      ),
+    ).toMatchObject({
+      message: expect.stringContaining(
+        "owner-only file ACLs cannot be verified",
+      ),
+    });
 
     expect(await readdir(directory)).toEqual([]);
   },

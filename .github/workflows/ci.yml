@@ -321,6 +321,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
       - uses: ./.github/actions/setup-built-workspace
       - name: Lint
         run: bun run lint
@@ -329,25 +330,26 @@ jobs:
       - name: Format
         run: bun run format:check
       - name: Typecheck
+        if: ${{ !cancelled() }}
         run: bun run typecheck:built
       - name: Verify typecheck rejects a seeded error
-        shell: bash
+        run: >-
+          bunx --no-install stll-typecheck-probe
+          --project packages/data/tsconfig.json
+          --seed-dir packages/data/dictionaries
+          -- bun run --cwd packages/data typecheck
+      - name: Detect shared toolchain changes
+        id: toolchain
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.sha || github.event.before || 'unavailable-toolchain-base' }}
         run: |
-          fixture=packages/data/dictionaries/typecheck-proof.ts
-          test ! -e "$fixture"
-          trap 'rm -f "$fixture"' EXIT
-          printf 'export const typecheckProof: number = "wrong";\n' > "$fixture"
-          if bun run --filter @stll/anonymize-data typecheck > "$RUNNER_TEMP/typecheck-proof.log" 2>&1; then
-            cat "$RUNNER_TEMP/typecheck-proof.log"
-            echo "Typecheck accepted a seeded type error"
-            exit 1
-          fi
-          cat "$RUNNER_TEMP/typecheck-proof.log"
-          grep -q 'TS2322' "$RUNNER_TEMP/typecheck-proof.log"
-          rm "$fixture"
-          trap - EXIT
-          bun run --filter @stll/anonymize-data typecheck
+          result=$(bunx --no-install stll-toolchain-changed --since "$BASE_REF")
+          printf '%s\n' "$result"
+          printf 'changed=%s\n' "$(printf '%s' "$result" | jq -r '.changed')" >> "$GITHUB_OUTPUT"
+      - name: Tooling adoption contract
+        run: bun run test:tooling
       - name: Typecheck diagnostic parity
+        if: steps.toolchain.outputs.changed == 'true'
         run: bun run check:typecheck-parity
       - name: Knip (unused/undeclared deps)
         run: bun run check:knip

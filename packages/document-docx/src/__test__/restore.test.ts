@@ -34,7 +34,7 @@ const docx = (body: string): Uint8Array =>
   });
 
 type FakeSessionOptions = {
-  mappings?: Readonly<Record<string, string>>;
+  mappings?: Readonly<Record<string, string | undefined>>;
   onRestore?: (text: string, observedAtEpochSeconds?: number) => void;
   rejectUnknownOwned?: boolean;
   sessionId?: string;

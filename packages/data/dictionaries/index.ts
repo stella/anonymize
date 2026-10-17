@@ -521,239 +521,149 @@ type JsonModule = { default: readonly string[] };
 // TS infers a wider type for dynamic imports.
 const LOADERS: Record<DictionaryId, () => Promise<JsonModule>> = {
   // ── Names ──────────────────────────────────────────
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "names/global": () => import("./names/global.json") as Promise<JsonModule>,
   // ── First names (Wikidata CC0) ──────────────────
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "names/first/cs": () =>
     import("./names/first/cs.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "names/first/sk": () =>
     import("./names/first/sk.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "names/first/de": () =>
     import("./names/first/de.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "names/first/pl": () =>
     import("./names/first/pl.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "names/first/hu": () =>
     import("./names/first/hu.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "names/first/ro": () =>
     import("./names/first/ro.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "names/first/fr": () =>
     import("./names/first/fr.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "names/first/es": () =>
     import("./names/first/es.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "names/first/it": () =>
     import("./names/first/it.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "names/first/en": () =>
     import("./names/first/en.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "names/first/sv": () =>
     import("./names/first/sv.json") as Promise<JsonModule>,
   // ── Surnames (Wikidata CC0) ─────────────────────
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "names/surnames/cs": () =>
     import("./names/surnames/cs.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "names/surnames/sk": () =>
     import("./names/surnames/sk.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "names/surnames/de": () =>
     import("./names/surnames/de.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "names/surnames/pl": () =>
     import("./names/surnames/pl.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "names/surnames/hu": () =>
     import("./names/surnames/hu.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "names/surnames/ro": () =>
     import("./names/surnames/ro.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "names/surnames/fr": () =>
     import("./names/surnames/fr.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "names/surnames/es": () =>
     import("./names/surnames/es.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "names/surnames/it": () =>
     import("./names/surnames/it.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "names/surnames/en": () =>
     import("./names/surnames/en.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "names/surnames/sv": () =>
     import("./names/surnames/sv.json") as Promise<JsonModule>,
 
   // ── Countries ──────────────────────────────────────
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "countries/translations": () =>
     import("./countries/translations.json") as Promise<JsonModule>,
 
   // ── Cities: loaded via loadCityDictionary() in ./cities
 
   // ── Courts ─────────────────────────────────────────
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "courts/AT": () => import("./courts/AT.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "courts/AU": () => import("./courts/AU.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "courts/BE": () => import("./courts/BE.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "courts/BG": () => import("./courts/BG.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "courts/BR": () => import("./courts/BR.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "courts/CA": () => import("./courts/CA.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "courts/CZ": () => import("./courts/CZ.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "courts/DE": () => import("./courts/DE.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "courts/DK": () => import("./courts/DK.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "courts/ES": () => import("./courts/ES.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "courts/FI": () => import("./courts/FI.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "courts/FR": () => import("./courts/FR.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "courts/GB": () => import("./courts/GB.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "courts/HR": () => import("./courts/HR.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "courts/HU": () => import("./courts/HU.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "courts/IE": () => import("./courts/IE.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "courts/IT": () => import("./courts/IT.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "courts/NL": () => import("./courts/NL.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "courts/NO": () => import("./courts/NO.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "courts/PL": () => import("./courts/PL.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "courts/PT": () => import("./courts/PT.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "courts/RO": () => import("./courts/RO.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "courts/SE": () => import("./courts/SE.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "courts/SI": () => import("./courts/SI.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "courts/SK": () => import("./courts/SK.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "courts/US": () => import("./courts/US.json") as Promise<JsonModule>,
 
   // ── Banks ──────────────────────────────────────────
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "banks/AT": () => import("./banks/AT.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "banks/AU": () => import("./banks/AU.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "banks/BE": () => import("./banks/BE.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "banks/BG": () => import("./banks/BG.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "banks/BR": () => import("./banks/BR.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "banks/CA": () => import("./banks/CA.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "banks/CZ": () => import("./banks/CZ.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "banks/DE": () => import("./banks/DE.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "banks/DK": () => import("./banks/DK.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "banks/ES": () => import("./banks/ES.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "banks/FI": () => import("./banks/FI.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "banks/FR": () => import("./banks/FR.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "banks/GB": () => import("./banks/GB.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "banks/HR": () => import("./banks/HR.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "banks/HU": () => import("./banks/HU.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "banks/IE": () => import("./banks/IE.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "banks/IT": () => import("./banks/IT.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "banks/NL": () => import("./banks/NL.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "banks/NO": () => import("./banks/NO.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "banks/PL": () => import("./banks/PL.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "banks/PT": () => import("./banks/PT.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "banks/RO": () => import("./banks/RO.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "banks/SE": () => import("./banks/SE.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "banks/SI": () => import("./banks/SI.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "banks/SK": () => import("./banks/SK.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "banks/US": () => import("./banks/US.json") as Promise<JsonModule>,
 
   // ── Insurance ──────────────────────────────────────
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "insurance/CZ": () => import("./insurance/CZ.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "insurance/DE": () => import("./insurance/DE.json") as Promise<JsonModule>,
 
   // ── Education ──────────────────────────────────────
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "education/universities-AT": () =>
     import("./education/universities-AT.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "education/universities-CZ": () =>
     import("./education/universities-CZ.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "education/universities-DE": () =>
     import("./education/universities-DE.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "education/universities-SK": () =>
     import("./education/universities-SK.json") as Promise<JsonModule>,
 
   // ── Government ─────────────────────────────────────
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "government/ministries-AT": () =>
     import("./government/ministries-AT.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "government/ministries-CZ": () =>
     import("./government/ministries-CZ.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "government/ministries-DE": () =>
     import("./government/ministries-DE.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "government/ministries-GB": () =>
     import("./government/ministries-GB.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "government/ministries-SK": () =>
     import("./government/ministries-SK.json") as Promise<JsonModule>,
 
   // ── Healthcare ─────────────────────────────────────
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "healthcare/hospitals-CZ": () =>
     import("./healthcare/hospitals-CZ.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "healthcare/hospitals-DE": () =>
     import("./healthcare/hospitals-DE.json") as Promise<JsonModule>,
 
   // ── International ──────────────────────────────────
-  // eslint-disable-next-line typescript-eslint/promise-function-async
   "international/eu-institutions": () =>
     import("./international/eu-institutions.json") as Promise<JsonModule>,
 };

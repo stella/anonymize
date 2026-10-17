@@ -51,7 +51,9 @@
     "hooks:uninstall": "lefthook uninstall",
     "sync-ai": "bash scripts/sync-ai-skills.sh",
     "sync-ai:check": "bash scripts/sync-ai-skills.sh --check",
-    "sync-ai:check:optional": "bash scripts/sync-ai-skills.sh --check --optional"
+    "sync-ai:check:optional": "bash scripts/sync-ai-skills.sh --check --optional",
+    "cloud:setup": "stll-cloud-setup",
+    "test:tooling": "bun test ./.github/tools/tooling-adoption.test.ts ./.github/tools/tooling-workflow.test.ts packages/anonymize/src/__test__/native-json-codec.test.ts ./.github/tools/eval-html-args.test.ts && node --test .github/tools/json-values.test.mjs"
   },
   "overrides": {
     "@emnapi/core": "1.11.1",
@@ -67,13 +69,17 @@
     "@changesets/changelog-github": "^1.0.1",
     "@changesets/cli": "^3.0.3",
     "@stll/anonymize-data": "workspace:*",
-    "@stll/oxlint-config": "1.0.1",
-    "@stll/typescript-config": "0.6.0",
+    "@stll/oxlint-config": "1.4.0",
+    "@stll/typescript-config": "0.8.0",
     "typescript": "7.0.2",
     "lefthook": "2.1.16",
     "oxfmt": "0.72.0",
     "oxlint": "1.87.0",
     "oxlint-tsgolint": "7.0.2003",
-    "turbo": "^2.11.6"
+    "turbo": "^2.11.6",
+    "@stll/oxlint-plugin": "0.2.2",
+    "@types/node": "26.6.4",
+    "bun-types": "1.4.3",
+    "tsdown": "0.23.0"
   }
 }

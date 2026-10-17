@@ -64,7 +64,7 @@ export const restoreDocxText = ({
     return restored;
   };
   const planRestoration = loadNativeAnonymizeBinding().planDocxRestorationJson;
-  if (planRestoration === undefined) {
+  if (typeof planRestoration !== "function") {
     throw restorationError(
       DOCX_RESTORATION_ERROR_CODES.invalidSession,
       "Native anonymize binding does not expose DOCX restoration planning",

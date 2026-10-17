@@ -31,6 +31,7 @@ import {
   type DurableSessionStoreOptions,
 } from "../durable-sessions";
 import { LocalAnonymizeService, PathScope } from "../local";
+import { requirePresent } from "./require-present";
 
 const temporaryDirectories: string[] = [];
 const openServices = new Set<LocalAnonymizeService>();
@@ -328,7 +329,8 @@ void describe("durable MCP sessions", () => {
     await mismatchedService.close();
 
     const tampered = await readFile(archivePath);
-    tampered[tampered.byteLength - 1] ^= 0xff;
+    const lastByteIndex = tampered.byteLength - 1;
+    tampered[lastByteIndex] = requirePresent(tampered[lastByteIndex]) ^ 0xff;
     await writeFile(archivePath, tampered, { mode: 0o600 });
     const tamperedOutput = join(paths.root, "tampered.txt");
     const tamperedService = await createService(paths);
