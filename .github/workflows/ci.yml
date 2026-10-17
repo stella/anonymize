@@ -204,6 +204,10 @@ jobs:
           repository-checks: "true"
       - name: Check shared toolchain
         run: bun run check:toolchain
+      - name: Typecheck core sources before building data
+        run: |
+          test ! -e packages/data/dist
+          bun run --filter @stll/anonymize typecheck
       - name: Audit Bun dependencies
         run: bun audit
       - uses: ./.github/actions/setup-rust-ci

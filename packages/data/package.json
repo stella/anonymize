@@ -15,16 +15,19 @@
   "type": "module",
   "exports": {
     ".": {
+      "@stll/anonymize-source": "./dictionaries/index.ts",
       "types": "./dist/index.d.mts",
       "import": "./dist/index.mjs",
       "default": "./dist/index.mjs"
     },
     "./dictionaries": {
+      "@stll/anonymize-source": "./dictionaries/index.ts",
       "types": "./dist/index.d.mts",
       "import": "./dist/index.mjs",
       "default": "./dist/index.mjs"
     },
     "./cities": {
+      "@stll/anonymize-source": "./dictionaries/cities.ts",
       "types": "./dist/cities.d.mts",
       "import": "./dist/cities.mjs",
       "default": "./dist/cities.mjs"
