@@ -61,6 +61,35 @@ test("packed scripts outside bin and exports are closure roots too", () => {
   ).toThrow("extra.mjs -> ./unpacked.mjs");
 });
 
+test("CommonJS call shapes include script and opaque asset dependencies", () => {
+  for (const call of [
+    'require("./dependency");',
+    'module.exports = require("./dependency");',
+    'const { value } = require("./dependency");',
+    'require.resolve("./dependency");',
+  ]) {
+    for (const extension of ["js", "json", "node"]) {
+      const dependency = `dependency.${extension}`;
+      const files = new Map([
+        ["entry.cjs", call],
+        [dependency, extension === "js" ? "module.exports = {};" : "opaque"],
+      ]);
+      const options = {
+        manifest: { main: "entry.cjs" },
+        packedFiles: new Set(files.keys()),
+        readSource: (path: string) => files.get(path),
+      };
+      expect(assertPackedRuntimeImports(options)).toEqual(
+        new Set(files.keys()),
+      );
+      options.packedFiles.delete(dependency);
+      expect(() => assertPackedRuntimeImports(options)).toThrow(
+        "entry.cjs -> ./dependency",
+      );
+    }
+  }
+});
+
 test("runtime closure excludes type-only and computed dynamic imports", () => {
   const source =
     'import type { Missing } from "./type-only"; const target = "./dynamic.mjs"; void import(target); export const value = 1;';
