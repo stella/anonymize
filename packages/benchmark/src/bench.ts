@@ -43,9 +43,8 @@ const RESULTS_DIR = join(import.meta.dir, "..", "results");
 const git = (args: string[]): string => {
   try {
     const proc = Bun.spawnSync(["git", ...args], { cwd: import.meta.dir });
-    // spawnSync can fail to launch (git absent, permission denied): `success`
-    // is false and `stdout` may be null. Only trust stdout on a clean exit.
-    if (!proc.success || proc.exitCode !== 0 || proc.stdout == null) {
+    // Only trust stdout on a clean exit; launch failures are caught below.
+    if (!proc.success || proc.exitCode !== 0) {
       return "";
     }
     return proc.stdout.toString().trim();

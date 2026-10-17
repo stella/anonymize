@@ -654,9 +654,9 @@ export const parseNativePreparedSearchConfig = (
   const value = normalizeOptionalFields({
     ...defaults,
     ...input,
-    regex_options: input.regex_options ?? {},
-    custom_regex_options: input.custom_regex_options ?? {},
-    literal_options: input.literal_options ?? {},
+    regex_options: input["regex_options"] ?? {},
+    custom_regex_options: input["custom_regex_options"] ?? {},
+    literal_options: input["literal_options"] ?? {},
   });
   if (!isNativePreparedSearchConfig(value))
     throw new TypeError("Invalid native prepared search config");

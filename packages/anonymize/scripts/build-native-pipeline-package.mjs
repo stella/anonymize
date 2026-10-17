@@ -42,6 +42,7 @@ console.log(
 
 /** @param {string[]} values */
 function parseArgs(values) {
+  /** @type {{ config?: string, exportName?: string, out?: string, raw?: boolean, compressed?: boolean, defaultDictionaries?: boolean, language?: string, languages?: string }} */
   const result = {};
   for (let index = 0; index < values.length; index += 1) {
     const value = values[index];

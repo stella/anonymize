@@ -11,5 +11,5 @@
     "src/**/*.test.ts",
     "src/wasm.ts"
   ],
-  "files": ["index.cjs", "index.d.cts"]
+  "files": ["index.cjs", "index.d.cts", "src/native-addon.d.ts"]
 }

@@ -158,7 +158,7 @@ const runStandaloneSmoke = async () => {
     });
     if (!standaloneBuild.success) {
       throw new Error(
-        `standalone compile failed: ${standaloneBuild.logs.join("\n")}`,
+        `standalone compile failed: ${standaloneBuild.logs.map((log) => log.message).join("\n")}`,
       );
     }
 
@@ -233,7 +233,9 @@ const runPrunedBundleSmoke = async () => {
       target: "bun",
     });
     if (!bundleBuild.success) {
-      throw new Error(`ordinary bundle failed: ${bundleBuild.logs.join("\n")}`);
+      throw new Error(
+        `ordinary bundle failed: ${bundleBuild.logs.map((log) => log.message).join("\n")}`,
+      );
     }
 
     const subprocess = Bun.spawn(

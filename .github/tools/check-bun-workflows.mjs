@@ -248,7 +248,7 @@ if (
       ];
   if (mode !== "pin" && mode !== "--cache-policy")
     problems.push(`Unknown check mode: ${mode}`);
-  if (mode === "--cache-policy" && !globalThis.Bun)
+  if (mode === "--cache-policy" && typeof globalThis.Bun === "undefined")
     problems.push("Cache policy requires the installed Bun runtime");
   if (problems.length === 0) {
     for (const file of bunWorkflowFiles()) {

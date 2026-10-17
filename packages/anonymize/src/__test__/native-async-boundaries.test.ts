@@ -3,6 +3,15 @@ import { expect, test } from "bun:test";
 import { readNativePipelinePackageFileAsync } from "../native-node";
 import { loadDefaultNativeBinding } from "../native-runtime";
 
+const rejectionOf = async (promise: Promise<unknown>) => {
+  try {
+    await promise;
+  } catch (error) {
+    return error;
+  }
+  throw new Error("Expected promise to reject");
+};
+
 test("native loader starts immediately and rejects synchronous loader failures", async () => {
   let attempts = 0;
   const loaded = loadDefaultNativeBinding({
@@ -18,7 +27,9 @@ test("native loader starts immediately and rejects synchronous loader failures",
 
   expect(attempts).toBeGreaterThan(0);
   expect(loaded).toBeInstanceOf(Promise);
-  await expect(loaded).rejects.toThrow("Unable to load native anonymize binding");
+  expect(await rejectionOf(loaded)).toMatchObject({
+    message: expect.stringContaining("Unable to load native anonymize binding"),
+  });
 });
 
 test("asynchronous package reads reject missing paths", async () => {
@@ -26,5 +37,5 @@ test("asynchronous package reads reject missing paths", async () => {
     `${import.meta.filename}/missing-package`,
   );
   expect(read).toBeInstanceOf(Promise);
-  await expect(read).rejects.toThrow();
+  expect(await rejectionOf(read)).toBeInstanceOf(Error);
 });
