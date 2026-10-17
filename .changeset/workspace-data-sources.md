@@ -1,5 +1,4 @@
 ---
-"@stll/anonymize-data": patch
 ---
 
-Declare a workspace-only export condition for the dictionary sources.
+Typecheck reads the dictionary sources through a workspace-only export condition; no published change.
