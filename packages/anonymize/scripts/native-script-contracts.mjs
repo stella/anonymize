@@ -31,9 +31,10 @@ export const nativeLibcFromReport = (report) => {
     isRecord(report) && isRecord(report["header"])
       ? report["header"]
       : undefined;
-  // Match the native SDK's report-header contract: absence of glibc means musl.
+  // Preserve build detection: an empty glibc marker does not identify GNU libc.
   return header !== undefined &&
-    typeof header["glibcVersionRuntime"] === "string"
+    typeof header["glibcVersionRuntime"] === "string" &&
+    header["glibcVersionRuntime"].length > 0
     ? "gnu"
     : "musl";
 };

@@ -47,6 +47,7 @@ void test("report libc detection validates the unknown header before consuming i
     { header: [] },
     { header: {} },
     { header: { glibcVersionRuntime: 2.36 } },
+    { header: { glibcVersionRuntime: "" } },
   ])
     assert.equal(nativeLibcFromReport(report), "musl");
 });
