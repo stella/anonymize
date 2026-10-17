@@ -111,6 +111,14 @@ test("a fresh Node process imports the detector without reading a report or load
     process.report.getReport = () => { throw new Error("report read during import"); };
     const { detectNativeLibc } = await import(process.argv[1]);
     if (detectNativeLibc("darwin") !== undefined) throw new Error("unexpected non-Linux result");
+    let reads = 0;
+    process.report.getReport = () => {
+      reads += 1;
+      return { header: { glibcVersionRuntime: "2.39" } };
+    };
+    if (detectNativeLibc("linux") !== "gnu" || reads !== 1) {
+      throw new Error("default Linux reader must read the Node report exactly once");
+    }
   `,
       module.href,
     ],

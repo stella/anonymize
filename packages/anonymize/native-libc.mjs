@@ -6,7 +6,7 @@ import process from "node:process";
  */
 export const detectNativeLibc = (
   platform,
-  readReport = () => process.report?.getReport?.(),
+  readReport = () => process.report.getReport(),
 ) => {
   if (platform !== "linux") return undefined;
   const report = readReport();
