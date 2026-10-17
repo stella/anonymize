@@ -123,16 +123,29 @@ fn rejects_invalid_utf8_entry_names_before_package_validation()
   assert_eq!(name_offsets.len(), 2);
   let character_offset =
     path.find('é').ok_or("missing UTF-8 fixture character")?;
-  for invalid_byte in [0xff, 0x80, 0xc0] {
+  let mut readable = ZipArchive::new(Cursor::new(&original))?;
+  assert_eq!(readable.by_index(0)?.name()?, path);
+  let incomplete = extract_docx_text(&original)
+    .err()
+    .ok_or("expected incomplete package error")?;
+  assert_eq!(incomplete.code(), DocxErrorCode::InvalidPackage);
+  for (invalid_byte, decoded_name) in [
+    (0xff, "word/docum\u{a0}⌐nt.xml"),
+    (0x80, "word/documÇ⌐nt.xml"),
+    (0xc0, "word/docum└⌐nt.xml"),
+  ] {
     let mut document = original.clone();
     for offset in &name_offsets {
       *document
         .get_mut(offset + character_offset)
         .ok_or("missing ZIP filename byte")? = invalid_byte;
     }
-    // Keep the container readable: decoding the entry name is the failure.
+    // ZIP 9 accepts these bytes through its CP437 fallback; the DOCX
+    // boundary must reject them before validating the incomplete package.
     let mut archive = ZipArchive::new(Cursor::new(&document))?;
-    assert!(archive.by_index(0)?.name().is_err());
+    let entry = archive.by_index(0)?;
+    assert!(std::str::from_utf8(entry.name_raw()).is_err());
+    assert_eq!(entry.name()?, decoded_name);
     let failure = extract_docx_text(&document)
       .err()
       .ok_or("expected invalid entry name error")?;

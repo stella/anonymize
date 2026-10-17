@@ -1033,15 +1033,15 @@ fn read_archive(document: &[u8]) -> Result<Vec<ArchiveEntry>, DocxError> {
         "Input is not a valid bounded DOCX ZIP archive",
       )
     })?;
-    let path = file
-      .name()
+    // ZIP 9 falls back to CP437 even for malformed UTF-8 entry names.
+    let path = std::str::from_utf8(file.name_raw())
       .map_err(|_| {
         error(
           DocxErrorCode::InvalidArchive,
           "DOCX archive contains an invalid entry name",
         )
       })?
-      .into_owned();
+      .to_owned();
     if !safe_entry_path(&path) {
       return Err(error(
         DocxErrorCode::UnsafeEntryPath,
