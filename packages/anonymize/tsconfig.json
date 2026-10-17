@@ -2,6 +2,7 @@
   "$schema": "https://json.schemastore.org/tsconfig",
   "extends": "@stll/typescript-config/node.json",
   "compilerOptions": {
+    "customConditions": ["@stll/anonymize-source"],
     "lib": ["ESNext", "DOM"]
   },
   "include": ["src/**/*.ts", "tsdown.config.ts", "native-libc.mjs"],
