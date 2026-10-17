@@ -282,6 +282,9 @@ for (const city of ["Buenos Aires", "Monterrey"]) {
   const cityEntities = defaultPipeline.redactText(
     `Address: ${city}`,
   ).resolvedEntities;
+  if (!Array.isArray(cityEntities)) {
+    throw new Error("all-language package did not return city entities");
+  }
   if (
     !cityEntities.some(
       ({ label, text }) => label === "address" && text === city,

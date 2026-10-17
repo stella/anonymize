@@ -1,0 +1,50 @@
+/**
+ * @param {unknown} value
+ * @returns {value is Record<string, unknown>}
+ */
+const isRecord = (value) =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+export const NATIVE_LIBRARY_FILES = Object.freeze({
+  darwin: "libstella_anonymize_napi.dylib",
+  linux: "libstella_anonymize_napi.so",
+  win32: "stella_anonymize_napi.dll",
+});
+
+/**
+ * @param {string} platform
+ * @returns {platform is keyof typeof NATIVE_LIBRARY_FILES}
+ */
+const isNativeBuildPlatform = (platform) =>
+  Object.hasOwn(NATIVE_LIBRARY_FILES, platform);
+
+/** @param {string} platform */
+export const nativeLibraryName = (platform) => {
+  if (!isNativeBuildPlatform(platform))
+    throw new Error(`Unsupported native build platform: ${platform}`);
+  return NATIVE_LIBRARY_FILES[platform];
+};
+
+/** @param {unknown} report */
+export const nativeLibcFromReport = (report) => {
+  const header =
+    isRecord(report) && isRecord(report["header"])
+      ? report["header"]
+      : undefined;
+  // Match the native SDK's report-header contract: absence of glibc means musl.
+  return header !== undefined &&
+    typeof header["glibcVersionRuntime"] === "string"
+    ? "gnu"
+    : "musl";
+};
+
+/** @param {unknown} manifest */
+export const assertBuiltCapabilities = (manifest) => {
+  if (
+    !isRecord(manifest) ||
+    manifest["schemaVersion"] !== 2 ||
+    !Array.isArray(manifest["entities"]) ||
+    manifest["entities"].length === 0
+  )
+    throw new TypeError("dist capability manifest is missing or invalid");
+};

@@ -24,6 +24,7 @@ import {
   createNativePipelineFromPackageFile,
   loadNativeAnonymizeBinding,
 } from "../dist/native-node.mjs";
+import { assertBuiltCapabilities } from "./native-script-contracts.mjs";
 
 if (typeof globalThis.Bun === "undefined") {
   throw new Error("dist native smoke must run under Bun");
@@ -58,12 +59,7 @@ if (typeof createPipelineContext !== "function") {
 if (createPipelineContext().nativePipelinePackage !== null) {
   throw new TypeError("dist pipeline context did not start empty");
 }
-if (
-  CAPABILITY_MANIFEST.schemaVersion !== 2 ||
-  CAPABILITY_MANIFEST.entities.length === 0
-) {
-  throw new TypeError("dist capability manifest is missing or invalid");
-}
+assertBuiltCapabilities(CAPABILITY_MANIFEST);
 
 const binding = loadNativeAnonymizeBinding();
 const nativePackageVersion = binding.nativePackageVersion();

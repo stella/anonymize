@@ -10,6 +10,10 @@ import {
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { gzipSync } from "node:zlib";
+import {
+  nativeLibraryName,
+  nativeLibcFromReport,
+} from "./native-script-contracts.mjs";
 
 import languageScopes from "../src/data/language-scopes.json" with { type: "json" };
 
@@ -39,16 +43,7 @@ const supportedCityCountries = [
   ),
 ].toSorted();
 
-const sourceByPlatform = {
-  darwin: "libstella_anonymize_napi.dylib",
-  linux: "libstella_anonymize_napi.so",
-  win32: "stella_anonymize_napi.dll",
-};
-
-const sourceName = sourceByPlatform[process.platform];
-if (!sourceName) {
-  throw new Error(`Unsupported native build platform: ${process.platform}`);
-}
+const sourceName = nativeLibraryName(process.platform);
 
 execFileSync(
   "cargo",
@@ -210,11 +205,10 @@ function nativeSidecarPackageName({ arch, libc, platform }) {
   return null;
 }
 
+/** @param {string} platform */
 function detectNativeLibc(platform) {
   if (platform !== "linux") {
     return undefined;
   }
-  return process.report?.getReport?.().header?.glibcVersionRuntime
-    ? "gnu"
-    : "musl";
+  return nativeLibcFromReport(process.report.getReport());
 }
