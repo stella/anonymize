@@ -145,9 +145,10 @@ const run = () => {
   process.exitCode = 1;
 };
 
+const entrypoint = process.argv.at(1);
 if (
-  process.argv[1] !== undefined &&
-  import.meta.url === pathToFileURL(process.argv[1]).href
+  entrypoint !== undefined &&
+  import.meta.url === pathToFileURL(entrypoint).href
 ) {
   run();
 }

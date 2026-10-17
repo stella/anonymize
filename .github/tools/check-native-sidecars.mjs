@@ -17,7 +17,7 @@ const releaseWorkflow = readFileSync(".github/workflows/release.yml", "utf8");
 const packlistTool = readFileSync(".github/tools/check-packlist.mjs", "utf8");
 const sidecars = discoverSidecars();
 
-let failed = false;
+const failureState = { count: 0 };
 
 if (sidecars.length === 0) {
   fail("No native sidecar packages found");
@@ -46,7 +46,7 @@ if (!packlistTool.includes(`forbidden: ["${NATIVE_BINARY}"]`)) {
   fail(`Root packlist check must forbid ${NATIVE_BINARY}`);
 }
 
-if (failed) {
+if (failureState.count > 0) {
   process.exit(1);
 }
 
@@ -184,7 +184,12 @@ function assertNativeBuildArtifactPolicy() {
       `${ROOT_PACKAGE}/turbo.json must disable caching for its host-dependent build`,
     );
   }
+  /** @type {unknown} */
   const sharedBuildOutputs = rootTurboConfig.tasks?.build?.outputs ?? [];
+  if (!Array.isArray(sharedBuildOutputs)) {
+    fail("Turbo build outputs must be an array");
+    return;
+  }
   if (
     sharedBuildOutputs.some(
       (output) => typeof output === "string" && output.endsWith(NATIVE_BINARY),
@@ -291,6 +296,6 @@ function readJson(path) {
 }
 
 function fail(message) {
-  failed = true;
+  failureState.count++;
   console.error(message);
 }
