@@ -5,6 +5,7 @@
 
 use std::collections::HashMap;
 
+use super::identifiers::IdentifierSpace;
 use super::{common_font, valid_numbering_label};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -31,6 +32,7 @@ pub(super) enum AttributeDomain {
   BinaryDigits(usize),
   /// A style identifier, replaced by its export identifier.
   StyleReference,
+  Identifier(IdentifierSpace),
   /// A font family from the export's common-font list.
   Font,
   /// A theme typeface: empty or a common font.
@@ -90,6 +92,7 @@ impl AttributeDomain {
       Self::BinaryDigits(length) => (value.len() == length
         && value.bytes().all(|byte| matches!(byte, b'0' | b'1')))
       .then(|| value.to_owned()),
+      Self::Identifier(_) => None,
       Self::StyleReference => styles.get(value).cloned(),
       Self::Font => common_font(value).then(|| value.to_owned()),
       Self::ThemeTypeface => {
@@ -172,6 +175,25 @@ pub(super) fn word_attribute_spec(
   find_spec(WORD_ATTRIBUTE_TABLES, element, parent, attribute)
 }
 
+pub(super) fn required_identifier_attribute(
+  element: &str,
+  parent: Option<&str>,
+) -> Option<&'static str> {
+  WORD_ATTRIBUTE_TABLES
+    .iter()
+    .copied()
+    .flatten()
+    .find_map(|spec| {
+      (matches!(spec.domain, AttributeDomain::Identifier(space) if space != IdentifierSpace::EastAsianLayout)
+        && spec.elements.contains(&element)
+        && spec.parents.is_none_or(|parents| {
+          parent.is_some_and(|parent| parents.contains(&parent))
+        }))
+      .then(|| spec.attributes.first().copied())
+      .flatten()
+    })
+}
+
 pub(super) fn drawing_attribute_spec(
   element: &str,
   attribute: &str,
@@ -179,8 +201,7 @@ pub(super) fn drawing_attribute_spec(
   find_spec(DRAWING_ATTRIBUTE_TABLES, element, None, attribute)
 }
 
-// Identifier numbers (numbering, notes) and lengths in twentieths of a point.
-const IDENTIFIER_MAX: i32 = 1_000_000;
+// Lengths in twentieths of a point.
 const LENGTH_MAX: i32 = 1_000_000;
 // Font sizes and kerning thresholds in half-points; Word caps text at 1638 pt.
 const HALF_POINTS_MAX: i32 = 3_276;
@@ -190,8 +211,6 @@ const POSITION_MAX_HALF_POINTS: i32 = 3_168;
 const CHARACTER_SPACING_MAX_TWIPS: i32 = 31_680;
 const UNSIGNED_LENGTH: AttributeDomain = integer(0, LENGTH_MAX);
 const SIGNED_LENGTH: AttributeDomain = integer(-LENGTH_MAX, LENGTH_MAX);
-const IDENTIFIER: AttributeDomain = integer(0, IDENTIFIER_MAX);
-const NOTE_IDENTIFIER: AttributeDomain = integer(-1, IDENTIFIER_MAX);
 const LEVEL: AttributeDomain = integer(0, 8);
 const HEX_BYTE: AttributeDomain = AttributeDomain::HexDigits(2);
 const AUTOMATIC_COLOR: AttributeDomain =
@@ -473,9 +492,14 @@ const WORD_VALUE_SPECS: &[AttributeSpec] = &[
     AttributeDomain::StyleReference,
   ),
   any(
-    &["abstractNumId", "numId", "numIdMacAtCleanup"],
+    &["abstractNumId"],
     &["val"],
-    IDENTIFIER,
+    AttributeDomain::Identifier(IdentifierSpace::AbstractNumbering),
+  ),
+  any(
+    &["numId", "numIdMacAtCleanup"],
+    &["val"],
+    AttributeDomain::Identifier(IdentifierSpace::Numbering),
   ),
   any(&["cnfStyle"], &["val"], AttributeDomain::BinaryDigits(12)),
   any(
@@ -632,7 +656,16 @@ const WORD_STRUCTURE_SPECS: &[AttributeSpec] = &[
     &["hint"],
     one_of(&["default", "eastAsia", "cs"]),
   ),
-  any(&["footnote", "endnote"], &["id"], NOTE_IDENTIFIER),
+  any(
+    &["footnote", "footnoteReference"],
+    &["id"],
+    AttributeDomain::Identifier(IdentifierSpace::Footnote),
+  ),
+  any(
+    &["endnote", "endnoteReference"],
+    &["id"],
+    AttributeDomain::Identifier(IdentifierSpace::Endnote),
+  ),
   any(
     &["footnote", "endnote"],
     &["type"],
@@ -642,11 +675,6 @@ const WORD_STRUCTURE_SPECS: &[AttributeSpec] = &[
       "continuationSeparator",
       "continuationNotice",
     ]),
-  ),
-  any(
-    &["footnoteReference", "endnoteReference"],
-    &["id"],
-    IDENTIFIER,
   ),
   any(
     &["footnoteReference", "endnoteReference"],
@@ -663,8 +691,16 @@ const WORD_STRUCTURE_SPECS: &[AttributeSpec] = &[
     &["type"],
     one_of(TABLE_STYLE_OVERRIDE_TYPES),
   ),
-  any(&["abstractNum"], &["abstractNumId"], IDENTIFIER),
-  any(&["num"], &["numId"], IDENTIFIER),
+  any(
+    &["abstractNum"],
+    &["abstractNumId"],
+    AttributeDomain::Identifier(IdentifierSpace::AbstractNumbering),
+  ),
+  any(
+    &["num"],
+    &["numId"],
+    AttributeDomain::Identifier(IdentifierSpace::Numbering),
+  ),
   any(&["lvl", "lvlOverride"], &["ilvl"], LEVEL),
   any(
     &["lvl"],
@@ -677,7 +713,11 @@ const WORD_STRUCTURE_SPECS: &[AttributeSpec] = &[
     &["combine", "vert", "vertCompress"],
     AttributeDomain::OnOff,
   ),
-  any(&["eastAsianLayout"], &["id"], IDENTIFIER),
+  any(
+    &["eastAsianLayout"],
+    &["id"],
+    AttributeDomain::Identifier(IdentifierSpace::EastAsianLayout),
+  ),
   any(
     &["eastAsianLayout"],
     &["combineBrackets"],
@@ -1190,6 +1230,17 @@ mod tests {
       AttributeDomain::BinaryDigits(length) => {
         vec![same(&"0".repeat(length)), same(&"1".repeat(length))]
       }
+      AttributeDomain::Identifier(space) => vec![(
+        "202555".to_owned(),
+        Some(
+          if space == super::IdentifierSpace::AbstractNumbering {
+            "0"
+          } else {
+            "1"
+          }
+          .to_owned(),
+        ),
+      )],
       AttributeDomain::StyleReference => {
         vec![("Synthetic".to_owned(), Some("stellaStyle1".to_owned()))]
       }
@@ -1233,6 +1284,9 @@ mod tests {
       AttributeDomain::BinaryDigits(length) => {
         vec!["2".repeat(length), "0".repeat(length.saturating_add(1))]
       }
+      AttributeDomain::Identifier(_) => {
+        vec!["999888".to_owned(), "0202555".to_owned()]
+      }
       AttributeDomain::StyleReference => vec!["Unknown".to_owned()],
       AttributeDomain::Font | AttributeDomain::ThemeTypeface => {
         vec!["SyntheticOwner".to_owned()]
@@ -1260,8 +1314,12 @@ mod tests {
       .parents
       .and_then(|parents| parents.first().copied())
       .unwrap_or("wrapper");
+    let required = super::required_identifier_attribute(element, Some(parent))
+      .filter(|required| *required != attribute)
+      .map(|required| format!(" w:{required}=\"202555\""))
+      .unwrap_or_default();
     let xml = format!(
-      "<w:{parent} xmlns:w=\"{WORD}\"><w:{element} w:{attribute}=\"{value}\"/></w:{parent}>"
+      "<w:{parent} xmlns:w=\"{WORD}\"><w:{element} w:{attribute}=\"{value}\"{required}/></w:{parent}>"
     );
     let document = roxmltree::Document::parse(&xml)?;
     let node = document
@@ -1271,13 +1329,45 @@ mod tests {
     let styles =
       HashMap::from([("Synthetic".to_owned(), "stellaStyle1".to_owned())]);
     let relationships = HashMap::new();
-    Ok(canonical_word_attributes(
-      node,
-      WordIdentifiers {
-        styles: &styles,
-        relationships: &relationships,
-      },
-    ))
+    let entries = [
+      ("word/footnotes.xml", format!("<w:footnotes xmlns:w=\"{WORD}\"><w:footnote w:id=\"202555\"/></w:footnotes>")),
+      ("word/endnotes.xml", format!("<w:endnotes xmlns:w=\"{WORD}\"><w:endnote w:id=\"202555\"/></w:endnotes>")),
+      ("word/numbering.xml", format!("<w:numbering xmlns:w=\"{WORD}\"><w:eastAsianLayout w:id=\"202555\"/><w:num w:numId=\"202555\"/><w:abstractNum w:abstractNumId=\"202555\"/></w:numbering>")),
+    ].map(|(path, markup)| crate::ArchiveEntry { path: path.to_owned(), bytes: markup.into_bytes() });
+    let types = HashMap::from([
+      (
+        "word/footnotes.xml",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml",
+      ),
+      (
+        "word/endnotes.xml",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.endnotes+xml",
+      ),
+      (
+        "word/numbering.xml",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml",
+      ),
+    ]);
+    let names =
+      super::super::package_names(&entries, &std::collections::HashSet::new())?;
+    let numeric =
+      super::super::NumericIdentifiers::collect(&entries, &types, &names)?;
+    Ok(
+      canonical_word_attributes(
+        node,
+        WordIdentifiers {
+          styles: &styles,
+          numeric: &numeric,
+          relationships: &relationships,
+        },
+      )
+      .map(|attributes| {
+        attributes
+          .into_iter()
+          .filter(|(name, _)| name == &format!("w:{attribute}"))
+          .collect()
+      }),
+    )
   }
 
   // A drawing row applies to theme DrawingML and to the Word 2010 text-effect

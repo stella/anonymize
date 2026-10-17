@@ -20,11 +20,14 @@ use super::{
 };
 
 mod attributes;
+mod identifiers;
 mod names;
 
 use attributes::{
-  CanonicalAttribute, drawing_attribute_spec, word_attribute_spec,
+  AttributeDomain, CanonicalAttribute, drawing_attribute_spec,
+  required_identifier_attribute, word_attribute_spec,
 };
+use identifiers::NumericIdentifiers;
 use names::{PackageNames, package_names, part_number};
 
 const DRAWINGML_NAMESPACE: &str =
@@ -633,12 +636,12 @@ fn common_font(value: &str) -> bool {
   )
 }
 
-// Export identifiers that replace producer-chosen style and relationship
-// identifiers in one Word part.
+// Package-wide numeric and style identifiers, plus relationships in one part.
 #[derive(Clone, Copy, Debug)]
 struct WordIdentifiers<'a> {
   styles: &'a HashMap<String, String>,
   relationships: &'a HashMap<String, String>,
+  numeric: &'a NumericIdentifiers,
 }
 
 fn canonical_word_attributes(
@@ -647,6 +650,18 @@ fn canonical_word_attributes(
 ) -> Result<Vec<(String, String)>, DocxRewriteError> {
   let local = node.tag_name().name();
   let parent = node.parent_element().and_then(word_local);
+  if let Some(required) = required_identifier_attribute(local, parent)
+    && !node.attributes().any(|attribute| {
+      attribute.name() == required
+        && attribute.namespace().is_some_and(|namespace| {
+          WORDPROCESSING_NAMESPACES.contains(&namespace)
+        })
+    })
+  {
+    return Err(unsupported(
+      "DOCX identifier reference is missing its identifier",
+    ));
+  }
   let mut attributes = Vec::new();
   for attribute in node.attributes() {
     let name = attribute.name();
@@ -686,7 +701,14 @@ fn canonical_word_attributes(
       .ok_or_else(|| {
         unsupported("DOCX content has an unsupported XML attribute")
       })?;
-    match spec.domain.canonical(attribute.value(), identifiers.styles) {
+    let canonical = match spec.domain {
+      AttributeDomain::Identifier(space) => identifiers
+        .numeric
+        .resolve(space, attribute.value())
+        .map(CanonicalAttribute::Retain),
+      domain => domain.canonical(attribute.value(), identifiers.styles),
+    };
+    match canonical {
       Some(CanonicalAttribute::Retain(value)) => {
         attributes.push((format!("w:{name}"), value));
       }
@@ -714,7 +736,22 @@ fn write_attributes(output: &mut String, attributes: &[(String, String)]) {
 
 fn content_node_is_removed(local: &str) -> bool {
   REMOVED_WORD_ELEMENTS.contains(&local)
-    || matches!(local, "lang" | "tblCaption" | "tblDescription")
+    || matches!(
+      local,
+      "lang" | "tblCaption" | "tblDescription" | "fldChar" | "instrText"
+    )
+}
+
+fn formatting_node_is_removed(local: &str) -> bool {
+  matches!(local, "name" | "aliases" | "lang" | "latentStyles" | "rsid")
+}
+
+fn identifier_subtree_is_removed(local: &str, content_type: &str) -> bool {
+  if formatting_content_type(content_type) {
+    formatting_node_is_removed(local)
+  } else {
+    content_node_is_removed(local)
+  }
 }
 
 fn validate_retained_content_node(
@@ -797,9 +834,6 @@ fn serialize_content_node(
     ));
   }
   if content_node_is_removed(local) {
-    return Ok(());
-  }
-  if matches!(local, "fldChar" | "instrText") {
     return Ok(());
   }
   if matches!(
@@ -925,6 +959,7 @@ fn serialize_formatting_node(
   node: Node<'_, '_>,
   suffix: &str,
   styles: &HashMap<String, String>,
+  numeric: &NumericIdentifiers,
   output: &mut String,
   is_root: bool,
 ) -> Result<(), DocxRewriteError> {
@@ -947,7 +982,7 @@ fn serialize_formatting_node(
   if local.ends_with("Change") || PROHIBITED_WORD_ELEMENTS.contains(&local) {
     return Err(unsupported("DOCX formatting contains a revision structure"));
   }
-  if matches!(local, "name" | "aliases" | "lang" | "latentStyles" | "rsid") {
+  if formatting_node_is_removed(local) {
     return Ok(());
   }
   let structural = match suffix {
@@ -964,6 +999,7 @@ fn serialize_formatting_node(
     node,
     WordIdentifiers {
       styles,
+      numeric,
       relationships: &HashMap::new(),
     },
   )?;
@@ -988,7 +1024,7 @@ fn serialize_formatting_node(
   let content_start = open_element_content(output);
   for child in node.children() {
     if child.is_element() {
-      serialize_formatting_node(child, suffix, styles, output, false)?;
+      serialize_formatting_node(child, suffix, styles, numeric, output, false)?;
     } else if child.is_text()
       && child.text().is_some_and(|text| !text.trim().is_empty())
     {
@@ -1293,6 +1329,7 @@ fn sanitize_formatting_xml(
   _path: &str,
   content_type: &str,
   styles: &HashMap<String, String>,
+  numeric: &NumericIdentifiers,
 ) -> Result<String, DocxRewriteError> {
   let document = parse_export_xml(xml, "formatting part")?;
   if content_type == THEME_CONTENT_TYPE {
@@ -1329,7 +1366,7 @@ fn sanitize_formatting_xml(
     ));
   }
   let mut output = XML_DECLARATION.to_owned();
-  serialize_formatting_node(root, suffix, styles, &mut output, true)?;
+  serialize_formatting_node(root, suffix, styles, numeric, &mut output, true)?;
   Ok(output)
 }
 
@@ -1667,6 +1704,7 @@ fn validate_xml_entry(
   content_type: &str,
   styles: &HashMap<String, String>,
   names: &PackageNames,
+  numeric: &NumericIdentifiers,
 ) -> Result<(), DocxRewriteError> {
   let xml = std::str::from_utf8(&entry.bytes)
     .map_err(|_| unsupported("Sanitized DOCX XML is not UTF-8"))?;
@@ -1678,13 +1716,14 @@ fn validate_xml_entry(
   let canonical = if classify_part(&part).is_some() {
     let identifiers = WordIdentifiers {
       styles,
+      numeric,
       relationships: names
         .relationships(&entry.path)
         .unwrap_or(&no_relationships),
     };
     sanitize_content_xml(xml, &entry.path, identifiers)?
   } else if formatting_content_type(content_type) {
-    sanitize_formatting_xml(xml, &entry.path, content_type, styles)?
+    sanitize_formatting_xml(xml, &entry.path, content_type, styles, numeric)?
   } else {
     return Err(unsupported("Sanitized DOCX contains an unsupported part"));
   };
@@ -1786,8 +1825,14 @@ fn validate_profile(
     .map(|part| (part.path.as_str(), part.content_type.as_str()))
     .collect::<HashMap<_, _>>();
   let styles = collect_style_identifiers(&entries, &by_path)?;
-  validate_main_relationship(&entries)?;
   let names = package_names(&entries, &HashSet::new())?;
+  let numeric = NumericIdentifiers::collect(&entries, &by_path, &names)?;
+  if !numeric.is_identity() {
+    return Err(unsupported(
+      "Sanitized DOCX numeric identifiers are not canonical",
+    ));
+  }
+  validate_main_relationship(&entries)?;
   if !names.is_identity() {
     return Err(unsupported(
       "Sanitized DOCX part names or relationship identifiers are not canonical",
@@ -1823,7 +1868,7 @@ fn validate_profile(
       by_path.get(entry.path.as_str()).copied().ok_or_else(|| {
         unsupported("Sanitized DOCX contains an undeclared part")
       })?;
-    validate_xml_entry(entry, content_type, &styles, &names)?;
+    validate_xml_entry(entry, content_type, &styles, &names, &numeric)?;
   }
   let extraction = extract_docx_text(document).map_err(|error| {
     rewrite_error(DocxRewriteErrorCode::InvalidPackage, error.to_string())
@@ -1840,6 +1885,7 @@ struct ExportContext<'a> {
   removed_paths: &'a HashSet<String>,
   styles: &'a HashMap<String, String>,
   names: &'a PackageNames,
+  numeric: &'a NumericIdentifiers,
 }
 
 fn sanitize_export_entry(
@@ -1894,6 +1940,7 @@ fn sanitize_export_entry(
     let no_relationships = HashMap::new();
     let identifiers = WordIdentifiers {
       styles: context.styles,
+      numeric: context.numeric,
       relationships: context
         .names
         .relationships(&entry.path)
@@ -1908,9 +1955,14 @@ fn sanitize_export_entry(
   {
     let xml = std::str::from_utf8(&entry.bytes)
       .map_err(|_| unsupported("DOCX formatting part is not valid UTF-8"))?;
-    entry.bytes =
-      sanitize_formatting_xml(xml, &entry.path, content_type, context.styles)?
-        .into_bytes();
+    entry.bytes = sanitize_formatting_xml(
+      xml,
+      &entry.path,
+      content_type,
+      context.styles,
+      context.numeric,
+    )?
+    .into_bytes();
     return Ok(true);
   }
   if content_type == RELATIONSHIPS_CONTENT_TYPE {
@@ -1988,7 +2040,9 @@ pub fn prepare_docx_anonymized_export(
       && !removed_relationship_paths.contains(&entry.path)
   });
   let names = package_names(&entries, &removed_paths)?;
+  let numeric = NumericIdentifiers::collect(&entries, &by_path, &names)?;
   let context = ExportContext {
+    numeric: &numeric,
     content_types: &by_path,
     removed_paths: &removed_paths,
     styles: &styles,
@@ -2045,8 +2099,8 @@ mod tests {
     STRICT_DRAWINGML_NAMESPACE, THEME_CONTENT_TYPE, WORD_2010_NAMESPACE,
     WordIdentifiers, canonical_word_attributes, common_font, escape_attribute,
     finalize_docx_anonymized_export, prepare_docx_anonymized_export,
-    sanitize_formatting_xml, valid_numbering_label,
-    validate_docx_anonymized_export, validate_extraction_coverage,
+    valid_numbering_label, validate_docx_anonymized_export,
+    validate_extraction_coverage,
   };
 
   const CONTENT_TYPES: &str =
@@ -2059,6 +2113,23 @@ mod tests {
     "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
   const WORD_CONTENT: &str =
     "application/vnd.openxmlformats-officedocument.wordprocessingml.";
+
+  fn sanitize_test_formatting(
+    xml: &str,
+    path: &str,
+    content_type: &str,
+    styles: &HashMap<String, String>,
+  ) -> Result<String, crate::DocxRewriteError> {
+    let entries = [crate::ArchiveEntry {
+      path: path.to_owned(),
+      bytes: xml.as_bytes().to_vec(),
+    }];
+    let types = HashMap::from([(path, content_type)]);
+    let names =
+      super::package_names(&entries, &std::collections::HashSet::new())?;
+    let numeric = super::NumericIdentifiers::collect(&entries, &types, &names)?;
+    super::sanitize_formatting_xml(xml, path, content_type, styles, &numeric)
+  }
 
   fn archive(
     entries: &[(&str, &str)],
@@ -2177,6 +2248,143 @@ mod tests {
         "<cp:coreProperties xmlns:cp=\"http://schemas.openxmlformats.org/package/2006/metadata/core-properties\"><cp:keywords>Private Metadata</cp:keywords></cp:coreProperties>",
       ),
     ])
+  }
+
+  fn identifier_document() -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    let original = field_and_addin_document()?;
+    let mut entries = crate::read_archive(&original)?;
+    for item in &mut entries {
+      let xml = std::str::from_utf8(&item.bytes)?;
+      let xml = match item.path.as_str() {
+        "[Content_Types].xml" => xml.replace("</Types>", &format!("<Override PartName=\"/word/numbering.xml\" ContentType=\"{WORD_CONTENT}numbering+xml\"/></Types>")),
+        "word/_rels/document.xml.rels" => xml.replace("</Relationships>", &format!("<Relationship Id=\"rId3\" Type=\"{OFFICE_RELS}/numbering\" Target=\"numbering.xml\"/></Relationships>")),
+        "word/document.xml" => xml.replace("</w:body>", "<w:p><w:pPr><w:numPr><w:numId w:val=\"303666\"/></w:numPr></w:pPr><w:r><w:t>List text</w:t></w:r></w:p></w:body>").replace("w:id=\"1\"", "w:id=\"202555\""),
+        "word/footnotes.xml" | "word/endnotes.xml" => xml.replace("w:id=\"1\"", "w:id=\"202555\""),
+        _ => xml.to_owned(),
+      };
+      item.bytes = xml.into_bytes();
+    }
+    entries.push(crate::ArchiveEntry {
+      path: "word/numbering.xml".to_owned(),
+      bytes: format!("<w:numbering xmlns:w=\"{WORD}\"><w:abstractNum w:abstractNumId=\"404777\"><w:lvl w:ilvl=\"0\"><w:numFmt w:val=\"decimal\"/><w:lvlText w:val=\"%1.\"/></w:lvl></w:abstractNum><w:num w:numId=\"303666\"><w:abstractNumId w:val=\"404777\"/></w:num></w:numbering>").into_bytes(),
+    });
+    Ok(super::write_archive(entries)?)
+  }
+
+  #[test]
+  fn renumbers_package_identifiers_and_preserves_reference_graphs()
+  -> Result<(), Box<dyn std::error::Error>> {
+    let original = identifier_document()?;
+    for value in ["202555", "303666", "404777"] {
+      assert!(archive_text(&original)?.contains(value));
+    }
+    let prepared = prepare_docx_anonymized_export(&original)?;
+    let all_xml = archive_text(&prepared.document)?;
+    for value in ["202555", "303666", "404777"] {
+      assert!(!all_xml.contains(value));
+    }
+    let document = entry(&prepared.document, "word/document.xml")?;
+    let document = roxmltree::Document::parse(&document)?;
+    for (reference, path, definition) in [
+      ("footnoteReference", "word/footnotes.xml", "footnote"),
+      ("endnoteReference", "word/endnotes.xml", "endnote"),
+      ("numId", "word/numbering.xml", "num"),
+    ] {
+      let xml = entry(&prepared.document, path)?;
+      let target = roxmltree::Document::parse(&xml)?;
+      let mut count = 0;
+      for node in document
+        .descendants()
+        .filter(|node| super::word_local(*node) == Some(reference))
+      {
+        let id = node
+          .attribute((WORD, if reference == "numId" { "val" } else { "id" }))
+          .ok_or("missing reference id")?;
+        assert!(
+          target
+            .descendants()
+            .any(|definition_node| super::word_local(definition_node)
+              == Some(definition)
+              && definition_node.attribute((
+                WORD,
+                if definition == "num" { "numId" } else { "id" }
+              )) == Some(id))
+        );
+        count += 1;
+      }
+      assert_eq!(count, 1);
+    }
+    let xml = entry(&prepared.document, "word/numbering.xml")?;
+    let numbering = roxmltree::Document::parse(&xml)?;
+    let reference = numbering
+      .descendants()
+      .find(|node| super::word_local(*node) == Some("abstractNumId"))
+      .ok_or("missing abstract reference")?;
+    assert!(
+      numbering
+        .descendants()
+        .any(|node| super::word_local(node) == Some("abstractNum")
+          && node.attribute((WORD, "abstractNumId"))
+            == reference.attribute((WORD, "val")))
+    );
+    let notes = entry(&prepared.document, "word/footnotes.xml")?;
+    assert!(notes.contains("w:id=\"-1\" w:type=\"separator\""));
+    assert!(notes.contains("w:id=\"0\" w:type=\"continuationSeparator\""));
+    validate_docx_anonymized_export(&prepared.document)?;
+    assert_eq!(
+      prepare_docx_anonymized_export(&prepared.document)?.document,
+      prepared.document
+    );
+    Ok(())
+  }
+
+  #[test]
+  fn rejects_unresolved_and_noncanonical_package_identifiers()
+  -> Result<(), Box<dyn std::error::Error>> {
+    let original = identifier_document()?;
+    let prepared = prepare_docx_anonymized_export(&original)?;
+    for (path, from, to) in [
+      ("word/document.xml", "w:id=\"202555\"", "w:id=\"999888\""),
+      ("word/document.xml", "w:id=\"202555\"", ""),
+      ("word/document.xml", "w:val=\"303666\"", "w:val=\"999888\""),
+      ("word/numbering.xml", "w:val=\"404777\"", "w:val=\"999888\""),
+    ] {
+      let mut entries = crate::read_archive(&original)?;
+      let item = entries
+        .iter_mut()
+        .find(|item| item.path == path)
+        .ok_or("missing fixture part")?;
+      let xml = std::str::from_utf8(&item.bytes)?;
+      assert!(xml.contains(from));
+      item.bytes = xml.replace(from, to).into_bytes();
+      assert!(
+        prepare_docx_anonymized_export(&super::write_archive(entries)?)
+          .is_err()
+      );
+    }
+    // Change a definition and all references consistently; graph validity alone
+    // must not make producer-chosen identifiers canonical.
+    for (from, to) in [
+      ("w:id=\"1\"", "w:id=\"202555\""),
+      ("w:numId=\"1\"", "w:numId=\"303666\""),
+    ] {
+      let mut entries = crate::read_archive(&prepared.document)?;
+      for item in &mut entries {
+        if std::path::Path::new(&item.path)
+          .extension()
+          .is_some_and(|extension| extension.eq_ignore_ascii_case("xml"))
+        {
+          item.bytes = std::str::from_utf8(&item.bytes)?
+            .replace(from, to)
+            .into_bytes();
+        }
+      }
+      assert!(
+        validate_docx_anonymized_export(&super::write_archive(entries)?)
+          .is_err()
+      );
+    }
+    Ok(())
   }
 
   fn minimal_document(
@@ -2352,7 +2560,7 @@ mod tests {
     let strict_theme = format!(
       "<a:theme xmlns:a=\"{STRICT_DRAWINGML_NAMESPACE}\" name=\"Display&#x9;Name\"><a:themeElements><a:clrScheme name=\"Colors\"><a:dk1><a:srgbClr val=\"112233\"/></a:dk1></a:clrScheme></a:themeElements></a:theme>"
     );
-    let canonical = sanitize_formatting_xml(
+    let canonical = sanitize_test_formatting(
       &strict_theme,
       "word/theme/theme1.xml",
       THEME_CONTENT_TYPE,
@@ -2370,6 +2578,7 @@ mod tests {
       let priority = roxmltree::Document::parse(&priority_xml)?;
       let none = HashMap::new();
       let identifiers = WordIdentifiers {
+        numeric: &super::NumericIdentifiers::default(),
         styles: &none,
         relationships: &none,
       };
@@ -2388,7 +2597,7 @@ mod tests {
     let xml = format!(
       "<w:numbering xmlns:w=\"{WORD}\"><w:abstractNum w:abstractNumId=\"0\"><w:lvl w:ilvl=\"0\"><w:pPr><w:tabs><w:tab w:val=\"num\" w:pos=\"720\"/></w:tabs></w:pPr></w:lvl></w:abstractNum></w:numbering>"
     );
-    let canonical = sanitize_formatting_xml(
+    let canonical = sanitize_test_formatting(
       &xml,
       "word/numbering.xml",
       &format!("{WORD_CONTENT}numbering+xml"),
@@ -2414,7 +2623,7 @@ mod tests {
         let xml = format!(
           "<w:{root} xmlns:w=\"{WORD}\"><w:p><w:r><w:t>{text}</w:t></w:r></w:p></w:{root}>"
         );
-        let failure = sanitize_formatting_xml(
+        let failure = sanitize_test_formatting(
           &xml,
           &format!("word/{root}.xml"),
           &format!("{WORD_CONTENT}{suffix}"),
@@ -2604,7 +2813,7 @@ mod tests {
     for (kind, accepted) in
       [("band1Horz", true), ("swCell", true), ("Private", false)]
     {
-      let result = sanitize_formatting_xml(
+      let result = sanitize_test_formatting(
         &table_style(kind),
         "word/styles.xml",
         &styles_type,
@@ -2619,7 +2828,7 @@ mod tests {
     };
     let calibri =
       "<a:latin typeface=\"Calibri Light\" panose=\"020f0302020204030204\"/>";
-    let accepted = sanitize_formatting_xml(
+    let accepted = sanitize_test_formatting(
       &theme(calibri, "<a:satMod val=\"350000\"/>"),
       "word/theme/theme1.xml",
       THEME_CONTENT_TYPE,
@@ -2635,11 +2844,11 @@ mod tests {
       (calibri, "<a:lumMod val=\"-1\"/>"),
     ] {
       assert!(
-        sanitize_formatting_xml(
+        sanitize_test_formatting(
           &theme(font, color),
           "word/theme/theme1.xml",
           THEME_CONTENT_TYPE,
-          &HashMap::new(),
+          &HashMap::new()
         )
         .is_err(),
         "{font}{color} must be rejected"
@@ -2798,7 +3007,7 @@ mod tests {
       let numbering = format!(
         "<w:numbering xmlns:w=\"{WORD}\"><w:abstractNum w:abstractNumId=\"0\"><w:lvl w:ilvl=\"0\"><w:numFmt w:val=\"{format}\"/></w:lvl></w:abstractNum></w:numbering>"
       );
-      let result = sanitize_formatting_xml(
+      let result = sanitize_test_formatting(
         &numbering,
         "word/numbering.xml",
         &numbering_type,
@@ -2815,8 +3024,12 @@ mod tests {
       let xml = format!(
         "<w:styles xmlns:w=\"{WORD}\"><w:style w:type=\"{kind}\" w:styleId=\"Synthetic\"><w:rPr><w:b/></w:rPr></w:style></w:styles>"
       );
-      let result =
-        sanitize_formatting_xml(&xml, "word/styles.xml", &styles_type, &styles);
+      let result = sanitize_test_formatting(
+        &xml,
+        "word/styles.xml",
+        &styles_type,
+        &styles,
+      );
       assert_eq!(result.is_ok(), accepted, "style type {kind}");
     }
     Ok(())
@@ -2949,7 +3162,7 @@ mod tests {
         (outline, "word/styles.xml", styles_type.as_str()),
       ] {
         let failure =
-          sanitize_formatting_xml(&xml, path, content_type, &styles)
+          sanitize_test_formatting(&xml, path, content_type, &styles)
             .err()
             .ok_or("drawing text was accepted")?;
         assert_eq!(
