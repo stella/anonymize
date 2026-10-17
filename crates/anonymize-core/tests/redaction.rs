@@ -403,7 +403,10 @@ fn mask_operator_masks_whole_graphemes_from_the_configured_direction() {
         .iter()
         .all(|replacement| replacement.replacement == "●")
     );
-    assert!(result.redaction_map.is_empty());
+    assert_eq!(
+      result.redaction_map,
+      Vec::<stella_anonymize_core::RedactionEntry>::new()
+    );
     assert_eq!(result.operator_map[0].operator, OperatorType::Mask);
   }
 }

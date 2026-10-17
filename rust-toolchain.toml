@@ -1,5 +1,5 @@
 [toolchain]
-channel = "1.96.0"
+channel = "1.99.0"
 components = ["rustfmt", "clippy"]
 # The browser binding is a single-thread wasm-bindgen module. It has no WASI,
 # worker, SharedArrayBuffer, or cross-origin-isolation requirement.

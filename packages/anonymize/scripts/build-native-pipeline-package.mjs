@@ -13,6 +13,7 @@ import {
   defaultDictionaryBundleOptions,
 } from "../dist/build-native-package.mjs";
 import { loadNativeAnonymizeBinding } from "../dist/native-node.mjs";
+import { readNativePackageInput } from "./native-script-contracts.mjs";
 
 const args = parseArgs(process.argv.slice(2));
 const outputPath = resolve(args.out ?? "native-pipeline.stlanonpkg");
@@ -39,7 +40,9 @@ console.log(
   }),
 );
 
+/** @param {string[]} values */
 function parseArgs(values) {
+  /** @type {{ config?: string, exportName?: string, out?: string, raw?: boolean, compressed?: boolean, defaultDictionaries?: boolean, language?: string, languages?: string }} */
   const result = {};
   for (let index = 0; index < values.length; index += 1) {
     const value = values[index];
@@ -95,6 +98,11 @@ function parseArgs(values) {
   return result;
 }
 
+/**
+ * @param {string[]} values
+ * @param {number} index
+ * @param {string} option
+ */
 function requiredValue(values, index, option) {
   const value = values[index + 1];
   if (value === undefined || value.startsWith("--")) {
@@ -103,6 +111,7 @@ function requiredValue(values, index, option) {
   return value;
 }
 
+/** @param {ReturnType<typeof parseArgs>} options */
 async function loadPackageInput(options) {
   const input = await loadBasePackageInput(options);
   const scopedConfig = applyPipelineLanguageScope(
@@ -121,12 +130,13 @@ async function loadPackageInput(options) {
   return withDictionaries;
 }
 
+/** @param {ReturnType<typeof parseArgs>} options */
 async function loadBasePackageInput(options) {
   if (!options.config) {
     return { config: defaultNativePipelineConfig(), gazetteerEntries: [] };
   }
   const moduleUrl = pathToFileURL(resolve(options.config)).href;
-  // eslint-disable-next-line stll/no-dynamic-import-specifier
+  // oxlint-disable-next-line stll/no-dynamic-import-specifier -- Resolve verified emitted assets at runtime.
   const loaded = await import(moduleUrl);
   const exportName = options.exportName ?? "default";
   const candidate =
@@ -136,16 +146,7 @@ async function loadBasePackageInput(options) {
   }
   const value =
     typeof candidate === "function" ? await candidate() : await candidate;
-  if (!value || typeof value !== "object") {
-    throw new TypeError("Native package config export must be an object");
-  }
-  if ("config" in value) {
-    return {
-      config: value.config,
-      gazetteerEntries: value.gazetteerEntries ?? [],
-    };
-  }
-  return { config: value, gazetteerEntries: [] };
+  return readNativePackageInput(value);
 }
 
 function defaultNativePipelineConfig() {

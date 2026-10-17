@@ -24,7 +24,7 @@ const executablePath = [
   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
   "/usr/bin/google-chrome-stable",
   "/usr/bin/chromium",
-].find((path) => path && existsSync(path));
+].find((path) => path !== undefined && existsSync(path));
 assert.ok(executablePath, "Set CHROME_BIN to a system Chrome/Chromium binary");
 
 const root = await mkdtemp(join(packageRoot, ".vite-browser-smoke-"));
@@ -164,7 +164,7 @@ try {
             clearTimeout(timer);
           }
         }, context);
-        assert.equal(typeof text, "string");
+        assert.ok(typeof text === "string", "browser boot must return text");
         assert.ok(
           text.includes("Contact"),
           `${base} ${context}: retained text`,

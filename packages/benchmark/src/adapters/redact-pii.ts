@@ -163,9 +163,6 @@ const buildDetector = (): Detector => {
     };
     for (const { label, regex } of compiled) {
       for (const match of working.matchAll(regex)) {
-        if (match.index === undefined) {
-          continue;
-        }
         const value = match[0];
         if (value.length === 0) {
           continue;
@@ -189,15 +186,18 @@ const buildDetector = (): Detector => {
 export const createRedactPiiAdapter = (): Adapter => ({
   name: "redact-pii",
   version: REDACT_PII_VERSION,
-  run: async (docs: readonly GroundTruthDocument[]) => {
-    // Init boundary (fairness, symmetric with the other adapters): loading
-    // redact-pii's built-in pattern list and well-known-names corpus, and
-    // compiling the regexes (the well-known-names regex alternation is large),
-    // is redact-pii's one-time setup, so it is timed as init rather than
-    // hidden at module load.
-    const initStart = performance.now();
-    const detect = buildDetector();
-    const initSeconds = (performance.now() - initStart) / 1000;
-    return runTwoPassInProcess(docs, (doc) => detect(doc.text), initSeconds);
-  },
+  run: (docs: readonly GroundTruthDocument[]) =>
+    new Promise((resolve) => {
+      // Init boundary (fairness, symmetric with the other adapters): loading
+      // redact-pii's built-in pattern list and well-known-names corpus, and
+      // compiling the regexes (the well-known-names regex alternation is large),
+      // is redact-pii's one-time setup, so it is timed as init rather than
+      // hidden at module load.
+      const initStart = performance.now();
+      const detect = buildDetector();
+      const initSeconds = (performance.now() - initStart) / 1000;
+      resolve(
+        runTwoPassInProcess(docs, (doc) => detect(doc.text), initSeconds),
+      );
+    }),
 });

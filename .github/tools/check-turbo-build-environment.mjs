@@ -18,7 +18,7 @@ for (const file of readdirSync(BUILD_SCRIPT_DIRECTORY).filter((entry) =>
   const path = join(BUILD_SCRIPT_DIRECTORY, file);
   const source = readFileSync(path, "utf8");
   for (const match of source.matchAll(NAMED_ENVIRONMENT_ACCESS_PATTERN)) {
-    const name = match[1] ?? match[2];
+    const name = match.at(1) ?? match.at(2);
     if (name === undefined) {
       continue;
     }

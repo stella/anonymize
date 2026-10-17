@@ -2357,7 +2357,7 @@ fn validate_name_tree(
           "PDF name-tree Names must contain key/value pairs",
         ));
       }
-      for pair in names.chunks_exact(2) {
+      for pair in names.as_chunks::<2>().0 {
         pair
           .first()
           .and_then(|key| key.as_str().ok())
@@ -2512,7 +2512,7 @@ fn validate_file_spec(
             "PDF related-file arrays must contain name/payload pairs",
           ));
         }
-        for pair in related_array.chunks_exact(2) {
+        for pair in related_array.as_chunks::<2>().0 {
           inventory.charge_node()?;
           pair
             .first()
@@ -2637,7 +2637,7 @@ fn catalog_xfa_count(document: &Document) -> Result<u32, PdfInspectionError> {
       "PDF AcroForm XFA packet arrays must contain name/stream pairs",
     ));
   }
-  for pair in packets.chunks_exact(2) {
+  for pair in packets.as_chunks::<2>().0 {
     pair
       .first()
       .and_then(|name| name.as_str().ok())
@@ -2653,7 +2653,7 @@ fn catalog_xfa_count(document: &Document) -> Result<u32, PdfInspectionError> {
       })
     })?;
   }
-  u32::try_from(packets.chunks_exact(2).len()).map_err(|_| {
+  u32::try_from(packets.as_chunks::<2>().0.len()).map_err(|_| {
     error(
       PdfInspectionErrorCode::DocumentLimitExceeded,
       "PDF XFA packet count overflowed",
@@ -2770,7 +2770,7 @@ mod tests {
       inspection.coverage.status,
       PdfInspectionCoverageStatus::Full
     );
-    assert!(inspection.coverage.gaps.is_empty());
+    assert_eq!(inspection.coverage.gaps, Vec::<PdfInspectionGap>::new());
   }
 
   #[test]

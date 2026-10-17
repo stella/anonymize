@@ -2,6 +2,7 @@ import { createRequire } from "node:module";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import process from "node:process";
+import { detectNativeLibc } from "../native-libc.mjs";
 import { loadNativeBinding as loadDefaultPlatformNativePackage } from "../index.cjs";
 
 import {
@@ -206,7 +207,7 @@ export const readNativePipelinePackageFile = (
 
 export const readNativePipelinePackageFileAsync = async (
   packagePath: string,
-): Promise<Uint8Array> => readFile(packagePath);
+): Promise<Uint8Array> => await readFile(packagePath);
 
 export const native_package_version = (
   options: NativeSdkOptions = {},
@@ -872,18 +873,6 @@ const unsupportedNativeTargetError = ({
   return new Error(
     `No native anonymize binding is published for ${target}; supported targets: ${supported}. Set ${PACKAGE_SPECIFIC_NATIVE_PATH} to a locally built binding to run on this platform.${attempts}`,
   );
-};
-
-const detectNativeLibc = (platform: string): NativeLibc | undefined => {
-  if (platform !== "linux") {
-    return undefined;
-  }
-  const report = process.report?.getReport();
-  const header =
-    isPropertyBag(report) && isPropertyBag(report["header"])
-      ? report["header"]
-      : null;
-  return typeof header?.["glibcVersionRuntime"] === "string" ? "gnu" : "musl";
 };
 
 const isHostNativeTarget = ({

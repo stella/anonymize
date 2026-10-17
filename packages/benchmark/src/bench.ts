@@ -27,7 +27,6 @@ import {
   type ThroughputReport,
 } from "./report";
 import {
-  COMMON_LABELS,
   DATAFOG_MAPPING,
   type CommonLabel,
   type NativeMapping,
@@ -44,9 +43,8 @@ const RESULTS_DIR = join(import.meta.dir, "..", "results");
 const git = (args: string[]): string => {
   try {
     const proc = Bun.spawnSync(["git", ...args], { cwd: import.meta.dir });
-    // spawnSync can fail to launch (git absent, permission denied): `success`
-    // is false and `stdout` may be null. Only trust stdout on a clean exit.
-    if (!proc.success || proc.exitCode !== 0 || proc.stdout == null) {
+    // Only trust stdout on a clean exit; launch failures are caught below.
+    if (!proc.success || proc.exitCode !== 0) {
       return "";
     }
     return proc.stdout.toString().trim();
@@ -70,11 +68,18 @@ const hardwareNote = (): string => {
 const byLabelPrf = (
   spans: readonly ScoredSpan[],
 ): Record<CommonLabel, ReturnType<typeof aggregate>> => {
-  const record = {} as Record<CommonLabel, ReturnType<typeof aggregate>>;
-  for (const label of COMMON_LABELS) {
-    record[label] = aggregate(spans.filter((span) => span.label === label));
-  }
-  return record;
+  const forLabel = (label: CommonLabel) =>
+    aggregate(spans.filter((span) => span.label === label));
+  return {
+    person: forLabel("person"),
+    organization: forLabel("organization"),
+    address: forLabel("address"),
+    email: forLabel("email"),
+    phone: forLabel("phone"),
+    "id-number": forLabel("id-number"),
+    date: forLabel("date"),
+    money: forLabel("money"),
+  };
 };
 
 const byLanguagePrf = (

@@ -96,6 +96,50 @@ describe("canonical performance statistics", () => {
     }
   });
 
+  test("rejects worker contract tags before constructing typed samples", () => {
+    for (const sample of [
+      {
+        scenario: { type: "unexpected", schemaVersion: 1, id: "fixture-mixed" },
+        runtime: { type: "bun-native-binding", version: "1.3.0" },
+      },
+      {
+        scenario: {
+          type: "performance-input-scenario",
+          schemaVersion: 2,
+          id: "fixture-mixed",
+        },
+        runtime: { type: "bun-native-binding", version: "1.3.0" },
+      },
+      {
+        scenario: {
+          type: "performance-input-scenario",
+          schemaVersion: 1,
+          id: "fixture-mixed",
+        },
+        runtime: { type: "unexpected", version: "1.3.0" },
+      },
+    ]) {
+      expect(() =>
+        parsePerformanceWorkerMessage(
+          JSON.stringify({
+            type: "result",
+            sample: {
+              ...sample,
+              inputBytes: 1024,
+              inputCharacters: 1024,
+              inputSha256: "a".repeat(64),
+              outputCount: 0,
+              outputDigest: "a".repeat(64),
+              initSeconds: 0,
+              coldSeconds: 0,
+              warmSeconds: 0,
+            },
+          }),
+        ),
+      ).toThrow("invalid");
+    }
+  });
+
   test("reports median, MAD, and nearest-rank p95 without sorting samples", () => {
     const values = [9, 1, 4, 2, 3];
     expect(summarize(values)).toEqual({
@@ -511,6 +555,17 @@ describe("canonical performance host", () => {
     governors: ["performance"],
     turboDisabled: true,
   };
+
+  test("validates raw host profiles before reading their canonical fields", () => {
+    for (const invalid of [
+      null,
+      { ...profile, schemaVersion: 2 },
+      { ...profile, label: "unapproved" },
+      { ...profile, turbo: "enabled" },
+    ]) {
+      expect(() => assertCanonicalHost(invalid, snapshot)).toThrow("profile");
+    }
+  });
 
   test("accepts only a matching, quiet, trusted host", () => {
     expect(() => assertCanonicalHost(profile, snapshot)).not.toThrow();

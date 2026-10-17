@@ -5,7 +5,7 @@ protocol = "sparse"
 [alias]
 ci-fmt = "fmt --all -- --check"
 ci-clippy = "clippy --workspace --all-targets --all-features --locked -- -D warnings"
-ci-dylint = "dylint --workspace --all"
+ci-stella-lint = "stella-lint ."
 # nextest runs each test in its own process (a panic in one test cannot poison
 # the run) and is faster than the built-in harness. It does NOT run doctests,
 # so `ci-test-doc` covers those separately; keep both wired in `rust:test`.

@@ -15,6 +15,16 @@ import { tmpdir } from "node:os";
 import { join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import {
+  parseNativeDefaultSdkWorkerResult,
+  parseNativeDefaultSdkDiagnosticEvents,
+  nativeDefaultSdkProcessFailure,
+} from "./native-default-sdk-perf-contract.ts";
+import { parseCanonicalStaticRedactionResult } from "../src/native-result-codec.ts";
+
+/** @typedef {import("./native-default-sdk-perf-contract").NativeDefaultSdkWorkerResult} WorkerSample */
+/** @typedef {{ adapter: "ts-node" | "python", language: string, preload: boolean, pythonSdkRoot?: string }} WorkerOptions */
+
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
 const PACKAGE_DIR = resolve(join(import.meta.dir, ".."));
 const ROOT_DIR = resolve(join(PACKAGE_DIR, "..", ".."));
@@ -187,36 +197,37 @@ async function runWorker() {
   const warmAvgMs =
     WARM_ITERATIONS === 0 ? 0 : roundMs(totalRunMs(warmRuns) / WARM_ITERATIONS);
 
-  console.log(
-    JSON.stringify({
-      event: "native-default-sdk-perf-worker",
-      language: language.length === 0 ? null : language,
-      preload: PRELOAD,
-      packageBytes,
-      fixtureCount: fixtures.length,
-      loadMs,
-      warmupMs,
-      prepareMs,
-      runMs: coldRun.ms,
-      warmAvgMs,
-      prepareTopStages,
-      prepareTopSlots,
-      warmupTopStages,
-      warmupTopSlots,
-      runProfile,
-      fixtureTimings: summarizeFixtureTimings(coldRun, warmRuns),
-      runTopFixtures: coldRun.fixtures
-        .toSorted((left, right) => right.ms - left.ms)
-        .slice(0, 5)
-        .map(publicFixtureTiming),
-      fixtureSignatures: coldRun.fixtures.map(({ fixture, signature }) => ({
-        fixture,
-        signature,
-      })),
-    }),
-  );
+  /** @satisfies {WorkerSample} */
+  const workerResult = {
+    event: "native-default-sdk-perf-worker",
+    language: language.length === 0 ? null : language,
+    preload: PRELOAD,
+    packageBytes,
+    fixtureCount: fixtures.length,
+    loadMs,
+    warmupMs,
+    prepareMs,
+    runMs: coldRun.ms,
+    warmAvgMs,
+    prepareTopStages,
+    prepareTopSlots,
+    warmupTopStages,
+    warmupTopSlots,
+    runProfile,
+    fixtureTimings: summarizeFixtureTimings(coldRun, warmRuns),
+    runTopFixtures: coldRun.fixtures
+      .toSorted((left, right) => right.ms - left.ms)
+      .slice(0, 5)
+      .map(publicFixtureTiming),
+    fixtureSignatures: coldRun.fixtures.map(({ fixture, signature }) => ({
+      fixture,
+      signature,
+    })),
+  };
+  console.log(JSON.stringify(workerResult));
 }
 
+/** @param {WorkerOptions} options */
 function runWorkerRepeated(options) {
   const samples = [];
   for (let index = 0; index < REPEATS; index += 1) {
@@ -225,6 +236,7 @@ function runWorkerRepeated(options) {
   return aggregateWorkerSamples(samples);
 }
 
+/** @param {WorkerOptions} options */
 function runWorkerProcess({ adapter, language, preload, pythonSdkRoot }) {
   const child = spawnSync(process.execPath, [SCRIPT_PATH], {
     cwd: ROOT_DIR,
@@ -246,9 +258,7 @@ function runWorkerProcess({ adapter, language, preload, pythonSdkRoot }) {
     throw new Error(
       [
         "Native default SDK benchmark worker failed",
-        child.error?.message,
-        child.stdout?.trim(),
-        child.stderr?.trim(),
+        ...nativeDefaultSdkProcessFailure(child),
       ]
         .filter(Boolean)
         .join("\n"),
@@ -257,10 +267,8 @@ function runWorkerProcess({ adapter, language, preload, pythonSdkRoot }) {
 
   for (const line of child.stdout.trim().split("\n").toReversed()) {
     try {
-      const parsed = JSON.parse(line);
-      if (parsed.event === "native-default-sdk-perf-worker") {
-        return parsed;
-      }
+      const parsed = parseNativeDefaultSdkWorkerResult(JSON.parse(line));
+      return parsed;
     } catch {
       continue;
     }
@@ -268,6 +276,7 @@ function runWorkerProcess({ adapter, language, preload, pythonSdkRoot }) {
   throw new Error("Native default SDK benchmark worker did not emit JSON");
 }
 
+/** @param {WorkerSample[]} samples */
 function aggregateWorkerSamples(samples) {
   const first = samples[0];
   if (first === undefined) {
@@ -309,6 +318,7 @@ function aggregateWorkerSamples(samples) {
   };
 }
 
+/** @param {WorkerSample[]} samples */
 function assertWorkerSamplesCompatible(samples) {
   const first = samples[0];
   if (first === undefined) {
@@ -332,6 +342,7 @@ function assertWorkerSamplesCompatible(samples) {
   }
 }
 
+/** @param {WorkerSample[]} samples */
 function aggregateFixtureTimings(samples) {
   const first = samples[0];
   if (first === undefined) {
@@ -365,6 +376,7 @@ function aggregateFixtureTimings(samples) {
   });
 }
 
+/** @param {WorkerSample[]} samples @param {"prepareMs" | "runMs" | "warmupMs"} metric */
 function representativeSample(samples, metric) {
   const median = medianNumber(samples.map((sample) => sample[metric]));
   const sample = samples
@@ -379,6 +391,7 @@ function representativeSample(samples, metric) {
   return sample;
 }
 
+/** @param {WorkerSample} sample */
 function compactWorkerSample(sample) {
   return {
     loadMs: sample.loadMs,
@@ -419,9 +432,7 @@ function runPythonWorker({ language, fixtures, packageBytes }) {
     throw new Error(
       [
         "Python default SDK benchmark worker failed",
-        child.error?.message,
-        child.stdout?.trim(),
-        child.stderr?.trim(),
+        ...nativeDefaultSdkProcessFailure(child),
       ]
         .filter(Boolean)
         .join("\n"),
@@ -450,10 +461,11 @@ function runFixtures(pipeline, fixtures) {
   };
 }
 
+/** @param {ReturnType<typeof import("../src/native-node").getDefaultNativePipeline>} pipeline @param {string} text */
 function runFixture(pipeline, text) {
   if (RESULT_MODE === "json") {
     const canonical = canonicalJsonResult(
-      JSON.parse(pipeline.redactTextJson(text)),
+      parseCanonicalStaticRedactionResult(pipeline.redactTextJson(text)),
     );
     return {
       canonical,
@@ -520,6 +532,7 @@ function summarizeFixtureTimings(coldRun, warmRuns) {
   };
 }
 
+/** @param {import("../src/native").NativeStaticRedactionResult} result */
 function canonicalNativeResult(result) {
   return {
     resolved_entities: result.resolvedEntities.map((entity) => ({
@@ -544,6 +557,7 @@ function canonicalNativeResult(result) {
   };
 }
 
+/** @param {import("../src/native").CanonicalStaticRedactionResult} result */
 function canonicalJsonResult(result) {
   return {
     resolved_entities: result.resolved_entities.map((entity) => ({
@@ -752,34 +766,47 @@ function topRuntimeDiagnosticStages(diagnosticsJson) {
 
 function diagnosticStageSummaries(diagnosticsJson) {
   return diagnosticEvents(diagnosticsJson)
-    .filter((event) => typeof event.stage === "string")
-    .map((event) => ({
-      phase:
-        typeof event.phase === "string"
-          ? event.phase
-          : diagnosticPhaseFromStage(event.stage),
-      scope:
-        typeof event.scope === "string"
-          ? event.scope
-          : diagnosticScopeFromStageSummary({
-              stage: event.stage,
-              slot: event.slot,
-            }),
-      stage: event.stage,
-      elapsedMs:
-        typeof event.elapsed_us === "number"
-          ? roundMs(event.elapsed_us / 1_000)
-          : null,
-      count: typeof event.count === "number" ? event.count : null,
-      inputBytes:
-        typeof event.input_bytes === "number" ? event.input_bytes : null,
-      patternCount:
-        typeof event.pattern_count === "number" ? event.pattern_count : null,
-      artifactCount:
-        typeof event.artifact_count === "number" ? event.artifact_count : null,
-      artifactBytes:
-        typeof event.artifact_bytes === "number" ? event.artifact_bytes : null,
-    }))
+    .flatMap(
+      ({
+        stage,
+        phase,
+        scope,
+        slot,
+        elapsed_us,
+        count,
+        input_bytes,
+        pattern_count,
+        artifact_count,
+        artifact_bytes,
+      }) => {
+        if (typeof stage !== "string") return [];
+        return [
+          {
+            phase:
+              typeof phase === "string"
+                ? phase
+                : diagnosticPhaseFromStage(stage),
+            scope:
+              typeof scope === "string"
+                ? scope
+                : diagnosticScopeFromStageSummary({ stage, slot }),
+            stage,
+            elapsedMs:
+              typeof elapsed_us === "number"
+                ? roundMs(elapsed_us / 1_000)
+                : null,
+            count: typeof count === "number" ? count : null,
+            inputBytes: typeof input_bytes === "number" ? input_bytes : null,
+            patternCount:
+              typeof pattern_count === "number" ? pattern_count : null,
+            artifactCount:
+              typeof artifact_count === "number" ? artifact_count : null,
+            artifactBytes:
+              typeof artifact_bytes === "number" ? artifact_bytes : null,
+          },
+        ];
+      },
+    )
     .filter((event) => event.elapsedMs !== null)
     .toSorted((left, right) => (right.elapsedMs ?? 0) - (left.elapsedMs ?? 0));
 }
@@ -796,33 +823,51 @@ function topRuntimeDiagnosticSlots(diagnosticsJson) {
 
 function diagnosticSlotSummaries(diagnosticsJson) {
   return diagnosticEvents(diagnosticsJson)
-    .filter(
-      (event) =>
-        typeof event.stage === "string" &&
-        typeof event.slot === "number" &&
-        typeof event.elapsed_us === "number",
+    .flatMap(
+      ({
+        stage,
+        phase,
+        slot,
+        elapsed_us,
+        subslot,
+        engine,
+        pattern,
+        pattern_count,
+        count,
+        input_bytes,
+        artifact_count,
+        artifact_bytes,
+      }) => {
+        if (
+          typeof stage !== "string" ||
+          typeof slot !== "number" ||
+          typeof elapsed_us !== "number"
+        )
+          return [];
+        return [
+          {
+            phase:
+              typeof phase === "string"
+                ? phase
+                : diagnosticPhaseFromStage(stage),
+            stage,
+            slot,
+            subslot: typeof subslot === "number" ? subslot : null,
+            engine: typeof engine === "string" ? engine : null,
+            pattern: typeof pattern === "number" ? pattern : null,
+            patternCount:
+              typeof pattern_count === "number" ? pattern_count : null,
+            elapsedMs: roundMs(elapsed_us / 1_000),
+            count: typeof count === "number" ? count : null,
+            inputBytes: typeof input_bytes === "number" ? input_bytes : null,
+            artifactCount:
+              typeof artifact_count === "number" ? artifact_count : null,
+            artifactBytes:
+              typeof artifact_bytes === "number" ? artifact_bytes : null,
+          },
+        ];
+      },
     )
-    .map((event) => ({
-      phase:
-        typeof event.phase === "string"
-          ? event.phase
-          : diagnosticPhaseFromStage(event.stage),
-      stage: event.stage,
-      slot: event.slot,
-      subslot: typeof event.subslot === "number" ? event.subslot : null,
-      engine: typeof event.engine === "string" ? event.engine : null,
-      pattern: typeof event.pattern === "number" ? event.pattern : null,
-      patternCount:
-        typeof event.pattern_count === "number" ? event.pattern_count : null,
-      elapsedMs: roundMs(event.elapsed_us / 1_000),
-      count: typeof event.count === "number" ? event.count : null,
-      inputBytes:
-        typeof event.input_bytes === "number" ? event.input_bytes : null,
-      artifactCount:
-        typeof event.artifact_count === "number" ? event.artifact_count : null,
-      artifactBytes:
-        typeof event.artifact_bytes === "number" ? event.artifact_bytes : null,
-    }))
     .toSorted((left, right) => right.elapsedMs - left.elapsedMs);
 }
 
@@ -830,15 +875,12 @@ function isRuntimeDiagnosticSummary(event) {
   return event.phase !== "prepare" && event.phase !== "warm";
 }
 
+/** @param {string | null} diagnosticsJson */
 function diagnosticEvents(diagnosticsJson) {
-  if (diagnosticsJson === null) {
-    return [];
-  }
-  const parsed = JSON.parse(diagnosticsJson);
-  const events = parsed.events ?? parsed.diagnostics?.events;
-  return Array.isArray(events) ? events : [];
+  return parseNativeDefaultSdkDiagnosticEvents(diagnosticsJson);
 }
 
+/** @param {{ stage: string, slot: unknown }} summary */
 function diagnosticScopeFromStageSummary({ stage, slot }) {
   if (typeof slot === "number") {
     return "slot";
@@ -855,6 +897,7 @@ function diagnosticScopeFromStageSummary({ stage, slot }) {
   return "step";
 }
 
+/** @param {string} stage */
 function diagnosticPhaseFromStage(stage) {
   if (stage.startsWith("prepare.")) {
     return "prepare";
@@ -939,9 +982,7 @@ function ensureDefaultNativePackages() {
   throw new Error(
     [
       "Failed to build default native packages",
-      build.error?.message,
-      build.stdout?.trim(),
-      build.stderr?.trim(),
+      ...nativeDefaultSdkProcessFailure(build),
     ]
       .filter(Boolean)
       .join("\n"),
@@ -985,9 +1026,7 @@ function ensurePythonNativeLibrary() {
   throw new Error(
     [
       "Failed to build Python native library",
-      build.error?.message,
-      build.stdout?.trim(),
-      build.stderr?.trim(),
+      ...nativeDefaultSdkProcessFailure(build),
     ]
       .filter(Boolean)
       .join("\n"),

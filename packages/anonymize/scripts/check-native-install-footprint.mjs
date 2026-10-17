@@ -9,6 +9,11 @@ import {
   resolve,
 } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  isJsonObject,
+  parseJsonObject,
+  parseNpmPack,
+} from "../../../.github/tools/json-values.mjs";
 
 const MEBIBYTE = 1024 * 1024;
 const MAX_NATIVE_INSTALL_BYTES = 85 * MEBIBYTE;
@@ -16,16 +21,22 @@ const DATA_PACKAGE_NAME = "@stll/anonymize-data";
 const npmExecutable = process.platform === "win32" ? "npm.cmd" : "npm";
 const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const repoRoot = dirname(dirname(packageRoot));
-const packageManifest = JSON.parse(
+const packageManifest = parseJsonObject(
   readFileSync(join(packageRoot, "package.json"), "utf8"),
 );
 
-if (packageManifest.optionalDependencies?.["@stll/anonymize-wasm"]) {
+const optionalDependencies = packageManifest.optionalDependencies;
+if (!isJsonObject(optionalDependencies))
+  throw new TypeError("Native package optionalDependencies must be an object");
+const dependencies = packageManifest.dependencies;
+if (!isJsonObject(dependencies))
+  throw new TypeError("Native package dependencies must be an object");
+if (optionalDependencies["@stll/anonymize-wasm"] !== undefined) {
   throw new Error(
     "@stll/anonymize must not install the browser WASM runtime as an optional dependency",
   );
 }
-const runtimeDependencies = Object.keys(packageManifest.dependencies ?? {});
+const runtimeDependencies = Object.keys(dependencies);
 if (
   runtimeDependencies.length !== 1 ||
   runtimeDependencies.at(0) !== DATA_PACKAGE_NAME
@@ -36,12 +47,12 @@ if (
 }
 
 const sidecarDirectory = resolveSidecarDirectory(process.argv.at(2));
-const sidecarManifest = JSON.parse(
+const sidecarManifest = parseJsonObject(
   readFileSync(join(sidecarDirectory, "package.json"), "utf8"),
 );
 if (
   typeof sidecarManifest.name !== "string" ||
-  packageManifest.optionalDependencies?.[sidecarManifest.name] === undefined
+  optionalDependencies[sidecarManifest.name] === undefined
 ) {
   throw new Error(
     `${sidecarDirectory} is not a native optional dependency of @stll/anonymize`,
@@ -50,7 +61,7 @@ if (
 
 const sidecarName = basename(sidecarDirectory);
 const dataDirectory = join(repoRoot, "packages", "data");
-const dataManifest = JSON.parse(
+const dataManifest = parseJsonObject(
   readFileSync(join(dataDirectory, "package.json"), "utf8"),
 );
 if (dataManifest.name !== DATA_PACKAGE_NAME) {
@@ -78,6 +89,7 @@ console.log(
   }),
 );
 
+/** @param {string} directory */
 function packedUnpackedBytes(directory) {
   const output = execFileSync(
     npmExecutable,
@@ -88,11 +100,7 @@ function packedUnpackedBytes(directory) {
       shell: process.platform === "win32",
     },
   );
-  const pack = JSON.parse(output).at(0);
-  if (!pack || typeof pack.unpackedSize !== "number") {
-    throw new Error(`npm did not report an unpacked size for ${directory}`);
-  }
-  return pack.unpackedSize;
+  return parseNpmPack(output).unpackedSize;
 }
 
 function nativeSidecarName() {
@@ -116,6 +124,7 @@ function nativeSidecarName() {
   );
 }
 
+/** @param {string | undefined} requestedDirectory */
 function resolveSidecarDirectory(requestedDirectory) {
   const packagesRoot = join(repoRoot, "packages");
   const directory =
@@ -136,6 +145,7 @@ function resolveSidecarDirectory(requestedDirectory) {
   return directory;
 }
 
+/** @param {number} bytes */
 function formatMebibytes(bytes) {
   return `${(bytes / MEBIBYTE).toFixed(1)} MiB`;
 }

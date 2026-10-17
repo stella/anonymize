@@ -737,7 +737,7 @@ fn sanitize_drops_empty_entities() {
     DetectionSource::Ner,
   )]);
 
-  assert!(result.is_empty());
+  assert_eq!(result, Vec::<stella_anonymize_core::PipelineEntity>::new());
 }
 
 #[test]

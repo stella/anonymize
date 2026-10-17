@@ -901,7 +901,7 @@ mod tests {
     session
       .apply_patch(&DocumentPatch::new(session.revision(), changes))
       .unwrap();
-    assert!(session.analyze().unwrap().findings().is_empty());
+    assert_eq!(session.analyze().unwrap().findings(), []);
     assert_eq!(session.patch_and_refresh_counts(), (20_000, 20_000));
   }
 
