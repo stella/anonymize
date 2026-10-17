@@ -1332,7 +1332,7 @@ mod tests {
     let entries = [
       ("word/footnotes.xml", format!("<w:footnotes xmlns:w=\"{WORD}\"><w:footnote w:id=\"202555\"/></w:footnotes>")),
       ("word/endnotes.xml", format!("<w:endnotes xmlns:w=\"{WORD}\"><w:endnote w:id=\"202555\"/></w:endnotes>")),
-      ("word/numbering.xml", format!("<w:numbering xmlns:w=\"{WORD}\"><w:eastAsianLayout w:id=\"202555\"/><w:num w:numId=\"202555\"/><w:abstractNum w:abstractNumId=\"202555\"/></w:numbering>")),
+      ("word/numbering.xml", format!("<w:numbering xmlns:w=\"{WORD}\"><w:eastAsianLayout w:id=\"202555\"/><w:num w:numId=\"202555\"><w:abstractNumId w:val=\"202555\"/></w:num><w:abstractNum w:abstractNumId=\"202555\"/></w:numbering>")),
     ].map(|(path, markup)| crate::ArchiveEntry { path: path.to_owned(), bytes: markup.into_bytes() });
     let types = HashMap::from([
       (

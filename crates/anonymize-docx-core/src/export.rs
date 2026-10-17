@@ -2184,13 +2184,19 @@ mod tests {
     Ok(found)
   }
 
+  fn numbering_pair(level: &str) -> String {
+    format!(
+      "<w:numbering xmlns:w=\"{WORD}\"><w:abstractNum w:abstractNumId=\"0\">{level}</w:abstractNum><w:num w:numId=\"1\"><w:abstractNumId w:val=\"0\"/></w:num></w:numbering>"
+    )
+  }
+
   fn ordinary_document(
     body: &str,
   ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     ordinary_document_with_numbering(
       body,
-      &format!(
-        "<w:numbering xmlns:w=\"{WORD}\"><w:abstractNum w:abstractNumId=\"0\"><w:lvl w:ilvl=\"0\"><w:numFmt w:val=\"bullet\"/><w:lvlText w:val=\"\u{f0b7}\"/><w:pPr><w:tabs><w:tab w:val=\"num\" w:pos=\"720\"/></w:tabs></w:pPr><w:rPr><w:rFonts w:ascii=\"Symbol\" w:hAnsi=\"Symbol\" w:hint=\"default\"/></w:rPr></w:lvl></w:abstractNum></w:numbering>"
+      &numbering_pair(
+        "<w:lvl w:ilvl=\"0\"><w:numFmt w:val=\"bullet\"/><w:lvlText w:val=\"\u{f0b7}\"/><w:pPr><w:tabs><w:tab w:val=\"num\" w:pos=\"720\"/></w:tabs></w:pPr><w:rPr><w:rFonts w:ascii=\"Symbol\" w:hAnsi=\"Symbol\" w:hint=\"default\"/></w:rPr></w:lvl>",
       ),
     )
   }
@@ -2594,8 +2600,8 @@ mod tests {
   #[test]
   fn preserves_automatic_numbering_tab_alignment()
   -> Result<(), Box<dyn std::error::Error>> {
-    let xml = format!(
-      "<w:numbering xmlns:w=\"{WORD}\"><w:abstractNum w:abstractNumId=\"0\"><w:lvl w:ilvl=\"0\"><w:pPr><w:tabs><w:tab w:val=\"num\" w:pos=\"720\"/></w:tabs></w:pPr></w:lvl></w:abstractNum></w:numbering>"
+    let xml = numbering_pair(
+      "<w:lvl w:ilvl=\"0\"><w:pPr><w:tabs><w:tab w:val=\"num\" w:pos=\"720\"/></w:tabs></w:pPr></w:lvl>",
     );
     let canonical = sanitize_test_formatting(
       &xml,
@@ -3004,9 +3010,9 @@ mod tests {
     for (format, accepted) in
       [("decimal", true), ("on", false), ("accent1", false)]
     {
-      let numbering = format!(
-        "<w:numbering xmlns:w=\"{WORD}\"><w:abstractNum w:abstractNumId=\"0\"><w:lvl w:ilvl=\"0\"><w:numFmt w:val=\"{format}\"/></w:lvl></w:abstractNum></w:numbering>"
-      );
+      let numbering = numbering_pair(&format!(
+        "<w:lvl w:ilvl=\"0\"><w:numFmt w:val=\"{format}\"/></w:lvl>"
+      ));
       let result = sanitize_test_formatting(
         &numbering,
         "word/numbering.xml",
