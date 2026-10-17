@@ -1,5 +1,5 @@
 {
   "extends": "@stll/typescript-config/library.json",
   "exclude": ["node_modules"],
-  "include": ["dictionaries"]
+  "include": ["dictionaries", "tsdown.config.ts"]
 }

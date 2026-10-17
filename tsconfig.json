@@ -12,6 +12,8 @@
     "packages/*/src/**/__test__/**/*",
     "packages/*/__test__/**/*",
     "packages/*/test-fixtures/**/*",
-    "packages/anonymize/src/wasm.ts"
+    "packages/anonymize/src/wasm.ts",
+    "*.d.*ts",
+    "packages/*/*.d.*ts"
   ]
 }

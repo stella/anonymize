@@ -57,7 +57,7 @@ test("uses shared library defaults and the complete portable safety pack", async
   }
 });
 
-test("test and data-tool programs use the shared Bun environment", async () => {
+test("test and tool programs use the shared Bun environment", async () => {
   for (const path of [
     "packages/anonymize/tsconfig.test.json",
     "packages/cli/tsconfig.test.json",
@@ -66,6 +66,9 @@ test("test and data-tool programs use the shared Bun environment", async () => {
     "packages/document-pdf/tsconfig.test.json",
     "packages/data/__test__/tsconfig.json",
     "packages/data/scripts/tsconfig.json",
+    "packages/anonymize/scripts/tsconfig.json",
+    "packages/mcp/scripts/tsconfig.json",
+    "packages/mcp/test-fixtures/tsconfig.json",
   ]) {
     const tsconfig = await Bun.file(path).json();
     expect(tsconfig.extends).toBe("@stll/typescript-config/bun.json");

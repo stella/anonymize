@@ -4,11 +4,12 @@
   "compilerOptions": {
     "lib": ["ESNext", "DOM"]
   },
-  "include": ["src/**/*.ts"],
+  "include": ["src/**/*.ts", "tsdown.config.ts"],
   "exclude": [
     "node_modules",
     "src/**/__test__/**",
     "src/**/*.test.ts",
     "src/wasm.ts"
-  ]
+  ],
+  "files": ["index.cjs", "index.d.cts"]
 }
