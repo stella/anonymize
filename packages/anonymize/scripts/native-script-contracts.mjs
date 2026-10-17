@@ -25,20 +25,6 @@ export const nativeLibraryName = (platform) => {
   return NATIVE_LIBRARY_FILES[platform];
 };
 
-/** @param {unknown} report */
-export const nativeLibcFromReport = (report) => {
-  const header =
-    isRecord(report) && isRecord(report["header"])
-      ? report["header"]
-      : undefined;
-  // Preserve build detection: an empty glibc marker does not identify GNU libc.
-  return header !== undefined &&
-    typeof header["glibcVersionRuntime"] === "string" &&
-    header["glibcVersionRuntime"].length > 0
-    ? "gnu"
-    : "musl";
-};
-
 /** @param {unknown} manifest */
 export const assertBuiltCapabilities = (manifest) => {
   if (
