@@ -1033,7 +1033,15 @@ fn read_archive(document: &[u8]) -> Result<Vec<ArchiveEntry>, DocxError> {
         "Input is not a valid bounded DOCX ZIP archive",
       )
     })?;
-    let path = file.name().to_owned();
+    let path = file
+      .name()
+      .map_err(|_| {
+        error(
+          DocxErrorCode::InvalidArchive,
+          "DOCX archive contains an invalid entry name",
+        )
+      })?
+      .into_owned();
     if !safe_entry_path(&path) {
       return Err(error(
         DocxErrorCode::UnsafeEntryPath,
