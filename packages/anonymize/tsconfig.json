@@ -1,16 +1,15 @@
 {
   "$schema": "https://json.schemastore.org/tsconfig",
-  "extends": "@stll/typescript-config/library.json",
+  "extends": "@stll/typescript-config/node.json",
   "compilerOptions": {
-    "lib": ["ESNext", "DOM"],
-    "noEmit": true,
-    "target": "ES2023"
+    "lib": ["ESNext", "DOM"]
   },
-  "include": ["src/**/*.ts"],
+  "include": ["src/**/*.ts", "tsdown.config.ts"],
   "exclude": [
     "node_modules",
     "src/**/__test__/**",
     "src/**/*.test.ts",
     "src/wasm.ts"
-  ]
+  ],
+  "files": ["index.cjs", "index.d.cts", "src/native-addon.d.ts"]
 }

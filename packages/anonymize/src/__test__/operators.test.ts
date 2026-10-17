@@ -5,8 +5,29 @@ import {
   OPERATOR_REGISTRY,
   resolveOperator,
 } from "../operators";
+import type { OperatorSelection } from "../types";
 
 describe("OPERATOR_REGISTRY", () => {
+  test("mask validates direction from untyped callers", () => {
+    for (const direction of ["middle", "", null, undefined, 1]) {
+      const selection = {
+        type: "mask",
+        maskingCharacter: "*",
+        charactersToMask: 2,
+        direction: "end",
+      } satisfies OperatorSelection;
+      expect(Reflect.set(selection, "direction", direction)).toBe(true);
+      expect(() =>
+        OPERATOR_REGISTRY.mask.apply(
+          "Alice",
+          "person",
+          "[PERSON_1]",
+          "[REDACTED]",
+          selection,
+        ),
+      ).toThrow("direction must be either start or end");
+    }
+  });
   test("replace is reversible and emits the placeholder", () => {
     const op = OPERATOR_REGISTRY.replace;
     expect(op.reversibility).toBe("reversible");

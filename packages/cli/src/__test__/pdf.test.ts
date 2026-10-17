@@ -18,6 +18,15 @@ import { inspectPdf, PDF_DOCUMENT_MAX_BYTES } from "@stll/anonymize-pdf";
 import { UsageError } from "../args";
 import { runPdfCommand, type PdfCliPipeline } from "../pdf";
 
+const rejectionOf = async (promise: Promise<unknown>) => {
+  try {
+    await promise;
+  } catch (error) {
+    return error;
+  }
+  throw new Error("Expected promise to reject");
+};
+
 const fixture = readFileSync(
   join(
     import.meta.dir,
@@ -138,37 +147,43 @@ describe("PDF CLI workflow", () => {
   });
 
   test("rejects input overwrite and symlink inputs", async () => {
-    await expect(
-      runPdfCommand({
-        argv: args(inputPath),
-        preparePipeline: async () => pipeline,
-      }),
-    ).rejects.toBeInstanceOf(UsageError);
+    expect(
+      await rejectionOf(
+        runPdfCommand({
+          argv: args(inputPath),
+          preparePipeline: async () => pipeline,
+        }),
+      ),
+    ).toBeInstanceOf(UsageError);
 
     const symlinkPath = join(directory, "input-link.pdf");
     await symlink(inputPath, symlinkPath);
-    await expect(
-      runPdfCommand({
-        argv: args(join(directory, "symlink-output.pdf"), symlinkPath),
-        preparePipeline: async () => pipeline,
-      }),
-    ).rejects.toBeInstanceOf(UsageError);
+    expect(
+      await rejectionOf(
+        runPdfCommand({
+          argv: args(join(directory, "symlink-output.pdf"), symlinkPath),
+          preparePipeline: async () => pipeline,
+        }),
+      ),
+    ).toBeInstanceOf(UsageError);
   });
 
   test("reports a missing input as usage failure before pipeline preparation", async () => {
     let pipelineCalls = 0;
-    await expect(
-      runPdfCommand({
-        argv: args(
-          join(directory, "missing-output.pdf"),
-          join(directory, "missing-input.pdf"),
-        ),
-        preparePipeline: async () => {
-          pipelineCalls += 1;
-          return pipeline;
-        },
-      }),
-    ).rejects.toBeInstanceOf(UsageError);
+    expect(
+      await rejectionOf(
+        runPdfCommand({
+          argv: args(
+            join(directory, "missing-output.pdf"),
+            join(directory, "missing-input.pdf"),
+          ),
+          preparePipeline: async () => {
+            pipelineCalls += 1;
+            return pipeline;
+          },
+        }),
+      ),
+    ).toBeInstanceOf(UsageError);
     expect(pipelineCalls).toBe(0);
   });
 
@@ -178,15 +193,17 @@ describe("PDF CLI workflow", () => {
     await truncate(oversized, PDF_DOCUMENT_MAX_BYTES + 1);
     let pipelineCalls = 0;
 
-    await expect(
-      runPdfCommand({
-        argv: args(join(directory, "oversized-output.pdf"), oversized),
-        preparePipeline: async () => {
-          pipelineCalls += 1;
-          return pipeline;
-        },
-      }),
-    ).rejects.toBeInstanceOf(UsageError);
+    expect(
+      await rejectionOf(
+        runPdfCommand({
+          argv: args(join(directory, "oversized-output.pdf"), oversized),
+          preparePipeline: async () => {
+            pipelineCalls += 1;
+            return pipeline;
+          },
+        }),
+      ),
+    ).toBeInstanceOf(UsageError);
     expect(pipelineCalls).toBe(0);
   });
 
@@ -194,15 +211,17 @@ describe("PDF CLI workflow", () => {
     const outputPath = join(directory, "raced-output.pdf");
     const marker = Buffer.from("do not replace");
 
-    await expect(
-      runPdfCommand({
-        argv: args(outputPath),
-        preparePipeline: async () => {
-          await writeFile(outputPath, marker, { flag: "wx", mode: 0o600 });
-          return pipeline;
-        },
-      }),
-    ).rejects.toBeInstanceOf(UsageError);
+    expect(
+      await rejectionOf(
+        runPdfCommand({
+          argv: args(outputPath),
+          preparePipeline: async () => {
+            await writeFile(outputPath, marker, { flag: "wx", mode: 0o600 });
+            return pipeline;
+          },
+        }),
+      ),
+    ).toBeInstanceOf(UsageError);
     expect(await readFile(outputPath)).toEqual(marker);
   });
 });

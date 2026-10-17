@@ -1,4 +1,5 @@
 import process from "node:process";
+import { parseNpmPack } from "./json-values.mjs";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -148,12 +149,7 @@ for (const {
     cwd: dir,
     encoding: "utf8",
   });
-  const pack = JSON.parse(packJson)[0];
-
-  if (!pack) {
-    console.error(`No pack metadata returned for ${dir}`);
-    process.exit(1);
-  }
+  const pack = parseNpmPack(packJson);
 
   const files = new Set(pack.files.map((entry) => entry.path));
   const missing = expected.filter((file) => !files.has(file));

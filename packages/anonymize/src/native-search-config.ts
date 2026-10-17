@@ -338,14 +338,14 @@ export type NativePreparedSearchConfig = {
   threshold: number;
   confidence_boost: boolean;
   slices: {
-    regex: PatternSlice;
-    custom_regex: PatternSlice;
+    regex?: PatternSlice;
+    custom_regex?: PatternSlice;
     legal_forms?: PatternSlice;
     triggers?: PatternSlice;
-    deny_list: PatternSlice;
+    deny_list?: PatternSlice;
     street_types?: PatternSlice;
-    gazetteer: PatternSlice;
-    countries: PatternSlice;
+    gazetteer?: PatternSlice;
+    countries?: PatternSlice;
     hotwords?: PatternSlice;
   };
   regex_meta: NativeRegexMatchMeta[];

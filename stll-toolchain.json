@@ -13,5 +13,8 @@
       "tracking": "https://github.com/stella/tooling/issues/99",
       "expires": "2026-11-11"
     }
-  ]
+  ],
+  "cloud": {
+    "install": "bun install --frozen-lockfile"
+  }
 }

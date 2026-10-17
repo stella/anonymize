@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 import { watch } from "fs";
+import { parseEvalHtmlArgs } from "./.github/tools/eval-html-args";
 import {
   runPipeline,
   redactText,
@@ -326,22 +327,9 @@ const buildHtml = (docs: DocResult[]): string => {
 
 // ── CLI ─────────────────────────────────────────
 
-const args = process.argv.slice(2);
-let outputPath = "/tmp/eval-report.html";
-let watchMode = false;
-const inputs: string[] = [];
-
-for (let i = 0; i < args.length; i++) {
-  const arg = args[i];
-  if (arg === "--output" && args[i + 1]) {
-    outputPath = args[i + 1]!;
-    i++;
-  } else if (arg === "--watch" || arg === "-w") {
-    watchMode = true;
-  } else {
-    inputs.push(arg!);
-  }
-}
+const { outputPath, watchMode, inputs } = parseEvalHtmlArgs(
+  process.argv.slice(2),
+);
 
 if (inputs.length === 0) {
   console.error(

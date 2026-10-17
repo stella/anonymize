@@ -43,7 +43,7 @@ const baseConfig: Omit<PipelineConfig, "dictionaries"> = {
 
 let cached: Dictionaries | undefined;
 const getDictionaries = async (): Promise<Dictionaries> => {
-  if (!cached) cached = await loadTestDictionaries();
+  cached ??= await loadTestDictionaries();
   return cached;
 };
 

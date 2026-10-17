@@ -44,11 +44,11 @@ runs:
     - name: Cache Rust build
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
+        # Supply-chain verdicts require a fresh registry index; cache artifacts only.
         path: |
           ~/.cargo/.crates.toml
           ~/.cargo/.crates2.json
           ~/.cargo/bin/cargo-stella-lint
-          ~/.cargo/registry/index/
           ~/.cargo/registry/cache/
           ~/.cargo/git/db/
           target/
