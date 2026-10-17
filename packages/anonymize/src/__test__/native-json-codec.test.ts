@@ -243,7 +243,12 @@ describe("native JSON boundaries", () => {
 
   test("closed session status rejects unknown values and accepts every declared state", () => {
     const metadata = cases.parseCanonicalSessionMetadata.fixture;
-    for (const status of ["active", "not_yet_active", "expired", "deleted"]) {
+    for (const status of [
+      "active",
+      "not_yet_active",
+      "expired",
+      "deleted",
+    ] as const) {
       expect(
         results.parseCanonicalSessionMetadata(
           JSON.stringify({ ...metadata, status }),

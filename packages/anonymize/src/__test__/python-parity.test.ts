@@ -1373,8 +1373,10 @@ describe("python binding parity", () => {
     } catch (error) {
       nodeMessage = error instanceof Error ? error.message : String(error);
     }
+    const code = nodeMessage.split(":", 1).at(0);
+    if (code === undefined) throw new Error("Missing native PDF error code");
     expect(python.pdf_invalid_error).toEqual({
-      code: nodeMessage.split(":", 1)[0],
+      code,
       message: nodeMessage,
     });
     expect(python.pdf_constants).toEqual({

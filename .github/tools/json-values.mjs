@@ -31,13 +31,13 @@ export const parseStringList = (source) => {
 const packFile = (value) => {
   if (
     !isJsonObject(value) ||
-    typeof value.path !== "string" ||
-    typeof value.size !== "number" ||
-    !Number.isFinite(value.size) ||
-    value.size < 0
+    typeof value["path"] !== "string" ||
+    typeof value["size"] !== "number" ||
+    !Number.isFinite(value["size"]) ||
+    value["size"] < 0
   )
     throw new TypeError("Invalid npm pack file metadata");
-  return { path: value.path, size: value.size };
+  return { path: value["path"], size: value["size"] };
 };
 
 /** @param {string} source */
@@ -47,11 +47,14 @@ export const parseNpmPack = (source) => {
   const first = value.at(0);
   if (
     !isJsonObject(first) ||
-    !Array.isArray(first.files) ||
-    typeof first.unpackedSize !== "number" ||
-    !Number.isFinite(first.unpackedSize) ||
-    first.unpackedSize < 0
+    !Array.isArray(first["files"]) ||
+    typeof first["unpackedSize"] !== "number" ||
+    !Number.isFinite(first["unpackedSize"]) ||
+    first["unpackedSize"] < 0
   )
     throw new TypeError("Invalid npm pack metadata");
-  return { files: first.files.map(packFile), unpackedSize: first.unpackedSize };
+  return {
+    files: first["files"].map(packFile),
+    unpackedSize: first["unpackedSize"],
+  };
 };

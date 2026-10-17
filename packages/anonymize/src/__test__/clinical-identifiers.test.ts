@@ -394,6 +394,9 @@ describe("multilingual clinical identifiers", () => {
         expect(entry.label).toBe("registration number");
         expect(entry.strategy?.type).toBe("company-id-value");
         expect(entry.triggers).toBeArray();
+        if (!Array.isArray(entry.triggers)) {
+          throw new TypeError(`${id} triggers must contain an array`);
+        }
         expect(entry.triggers.length).toBeGreaterThan(0);
         expect(entry.validations).toContainEqual({ type: "has-digits" });
       }
