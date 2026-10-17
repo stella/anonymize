@@ -64,6 +64,7 @@
     "dist",
     "index.cjs",
     "index.d.cts",
+    "native-libc.mjs",
     "native-pipeline.stlanonpkg",
     "native-pipeline.*.stlanonpkg",
     "scripts/build-native-pipeline-package.mjs"

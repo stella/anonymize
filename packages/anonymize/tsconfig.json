@@ -6,7 +6,7 @@
     "noEmit": true,
     "target": "ES2023"
   },
-  "include": ["src/**/*.ts"],
+  "include": ["src/**/*.ts", "native-libc.mjs"],
   "exclude": [
     "node_modules",
     "src/**/__test__/**",

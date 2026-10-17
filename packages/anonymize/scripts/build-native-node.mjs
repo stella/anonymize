@@ -10,6 +10,7 @@ import {
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { gzipSync } from "node:zlib";
+import { detectNativeLibc } from "../native-libc.mjs";
 
 import languageScopes from "../src/data/language-scopes.json" with { type: "json" };
 
@@ -208,13 +209,4 @@ function nativeSidecarPackageName({ arch, libc, platform }) {
     return "anonymize-win32-x64-msvc";
   }
   return null;
-}
-
-function detectNativeLibc(platform) {
-  if (platform !== "linux") {
-    return undefined;
-  }
-  return process.report?.getReport?.().header?.glibcVersionRuntime
-    ? "gnu"
-    : "musl";
 }

@@ -25,6 +25,7 @@ const PACKAGES = [
       "dist/native-node.mjs",
       "index.cjs",
       "index.d.cts",
+      "native-libc.mjs",
       "native-pipeline.stlanonpkg",
       "native-pipeline.cs.stlanonpkg",
       "native-pipeline.de.stlanonpkg",
