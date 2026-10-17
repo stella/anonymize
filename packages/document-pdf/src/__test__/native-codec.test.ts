@@ -113,7 +113,10 @@ describe("native PDF codecs", () => {
   test("rejects certificates without verified structural pixel rewriting", () => {
     expect(() =>
       decodePdfRasterRewriteCertificate(
-        JSON.stringify({ ...certificate, structurePixelRewriteVerified: false }),
+        JSON.stringify({
+          ...certificate,
+          structurePixelRewriteVerified: false,
+        }),
       ),
     ).toThrow("does not match contract version 2");
   });
