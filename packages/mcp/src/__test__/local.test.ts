@@ -29,6 +29,7 @@ import {
   PathScope,
   createAnonymizeMcpServer,
 } from "../local";
+import { requirePresent } from "./require-present";
 
 const rejectionOf = async (promise: Promise<unknown>) => {
   try {
@@ -571,9 +572,9 @@ describe("local MCP surface", () => {
       join(root, "external-b-output.txt"),
     ];
     for (const index of [0, 1] as const) {
-      await writeFile(inputs[index], documents[index]);
+      await writeFile(requirePresent(inputs[index]), documents[index]);
       await writeFile(
-        batches[index],
+        requirePresent(batches[index]),
         JSON.stringify(externalBatch(documents[index])),
       );
     }
@@ -602,9 +603,9 @@ describe("local MCP surface", () => {
       },
     });
     const first = service.anonymizeTextWithExternalDetections({
-      inputPath: inputs[0],
-      detectionBatchPath: batches[0],
-      outputPath: outputs[0],
+      inputPath: requirePresent(inputs[0]),
+      detectionBatchPath: requirePresent(batches[0]),
+      outputPath: requirePresent(outputs[0]),
       sessionId: "external_concurrent_1",
       language: "en",
     });
@@ -613,9 +614,9 @@ describe("local MCP surface", () => {
       expect(
         await rejectionOf(
           service.anonymizeTextWithExternalDetections({
-            inputPath: inputs[1],
-            detectionBatchPath: batches[1],
-            outputPath: outputs[1],
+            inputPath: requirePresent(inputs[1]),
+            detectionBatchPath: requirePresent(batches[1]),
+            outputPath: requirePresent(outputs[1]),
             sessionId: "external_concurrent_1",
             language: "en",
           }),
@@ -636,8 +637,8 @@ describe("local MCP surface", () => {
     expect(
       await rejectionOf(
         service.anonymizeTextWithExternalDetections({
-          inputPath: inputs[1 - successfulIndex],
-          detectionBatchPath: batches[1 - successfulIndex],
+          inputPath: requirePresent(inputs[1 - successfulIndex]),
+          detectionBatchPath: requirePresent(batches[1 - successfulIndex]),
           outputPath: failedOutput,
           sessionId: "external_concurrent_1",
         }),
@@ -652,7 +653,7 @@ describe("local MCP surface", () => {
 
     const restored = join(root, "external-concurrent-restored.txt");
     await service.restoreText({
-      inputPath: outputs[successfulIndex],
+      inputPath: requirePresent(outputs[successfulIndex]),
       outputPath: restored,
       sessionId: "external_concurrent_1",
     });
