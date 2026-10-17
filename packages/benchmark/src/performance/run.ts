@@ -426,9 +426,6 @@ const assertSameOutput = (
 ): void => {
   if (
     expected.scenario.id !== actual.scenario.id ||
-    expected.scenario.schemaVersion !== actual.scenario.schemaVersion ||
-    expected.scenario.type !== actual.scenario.type ||
-    expected.runtime.type !== actual.runtime.type ||
     expected.runtime.version !== actual.runtime.version ||
     expected.inputBytes !== actual.inputBytes ||
     expected.inputSha256 !== actual.inputSha256 ||

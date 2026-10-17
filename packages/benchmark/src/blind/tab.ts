@@ -289,7 +289,7 @@ const loadVerifiedTabCorpus = async (
 };
 
 export const loadVerifiedTabTestCorpus = async (): Promise<TabDocument[]> =>
-  loadVerifiedTabCorpus(TAB_PROVENANCE, "test");
+  await loadVerifiedTabCorpus(TAB_PROVENANCE, "test");
 
 export const loadVerifiedTabDevCorpus = async (): Promise<TabDocument[]> =>
-  loadVerifiedTabCorpus(TAB_DEV_PROVENANCE, "dev");
+  await loadVerifiedTabCorpus(TAB_DEV_PROVENANCE, "dev");

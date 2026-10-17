@@ -3,10 +3,7 @@ import { open } from "node:fs/promises";
 
 import { UsageError } from "./args";
 
-const isNodeError = (
-  error: unknown,
-  code: string,
-): error is NodeJS.ErrnoException =>
+const isNodeError = (error: unknown, code: string): boolean =>
   error instanceof Error && "code" in error && error.code === code;
 
 const FILE_PERMISSION_MASK = 0o777n;

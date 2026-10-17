@@ -206,7 +206,7 @@ export const readNativePipelinePackageFile = (
 
 export const readNativePipelinePackageFileAsync = async (
   packagePath: string,
-): Promise<Uint8Array> => readFile(packagePath);
+): Promise<Uint8Array> => await readFile(packagePath);
 
 export const native_package_version = (
   options: NativeSdkOptions = {},
@@ -878,7 +878,7 @@ const detectNativeLibc = (platform: string): NativeLibc | undefined => {
   if (platform !== "linux") {
     return undefined;
   }
-  const report = process.report?.getReport();
+  const report = process.report.getReport();
   const header =
     isPropertyBag(report) && isPropertyBag(report["header"])
       ? report["header"]

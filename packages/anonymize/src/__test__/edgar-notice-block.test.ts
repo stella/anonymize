@@ -763,7 +763,7 @@ Alice Smith
 Boston, MA 02110`,
         "Alice Smith",
       ],
-    ]) {
+    ] as const) {
       const entities = await detectNative(
         { ...baseConfig, dictionaries, labels: ["person"] },
         text,

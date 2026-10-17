@@ -13,6 +13,15 @@ import {
   renderPdfWithPopplerTesseract,
 } from "../index";
 
+const rejectionOf = async (promise: Promise<unknown>) => {
+  try {
+    await promise;
+  } catch (error) {
+    return error;
+  }
+  throw new Error("Expected promise to reject");
+};
+
 const source = readFileSync(
   join(
     import.meta.dir,
@@ -190,53 +199,61 @@ describe("local Poppler/Tesseract PDF provider", () => {
   });
 
   test("rejects mixed and option-shaped OCR languages before execution", async () => {
-    await expect(
-      renderPdfWithPopplerTesseract({
-        document: source,
-        dpi: 72,
-        ocrLanguage: "eng+deu",
-        pdftoppmPath,
-        tesseractPath,
-      }),
-    ).rejects.toMatchObject({
+    expect(
+      await rejectionOf(
+        renderPdfWithPopplerTesseract({
+          document: source,
+          dpi: 72,
+          ocrLanguage: "eng+deu",
+          pdftoppmPath,
+          tesseractPath,
+        }),
+      ),
+    ).toMatchObject({
       code: PDF_LOCAL_PROVIDER_ERROR_CODES.invalidOptions,
     });
 
-    await expect(
-      renderPdfWithPopplerTesseract({
-        document: source,
-        dpi: 72,
-        ocrLanguage: "--psm",
-        pdftoppmPath,
-        tesseractPath,
-      }),
-    ).rejects.toMatchObject({
+    expect(
+      await rejectionOf(
+        renderPdfWithPopplerTesseract({
+          document: source,
+          dpi: 72,
+          ocrLanguage: "--psm",
+          pdftoppmPath,
+          tesseractPath,
+        }),
+      ),
+    ).toMatchObject({
       code: PDF_LOCAL_PROVIDER_ERROR_CODES.invalidOptions,
     });
   });
 
   test("fails closed on malformed renderer output", async () => {
-    await expect(
-      renderPdfWithPopplerTesseract({
-        document: source,
-        dpi: 72,
-        ocrLanguage: "eng",
-        pdftoppmPath: malformedPdftoppmPath,
-        tesseractPath,
-      }),
-    ).rejects.toBeInstanceOf(PdfLocalProviderError);
+    expect(
+      await rejectionOf(
+        renderPdfWithPopplerTesseract({
+          document: source,
+          dpi: 72,
+          ocrLanguage: "eng",
+          pdftoppmPath: malformedPdftoppmPath,
+          tesseractPath,
+        }),
+      ),
+    ).toBeInstanceOf(PdfLocalProviderError);
   });
 
   test("rejects projected raster limits before invoking Poppler", async () => {
-    await expect(
-      renderPdfWithPopplerTesseract({
-        document: pdfWithPageSize(100_000, 100_000),
-        dpi: 72,
-        ocrLanguage: "eng",
-        pdftoppmPath: join(fakeDirectory, "must-not-run-pdftoppm"),
-        tesseractPath: join(fakeDirectory, "must-not-run-tesseract"),
-      }),
-    ).rejects.toMatchObject({
+    expect(
+      await rejectionOf(
+        renderPdfWithPopplerTesseract({
+          document: pdfWithPageSize(100_000, 100_000),
+          dpi: 72,
+          ocrLanguage: "eng",
+          pdftoppmPath: join(fakeDirectory, "must-not-run-pdftoppm"),
+          tesseractPath: join(fakeDirectory, "must-not-run-tesseract"),
+        }),
+      ),
+    ).toMatchObject({
       code: PDF_LOCAL_PROVIDER_ERROR_CODES.limitExceeded,
     });
   });
@@ -250,22 +267,25 @@ describe("local Poppler/Tesseract PDF provider", () => {
       tesseractPath,
     });
 
-    const observation = rendered.pages[0]?.observation;
-    expect(observation?.widthPoints).toBeCloseTo(595.28, 4);
-    expect(observation?.heightPoints).toBeCloseTo(841.89, 4);
+    const page = rendered.pages.at(0);
+    if (page === undefined) throw new Error("expected one rendered PDF page");
+    expect(page.observation.widthPoints).toBeCloseTo(595.28, 4);
+    expect(page.observation.heightPoints).toBeCloseTo(841.89, 4);
   });
 
   test("bounds hung executables with a timeout", async () => {
-    await expect(
-      renderPdfWithPopplerTesseract({
-        document: source,
-        dpi: 72,
-        ocrLanguage: "eng",
-        pdftoppmPath: slowPdftoppmPath,
-        tesseractPath,
-        timeoutMs: 100,
-      }),
-    ).rejects.toMatchObject({
+    expect(
+      await rejectionOf(
+        renderPdfWithPopplerTesseract({
+          document: source,
+          dpi: 72,
+          ocrLanguage: "eng",
+          pdftoppmPath: slowPdftoppmPath,
+          tesseractPath,
+          timeoutMs: 100,
+        }),
+      ),
+    ).toMatchObject({
       code: PDF_LOCAL_PROVIDER_ERROR_CODES.executableFailed,
     });
   });

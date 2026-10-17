@@ -42,9 +42,6 @@ describe("benchmark suite registry", () => {
       true,
     );
     expect(BENCHMARK_CORPORA.some(({ id }) => id === "german-ler")).toBe(true);
-    expect(BENCHMARK_CORPORA.every(({ access }) => access !== undefined)).toBe(
-      true,
-    );
     expect(
       BENCHMARK_CORPORA.filter(
         ({ runnable, policy }) => runnable && policy === "evaluation-only",

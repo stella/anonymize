@@ -68,71 +68,10 @@ updates:
           - version-update:semver-minor
           - version-update:semver-patch
   - package-ecosystem: cargo
-    directory: /
-    schedule:
-      interval: weekly
-      day: saturday
-      time: "07:00"
-      timezone: Europe/Prague
-    cooldown:
-      default-days: 5
-    groups:
-      dependencies:
-        patterns:
-          - "*"
-        update-types:
-          - minor
-          - patch
-  - package-ecosystem: cargo
-    directory: /fuzz
-    schedule:
-      interval: weekly
-      day: saturday
-      time: "07:00"
-      timezone: Europe/Prague
-    cooldown:
-      default-days: 5
-    groups:
-      dependencies:
-        patterns:
-          - "*"
-        update-types:
-          - minor
-          - patch
-  - package-ecosystem: cargo
-    directory: /packages/benchmark/native/nym-adapter
-    schedule:
-      interval: weekly
-      day: saturday
-      time: "07:00"
-      timezone: Europe/Prague
-    cooldown:
-      default-days: 5
-    groups:
-      dependencies:
-        patterns:
-          - "*"
-        update-types:
-          - minor
-          - patch
-  - package-ecosystem: pip
-    directory: /crates/anonymize-py
-    schedule:
-      interval: weekly
-      day: saturday
-      time: "07:00"
-      timezone: Europe/Prague
-    cooldown:
-      default-days: 5
-    groups:
-      dependencies:
-        patterns:
-          - "*"
-        update-types:
-          - minor
-          - patch
-  - package-ecosystem: pip
-    directory: /packages/benchmark/python
+    directories:
+      - /
+      - /fuzz
+      - /packages/benchmark/native/nym-adapter
     schedule:
       interval: weekly
       day: saturday
@@ -214,8 +153,26 @@ updates:
           - version-update:semver-major
           - version-update:semver-minor
           - version-update:semver-patch
-      - dependency-name: "stella/.github/.github/workflows/package-consumer-compat.yml"
+      - dependency-name: stella/.github/.github/workflows/package-consumer-compat.yml
         update-types:
           - version-update:semver-major
           - version-update:semver-minor
           - version-update:semver-patch
+  - package-ecosystem: pip
+    directories:
+      - /crates/anonymize-py
+      - /packages/benchmark/python
+    schedule:
+      interval: weekly
+      day: saturday
+      time: "07:00"
+      timezone: Europe/Prague
+    cooldown:
+      default-days: 5
+    groups:
+      dependencies:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch

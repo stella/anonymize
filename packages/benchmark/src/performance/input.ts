@@ -165,7 +165,7 @@ const scenarioSeed = async (id: PerformanceScenarioId): Promise<string> => {
     case "sparse":
       return sparseEntitySeed(source);
     case "fixture":
-      return fixtureSeed(source.file);
+      return await fixtureSeed(source.file);
     default: {
       const unreachable: never = source;
       throw new Error(`unhandled performance source ${String(unreachable)}`);

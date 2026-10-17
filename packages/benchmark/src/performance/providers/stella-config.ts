@@ -7,6 +7,9 @@ export const regexDetectorConfig = (
   assembled: NativePreparedSearchConfig,
 ): NativePreparedSearchConfig => {
   const regexEnd = assembled.regex_patterns.length;
+  const regex = assembled.slices.regex;
+  if (regex === undefined)
+    throw new Error("stella regex-detector config requires a regex slice");
   const config: NativePreparedSearchConfig = {
     regex_patterns: assembled.regex_patterns,
     custom_regex_patterns: [],
@@ -19,7 +22,7 @@ export const regexDetectorConfig = (
     threshold: assembled.threshold,
     confidence_boost: false,
     slices: {
-      regex: assembled.slices.regex,
+      regex,
       custom_regex: EMPTY_SLICE,
       legal_forms: { start: regexEnd, end: regexEnd },
       triggers: { start: regexEnd, end: regexEnd },

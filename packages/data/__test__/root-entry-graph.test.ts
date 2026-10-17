@@ -11,7 +11,7 @@ const CITY_LOADERS = join(DICTIONARIES_DIR, "city-loaders.ts");
 // Statements that survive type erasure: `import type` and `export type` do
 // not, so they cannot pull a chunk into a bundle.
 const RUNTIME_IMPORT_RE =
-  /\b(?:import|export)\s+(type\s+)?[^"';]*?from\s+"(\.[^"]*)"/g;
+  /\b(?:import|export)\s+(?<typeOnly>type\s+)?[^"';]*?from\s+"(?<specifier>\.[^"]*)"/g;
 
 const resolveModule = (fromFile: string, specifier: string): string | null => {
   const base = resolve(dirname(fromFile), specifier);
@@ -40,9 +40,9 @@ test("the root entry's static graph never reaches city-loaders", () => {
       visited.add(file);
       const chain = [...(chains.get(file) ?? []), file];
       const source = readFileSync(file, "utf-8");
-      for (const [, typeOnly, specifier] of source.matchAll(
-        RUNTIME_IMPORT_RE,
-      )) {
+      for (const match of source.matchAll(RUNTIME_IMPORT_RE)) {
+        const typeOnly = match.groups?.["typeOnly"];
+        const specifier = match.groups?.["specifier"];
         if (typeOnly !== undefined || specifier === undefined) {
           continue;
         }

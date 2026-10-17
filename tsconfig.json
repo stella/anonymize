@@ -1,0 +1,19 @@
+{
+  "extends": "@stll/typescript-config/bun.json",
+  "include": [
+    "*.ts",
+    "scripts/**/*",
+    ".github/tools/**/*",
+    "packages/*/*.ts",
+    "packages/*/*.js",
+    "packages/*/*.mjs",
+    "packages/*/*.cjs",
+    "packages/*/scripts/**/*",
+    "packages/*/src/**/__test__/**/*",
+    "packages/*/__test__/**/*",
+    "packages/*/test-fixtures/**/*",
+    "packages/anonymize/src/wasm.ts",
+    "*.d.*ts",
+    "packages/*/*.d.*ts"
+  ]
+}

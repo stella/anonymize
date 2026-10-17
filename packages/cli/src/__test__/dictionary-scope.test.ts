@@ -41,7 +41,7 @@ describe("filterDictionaries", () => {
     expect(result.denyList["banks/cz"]).toBeDefined();
     expect(result.denyList["banks/de"]).toBeUndefined();
     expect(result.denyList["names/global"]).toBeDefined();
-    expect(Object.keys(result.citiesByCountry ?? {})).toEqual(["CZ"]);
+    expect(Object.keys(result.citiesByCountry)).toEqual(["CZ"]);
   });
 
   test("languages scope drops other name dictionaries", () => {

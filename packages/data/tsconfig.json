@@ -1,10 +1,5 @@
 {
   "extends": "@stll/typescript-config/library.json",
-  "compilerOptions": {
-    "lib": ["ESNext"],
-    "noEmit": true,
-    "target": "ES2023"
-  },
   "exclude": ["node_modules"],
-  "include": ["dictionaries"]
+  "include": ["dictionaries", "tsdown.config.ts"]
 }
