@@ -259,12 +259,20 @@ void describe("durable MCP sessions", () => {
       outputPath: anonymized,
       sessionId: "durable_external_1",
     });
-    assert.partialDeepStrictEqual(result, {
-      externalDetectionBatchStatus: "accepted",
-      externalDetectionCount: 1,
-      retainedExternalDetectionCount: 1,
-      entityCount: 2,
-    });
+    assert.deepStrictEqual(
+      {
+        externalDetectionBatchStatus: result.externalDetectionBatchStatus,
+        externalDetectionCount: result.externalDetectionCount,
+        retainedExternalDetectionCount: result.retainedExternalDetectionCount,
+        entityCount: result.entityCount,
+      },
+      {
+        externalDetectionBatchStatus: "accepted",
+        externalDetectionCount: 1,
+        retainedExternalDetectionCount: 1,
+        entityCount: 2,
+      },
+    );
     await initial.close();
 
     const restarted = await createService(paths);
@@ -793,7 +801,7 @@ void describe("durable MCP sessions", () => {
     } finally {
       releaseFirstPublication();
     }
-    assert.partialDeepStrictEqual(await first, { outputCreated: true });
+    assert.strictEqual((await first).outputCreated, true);
 
     const successfulOutput = firstOutput;
     const original = "Alice Smith signed.";
