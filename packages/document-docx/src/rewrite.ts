@@ -186,8 +186,8 @@ const preflightRewritePlan = (
   let estimatedBytes = rewriteCount * 256;
   const serializableRewrites: DocxBlockRewrite[] = [];
   for (let rewriteIndex = 0; rewriteIndex < rewriteCount; rewriteIndex += 1) {
-    const rewrite = rewrites[rewriteIndex];
-    if (typeof rewrite !== "function") {
+    const rewrite = rewrites.at(rewriteIndex);
+    if (rewrite === undefined) {
       throw new DocxRewriteError(
         DOCX_REWRITE_ERROR_CODES.invalidReplacement,
         "DOCX rewrite plans must not contain sparse blocks",
