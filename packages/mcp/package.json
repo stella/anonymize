@@ -40,19 +40,19 @@
     "format": "oxfmt ."
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.31.0",
+    "@modelcontextprotocol/sdk": "^1.32.1",
     "@stll/anonymize": "3.0.7",
     "@stll/anonymize-docx": "^3.0.7",
     "@stll/anonymize-pdf": "3.0.7",
     "fs-native-extensions": "^1.5.1",
-    "zod": "^4.6.5"
+    "zod": "^4.6.6"
   },
   "devDependencies": {
-    "@types/node": "^26.6.4",
+    "@types/node": "^26.6.5",
     "bun-types": "1.4.3",
     "expect": "^30.5.2",
     "fflate": "^0.8.3",
-    "tsdown": "0.23.0",
+    "tsdown": "0.23.1",
     "tsx": "^4.23.15",
     "typescript": "7.0.2",
     "@stll/typescript-config": "0.8.0"
