@@ -2090,8 +2090,14 @@ mod tests {
     let mut output = String::new();
     for index in 0..archive.len() {
       let mut file = archive.by_index(index)?;
-      let extension = file.name().rsplit_once('.').map(|(_, value)| value);
-      if matches!(extension, Some("xml" | "rels")) {
+      let is_markup = {
+        let name = file.name()?;
+        matches!(
+          name.rsplit_once('.').map(|(_, value)| value),
+          Some("xml" | "rels")
+        )
+      };
+      if is_markup {
         file.read_to_string(&mut output)?;
       }
     }

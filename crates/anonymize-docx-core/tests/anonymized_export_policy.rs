@@ -182,7 +182,7 @@ fn unzip(document: &[u8]) -> Result<Parts, Box<dyn std::error::Error>> {
     let mut file = archive.by_index(index)?;
     let mut content = String::new();
     file.read_to_string(&mut content)?;
-    parts.push((file.name().to_owned(), content));
+    parts.push((file.name()?.into_owned(), content));
   }
   Ok(parts)
 }
