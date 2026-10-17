@@ -55,6 +55,7 @@ export const assertPackedRuntimeImports = ({
     ...exportTargets(manifest["main"]),
     ...[...packedFiles].filter(isRuntimeScript),
   ];
+  const binScripts = new Set(binPaths.map(packagePath));
   const pending = roots.map(packagePath);
   const visited = new Set<string>();
   const scanner = new Bun.Transpiler({ loader: "tsx" });
@@ -65,7 +66,7 @@ export const assertPackedRuntimeImports = ({
     if (!packedFiles.has(path))
       throw new Error(`Runtime file is not packed: ${path}`);
     visited.add(path);
-    if (!isRuntimeScript(path)) continue;
+    if (!isRuntimeScript(path) && !binScripts.has(path)) continue;
     const source = readSource(path);
     if (source === undefined)
       throw new Error(`Packed runtime source is missing: ${path}`);
@@ -73,6 +74,7 @@ export const assertPackedRuntimeImports = ({
       if (
         dependency.kind !== "import-statement" &&
         dependency.kind !== "require-call" &&
+        dependency.kind !== "require-resolve" &&
         dependency.kind !== "dynamic-import"
       )
         continue;
@@ -88,7 +90,8 @@ export const assertPackedRuntimeImports = ({
       if (!specifier.startsWith(".")) continue;
       const target = packagePath(posix.join(posix.dirname(path), specifier));
       const candidates =
-        dependency.kind === "require-call"
+        dependency.kind === "require-call" ||
+        dependency.kind === "require-resolve"
           ? [
               target,
               ...[

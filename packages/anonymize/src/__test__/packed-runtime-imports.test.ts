@@ -14,7 +14,11 @@ const fixture = () =>
       "dist/value.mjs",
       'import "../scripts/helper.mjs"; export const value = 1;',
     ],
-    ["other.cjs", 'module.exports = require("./nested");'],
+    [
+      "other.cjs",
+      'module.exports = require("./nested"); require.resolve("./resolved");',
+    ],
+    ["resolved.js", "module.exports = 1;"],
     ["nested/index.js", 'require("node:fs"); require("external-package");'],
   ]);
 const manifest = {
@@ -101,4 +105,21 @@ test("escaping paths and unresolved package-local mappings fail closed", () => {
       }),
     ).toThrow();
   }
+});
+
+test("declared extensionless bins traverse their static runtime imports", () => {
+  const files = new Map([
+    ["bin/cli", '#!/usr/bin/env node\nimport "./helper.mjs";'],
+    ["bin/helper.mjs", "export const value = 1;"],
+  ]);
+  const options = {
+    manifest: { bin: { cli: "bin/cli" } },
+    packedFiles: new Set(files.keys()),
+    readSource: (path: string) => files.get(path),
+  };
+  expect(assertPackedRuntimeImports(options)).toEqual(new Set(files.keys()));
+  options.packedFiles.delete("bin/helper.mjs");
+  expect(() => assertPackedRuntimeImports(options)).toThrow(
+    "bin/cli -> ./helper.mjs",
+  );
 });
