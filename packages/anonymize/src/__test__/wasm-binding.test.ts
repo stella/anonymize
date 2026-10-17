@@ -49,6 +49,29 @@ const fakeRawModule = (): RawWasmModule => {
   };
 };
 
+const preparedForRawResult = (readResult: () => string) => {
+  const raw = fakeRawModule();
+  raw.WasmPreparedSearch.fromConfigJsonBytes = () => ({
+    prepareDiagnosticsJson: () => "{}",
+    warmLazyRegex: () => undefined,
+    warmLazyRegexDiagnosticsJson: () => "{}",
+    createRedactionSession: unavailable,
+    createRedactionSessionWithLifecycle: unavailable,
+    restoreRedactionSession: unavailable,
+    restoreEncryptedRedactionSession: unavailable,
+    redactStaticEntitiesJson: readResult,
+    redactStaticEntitiesWithCallerDetectionsJson: readResult,
+    redactStaticEntitiesWithCallerDetectionsDiagnosticsJson: () => "{}",
+    redactStaticEntitiesDiagnosticsJson: () => "{}",
+    redactStaticEntitiesSummaryDiagnosticsJson: () => "{}",
+    redactStaticEntitiesResultStreamJson: readResult,
+    redactStaticEntitiesDiagnosticsStreamJson: () => "{}",
+  });
+  return createWasmBinding(raw).NativePreparedSearch.fromConfigJsonBytes(
+    new Uint8Array(),
+  );
+};
+
 describe("raw WASM binding invariants", () => {
   test("accepts the complete raw surface", () => {
     expect(isRawWasmModule(fakeRawModule())).toBe(true);
@@ -129,28 +152,8 @@ describe("WASM result and byte contracts", () => {
         entity_count: OPERATOR_TYPES.length,
       },
     } satisfies CanonicalStaticRedactionResult;
-    const preparedForResult = (resultJson: string) => {
-      const raw = fakeRawModule();
-      raw.WasmPreparedSearch.fromConfigJsonBytes = () => ({
-        prepareDiagnosticsJson: () => "{}",
-        warmLazyRegex: () => undefined,
-        warmLazyRegexDiagnosticsJson: () => "{}",
-        createRedactionSession: unavailable,
-        createRedactionSessionWithLifecycle: unavailable,
-        restoreRedactionSession: unavailable,
-        restoreEncryptedRedactionSession: unavailable,
-        redactStaticEntitiesJson: () => resultJson,
-        redactStaticEntitiesWithCallerDetectionsJson: () => resultJson,
-        redactStaticEntitiesWithCallerDetectionsDiagnosticsJson: () => "{}",
-        redactStaticEntitiesDiagnosticsJson: () => "{}",
-        redactStaticEntitiesSummaryDiagnosticsJson: () => "{}",
-        redactStaticEntitiesResultStreamJson: () => resultJson,
-        redactStaticEntitiesDiagnosticsStreamJson: () => "{}",
-      });
-      return createWasmBinding(raw).NativePreparedSearch.fromConfigJsonBytes(
-        new Uint8Array(),
-      );
-    };
+    const preparedForResult = (resultJson: string) =>
+      preparedForRawResult(() => resultJson);
     const prepared = preparedForResult(JSON.stringify(result));
     const normalized = prepared.redactStaticEntities(text);
     expect(normalized.redaction.operatorMap).toEqual(
@@ -181,6 +184,42 @@ describe("WASM result and byte contracts", () => {
           ),
         operator,
       ).toThrow("Invalid native CanonicalStaticRedactionResult");
+    }
+  });
+
+  test("propagates native WASM errors unchanged before success-result decoding", () => {
+    // Rust's WasmResult<String> returns JsError on failure, not an error JSON envelope.
+    const nativeError = new Error(
+      "Unsupported anonymization operator: unknown",
+    );
+    const prepared = preparedForRawResult(() => {
+      throw nativeError;
+    });
+    const calls = [
+      () => prepared.redactStaticEntities("text"),
+      () => prepared.redactStaticEntitiesJson("text"),
+      () =>
+        prepared.redactStaticEntitiesWithCallerDetectionsJson("text", {
+          requestJson: '{"version":2,"detections":[]}',
+        }),
+      () =>
+        prepared.redactStaticEntitiesResultStreamJson(
+          "text",
+          undefined,
+          () => undefined,
+        ),
+    ];
+    for (const invoke of calls) {
+      let caught: unknown;
+      try {
+        invoke();
+      } catch (error) {
+        caught = error;
+      }
+      expect(caught).toBe(nativeError);
+      expect(caught).toMatchObject({
+        message: "Unsupported anonymization operator: unknown",
+      });
     }
   });
 
