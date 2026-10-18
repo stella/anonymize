@@ -2970,6 +2970,41 @@ mod tests {
   }
 
   #[test]
+  fn equivalent_boolean_spellings_produce_identical_exports()
+  -> Result<(), Box<dyn std::error::Error>> {
+    let mut expected = None;
+    for enabled in ["1", "true", "on"] {
+      for disabled in ["0", "false", "off"] {
+        for drawing_enabled in ["1", "true"] {
+          for drawing_disabled in ["0", "false"] {
+            let body = format!(
+              "<w:p><w:r><w:rPr><w:b w:val=\"{enabled}\"/><w:i w:val=\"{disabled}\"/><w14:textOutline xmlns:w14=\"{WORD_2010_NAMESPACE}\"><w14:gradFill w14:rotWithShape=\"{drawing_enabled}\"><w14:lin w14:scaled=\"{drawing_disabled}\"/></w14:gradFill></w14:textOutline></w:rPr><w:t>Synthetic text</w:t></w:r></w:p>"
+            );
+            let prepared =
+              prepare_docx_anonymized_export(&ordinary_document(&body)?)?;
+            let xml = entry(&prepared.document, "word/document.xml")?;
+            assert!(xml.contains("<w:b w:val=\"1\"/>"));
+            assert!(xml.contains("<w:i w:val=\"0\"/>"));
+            assert!(xml.contains("<w14:gradFill w14:rotWithShape=\"1\">"));
+            assert!(xml.contains("<w14:lin w14:scaled=\"0\"/>"));
+            validate_docx_anonymized_export(&prepared.document)?;
+            assert_eq!(
+              finalize_docx_anonymized_export(&prepared.document)?,
+              prepared.document,
+            );
+            if let Some(document) = &expected {
+              assert_eq!(&prepared.document, document);
+            } else {
+              expected = Some(prepared.document);
+            }
+          }
+        }
+      }
+    }
+    Ok(())
+  }
+
+  #[test]
   fn retained_values_reject_cross_domain_and_noncanonical_spellings()
   -> Result<(), Box<dyn std::error::Error>> {
     let cell = |span: &str| {

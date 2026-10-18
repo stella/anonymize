@@ -10,8 +10,10 @@ use super::{common_font, valid_numbering_label};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum AttributeDomain {
-  /// `ST_OnOff` lexemes, copied unchanged.
+  /// `ST_OnOff` lexemes, normalized to `0` or `1`.
   OnOff,
+  /// XML Schema boolean lexemes, normalized to `0` or `1`.
+  Boolean,
   /// A decimal integer in canonical spelling within the inclusive range.
   Integer {
     minimum: i32,
@@ -61,8 +63,6 @@ fn upper_hex(value: &str, length: usize) -> Option<String> {
     .then(|| value.to_ascii_uppercase())
 }
 
-const ON_OFF_VALUES: &[&str] = &["0", "1", "true", "false", "on", "off"];
-
 impl AttributeDomain {
   /// Returns `None` when `value` lies outside the domain.
   pub(super) fn canonical(
@@ -71,7 +71,16 @@ impl AttributeDomain {
     styles: &HashMap<String, String>,
   ) -> Option<CanonicalAttribute> {
     let retained = match self {
-      Self::OnOff => ON_OFF_VALUES.contains(&value).then(|| value.to_owned()),
+      Self::OnOff => match value {
+        "1" | "true" | "on" => Some("1".to_owned()),
+        "0" | "false" | "off" => Some("0".to_owned()),
+        _ => None,
+      },
+      Self::Boolean => match value {
+        "1" | "true" => Some("1".to_owned()),
+        "0" | "false" => Some("0".to_owned()),
+        _ => None,
+      },
       Self::Integer { minimum, maximum } => canonical_integer(value)
         .filter(|number| (minimum..=maximum).contains(number))
         .map(|number| number.to_string()),
@@ -942,7 +951,7 @@ const WORD_ATTRIBUTE_TABLES: &[&[AttributeSpec]] = &[
 const DRAWING_LENGTH: AttributeDomain = integer(0, 20_116_800);
 const DRAWING_ANGLE: AttributeDomain = integer(0, 21_600_000);
 const DRAWING_PERCENTAGE: AttributeDomain = integer(0, 100_000);
-const DRAWING_BOOLEAN: AttributeDomain = one_of(&["0", "1", "true", "false"]);
+const DRAWING_BOOLEAN: AttributeDomain = AttributeDomain::Boolean;
 const FONT_ELEMENTS: &[&str] = &["latin", "ea", "cs", "font"];
 const SHADOW_ELEMENTS: &[&str] = &["outerShdw", "innerShdw", "reflection"];
 const SCHEME_COLOR_VALUES: &[&str] = &[
@@ -1187,7 +1196,7 @@ mod tests {
     canonical_word_2010_attributes, canonical_word_attributes,
   };
   use super::{
-    AttributeDomain, AttributeSpec, DRAWING_ATTRIBUTE_TABLES, ON_OFF_VALUES,
+    AttributeDomain, AttributeSpec, DRAWING_ATTRIBUTE_TABLES,
     WORD_ATTRIBUTE_TABLES,
   };
 
@@ -1202,8 +1211,22 @@ mod tests {
   fn valid_samples(domain: AttributeDomain) -> Vec<(String, Option<String>)> {
     let same = |value: &str| (value.to_owned(), Some(value.to_owned()));
     match domain {
-      AttributeDomain::OnOff => {
-        ON_OFF_VALUES.iter().map(|value| same(value)).collect()
+      AttributeDomain::OnOff => [
+        ("0", "0"),
+        ("false", "0"),
+        ("off", "0"),
+        ("1", "1"),
+        ("true", "1"),
+        ("on", "1"),
+      ]
+      .map(|(value, expected)| (value.to_owned(), Some(expected.to_owned())))
+      .to_vec(),
+      AttributeDomain::Boolean => {
+        [("0", "0"), ("false", "0"), ("1", "1"), ("true", "1")]
+          .map(|(value, expected)| {
+            (value.to_owned(), Some(expected.to_owned()))
+          })
+          .to_vec()
       }
       AttributeDomain::Integer { minimum, maximum } => {
         vec![same(&minimum.to_string()), same(&maximum.to_string())]
@@ -1257,6 +1280,9 @@ mod tests {
   fn invalid_samples(domain: AttributeDomain) -> Vec<String> {
     match domain {
       AttributeDomain::OnOff => vec!["yes".to_owned(), "On".to_owned()],
+      AttributeDomain::Boolean => ["on", "off", "TRUE", "yes", "1 "]
+        .map(str::to_owned)
+        .to_vec(),
       AttributeDomain::Integer { minimum, maximum } => vec![
         i64::from(minimum).saturating_sub(1).to_string(),
         i64::from(maximum).saturating_add(1).to_string(),
