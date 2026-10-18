@@ -230,7 +230,7 @@ describe("extractDocxText", () => {
       },
     ]);
     expect(() => extractDocxText(archive)).toThrow(
-      `must not exceed ${DOCX_XML_MAX_DEPTH} nested elements`,
+      `must contain fewer than ${DOCX_XML_MAX_DEPTH} nested elements`,
     );
   });
 

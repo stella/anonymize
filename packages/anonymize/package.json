@@ -13,7 +13,10 @@
   "type": "module",
   "exports": {
     ".": {
-      "types": "./dist/index.d.mts",
+      "types": {
+        "@stll/anonymize-source": "./src/index.ts",
+        "default": "./dist/index.d.mts"
+      },
       "import": "./dist/index.mjs",
       "default": "./dist/index.mjs"
     },

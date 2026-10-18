@@ -111,6 +111,12 @@ type RawDocumentRewriteResult = {
   readonly appliedReplacementCount: number;
 };
 
+type RawDocxAnonymizedExportPreparation = {
+  readonly document: Uint8Array;
+  readonly extractionJson: string;
+  readonly reportJson: string;
+};
+
 type RawPdfRasterResult = {
   readonly document: Uint8Array;
   readonly certificateJson: string;
@@ -126,6 +132,10 @@ export type RawWasmModule = {
     batchJson: string,
   ) => string;
   extractDocxTextJson: (document: Uint8Array) => string;
+  prepareDocxAnonymizedExportNative: (
+    document: Uint8Array,
+  ) => RawDocxAnonymizedExportPreparation;
+  finalizeDocxAnonymizedExportNative: (document: Uint8Array) => Uint8Array;
   rewriteDocxTextNative: (
     document: Uint8Array,
     rewritesJson: string,
@@ -178,6 +188,8 @@ export const RAW_WASM_MODULE_FUNCTION_MEMBERS = [
   "externalDetectionLimitsJson",
   "convertExternalDetectionBatchJson",
   "extractDocxTextJson",
+  "prepareDocxAnonymizedExportNative",
+  "finalizeDocxAnonymizedExportNative",
   "rewriteDocxTextNative",
   "planDocxRestorationJson",
   "inspectPdfJson",
@@ -256,6 +268,15 @@ export const createWasmBinding = (
   },
   externalDetectionLimitsJson: raw.externalDetectionLimitsJson,
   extractDocxTextJson: raw.extractDocxTextJson,
+  prepareDocxAnonymizedExportNative: (document) => {
+    const result = raw.prepareDocxAnonymizedExportNative(document);
+    return {
+      document: result.document,
+      extractionJson: result.extractionJson,
+      reportJson: result.reportJson,
+    };
+  },
+  finalizeDocxAnonymizedExportNative: raw.finalizeDocxAnonymizedExportNative,
   inspectPdfJson: raw.inspectPdfJson,
   rewritePdfRasterFromDetectionsJson: (document, requestJson, pagePixels) => {
     assertPdfPixelPages(pagePixels);

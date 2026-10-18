@@ -1134,6 +1134,12 @@ const fakeNativeBinding = (
     convertExternalDetectionBatch: () => [],
     externalDetectionLimitsJson: () => "{}",
     extractDocxTextJson: () => "{}",
+    prepareDocxAnonymizedExportNative: () => ({
+      document: new Uint8Array(),
+      extractionJson: "{}",
+      reportJson: "{}",
+    }),
+    finalizeDocxAnonymizedExportNative: (document) => document,
     inspectPdfJson: () => "{}",
     rewritePdfRasterFromDetectionsJson: () => ({
       document: new Uint8Array(),
