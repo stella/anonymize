@@ -28,7 +28,7 @@ fn part_names(
   let archive = ZipArchive::new(Cursor::new(document))?;
   let mut names = archive
     .file_names()
-    .map(|name| name.map(|value| value.into_owned()))
+    .map(|name| name.map(std::borrow::Cow::into_owned))
     .collect::<Result<Vec<_>, _>>()?;
   names.sort_unstable();
   Ok(names)

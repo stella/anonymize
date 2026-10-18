@@ -428,13 +428,19 @@ mod tests {
         });
       }
       rewritten.sort_by(|left, right| left.path.cmp(&right.path));
-      let types = rewritten_types
+      let rewritten_content_types = rewritten_types
         .iter()
         .map(|(path, content_type)| (path.as_str(), content_type.as_str()))
         .collect();
-      let names = super::super::package_names(&rewritten, &HashSet::new())?;
+      let rewritten_names =
+        super::super::package_names(&rewritten, &HashSet::new())?;
       assert!(
-        NumericIdentifiers::collect(&rewritten, &types, &names)?.is_identity()
+        NumericIdentifiers::collect(
+          &rewritten,
+          &rewritten_content_types,
+          &rewritten_names,
+        )?
+        .is_identity()
       );
       entries.reverse();
     }
