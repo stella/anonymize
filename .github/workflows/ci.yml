@@ -11,6 +11,8 @@ on:
     branches: [main]
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
+  merge_group:
+    types: [checks_requested]
   workflow_dispatch:
 
 concurrency:
@@ -345,7 +347,7 @@ jobs:
       - name: Detect shared toolchain changes
         id: toolchain
         env:
-          BASE_REF: ${{ github.event.pull_request.base.sha || github.event.before || 'unavailable-toolchain-base' }}
+          BASE_REF: ${{ github.event.merge_group.base_sha || github.event.pull_request.base.sha || github.event.before || 'unavailable-toolchain-base' }}
         run: |
           result=$(bunx --no-install stll-toolchain-changed --since "$BASE_REF")
           printf '%s\n' "$result"
@@ -522,4 +524,67 @@ jobs:
               echo "::error::Validation lane finished with '$result'"
               exit 1
             fi
+          done
+
+  ci-result:
+    if: always()
+    needs:
+      - changeset
+      - rust-quality
+      - detached-rust
+      - build
+      - scaling
+      - static
+      - tests
+      - python
+      - packages
+      - parity
+      - mcp-node22
+      - validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Require every selected validation job
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          CHANGESET_RESULT: ${{ needs.changeset.result }}
+          RUST_QUALITY_RESULT: ${{ needs.rust-quality.result }}
+          DETACHED_RUST_RESULT: ${{ needs.detached-rust.result }}
+          BUILD_RESULT: ${{ needs.build.result }}
+          SCALING_RESULT: ${{ needs.scaling.result }}
+          STATIC_RESULT: ${{ needs.static.result }}
+          TESTS_RESULT: ${{ needs.tests.result }}
+          PYTHON_RESULT: ${{ needs.python.result }}
+          PACKAGES_RESULT: ${{ needs.packages.result }}
+          PARITY_RESULT: ${{ needs.parity.result }}
+          MCP_NODE22_RESULT: ${{ needs.mcp-node22.result }}
+          VALIDATE_RESULT: ${{ needs.validate.result }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            test "$CHANGESET_RESULT" = "success"
+          else
+            # changeset is pull-request-only and is skipped for merge groups.
+            case "$CHANGESET_RESULT" in
+              success | skipped) ;;
+              *) exit 1 ;;
+            esac
+          fi
+
+          for result in \
+            "$RUST_QUALITY_RESULT" \
+            "$DETACHED_RUST_RESULT" \
+            "$BUILD_RESULT" \
+            "$SCALING_RESULT" \
+            "$STATIC_RESULT" \
+            "$TESTS_RESULT" \
+            "$PYTHON_RESULT" \
+            "$PACKAGES_RESULT" \
+            "$PARITY_RESULT" \
+            "$MCP_NODE22_RESULT" \
+            "$VALIDATE_RESULT"; do
+            test "$result" = "success"
           done
