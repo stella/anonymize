@@ -655,7 +655,7 @@ jobs:
         needs.verify.outputs.publish_runtime == 'true'
         && (github.event_name == 'push'
             || inputs.publish_to_npm == true))
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       # Trusted Publishing (OIDC): no PyPI API token is stored in the repo.
