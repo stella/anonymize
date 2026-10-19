@@ -32,7 +32,7 @@ permissions:
 jobs:
   verify:
     name: Verify
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     outputs:
@@ -312,7 +312,7 @@ jobs:
     name: Pack ${{ matrix.package }}
     needs: verify
     if: needs.verify.outputs.publish_runtime == 'true' && (github.event_name == 'push' || inputs.publish_to_npm == true)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     strategy:
@@ -409,7 +409,7 @@ jobs:
     name: Pack data package
     needs: verify
     if: needs.verify.outputs.publish_data == 'true' && (github.event_name == 'push' || inputs.publish_to_npm == true)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     outputs:
@@ -655,7 +655,7 @@ jobs:
         needs.verify.outputs.publish_runtime == 'true'
         && (github.event_name == 'push'
             || inputs.publish_to_npm == true))
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       # Trusted Publishing (OIDC): no PyPI API token is stored in the repo.
