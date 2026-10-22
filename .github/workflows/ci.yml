@@ -206,7 +206,10 @@ jobs:
         run: bun run check:toolchain
       - name: Typecheck workspace sources before any build
         run: |
-          ! compgen -G 'packages/*/dist' > /dev/null
+          if compgen -G 'packages/*/dist' > /dev/null; then
+            echo "::error::build outputs exist before the source typecheck"
+            exit 1
+          fi
           bun run typecheck
       - name: Audit Bun dependencies
         run: bun audit
