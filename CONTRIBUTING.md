@@ -39,7 +39,7 @@ a pull request, run the applicable full gates:
 
 ```bash
 bun run lint
-bun run format:check
+bun fmt --check
 bun run typecheck
 bun run check:typecheck-parity
 bun run test

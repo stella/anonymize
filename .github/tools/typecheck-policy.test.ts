@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { dirname, join } from "node:path";
+
 import rootPackage from "../../package.json";
 
 const packagePaths = rootPackage.workspaces.flatMap((pattern) => [

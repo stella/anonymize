@@ -1,7 +1,7 @@
 {
   "$schema": "https://turborepo.com/schema.json",
   "globalDependencies": [
-    ".oxfmtrc.json",
+    "bunfig.toml",
     "Cargo.toml",
     "Cargo.lock",
     "rust-toolchain.toml",
@@ -30,7 +30,6 @@
       "outputs": []
     },
     "lint": {},
-    "format": {},
     "test": {
       "dependsOn": ["^build"]
     }

@@ -12,8 +12,8 @@
 
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { pathToFileURL } from "node:url";
 import process from "node:process";
+import { pathToFileURL } from "node:url";
 
 const THRESHOLD = 6;
 const WORD_FRACTION = 0.8;

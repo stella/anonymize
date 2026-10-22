@@ -332,7 +332,7 @@ jobs:
       - name: Verify data mirror
         run: bun run --cwd packages/data check:mirror
       - name: Format
-        run: bun run format:check
+        run: bun fmt --check
       - name: Typecheck
         if: ${{ !cancelled() }}
         run: bun run typecheck:built

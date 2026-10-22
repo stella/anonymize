@@ -23,7 +23,7 @@ test("uses committed history and shared detector to select workspace parity", ()
   expect(lint).not.toContain("typecheck-proof.ts");
   expect(lint).toContain("bun run test:tooling");
   expect(lint).toContain("bun run lint");
-  expect(lint).toContain("bun run format:check");
+  expect(lint).toContain("bun fmt --check");
 });
 
 test("Rust caches retain artifacts while registry index metadata stays fresh", () => {

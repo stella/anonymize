@@ -103,8 +103,7 @@
     "smoke:wasm-package": "node scripts/smoke-wasm-package.mjs",
     "smoke:wasm-runtimes": "node scripts/smoke-wasm-runtimes.mjs",
     "smoke:wasm-compiled": "node scripts/smoke-wasm-compiled.mjs",
-    "smoke:wasm-browser": "node scripts/smoke-wasm-browser.mjs && node scripts/smoke-wasm-vite.mjs",
-    "format": "oxfmt ."
+    "smoke:wasm-browser": "node scripts/smoke-wasm-browser.mjs && node scripts/smoke-wasm-vite.mjs"
   },
   "dependencies": {
     "@stll/anonymize-data": "^0.0.10"
@@ -118,7 +117,7 @@
   },
   "devDependencies": {
     "@napi-rs/cli": "^3.10.6",
-    "bun-types": "1.4.3",
+    "bun-types": "1.4.4",
     "fast-check": "^4.10.2",
     "fflate": "^0.8.3",
     "puppeteer-core": "25.12.0",

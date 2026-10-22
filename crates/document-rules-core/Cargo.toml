@@ -13,11 +13,7 @@ default = ["incremental"]
 incremental = ["dep:salsa"]
 
 [dependencies]
-salsa = { version = "0.28.1", default-features = false, optional = true, features = [
-  "inventory",
-  "macros",
-  "salsa_unstable",
-] }
+salsa = { version = "0.28.1", default-features = false, optional = true, features = ["inventory", "macros", "salsa_unstable"] }
 thiserror = "2"
 unicode-normalization = { version = "0.1.25", default-features = false }
 
