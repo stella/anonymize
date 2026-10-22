@@ -70,16 +70,19 @@ same normalized amount gets the same placeholder within a document, so a reader
 and that the escrow amount is a different figure. The redaction map restores
 the original text.
 
-````text
+```text
 The Purchase Price is $25,000,000 (the "Purchase Price").
 At Closing, Buyer shall pay $25,000,000 less the Escrow Amount of $2,500,000.
 The Escrow Amount of $2,500,000 is released 18 months after Closing.
-``
-` becomes ```text
+```
+
+becomes
+
+```text
 The Purchase Price is [MONETARY_AMOUNT_1] (the "Purchase Price").
 At Closing, Buyer shall pay [MONETARY_AMOUNT_1] less the Escrow Amount of [MONETARY_AMOUNT_2].
 The Escrow Amount of [MONETARY_AMOUNT_2] is released 18 months after Closing.
-````
+```
 
 `deanonymise(redactedText, redactionMap)` returns the original text: verified.
 
@@ -89,36 +92,58 @@ Per-label operators decide what happens to each entity type. `keep` leaves an
 entity in place while still recording that it was processed, so a document can
 have its deal sizes censored and nothing else:
 
-``
-`ts import { DEFAULT_ENTITY_LABELS } from "@stll/anonymize/constants"; import { getDefaultNativePipeline } from "@stll/anonymize"; const pipeline = getDefaultNativePipeline({ language: "en" }); const operators = Object.fromEntries( DEFAULT_ENTITY_LABELS.filter((label) => label !== "monetary amount").map( (label) => [label, "keep"], ), ); const { redaction } = pipeline.redactText(text, { operators }); ```
+```ts
+import { getDefaultNativePipeline } from "@stll/anonymize";
+import { DEFAULT_ENTITY_LABELS } from "@stll/anonymize/constants";
 
-````text
+const pipeline = getDefaultNativePipeline({ language: "en" });
+const operators = Object.fromEntries(
+  DEFAULT_ENTITY_LABELS.filter((label) => label !== "monetary amount").map(
+    (label) => [label, "keep"],
+  ),
+);
+const { redaction } = pipeline.redactText(text, { operators });
+```
+
+```text
 On 14 March 2025 Alice Smith (alice@example.com) wired the purchase price of USD 45,000,000 to IBAN DE89 3704 0044 0532 0130 00 and a deposit of EUR 250,000 to the notary.
-``
-` Default operators (every default label replaced): ```text
+```
+
+Default operators (every default label replaced):
+
+```text
 On [DATE_1] [PERSON_1] ([EMAIL_ADDRESS_1]) wired the purchase price of [MONETARY_AMOUNT_1] to IBAN [IBAN_1] and a deposit of [MONETARY_AMOUNT_2] to the notary.
-````
+```
 
 With `keep` for every label except `monetary amount`:
 
-``
-`text On 14 March 2025 Alice Smith (alice@example.com) wired the purchase price of [MONETARY_AMOUNT_1] to IBAN DE89 3704 0044 0532 0130 00 and a deposit of [MONETARY_AMOUNT_2] to the notary. ```
+```text
+On 14 March 2025 Alice Smith (alice@example.com) wired the purchase price of [MONETARY_AMOUNT_1] to IBAN DE89 3704 0044 0532 0130 00 and a deposit of [MONETARY_AMOUNT_2] to the notary.
+```
 
 The CLI exposes the same selection through `--labels`:
 
-````bash
+```bash
 anonymize --labels "monetary amount" -k deal.key.json term-sheet.txt
 anonymize --labels "monetary amount" -m redact --redact-string "[AMOUNT]" term-sheet.txt
-``
-` ### Same placeholders across related documents A redaction session reuses placeholders for the same normalized entity across documents, so a term sheet, the subscription agreement, and a later memo all refer to the round size by one placeholder. `restoreText()
-` maps them back. ```ts
+```
+
+### Same placeholders across related documents
+
+A redaction session reuses placeholders for the same normalized entity across
+documents, so a term sheet, the subscription agreement, and a later memo all
+refer to the round size by one placeholder. `restoreText()` maps them back.
+
+```ts
 const session = pipeline.createRedactionSession("deal1");
 const termSheet = session.redactText(termSheetText);
 const subscription = session.redactText(subscriptionText);
-````
+```
 
-``
-`text Term sheet: Northwind Ventures invests [MONETARY_AMOUNT_deal1_1] at a pre-money valuation of [MONETARY_AMOUNT_deal1_2]. Subscription agreement: the aggregate subscription price is [MONETARY_AMOUNT_deal1_1]. ```
+```text
+Term sheet: Northwind Ventures invests [MONETARY_AMOUNT_deal1_1] at a pre-money valuation of [MONETARY_AMOUNT_deal1_2].
+Subscription agreement: the aggregate subscription price is [MONETARY_AMOUNT_deal1_1].
+```
 
 `session.restoreText()` on the second output returns the original text: verified.
 
@@ -157,25 +182,46 @@ resolvedEntities
     cursor = entity.end;
   });
 output += text.slice(cursor);
-``
-` | Input                                                                                    | Caller-side output                                                                      | | ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | | `Acme Holdings Ltd. acquired Beta Systems GmbH for $1.2 billion in cash and stock.`      | `Acme Holdings Ltd. acquired Beta Systems GmbH for $[AMOUNT_1] in cash and stock.
-`      | | `The Series B round of USD 45,000,000 was led by Northwind Ventures on 14 March 2025.`   | `The Series B round of USD [AMOUNT_1] was led by Northwind Ventures on 14 March 2025.
-`  | | `Purchase price: EUR 12.5 million, of which €2,500,000 is held in escrow for 18 months.` | `Purchase price: EUR [AMOUNT_1], of which €[AMOUNT_2] is held in escrow for 18 months.
-` | | `The aggregate Earn-Out Payments shall not exceed $10,000,000 (the "Earn-Out Cap").`     | `The aggregate Earn-Out Payments shall not exceed $[AMOUNT_1] (the "Earn-Out Cap").
-`    | | `The Company raised a $7.5M seed round and a Series A of $32M.`                          | `The Company raised a $[AMOUNT_1] seed round and a Series A of $[AMOUNT_2].
-`            | The library does not parse amounts into numeric values; bucketing or rounding is a caller-side step over the detected span. ## Known limits The rows below are current output for shapes the detector does not handle well. | Input                                                  | Output                                                            | Monetary amounts     | | ------------------------------------------------------ | ----------------------------------------------------------------- | -------------------- | | `The fee is between $10 and $20 million.`              | `The fee is between [MONETARY_AMOUNT_1] and [MONETARY_AMOUNT_2].` | `$10`, `$20 million
-` | | `Der Kaufpreis beträgt fünfundzwanzig Millionen Euro.` | `Der Kaufpreis beträgt fünfundzwanzig Millionen Euro.
-`            | none                 | - Free-standing written-out amounts (`twenty-five million dollars
-  `, `a million dollars
-  `) are captured for English number words. Other languages write compound numerals as inflected single words and are covered through the keyword forms (`in Worten:`, `slovy:`, `en lettres:
-`). - Lowercase magnitude shorthand counts only when attached to the digits (`$25m`, `£500k`, `$25mm`); `$25 m` and `$25 mm
-` read as length units. - `between $10 and $20 million
-  ` yields two amounts; the shared magnitude is not distributed to the first figure. - Consistency is by normalized surface form: `$25,000,000`, `USD 25,000,000
-  `, and `$25m
-` are three placeholders, not one. - With the all-language package an organization name may absorb prose between two capitalized words (`Northwind Ventures LLC invested in Acme Holdings
-  Ltd.
-  ` becomes one organization) because languages such as Czech or French capitalize only the first word of a name. The `en
-  ` package closes that bridge to a connector set (`of`, `the`, `and`, `for`, `&`, `de`, `von
-  `, …), so English prose between two organizations is left in place. - No detector catches everything. Review the entity list when a missed figure would matter, and use `redactTextWithCallerDetections()
-  ` to add spans from a model or a document-specific rule. 
 ```
+
+| Input                                                                                    | Caller-side output                                                                      |
+| ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `Acme Holdings Ltd. acquired Beta Systems GmbH for $1.2 billion in cash and stock.`      | `Acme Holdings Ltd. acquired Beta Systems GmbH for $[AMOUNT_1] in cash and stock.`      |
+| `The Series B round of USD 45,000,000 was led by Northwind Ventures on 14 March 2025.`   | `The Series B round of USD [AMOUNT_1] was led by Northwind Ventures on 14 March 2025.`  |
+| `Purchase price: EUR 12.5 million, of which €2,500,000 is held in escrow for 18 months.` | `Purchase price: EUR [AMOUNT_1], of which €[AMOUNT_2] is held in escrow for 18 months.` |
+| `The aggregate Earn-Out Payments shall not exceed $10,000,000 (the "Earn-Out Cap").`     | `The aggregate Earn-Out Payments shall not exceed $[AMOUNT_1] (the "Earn-Out Cap").`    |
+| `The Company raised a $7.5M seed round and a Series A of $32M.`                          | `The Company raised a $[AMOUNT_1] seed round and a Series A of $[AMOUNT_2].`            |
+
+The library does not parse amounts into numeric values; bucketing or rounding
+is a caller-side step over the detected span.
+
+## Known limits
+
+The rows below are current output for shapes the detector does not handle
+well.
+
+| Input                                                  | Output                                                            | Monetary amounts     |
+| ------------------------------------------------------ | ----------------------------------------------------------------- | -------------------- |
+| `The fee is between $10 and $20 million.`              | `The fee is between [MONETARY_AMOUNT_1] and [MONETARY_AMOUNT_2].` | `$10`, `$20 million` |
+| `Der Kaufpreis beträgt fünfundzwanzig Millionen Euro.` | `Der Kaufpreis beträgt fünfundzwanzig Millionen Euro.`            | none                 |
+
+- Free-standing written-out amounts (`twenty-five million dollars`,
+  `a million dollars`) are captured for English number words. Other
+  languages write compound numerals as inflected single words and are covered
+  through the keyword forms (`in Worten:`, `slovy:`, `en lettres:`).
+- Lowercase magnitude shorthand counts only when attached to the digits
+  (`$25m`, `£500k`, `$25mm`); `$25 m` and `$25 mm` read as length units.
+- `between $10 and $20 million` yields two amounts; the shared magnitude is
+  not distributed to the first figure.
+- Consistency is by normalized surface form: `$25,000,000`, `USD 25,000,000`,
+  and `$25m` are three placeholders, not one.
+- With the all-language package an organization name may absorb prose between
+  two capitalized words
+  (`Northwind Ventures LLC invested in Acme Holdings Ltd.` becomes one
+  organization) because languages such as Czech or French
+  capitalize only the first word of a name. The `en` package closes that
+  bridge to a connector set (`of`, `the`, `and`, `for`, `&`, `de`, `von`, …),
+  so English prose between two organizations is left in place.
+- No detector catches everything. Review the entity list when a missed figure
+  would matter, and use `redactTextWithCallerDetections()` to add spans from a
+  model or a document-specific rule.

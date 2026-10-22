@@ -1154,7 +1154,7 @@ export class LocalAnonymizeService {
       fillRgb: input.fillRgb,
     });
     await this.#faults.beforeOutputPublish?.();
-    await destination.write(anonymized.document);
+    await safeWrite(destination, anonymized.document);
     return {
       operation: "anonymize",
       format: "pdf",
@@ -1184,7 +1184,7 @@ export class LocalAnonymizeService {
       const result = lease.entry.session.redact_text(text);
       await this.#persistSession(input.sessionId, lease.entry.session);
       await this.#faults.beforeOutputPublish?.();
-      await destination.write(result.redaction.redactedText);
+      await safeWrite(destination, result.redaction.redactedText);
       this.#commitSession(lease);
       return {
         operation: "anonymize",
@@ -1282,7 +1282,7 @@ export class LocalAnonymizeService {
       plan.commit();
       await this.#persistSession(input.sessionId, lease.entry.session);
       await this.#faults.beforeOutputPublish?.();
-      await destination.write(redactedText);
+      await safeWrite(destination, redactedText);
       this.#commitSession(lease);
       return {
         operation: "anonymize",
@@ -1318,7 +1318,7 @@ export class LocalAnonymizeService {
     const lease = await this.#readSession(input.sessionId);
     try {
       const restored = lease.entry.session.restoreText(text);
-      await destination.write(restored);
+      await safeWrite(destination, restored);
       this.#commitSession(lease);
       return {
         operation: "restore",
@@ -1365,7 +1365,7 @@ export class LocalAnonymizeService {
       });
       await this.#persistSession(input.sessionId, lease.entry.session);
       await this.#faults.beforeOutputPublish?.();
-      await destination.write(result.document);
+      await safeWrite(destination, result.document);
       this.#commitSession(lease);
       return {
         operation: "anonymize",
@@ -1414,7 +1414,7 @@ export class LocalAnonymizeService {
           "Re-run with allowPartialCoverage: true to accept partial restoration.",
         );
       }
-      await destination.write(result.document);
+      await safeWrite(destination, result.document);
       this.#commitSession(lease);
       return {
         operation: "restore",
