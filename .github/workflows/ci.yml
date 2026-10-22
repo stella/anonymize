@@ -146,8 +146,15 @@ jobs:
         run: bun run rust:check
       - name: Hawk visibility lint
         run: bun run rust:hawk
-      - name: Cargo deny (supply chain)
+      - name: Cargo deny policy (supply chain)
         run: bun run rust:deny
+      - name: Cargo deny advisories (supply chain)
+        uses: stella/.github/.github/actions/cargo-deny-advisories@12eb83b8c6bd42a0bead73d9c6bc30b4caad6433
+        with:
+          base-sha: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+          manifest-path: Cargo.toml
+          config: deny.toml
+          lockfile: Cargo.lock
       - name: Snapshot hygiene (insta)
         run: bun run rust:snapshot-check
 
@@ -164,12 +171,20 @@ jobs:
         with:
           profile: detached
           cache-scope: detached
-      - name: Native Nym cargo deny (supply chain)
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      - name: Native Nym cargo deny policy (supply chain)
         run: >-
           cargo deny --locked
           --manifest-path packages/benchmark/native/nym-adapter/Cargo.toml
           --config packages/benchmark/native/nym-adapter/deny.toml
-          check
+          check bans licenses sources
+      - name: Native Nym cargo deny advisories (supply chain)
+        uses: stella/.github/.github/actions/cargo-deny-advisories@12eb83b8c6bd42a0bead73d9c6bc30b4caad6433
+        with:
+          base-sha: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+          manifest-path: packages/benchmark/native/nym-adapter/Cargo.toml
+          config: packages/benchmark/native/nym-adapter/deny.toml
+          lockfile: packages/benchmark/native/nym-adapter/Cargo.lock
       - name: Fuzz targets compile (anti-bitrot)
         run: cargo check --manifest-path fuzz/Cargo.toml --bins
       - name: Install stable fuzz runner
