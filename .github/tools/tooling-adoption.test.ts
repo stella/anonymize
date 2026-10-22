@@ -136,6 +136,25 @@ test("keeps third-party quarantine and exact first-party tooling exemptions", ()
   ).toBe(true);
 });
 
+test("pins the shared quarantine workflows and prunes daily", () => {
+  const policy = read(".github/workflows/quarantine-policy.yml");
+  const prune = read(".github/workflows/quarantine-prune.yml");
+  const policyMatches = policy.matchAll(
+    /uses: stella\/\.github\/\.github\/workflows\/quarantine-policy\.yml@([0-9a-f]{40})/gu,
+  );
+  const policyCommits = [...policyMatches].map((match) => match[1]);
+  expect(policyCommits).toHaveLength(1);
+  expect(policy).not.toMatch(/^\s+schedule:/mu);
+  const pruneMatches = prune.matchAll(
+    /uses: stella\/\.github\/\.github\/workflows\/quarantine-prune\.yml@([0-9a-f]{40})/gu,
+  );
+  const pruneCommits = [...pruneMatches].map((match) => match[1]);
+  expect(pruneCommits).toHaveLength(1);
+  expect(policyCommits[0]).toBe(pruneCommits[0]);
+  expect(prune.match(/^\s+- cron: "11 4 \* \* \*"$/gmu)).toHaveLength(1);
+  expect(prune.match(/^\s+- cron:/gmu)).toHaveLength(1);
+});
+
 test("every first-party quarantine exemption carries an exact UTC annotation", () => {
   const source = read("bunfig.toml");
   const parsed = Bun.TOML.parse(source);

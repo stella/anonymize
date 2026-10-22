@@ -1,0 +1,4 @@
+# Crate versions admitted before the five-day quarantine.
+excludes = [
+  "stella-docx-kernel", # quarantine-excluded-since: 2026-07-27T19:48:12.000Z
+]
