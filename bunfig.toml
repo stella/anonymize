@@ -6,8 +6,7 @@ minimumReleaseAge = 432000
 # First-party stella packages ship in coordinated release
 # waves, so allow fresh internal versions immediately.
 minimumReleaseAgeExcludes = [
-  "@stll/oxlint-config", # quarantine-excluded-since: 2026-10-17T08:48:09.179Z
-  "@stll/oxlint-config@1.4.0", # quarantine-expires: 2026-10-22T08:48:09.179Z
-  "@stll/oxlint-plugin", # quarantine-excluded-since: 2026-10-10T13:16:33.995Z
-  "@stll/typescript-config", # quarantine-excluded-since: 2026-10-10T08:12:38.453Z
+  "@stll/oxlint-plugin", # quarantine-excluded-since: 2026-10-16T21:09:03.451Z
+  "@stll/typescript-config", # quarantine-excluded-since: 2026-05-31T22:16:56.000Z
+  "@stll/oxlint-config", # quarantine-excluded-since: 2026-05-31T22:16:56.000Z
 ]

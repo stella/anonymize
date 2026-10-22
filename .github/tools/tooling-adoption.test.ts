@@ -141,7 +141,7 @@ test("every first-party quarantine exemption carries an exact UTC annotation", (
   const parsed = Bun.TOML.parse(source);
   const entries = Array.from(
     source.matchAll(
-      /^\s*"(?<name>@stll\/[^"*]+)"\s*,?\s*#\s*quarantine-(?<marker>excluded-since|expires):\s*(?<timestamp>\S+)\s*$/gm,
+      /^\s*"(?<name>@stll\/[^"*]+)"\s*,?\s*#\s*quarantine-excluded-since:\s*(?<timestamp>\S+)\s*$/gm,
     ),
   );
   const names = entries.map((entry) => {
@@ -161,10 +161,6 @@ test("every first-party quarantine exemption carries an exact UTC annotation", (
     const timestamp = entry.groups?.timestamp;
     if (timestamp === undefined) throw new Error("Missing exemption timestamp");
     expect(new Date(timestamp).toISOString()).toBe(timestamp);
-    if (entry.groups?.marker === "excluded-since") {
-      expect(Date.parse(timestamp)).toBeLessThanOrEqual(Date.now());
-      continue;
-    }
-    expect(entry.groups?.name).toMatch(/@[^@]+$/u);
+    expect(Date.parse(timestamp)).toBeLessThanOrEqual(Date.now());
   }
 });
