@@ -46,7 +46,7 @@ itself. Do not restore a parallel TypeScript assembly implementation.
 3. Run `cargo nextest run -p stella-anonymize-core --test assemble_parity`
    without the update flag to verify the frozen snapshots.
 4. Rewrite the `packageDigest` values in `manifest.json` from the frozen
-   oracles, then run `bun fmt` and commit the fixture, manifest, and
+   oracles, then run `bun run format` and commit the fixture, manifest, and
    data change together:
 
    ```bash
