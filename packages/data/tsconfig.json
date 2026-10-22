@@ -1,5 +1,8 @@
 {
   "extends": "@stll/typescript-config/library.json",
+  "compilerOptions": {
+    "customConditions": ["@stll/anonymize-source"]
+  },
   "exclude": ["node_modules"],
   "include": ["dictionaries", "tsdown.config.ts"]
 }
