@@ -1,11 +1,11 @@
 import { loadNativeAnonymizeBinding } from "@stll/anonymize";
 
+import { decodeDocxExtraction } from "./native-codec";
 import {
   DOCX_EXTRACTION_ERROR_CODES,
   type DocxExtraction,
   type DocxExtractionErrorCode,
 } from "./types";
-import { decodeDocxExtraction } from "./native-codec";
 
 export const DOCX_EXTRACTION_CONTRACT_VERSION = 1 as const;
 export const DOCX_ARCHIVE_MAX_BYTES = 64 * 1024 * 1024;

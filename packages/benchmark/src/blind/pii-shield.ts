@@ -3,12 +3,12 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import type { GroundTruthDocument } from "../ground-truth";
 import type {
   Adapter,
   AdapterOutcome,
   NativePrediction,
 } from "../adapters/types";
+import type { GroundTruthDocument } from "../ground-truth";
 
 const SCAN_TIMEOUT_MS = 5 * 60 * 1000;
 const MACOS_NATIVE_TEARDOWN_EXIT = 134;

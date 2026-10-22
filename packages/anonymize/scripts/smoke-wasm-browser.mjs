@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { existsSync, readFileSync } from "node:fs";
 /**
  * Headless-browser smoke test for the @stll/anonymize-wasm BROWSER path.
  *
@@ -30,7 +31,6 @@
  * Run: `node scripts/smoke-wasm-browser.mjs` (from packages/anonymize).
  */
 import { createServer } from "node:http";
-import { existsSync, readFileSync } from "node:fs";
 import { dirname, extname, join, normalize, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import puppeteer from "puppeteer-core";

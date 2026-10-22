@@ -1,13 +1,13 @@
-import type { Dictionaries, PipelineConfig } from "./types";
-import type { NativeAnonymizeBinding, PreparedNativePipeline } from "./native";
 import { defaultDictionaryBundleOptions } from "./build-native-package";
-import { createNativePipelineFromConfig } from "./native-pipeline";
-import { DEFAULT_NATIVE_PIPELINE_CONFIG } from "./native-default-config";
 import { applyPipelineLanguageScope } from "./language-scope";
+import type { NativeAnonymizeBinding, PreparedNativePipeline } from "./native";
+import { DEFAULT_NATIVE_PIPELINE_CONFIG } from "./native-default-config";
+import { createNativePipelineFromConfig } from "./native-pipeline";
 import {
-  pipelineLanguageSelectionKey,
   type NormalizedPipelineLanguageSelection,
+  pipelineLanguageSelectionKey,
 } from "./pipeline-language";
+import type { Dictionaries, PipelineConfig } from "./types";
 
 type CreateSemanticPipelineOptions = {
   binding: NativeAnonymizeBinding;

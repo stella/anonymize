@@ -3,10 +3,10 @@ import { join } from "node:path";
 
 import type { GroundTruthDocument } from "../ground-truth";
 import {
-  totalUtf16CodeUnits,
   type Adapter,
   type AdapterOutcome,
   type NativePrediction,
+  totalUtf16CodeUnits,
 } from "./types";
 
 const PYTHON_ADAPTER_TIMEOUT_MS = 10 * 60 * 1000;

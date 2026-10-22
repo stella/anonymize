@@ -2,15 +2,15 @@ import { describe, expect, test } from "bun:test";
 import { strToU8, zipSync } from "fflate";
 
 import type { NativePrediction } from "../adapters/types";
+import { parseGermanLerRows } from "../suite/german-ler";
+import { parseMeddocanArchive } from "../suite/meddocan";
+import { parseMultiGraSCCoArchive } from "../suite/multigrassco";
+import { parseRedactionBenchRows } from "../suite/redactionbench";
+import { scoreRedactionBench } from "../suite/redactionbench-score";
 import {
   BENCHMARK_CORPORA,
   validateBenchmarkRegistry,
 } from "../suite/registry";
-import { parseRedactionBenchRows } from "../suite/redactionbench";
-import { scoreRedactionBench } from "../suite/redactionbench-score";
-import { parseMeddocanArchive } from "../suite/meddocan";
-import { parseMultiGraSCCoArchive } from "../suite/multigrassco";
-import { parseGermanLerRows } from "../suite/german-ler";
 import { scoreSpanCorpus } from "../suite/span-score";
 
 const rows = () => [

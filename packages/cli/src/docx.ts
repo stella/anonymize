@@ -14,13 +14,13 @@ import { parseArgs } from "node:util";
 
 import type { NativeOpenSessionArchiveOptions } from "@stll/anonymize";
 import {
-  DOCX_COVERAGE_MODES,
   anonymizeDocx,
-  restoreDocxText,
+  DOCX_COVERAGE_MODES,
   type DocxAnonymizationSession,
   type DocxAnonymizationSummary,
   type DocxRestorationResult,
   type DocxRestorationSession,
+  restoreDocxText,
 } from "@stll/anonymize-docx";
 
 import { parseCountries, UsageError } from "./args";
@@ -66,8 +66,7 @@ type DocxCommand =
   | ({ type: "restore" } & DocxCommonOptions);
 
 export type DocxPipelineRequest =
-  | { type: "anonymize"; detection: DocxDetectionOptions }
-  | { type: "restore" };
+  { type: "anonymize"; detection: DocxDetectionOptions } | { type: "restore" };
 
 type DocxCliSession = DocxAnonymizationSession &
   DocxRestorationSession & {

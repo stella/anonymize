@@ -1,8 +1,8 @@
 import { createRequire } from "node:module";
 
 import type { NativePrediction } from "../../adapters/types";
-import { assertProviderInputIdentity } from "./input-identity";
 import { assertProviderEntities, outputIdentity } from "./identity";
+import { assertProviderInputIdentity } from "./input-identity";
 import { regexDetectorConfig } from "./stella-config";
 import type { CrossProviderId, ProviderSample } from "./types";
 

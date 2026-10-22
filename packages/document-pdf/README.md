@@ -15,6 +15,7 @@ parsed or safe.
 
 ```ts
 import { readFile } from "node:fs/promises";
+
 import { inspectPdf } from "@stll/anonymize-pdf";
 
 const inspection = inspectPdf(await readFile("contract.pdf"));

@@ -1,18 +1,18 @@
 import { mkdirSync } from "node:fs";
-import { cpus, arch, platform, totalmem } from "node:os";
+import { arch, cpus, platform, totalmem } from "node:os";
 import { join } from "node:path";
 
-import { loadAdhocDocs, runAdhoc } from "./adhoc";
 import { createOpenRedactionAdapter } from "./adapters/openredaction";
-import { createStllAdapter } from "./adapters/stella";
-import { createRedactPiiAdapter } from "./adapters/redact-pii";
 import { createPythonAdapter } from "./adapters/python";
 import {
   DATAFOG_PROVIDER,
   PRESIDIO_PROVIDER,
   SCRUBADUB_PROVIDER,
 } from "./adapters/python-providers";
+import { createRedactPiiAdapter } from "./adapters/redact-pii";
+import { createStllAdapter } from "./adapters/stella";
 import type { Adapter, NativePrediction } from "./adapters/types";
+import { loadAdhocDocs, runAdhoc } from "./adhoc";
 import { loadGroundTruth } from "./ground-truth";
 import {
   aggregate,
@@ -27,8 +27,8 @@ import {
   type ThroughputReport,
 } from "./report";
 import {
-  DATAFOG_MAPPING,
   type CommonLabel,
+  DATAFOG_MAPPING,
   type NativeMapping,
   OPENREDACTION_MAPPING,
   PRESIDIO_MAPPING,

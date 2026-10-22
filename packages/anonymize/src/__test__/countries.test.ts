@@ -9,12 +9,12 @@ import { describe, expect, setDefaultTimeout, test } from "bun:test";
 
 setDefaultTimeout(60_000);
 
-import { createPipelineContext } from "../context";
 import { DEFAULT_ENTITY_LABELS } from "../constants";
+import { createPipelineContext } from "../context";
 import type { NativePipelineEntity } from "../native";
 import type { PipelineConfig } from "../types";
-import { detectNative } from "./native-detect";
 import { loadTestDictionaries } from "./load-dictionaries";
+import { detectNative } from "./native-detect";
 
 const baseConfig: Omit<PipelineConfig, "dictionaries"> = {
   threshold: 0.3,

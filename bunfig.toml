@@ -42,9 +42,7 @@ ignorePatterns = [
   "**/dist/**",
   "packages/benchmark/vendor/**",
   "cliff.toml",
-  "packages/",
-  "results/",
-  "vendor/",
+  "packages/benchmark/results/**",
 ]
 
 [fmt.sortImports]

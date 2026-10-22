@@ -1,15 +1,14 @@
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-
 import {
-  PDF_LOCAL_PROVIDER_ERROR_CODES,
-  PdfLocalProviderError,
   anonymizePdfRaster,
   inspectPdf,
+  PDF_LOCAL_PROVIDER_ERROR_CODES,
+  PdfLocalProviderError,
   renderPdfWithPopplerTesseract,
 } from "../index";
 

@@ -1,8 +1,7 @@
+import { parquetReadObjects } from "hyparquet";
 import { createHash } from "node:crypto";
 import { mkdir, readFile, rename, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
-
-import { parquetReadObjects } from "hyparquet";
 
 import { parseVerifiedArtifact } from "../verified-artifact";
 

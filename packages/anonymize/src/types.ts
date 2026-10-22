@@ -157,10 +157,7 @@ export type ValidIdValidator = "br.cpf" | "br.cnpj" | "us.rtn";
 
 /** Auto-generated trigger variants — closed set. */
 export type TriggerExtension =
-  | "add-colon"
-  | "add-trailing-space"
-  | "add-colon-space"
-  | "normalize-spaces";
+  "add-colon" | "add-trailing-space" | "add-colon-space" | "normalize-spaces";
 
 /** V2 trigger config entry (JSON shape). */
 export type TriggerGroupConfig = {
@@ -224,8 +221,7 @@ export type MaskOperatorConfig = {
 };
 
 export type OperatorSelection =
-  | Exclude<OperatorType, "mask">
-  | MaskOperatorConfig;
+  Exclude<OperatorType, "mask"> | MaskOperatorConfig;
 
 export type OperatorConfig = {
   /** Operator per label. Missing labels default to "replace". */

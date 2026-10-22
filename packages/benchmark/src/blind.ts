@@ -9,15 +9,15 @@ import {
   TAB_SAMPLE_SEED,
   TAB_SAMPLE_SIZE,
 } from "./blind/tab";
-import type { GroundTruthDocument } from "./ground-truth";
 import { benchmarkSourceGitSha } from "./git-revision";
+import type { GroundTruthDocument } from "./ground-truth";
 import { runSealedBoundary } from "./sealed-boundary";
 import {
+  normalizeSealedProviderVersion,
   SEALED_AGGREGATE_REPORT_SCHEMA_VERSION,
   type SealedAggregateReport,
   type SealedLibraryResult,
   type TabAggregateMetrics,
-  normalizeSealedProviderVersion,
   writeSealedAggregateReport,
 } from "./sealed-report";
 

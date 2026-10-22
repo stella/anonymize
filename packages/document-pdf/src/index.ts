@@ -2,27 +2,27 @@ import { createHash } from "node:crypto";
 
 import {
   convert_external_detection_batch,
-  loadNativeAnonymizeBinding,
   type ExternalDetectionBatch,
+  loadNativeAnonymizeBinding,
   type PreparedNativePipeline,
 } from "@stll/anonymize";
 
+import {
+  decodePdfInspection,
+  decodePdfRasterRewriteCertificate,
+} from "./native-codec";
 import {
   PDF_INSPECTION_ERROR_CODES,
   PDF_RASTER_ERROR_CODES,
   type PdfInspection,
   type PdfInspectionErrorCode,
   type PdfPageObservation,
-  type PdfRect,
-  type PdfRasterProvider,
   type PdfRasterErrorCode,
+  type PdfRasterProvider,
   type PdfRasterRewrite,
   type PdfRasterRewriteResult,
+  type PdfRect,
 } from "./types";
-import {
-  decodePdfInspection,
-  decodePdfRasterRewriteCertificate,
-} from "./native-codec";
 
 export const PDF_INSPECTION_CONTRACT_VERSION = 1 as const;
 export const PDF_RASTER_CONTRACT_VERSION = 1 as const;

@@ -1,11 +1,8 @@
-import { createHash } from "node:crypto";
-
 import { describe, expect, test } from "bun:test";
+import { createHash } from "node:crypto";
 
 import type { Dictionaries } from "@stll/anonymize";
 
-import type { GroundTruthDocument } from "../ground-truth";
-import { loadGroundTruth } from "../ground-truth";
 import {
   buildStllBenchmarkConfig,
   createStllAdapter,
@@ -13,6 +10,8 @@ import {
   runStllAdapterWithInitializer,
 } from "../adapters/stella";
 import { loadCorpusDictionaries } from "../dictionaries";
+import type { GroundTruthDocument } from "../ground-truth";
+import { loadGroundTruth } from "../ground-truth";
 
 const document = (
   id: string,

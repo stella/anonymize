@@ -1,3 +1,4 @@
+import { strToU8, zipSync } from "fflate";
 /**
  * Smoke test for the @stll/anonymize-wasm PACKAGE ENTRY (not just the raw
  * binding): exercises the built `wasm/dist/wasm.mjs` under Node.
@@ -20,7 +21,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { strToU8, zipSync } from "fflate";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const packageRoot = dirname(here);

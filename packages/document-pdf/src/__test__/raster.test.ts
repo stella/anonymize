@@ -1,13 +1,12 @@
+import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-
-import { describe, expect, test } from "bun:test";
 
 import {
   anonymizePdfRaster,
   inspectPdf,
-  PDF_MAX_PAGE_TEXT_UTF8_BYTES,
   PDF_MAX_OBSERVED_TEXT_UTF8_BYTES,
+  PDF_MAX_PAGE_TEXT_UTF8_BYTES,
   PDF_RASTER_CERTIFICATE_CONTRACT_VERSION,
   PdfRasterError,
 } from "../index";

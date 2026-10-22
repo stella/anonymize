@@ -20,37 +20,37 @@
  * worker dependency.
  */
 
+import { createSemanticPipeline } from "./create-pipeline";
 import {
+  convert_external_detection_batch as convertExternalDetectionBatchWithBinding,
   createNativeAnonymizerFromPackage,
   createNativePipelineFromPackage,
-  isNativeAnonymizeBinding,
-  convert_external_detection_batch as convertExternalDetectionBatchWithBinding,
   diagnostics_json as diagnosticsJsonWithBinding,
   diagnostics_stream_json as diagnosticsStreamJsonWithBinding,
-  type NativeAnonymizeBinding,
   type ExternalDetectionBatch,
+  isNativeAnonymizeBinding,
+  native_package_version as nativePackageVersionWithBinding,
+  type NativeAnonymizeBinding,
   type NativeCallerDetection,
   type NativeDiagnosticsBatchCallback,
   type NativeOperatorConfig,
   type NativeResultEventCallback,
   type NativeSearchPackageInput,
   type NativeStaticRedactionResult,
-  native_package_version as nativePackageVersionWithBinding,
   normalize_for_search as normalizeForSearchWithBinding,
+  prepare_search_package as prepareSearchPackageWithBinding,
   PreparedNativeAnonymizer,
   PreparedNativePipeline,
-  prepare_search_package as prepareSearchPackageWithBinding,
   redact_text as redactTextWithBinding,
   redact_text_json as redactTextJsonWithBinding,
   redact_text_stream_json as redactTextStreamJsonWithBinding,
   summary_diagnostics_json as summaryDiagnosticsJsonWithBinding,
 } from "./native";
-import { createWasmBinding, isRawWasmModule } from "./wasm-binding";
-import { createSemanticPipeline } from "./create-pipeline";
 import {
   normalizePipelineLanguageSelection,
   type PipelineLanguageSelection,
 } from "./pipeline-language";
+import { createWasmBinding, isRawWasmModule } from "./wasm-binding";
 
 export * from "./native";
 export { deanonymise, exportRedactionKey } from "./redact";

@@ -1,8 +1,8 @@
+import { describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
 
-import { describe, expect, test } from "bun:test";
-
 import {
+  convert_external_detection_batch,
   EXTERNAL_DETECTION_BATCH_MAX_BYTES,
   EXTERNAL_DETECTION_BATCH_VERSION,
   EXTERNAL_DETECTION_DOCUMENT_MAX_BYTES,
@@ -11,7 +11,6 @@ import {
   EXTERNAL_DETECTION_MAX_METADATA_BYTES,
   EXTERNAL_DETECTION_PROVIDER_ID_MAX_BYTES,
   type ExternalDetectionBatch,
-  convert_external_detection_batch,
 } from "../native";
 import { loadNativeAnonymizeBinding } from "../native-node";
 import { convert_external_detection_batch as convertWasmExternalDetectionBatch } from "../wasm";

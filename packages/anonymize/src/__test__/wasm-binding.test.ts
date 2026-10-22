@@ -2,7 +2,6 @@ import { describe, expect, test } from "bun:test";
 
 import { OPERATOR_TYPES } from "../constants";
 import type { CanonicalStaticRedactionResult } from "../native";
-
 import {
   createWasmBinding,
   isRawWasmModule,

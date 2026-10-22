@@ -5,9 +5,9 @@ import { parseArgs } from "node:util";
 import { loadManifest } from "./manifest";
 import {
   assertValidRunName,
+  rawPath,
   RUN_SUMMARY_FILE,
   RUNS_DIR,
-  rawPath,
 } from "./paths";
 import type { RunDocument, RunEntity, RunSummary, VerdictSpan } from "./types";
 import {

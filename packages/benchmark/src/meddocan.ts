@@ -1,15 +1,15 @@
 import { join } from "node:path";
 
 import { createBenchmarkAdapters } from "./adapters";
-import type { GroundTruthDocument } from "./ground-truth";
 import { benchmarkSourceGitSha } from "./git-revision";
+import type { GroundTruthDocument } from "./ground-truth";
 import { runSealedBoundary } from "./sealed-boundary";
 import {
-  SEALED_AGGREGATE_REPORT_SCHEMA_VERSION,
   type MeddocanAggregateMetrics,
+  normalizeSealedProviderVersion,
+  SEALED_AGGREGATE_REPORT_SCHEMA_VERSION,
   type SealedAggregateReport,
   type SealedLibraryResult,
-  normalizeSealedProviderVersion,
   writeSealedAggregateReport,
 } from "./sealed-report";
 import { loadVerifiedMeddocan, MEDDOCAN_PROVENANCE } from "./suite/meddocan";

@@ -1,10 +1,10 @@
 import { createHash } from "node:crypto";
 
-import { loadVerifiedTabDevCorpus, type TabDocument } from "./blind/tab";
 import { createPythonAdapter } from "./adapters/python";
 import { PRESIDIO_PROVIDER } from "./adapters/python-providers";
 import { createStllAdapter } from "./adapters/stella";
 import type { NativePrediction } from "./adapters/types";
+import { loadVerifiedTabDevCorpus, type TabDocument } from "./blind/tab";
 import type { GroundTruthDocument } from "./ground-truth";
 
 const SAMPLE_SIZE = 5;

@@ -1,7 +1,3 @@
-import {
-  parseCanonicalStaticRedactionResult,
-  parseExternalDetections,
-} from "./native-result-codec";
 import type {
   CanonicalStaticRedactionResult,
   NativeAnonymizeBinding,
@@ -11,6 +7,10 @@ import type {
   NativePreparedSessionRedactionPlanBinding,
 } from "./native";
 import { SESSION_CALLER_INPUTS_JSON_MAX_BYTES } from "./native";
+import {
+  parseCanonicalStaticRedactionResult,
+  parseExternalDetections,
+} from "./native-result-codec";
 
 type OperatorConfig = Parameters<
   NativePreparedSearchBinding["redactStaticEntities"]

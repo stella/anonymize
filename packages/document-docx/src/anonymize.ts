@@ -5,9 +5,9 @@ import { extractDocxText } from "./extract";
 import { docxLocationKey, docxLocationsEqual } from "./location";
 import { rewriteDocxText } from "./rewrite";
 import {
+  type AnonymizeDocxOptions,
   DOCX_ANONYMIZATION_ERROR_CODES,
   DOCX_COVERAGE_MODES,
-  type AnonymizeDocxOptions,
   type DocxAnonymizationErrorCode,
   type DocxAnonymizationResult,
   type DocxBlockCallerDetections,
