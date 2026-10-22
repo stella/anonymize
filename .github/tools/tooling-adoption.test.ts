@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 
 import { library } from "@stll/oxlint-config";
 import {
@@ -8,6 +9,10 @@ import {
 } from "@stll/oxlint-plugin";
 
 import config from "../../oxlint.config";
+
+// Workspace-only export condition: programs read sibling packages from their
+// sources, so lint and typecheck never need build outputs.
+const sourceCondition = "@stll/anonymize-source";
 
 const read = (path: string) =>
   readFileSync(new URL(`../../${path}`, import.meta.url), "utf8");
@@ -47,8 +52,11 @@ test("uses shared library defaults and the complete portable safety pack", async
     expect(Object.keys(tsconfig.compilerOptions ?? {})).toEqual(
       path === "packages/anonymize/tsconfig.json"
         ? ["customConditions", "lib"]
-        : [],
+        : ["customConditions"],
     );
+    expect(tsconfig.compilerOptions.customConditions).toEqual([
+      sourceCondition,
+    ]);
     const manifest = await Bun.file(
       path.replace("tsconfig.json", "package.json"),
     ).json();
@@ -74,12 +82,55 @@ test("test and tool programs use the shared Bun environment", async () => {
   ]) {
     const tsconfig = await Bun.file(path).json();
     expect(tsconfig.extends).toBe("@stll/typescript-config/bun.json");
-    if (path === "packages/anonymize/tsconfig.test.json") {
-      expect(tsconfig.compilerOptions).toEqual({
-        customConditions: ["@stll/anonymize-source"],
+    expect(tsconfig.compilerOptions).toEqual({
+      customConditions: [sourceCondition],
+    });
+  }
+});
+
+test("every program reads workspace packages from their sources", async () => {
+  const tracked = Bun.spawnSync(["git", "ls-files", "*tsconfig*.json"])
+    .stdout.toString()
+    .split("\n")
+    .filter((path) => path !== "");
+  expect(tracked.length).toBeGreaterThan(0);
+  const conditions = async (path: string): Promise<unknown> => {
+    const tsconfig = await Bun.file(path).json();
+    const own = tsconfig.compilerOptions?.customConditions;
+    if (own !== undefined) return own;
+    const parent: unknown = tsconfig.extends;
+    if (typeof parent !== "string" || !parent.startsWith(".")) return undefined;
+    return conditions(join(dirname(path), parent));
+  };
+  for (const path of tracked)
+    expect({ path, conditions: await conditions(path) }).toEqual({
+      path,
+      conditions: [sourceCondition],
+    });
+  const manifests = [...new Bun.Glob("packages/*/package.json").scanSync()];
+  for (const manifestPath of manifests) {
+    const manifest = await Bun.file(manifestPath).json();
+    for (const [entry, target] of Object.entries(manifest.exports ?? {})) {
+      if (
+        typeof target !== "object" ||
+        target === null ||
+        !("types" in target) ||
+        typeof target.types !== "string" ||
+        !target.types.startsWith("./dist/")
+      )
+        continue;
+      const source = Object.hasOwn(target, sourceCondition)
+        ? Reflect.get(target, sourceCondition)
+        : undefined;
+      expect({ manifestPath, entry, first: Object.keys(target)[0] }).toEqual({
+        manifestPath,
+        entry,
+        first: sourceCondition,
       });
-    } else {
-      expect(tsconfig.compilerOptions).toBeUndefined();
+      expect(
+        typeof source === "string" &&
+          (await Bun.file(join(dirname(manifestPath), source)).exists()),
+      ).toBe(true);
     }
   }
 });

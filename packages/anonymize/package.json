@@ -13,41 +13,49 @@
   "type": "module",
   "exports": {
     ".": {
+      "@stll/anonymize-source": "./src/index.ts",
       "types": "./dist/index.d.mts",
       "import": "./dist/index.mjs",
       "default": "./dist/index.mjs"
     },
     "./constants": {
+      "@stll/anonymize-source": "./src/constants.ts",
       "types": "./dist/constants.d.mts",
       "import": "./dist/constants.mjs",
       "default": "./dist/constants.mjs"
     },
     "./capabilities": {
+      "@stll/anonymize-source": "./src/capabilities.ts",
       "types": "./dist/capabilities.d.mts",
       "import": "./dist/capabilities.mjs",
       "default": "./dist/capabilities.mjs"
     },
     "./agent-surface": {
+      "@stll/anonymize-source": "./src/agent-surface.ts",
       "types": "./dist/agent-surface.d.mts",
       "import": "./dist/agent-surface.mjs",
       "default": "./dist/agent-surface.mjs"
     },
     "./feedback": {
+      "@stll/anonymize-source": "./src/feedback.ts",
       "types": "./dist/feedback.d.mts",
       "import": "./dist/feedback.mjs",
       "default": "./dist/feedback.mjs"
     },
     "./native": {
+      "@stll/anonymize-source": "./src/native.ts",
       "types": "./dist/native.d.mts",
       "import": "./dist/native.mjs",
       "default": "./dist/native.mjs"
     },
     "./native-node": {
+      "@stll/anonymize-source": "./src/native-node.ts",
       "types": "./dist/native-node.d.mts",
       "import": "./dist/native-node.mjs",
       "default": "./dist/native-node.mjs"
     },
     "./native-runtime": {
+      "@stll/anonymize-source": "./src/native-runtime.ts",
       "types": "./dist/native-runtime.d.mts",
       "import": "./dist/native-runtime.mjs",
       "default": "./dist/native-runtime.mjs"
