@@ -24,6 +24,6 @@ jobs:
     # Reusable workflow only consumes the auto-provided GITHUB_TOKEN.
     # Do not switch to `secrets: inherit` — that widens the blast radius
     # if the reusable ever starts touching named secrets.
-    uses: stella/.github/.github/workflows/label-sync.yml@636b7841096c8f0cc5a1572077b78768ef8fea42
+    uses: stella/.github/.github/workflows/label-sync.yml@caa3ee1c2d02ef807994fdd3907c55ba104aff00
     with:
       mode: ${{ inputs.mode }}
