@@ -22,7 +22,7 @@ const wasmPath = join(
   "wasm-release",
   "stella_anonymize_wasm.wasm",
 );
-const expectedWasmBindgenVersion = "wasm-bindgen 0.2.126";
+const expectedWasmBindgenVersion = "wasm-bindgen 0.2.129";
 let actualWasmBindgenVersion;
 try {
   actualWasmBindgenVersion = execFileSync("wasm-bindgen", ["--version"], {

@@ -501,7 +501,7 @@ default alias), and the pinned Rust 1.96.0 toolchain with the
   wasm-bindgen module uses ordinary single-thread memory. Run
   `smoke:wasm-runtimes` after loader changes; run
   `smoke:wasm-browser` to prove the ordinary non-isolated browser path. The
-  generator requires exactly wasm-bindgen CLI 0.2.126. Keep the shared runtime
+  generator requires exactly wasm-bindgen CLI 0.2.129. Keep the shared runtime
   artifact policy enforced during both dist assembly and tarball validation;
   do not bypass its size ceilings or closed `dist/native/` file set.
 - **Build before test / Python.** `bun run build` generates the `.stlanonpkg`

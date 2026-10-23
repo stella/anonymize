@@ -12,12 +12,12 @@ Install these prerequisites:
 - Node.js 22.18 or newer for the TypeScript-aware build configuration
 - rustup; the repository installs Rust 1.96.0 and the
   `wasm32-unknown-unknown` target through `rust-toolchain.toml`
-- `wasm-bindgen-cli` 0.2.126 for full builds and browser tests
+- `wasm-bindgen-cli` 0.2.129 for full builds and browser tests
 
 Install the pinned WebAssembly tool with:
 
 ```bash
-cargo install wasm-bindgen-cli --version 0.2.126 --locked
+cargo install wasm-bindgen-cli --version 0.2.129 --locked
 ```
 
 Python checks additionally require `uv`. The complete Rust suite uses
