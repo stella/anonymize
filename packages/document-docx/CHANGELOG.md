@@ -1,5 +1,13 @@
 # @stll/anonymize-docx
 
+## 4.0.0
+
+### Patch Changes
+
+- [#591](https://github.com/stella/anonymize/pull/591) [`80f90b3`](https://github.com/stella/anonymize/commit/80f90b3ebc4f0848cc3356a57e1d032719a8be09) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Validate native document operations and raster observations before consuming typed values.
+- Updated dependencies [[`c3d40e1`](https://github.com/stella/anonymize/commit/c3d40e1d13ddea6586cd43491c694da648187d57), [`80f90b3`](https://github.com/stella/anonymize/commit/80f90b3ebc4f0848cc3356a57e1d032719a8be09), [`470a2ae`](https://github.com/stella/anonymize/commit/470a2ae238c0ab2b0db3b90285eddd2bc672d865)]:
+  - @stll/anonymize@4.0.0
+
 ## 3.0.7
 
 ### Patch Changes
