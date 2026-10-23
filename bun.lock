@@ -7,6 +7,7 @@
       "devDependencies": {
         "@changesets/changelog-github": "^1.0.1",
         "@changesets/cli": "^3.0.3",
+        "@oxlint/plugins": "1.87.0",
         "@stll/anonymize-data": "workspace:*",
         "@stll/oxlint-config": "2.0.0",
         "@stll/oxlint-plugin": "0.6.3",
