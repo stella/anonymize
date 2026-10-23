@@ -23,7 +23,7 @@ runs:
         node .github/tools/check-bun-workflows.mjs
         node --test .github/tools/check-bun-workflows.test.mjs
 
-    - uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+    - uses: stella/.github/actions/setup-bun-cached@caa3ee1c2d02ef807994fdd3907c55ba104aff00
       with:
         bun-version-file: package.json
 

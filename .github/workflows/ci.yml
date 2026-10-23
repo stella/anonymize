@@ -4,7 +4,7 @@ env:
   HAWK_RUST_TOOLCHAIN: "1.97.1"
   HAWK_VERSION: "0.1.11"
   HAWK_X86_64_UNKNOWN_LINUX_GNU_SHA256: "8380db63360ae94f9890d7e426cce00e479d884f516614cea998c85d5f30ab6d"
-  UV_VERSION: "0.10.1"
+  UV_VERSION: "0.13.1"
 
 on:
   push:
@@ -30,7 +30,7 @@ jobs:
           persist-credentials: false
 
       - name: Enforce release intent
-        uses: stella/.github/.github/actions/changeset-policy@37bfa04a893d1ae2b9d28379cf68e8360781c8bc # v1.8.0
+        uses: stella/.github/.github/actions/changeset-policy@caa3ee1c2d02ef807994fdd3907c55ba104aff00
         with:
           release-paths: |
             Cargo.lock

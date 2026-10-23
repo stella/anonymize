@@ -7,11 +7,10 @@ on:
     types: [opened, synchronize, reopened, closed]
 
 permissions:
-  actions: write
   contents: read
   issues: write
-  pull-requests: write
-  statuses: write
+  pull-requests: read
+  checks: write
 
 jobs:
   cla:
@@ -26,7 +25,7 @@ jobs:
           || github.event.comment.body == 'I have read the CLA Document and I hereby sign the CLA'
         )
       )
-    uses: stella/.github/.github/workflows/cla.yml@8f19eb7220047e5b06f6e75f0b9f908bfd01f5f6
+    uses: stella/.github/.github/workflows/cla.yml@caa3ee1c2d02ef807994fdd3907c55ba104aff00
     with:
       allowlist: dependabot[bot],renovate[bot],github-actions[bot],google-labs-jules[bot],stella-provenance-updater[bot],cursoragent
     secrets:
