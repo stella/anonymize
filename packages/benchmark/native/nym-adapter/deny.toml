@@ -5,9 +5,8 @@
 version = 2
 yanked = "deny"
 ignore = [
-  # Hugging Face tokenizers 0.21.4 depends on paste directly and through
-  # macro_rules_attribute. The latest maintained release (0.23.1) still has
-  # the same direct dependency, so there is no safe upstream upgrade yet.
+  # Hugging Face tokenizers 0.23.2 still depends on paste directly.
+  # Remove this exception when a maintained release drops that dependency.
   { id = "RUSTSEC-2024-0436", reason = "no maintained tokenizers release avoids paste; recheck when upstream removes it" },
 ]
 

@@ -172,7 +172,7 @@ jobs:
 
       - name: Install uv
         run: |
-          python3 -m pip install --user "uv==0.10.1"
+          python3 -m pip install --user "uv==0.13.1"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Python typecheck
@@ -506,7 +506,7 @@ jobs:
         && needs.pack-data.result == 'success'
         && (github.event_name == 'push'
             || inputs.publish_to_npm == true))
-    uses: stella/.github/.github/workflows/npm-artifact-publish.yml@608900bde4c0847e5224a0dd93a5cc4c911960d6
+    uses: stella/.github/.github/workflows/npm-artifact-publish.yml@caa3ee1c2d02ef807994fdd3907c55ba104aff00
     with:
       artifact-name: data-package-stll-anonymize-data
       package-name: "@stll/anonymize-data"
@@ -623,7 +623,7 @@ jobs:
       - name: Install uv
         if: matrix.check_wheel
         run: |
-          python3 -m pip install --user "uv==0.10.1"
+          python3 -m pip install --user "uv==0.13.1"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Verify wheel packlist and smoke test
@@ -662,7 +662,7 @@ jobs:
       id-token: write # Required only for PyPI trusted publishing.
     steps:
       - name: Prepare exact Python wheel set
-        uses: stella/.github/.github/actions/pypi-publish-hardened@608900bde4c0847e5224a0dd93a5cc4c911960d6
+        uses: stella/.github/.github/actions/pypi-publish-hardened@caa3ee1c2d02ef807994fdd3907c55ba104aff00
         with:
           expected-version: ${{ needs.verify.outputs.version }}
           project-name: stella-anonymize-core
@@ -675,7 +675,7 @@ jobs:
           packages-dir: dist
           skip-existing: true
       - name: Verify published PyPI files
-        uses: stella/.github/.github/actions/pypi-publish-hardened/verify@608900bde4c0847e5224a0dd93a5cc4c911960d6
+        uses: stella/.github/.github/actions/pypi-publish-hardened/verify@caa3ee1c2d02ef807994fdd3907c55ba104aff00
         with:
           expected-version: ${{ needs.verify.outputs.version }}
           project-name: stella-anonymize-core
@@ -691,7 +691,7 @@ jobs:
         && needs.publish-pypi.result == 'success'
         && (github.event_name == 'push'
             || inputs.publish_to_npm == true))
-    uses: stella/.github/.github/workflows/npm-version-finalize.yml@608900bde4c0847e5224a0dd93a5cc4c911960d6
+    uses: stella/.github/.github/workflows/npm-version-finalize.yml@caa3ee1c2d02ef807994fdd3907c55ba104aff00
     with:
       package-files: |
         packages/anonymize/package.json

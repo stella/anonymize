@@ -13,11 +13,11 @@ open-source PII libraries on a public, project-authored synthetic legal fixture
 (en/cs/de). It exists to exercise the harness and track regressions. Its scores
 are not necessarily representative.
 
-- **OpenRedaction** 1.1.5 (stateless local regex engine; learning and optional
+- **OpenRedaction** (stateless local regex engine; learning and optional
   NER disabled).
 - **Microsoft Presidio** (`presidio-analyzer`) with spaCy models.
 - **scrubadub** (base install).
-- **DataFog** 4.8.0 (core regex engine only; no spaCy or GLiNER extras).
+- **DataFog** (core regex engine only; no spaCy or GLiNER extras).
 - **redact-pii** 3.4.0 detector assets, vendored from the npm package.
 
 Metrics: per-label and overall precision / recall / F1 with span-overlap
@@ -165,7 +165,8 @@ spawn-to-clean-exit wall duration, and each worker records total process CPU
 time. These paired values are the end-to-end comparison; phase medians must not
 be added together. Canonical mode uses the same host
 verification and `taskset` CPU pinning contract as `bench:performance`.
-The workflow pins uv 0.10.1 and CPython 3.11.12, then creates fresh virtualenvs
+The [workflow environment](../../.github/workflows/performance.yml) pins uv and
+CPython, then creates fresh virtualenvs
 from hash-locked requirement closures before it waits for the host to become
 quiet. Provider-size pairs use paired forward/reverse rotations so every
 coordinate's mean execution position is exactly balanced across measured
@@ -183,25 +184,25 @@ input bytes, denominator, and SHA-256 independently. Python virtualenvs default 
 `.venv-scrubadub` and `.venv-datafog`; override their interpreters with
 `ANONYMIZE_SCRUBADUB_PYTHON` and `ANONYMIZE_DATAFOG_PYTHON` when needed.
 
-## Pinned toolchain versions
+## Dependency pins
 
-| Component                             | Version                           |
-| ------------------------------------- | --------------------------------- |
-| Bun                                   | 1.4.0                             |
-| stella (`@stll/anonymize`)            | 2.8.1 (current workspace release) |
-| OpenRedaction (`@openredaction/core`) | 1.1.5                             |
-| redact-pii (npm)                      | 3.4.0                             |
-| Python                                | 3.11.12                           |
-| presidio-analyzer                     | 2.2.360                           |
-| presidio-anonymizer                   | 2.2.360                           |
-| spaCy                                 | 3.8.7                             |
-| en_core_web_lg                        | 3.8.0                             |
-| de_core_news_lg                       | 3.8.0                             |
-| es_core_news_lg                       | 3.8.0                             |
-| xx_ent_wiki_sm (used for Czech)       | 3.8.0                             |
-| scrubadub                             | 2.0.1                             |
-| phonenumbers (scrubadub)              | 8.13.55                           |
-| phonenumbers (Presidio)               | 9.0.37                            |
+The manifests, lockfiles, and workflow below are the version sources used by
+the harness. Read their committed values instead of a separately maintained
+version table. Python lockfiles include each provider's transitive dependencies,
+including phonenumbers.
+
+| Component                             | Pin source                                                                                                |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Bun                                   | Root [`packageManager`](../../package.json)                                                               |
+| stella (`@stll/anonymize`)            | [Workspace package](../anonymize/package.json)                                                            |
+| OpenRedaction (`@openredaction/core`) | [Benchmark manifest](package.json) and [Bun lockfile](../../bun.lock)                                     |
+| redact-pii                            | [Vendored asset provenance](vendor/redact-pii/3.4.0/README.md)                                            |
+| uv and CPython                        | [Performance workflow environment](../../.github/workflows/performance.yml)                               |
+| Presidio, spaCy, and phonenumbers     | [Requirements](python/requirements-presidio.txt) and [hash lockfile](python/requirements-presidio.lock)   |
+| scrubadub and phonenumbers            | [Requirements](python/requirements-scrubadub.txt) and [hash lockfile](python/requirements-scrubadub.lock) |
+| DataFog and its core dependencies     | [Requirements](python/requirements-datafog.txt) and [hash lockfile](python/requirements-datafog.lock)     |
+| spaCy models                          | [Model wheel URLs and hashes](#2-presidio-virtualenv-python)                                              |
+| Native ONNX Runtime and tokenizers    | [Adapter manifest](native/nym-adapter/Cargo.toml) and [Cargo lockfile](native/nym-adapter/Cargo.lock)     |
 
 ## Steps
 

@@ -129,7 +129,7 @@ export const SCRUBADUB_MAPPING: NativeMapping = {
 };
 
 /**
- * DataFog 4.8.0 core regex engine. The benchmark deliberately excludes its
+ * DataFog core regex engine. The benchmark deliberately excludes its
  * optional spaCy and GLiNER engines. ZIP labels fold into `address`; financial
  * and national identifiers fold into the shared `id-number` category. German
  * structured labels are emitted only when the adapter selects DataFog's `de`
