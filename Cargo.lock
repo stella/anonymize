@@ -498,6 +498,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "fancy-regex"
+version = "0.19.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d301f5bf187b3c295fce6468d3875037a0bccc5f6b151c63cac2f85babf21912"
+dependencies = [
+ "bit-set 0.8.0",
+ "regex-automata",
+ "regex-syntax",
+]
+
+[[package]]
 name = "fastrand"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1494,7 +1505,7 @@ version = "3.0.7"
 dependencies = [
  "bon",
  "chacha20poly1305",
- "fancy-regex",
+ "fancy-regex 0.19.2",
  "getrandom",
  "insta",
  "proptest",
@@ -1621,7 +1632,7 @@ name = "stella-regex-set-core"
 version = "1.0.5"
 source = "git+https://github.com/stella/regex-set?rev=ed4929465e1a072644c48238f7557ab21037a62c#ed4929465e1a072644c48238f7557ab21037a62c"
 dependencies = [
- "fancy-regex",
+ "fancy-regex 0.18.0",
  "regex",
  "regex-automata",
  "regex-syntax",
