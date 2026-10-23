@@ -76,10 +76,10 @@
   },
   "devDependencies": {
     "stopwords-iso": "1.1.0",
-    "tsdown": "0.23.0",
+    "tsdown": "0.23.1",
     "typescript": "7.0.2",
     "@stll/typescript-config": "0.8.0",
     "bun-types": "1.4.3",
-    "@types/node": "26.6.4"
+    "@types/node": "26.6.5"
   }
 }
