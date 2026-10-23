@@ -76,21 +76,21 @@ fn external_detection_limits_json() -> PyResult<String> {
     .map_err(|error| PyValueError::new_err(error.to_string()))
 }
 
-#[pyclass(name = "RedactionEntry", get_all, skip_from_py_object)]
+#[pyclass(name = "RedactionEntry", get_all)]
 #[derive(Clone)]
 pub struct PyRedactionEntry {
   placeholder: String,
   original: String,
 }
 
-#[pyclass(name = "OperatorEntry", get_all, skip_from_py_object)]
+#[pyclass(name = "OperatorEntry", get_all)]
 #[derive(Clone)]
 pub struct PyOperatorEntry {
   placeholder: String,
   operator: String,
 }
 
-#[pyclass(name = "RedactionResult", get_all, skip_from_py_object)]
+#[pyclass(name = "RedactionResult", get_all)]
 #[derive(Clone)]
 pub struct PyRedactionResult {
   redacted_text: String,
@@ -99,7 +99,7 @@ pub struct PyRedactionResult {
   entity_count: usize,
 }
 
-#[pyclass(name = "PipelineEntity", get_all, skip_from_py_object)]
+#[pyclass(name = "PipelineEntity", get_all)]
 #[derive(Clone)]
 pub struct PyPipelineEntity {
   start: u32,
@@ -113,7 +113,7 @@ pub struct PyPipelineEntity {
   detection_id: Option<String>,
 }
 
-#[pyclass(name = "StaticRedactionResult", get_all, skip_from_py_object)]
+#[pyclass(name = "StaticRedactionResult", get_all)]
 #[derive(Clone)]
 pub struct PyStaticRedactionResult {
   resolved_entities: Vec<PyPipelineEntity>,
