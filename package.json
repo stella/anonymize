@@ -75,8 +75,8 @@
     "oxlint-tsgolint": "7.0.2003",
     "turbo": "^2.11.6",
     "@stll/oxlint-plugin": "0.6.2",
-    "@types/node": "26.6.4",
+    "@types/node": "26.6.5",
     "bun-types": "1.4.4",
-    "tsdown": "0.23.0"
+    "tsdown": "0.23.1"
   }
 }
