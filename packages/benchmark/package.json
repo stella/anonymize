@@ -33,10 +33,10 @@
     "@stll/anonymize": "workspace:^",
     "@stll/anonymize-data": "^0.0.10",
     "fflate": "0.8.3",
-    "hyparquet": "1.31.2"
+    "hyparquet": "1.31.4"
   },
   "devDependencies": {
-    "@types/node": "^26.6.4",
+    "@types/node": "^26.6.5",
     "bun-types": "1.4.4",
     "@stll/typescript-config": "0.10.0"
   }

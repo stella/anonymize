@@ -53,14 +53,14 @@
     "test:tooling": "bun test ./.github/tools/tooling-adoption.test.ts ./.github/tools/tooling-workflow.test.ts packages/anonymize/src/__test__/native-json-codec.test.ts ./.github/tools/eval-html-args.test.ts && node --test .github/tools/json-values.test.mjs"
   },
   "overrides": {
-    "@emnapi/core": "1.11.1",
-    "@emnapi/runtime": "1.11.1",
-    "@hono/node-server": "2.0.10",
+    "@emnapi/core": "1.11.3",
+    "@emnapi/runtime": "1.11.3",
+    "@hono/node-server": "2.1.5",
     "body-parser": "2.4.0",
-    "emnapi": "1.11.1",
+    "emnapi": "1.11.3",
     "fast-uri": "3.1.9",
-    "qs": "6.16.0",
-    "shell-quote": "1.11.0",
+    "qs": "6.16.1",
+    "shell-quote": "1.12.0",
     "source-map-js": "1.2.2"
   },
   "devDependencies": {
@@ -72,10 +72,10 @@
     "lefthook": "2.2.2",
     "oxlint": "1.87.0",
     "oxlint-tsgolint": "7.0.2003",
-    "turbo": "^2.11.6",
+    "turbo": "^2.11.9",
     "@stll/oxlint-plugin": "0.6.3",
-    "@types/node": "26.6.4",
+    "@types/node": "26.6.5",
     "bun-types": "1.4.4",
-    "tsdown": "0.23.0"
+    "tsdown": "0.23.1"
   }
 }
