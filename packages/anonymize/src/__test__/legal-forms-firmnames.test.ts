@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+
 import { DEFAULT_ENTITY_LABELS } from "../constants";
 import type { PipelineConfig } from "../types";
 import { detectNative } from "./native-detect";

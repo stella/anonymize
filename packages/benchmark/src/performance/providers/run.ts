@@ -15,13 +15,13 @@ import {
   PERFORMANCE_INPUT_SOURCE,
   performanceInputSourceDigest,
 } from "../input";
-import { machineMetadata, type PerformanceMachine } from "../report";
 import {
   assertCleanCpuNoise,
+  type CpuNoiseDelta,
   cpuNoiseDelta,
   readCpuNoiseSnapshot,
-  type CpuNoiseDelta,
 } from "../noise";
+import { machineMetadata, type PerformanceMachine } from "../report";
 import { summarize } from "../statistics";
 import {
   CROSS_PROVIDER_IDS,

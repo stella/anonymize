@@ -1,35 +1,35 @@
-import { createRequire } from "node:module";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import process from "node:process";
-import { detectNativeLibc } from "../native-libc.mjs";
-import { loadNativeBinding as loadDefaultPlatformNativePackage } from "../index.cjs";
 
+import { loadNativeBinding as loadDefaultPlatformNativePackage } from "../index.cjs";
+import { detectNativeLibc } from "../native-libc.mjs";
+import { assertSupportedBunRuntime } from "./bun-version";
+import { createSemanticPipeline } from "./create-pipeline";
 import {
   assertNativeBindingVersion,
-  createNativePipelineFromPackage,
-  isNativeAnonymizeBinding,
-  type NativeOperatorConfig,
-  type NativeAnonymizeBinding,
-  type NativeNormalizeOptions,
-  type NativeSearchPackageInput,
-  PreparedNativeAnonymizer,
-  PreparedNativePipeline,
-  type NativeStaticRedactionResult,
-  diagnostics_json as diagnosticsJsonWithBinding,
   convert_external_detection_batch as convertExternalDetectionBatchWithBinding,
+  createNativePipelineFromPackage,
+  diagnostics_json as diagnosticsJsonWithBinding,
   diagnostics_stream_json as diagnosticsStreamJsonWithBinding,
+  isNativeAnonymizeBinding,
   load_prepared_package as loadPreparedPackageWithBinding,
   native_package_version as nativePackageVersionWithBinding,
+  type NativeAnonymizeBinding,
+  type NativeNormalizeOptions,
+  type NativeOperatorConfig,
+  type NativeSearchPackageInput,
+  type NativeStaticRedactionResult,
   normalize_for_search as normalizeForSearchWithBinding,
   prepare_search_package as prepareSearchPackageWithBinding,
+  PreparedNativeAnonymizer,
+  PreparedNativePipeline,
   redact_text as redactTextWithBinding,
   redact_text_json as redactTextJsonWithBinding,
   redact_text_stream_json as redactTextStreamJsonWithBinding,
   summary_diagnostics_json as summaryDiagnosticsJsonWithBinding,
 } from "./native";
-import { assertSupportedBunRuntime } from "./bun-version";
-import { createSemanticPipeline } from "./create-pipeline";
 import {
   normalizePipelineLanguageSelection,
   type PipelineLanguageSelection,

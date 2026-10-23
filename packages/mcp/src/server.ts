@@ -1,11 +1,11 @@
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
+import { DurableSessionStore } from "./durable-sessions";
 import {
+  createAnonymizeMcpServer,
   LocalAnonymizeService,
   PathScope,
-  createAnonymizeMcpServer,
 } from "./local";
-import { DurableSessionStore } from "./durable-sessions";
 
 export const SERVER_HELP = `Usage: stella-anonymize-mcp --root <absolute-directory> [--root <absolute-directory> ...]
 

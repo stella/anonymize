@@ -4,13 +4,14 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
-  readFileSync,
   readdirSync,
+  readFileSync,
   rmSync,
 } from "node:fs";
-import { basename, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
+import { basename, join, resolve } from "node:path";
 import process from "node:process";
+
 import { parseStringList } from "./json-values.mjs";
 
 const profile = process.env.ANONYMIZE_PYTHON_WHEEL_PROFILE ?? "ci";

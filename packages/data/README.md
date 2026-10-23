@@ -36,8 +36,8 @@ bun add @stll/anonymize-data
 
 ```ts
 import triggers from "@stll/anonymize-data/config/triggers.cs.json";
-import cities from "@stll/anonymize-data/dictionaries/cities/CZ.json";
 import banks from "@stll/anonymize-data/dictionaries/banks/US.json";
+import cities from "@stll/anonymize-data/dictionaries/cities/CZ.json";
 ```
 
 The lazy loaders are split across two module entries:

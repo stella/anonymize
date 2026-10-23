@@ -13,6 +13,7 @@ import {
   type PreparedNativePipeline,
 } from "@stll/anonymize";
 
+import modelManifest from "../../native/nym-adapter/model-manifest.json";
 import type { GroundTruthDocument } from "../ground-truth";
 import { loadStllBenchmarkConfig } from "./stella";
 import {
@@ -21,7 +22,6 @@ import {
   type NativePrediction,
   totalUtf16CodeUnits,
 } from "./types";
-import modelManifest from "../../native/nym-adapter/model-manifest.json";
 
 const require = createRequire(import.meta.url);
 const stellaVersion = (

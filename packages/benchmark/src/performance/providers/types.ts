@@ -13,10 +13,7 @@ export const CROSS_PROVIDER_IDS = [
 export type CrossProviderId = (typeof CROSS_PROVIDER_IDS)[number];
 
 export type ProviderScope =
-  | "full-pipeline"
-  | "base-install"
-  | "regex-only"
-  | "regex-detectors-only";
+  "full-pipeline" | "base-install" | "regex-only" | "regex-detectors-only";
 
 export type ProviderSample = {
   readonly provider: CrossProviderId;

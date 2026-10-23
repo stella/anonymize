@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { EventEmitter } from "node:events";
 
-import { SERVER_HELP, parseServerArguments, runMcpLifecycle } from "../server";
+import { parseServerArguments, runMcpLifecycle, SERVER_HELP } from "../server";
 
 describe("MCP server arguments", () => {
   test("keeps sessions in memory unless both durable paths are explicit", () => {

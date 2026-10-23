@@ -28,8 +28,7 @@
   "scripts": {
     "build": "tsdown",
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json && bun check --no-pretty --all --project=tsconfig.test.json",
-    "test": "bun test",
-    "format": "oxfmt ."
+    "test": "bun test"
   },
   "dependencies": {
     "@stll/anonymize": "^3.0.7",
@@ -37,7 +36,7 @@
   },
   "devDependencies": {
     "@types/node": "^26.6.4",
-    "bun-types": "1.4.3",
+    "bun-types": "1.4.4",
     "fflate": "^0.8.3",
     "tsdown": "0.23.0",
     "typescript": "7.0.2",

@@ -1,12 +1,13 @@
 #!/usr/bin/env bun
 import { watch } from "fs";
+
 import { parseEvalHtmlArgs } from "./.github/tools/eval-html-args";
 import {
-  runPipeline,
-  redactText,
+  createPipelineContext,
   DEFAULT_ENTITY_LABELS,
   DEFAULT_OPERATOR_CONFIG,
-  createPipelineContext,
+  redactText,
+  runPipeline,
 } from "./packages/anonymize/src/index";
 import type { Entity, PipelineConfig } from "./packages/anonymize/src/types";
 

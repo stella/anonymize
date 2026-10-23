@@ -1,20 +1,20 @@
 import { loadNativeAnonymizeBinding } from "@stll/anonymize";
 
 import {
-  DOCX_PART_TYPES,
-  DOCX_EXTRACTION_ERROR_CODES,
-  DOCX_REWRITE_ERROR_CODES,
-  type DocxBlockRewrite,
-  type DocxBlockLocation,
-  type DocxExtractionErrorCode,
-  type DocxRewriteErrorCode,
-  type DocxRewriteResult,
-} from "./types";
-import {
   DOCX_UNCOMPRESSED_MAX_BYTES,
   DOCX_XML_MAX_DEPTH,
   DocxExtractionError,
 } from "./extract";
+import {
+  DOCX_EXTRACTION_ERROR_CODES,
+  DOCX_PART_TYPES,
+  DOCX_REWRITE_ERROR_CODES,
+  type DocxBlockLocation,
+  type DocxBlockRewrite,
+  type DocxExtractionErrorCode,
+  type DocxRewriteErrorCode,
+  type DocxRewriteResult,
+} from "./types";
 
 export class DocxRewriteError extends Error {
   readonly code: DocxRewriteErrorCode;

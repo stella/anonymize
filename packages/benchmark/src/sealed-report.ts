@@ -178,8 +178,7 @@ export type LegacySealedAggregateReport = {
 };
 
 export type SupportedSealedAggregateReport =
-  | LegacySealedAggregateReport
-  | SealedAggregateReport;
+  LegacySealedAggregateReport | SealedAggregateReport;
 
 type AvailableSupportedSealedLibraryResult =
   | Extract<LegacySealedLibraryResult, { status: "ok" }>

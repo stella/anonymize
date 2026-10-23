@@ -2,8 +2,8 @@ import { describe, expect, setDefaultTimeout, test } from "bun:test";
 
 import { DEFAULT_ENTITY_LABELS } from "../constants";
 import type { Dictionaries, PipelineConfig } from "../types";
-import { detectNative } from "./native-detect";
 import { loadTestDictionaries } from "./load-dictionaries";
+import { detectNative } from "./native-detect";
 
 setDefaultTimeout(15_000);
 

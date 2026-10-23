@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "license": "Apache-2.0",
-  "packageManager": "bun@1.4.3",
+  "packageManager": "bun@1.4.4",
   "workspaces": [
     "packages/*",
     "packages/anonymize/wasm"
@@ -18,8 +18,6 @@
     "lint:oxlint": "bun test oxlint.plugin.test.ts && bun run lint:prepare && bun --bun oxlint -c oxlint.config.ts --deny-warnings --type-aware .",
     "lint:prepare": "bun x tsdown --config packages/anonymize/tsdown.config.ts --no-clean && bun x tsdown --config packages/document-docx/tsdown.config.ts --no-clean",
     "lint:fix": "bun run lint:prepare && bun --bun oxlint -c oxlint.config.ts --type-aware --fix .",
-    "format": "turbo run format && oxfmt . \"!packages/**\" \"!.ai/**\" \"!.agents/**\" \"!.claude/**\" \"!AGENTS.md\" \"!GEMINI.md\"",
-    "format:check": "turbo run format -- --check && oxfmt --check . \"!packages/**\" \"!.ai/**\" \"!.agents/**\" \"!.claude/**\" \"!AGENTS.md\" \"!GEMINI.md\"",
     "test": "turbo run test",
     "test:built": "turbo run test --only",
     "rust:fmt": "cargo ci-fmt",
@@ -69,17 +67,16 @@
     "@changesets/changelog-github": "^1.0.1",
     "@changesets/cli": "^3.0.3",
     "@stll/anonymize-data": "workspace:*",
-    "@stll/oxlint-config": "1.4.0",
+    "@stll/oxlint-config": "1.9.0",
     "@stll/typescript-config": "0.8.0",
     "typescript": "7.0.2",
     "lefthook": "2.1.16",
-    "oxfmt": "0.72.0",
     "oxlint": "1.87.0",
     "oxlint-tsgolint": "7.0.2003",
     "turbo": "^2.11.6",
-    "@stll/oxlint-plugin": "0.2.2",
+    "@stll/oxlint-plugin": "0.6.2",
     "@types/node": "26.6.4",
-    "bun-types": "1.4.3",
+    "bun-types": "1.4.4",
     "tsdown": "0.23.0"
   }
 }

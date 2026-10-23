@@ -2,25 +2,39 @@ import { describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
 import { resolve } from "node:path";
 
+import { loadGroundTruthFile } from "../ground-truth";
 import {
   assertCanonicalHost,
   assertCanonicalRuntimeControls,
   CANONICAL_HOST_LABEL,
-  parseCpuList,
   type HostProfile,
   type HostSnapshot,
+  parseCpuList,
 } from "../performance/host";
 import {
   buildPerformanceInput,
   PERFORMANCE_SCENARIO_IDS,
   performanceInputSourceDigest,
 } from "../performance/input";
-import { loadGroundTruthFile } from "../ground-truth";
 import {
   assertCleanCpuNoise,
   cpuNoiseDelta,
   type CpuNoiseSnapshot,
 } from "../performance/noise";
+import { assertProviderEntities } from "../performance/providers/identity";
+import {
+  assertProviderInputIdentity,
+  computeProviderInputIdentity,
+} from "../performance/providers/input-identity";
+import {
+  buildProviderInvocation,
+  buildProviderSampleOrder,
+  parseCrossProviderArgs,
+  type ProviderDefinition,
+  providerDefinitions,
+} from "../performance/providers/run";
+import { regexDetectorConfig } from "../performance/providers/stella-config";
+import { CROSS_PROVIDER_IDS } from "../performance/providers/types";
 import {
   assertPerformanceReport,
   PERFORMANCE_REPORT_SCHEMA_VERSION,
@@ -31,20 +45,6 @@ import {
   parsePerformanceWorkerMessage,
 } from "../performance/run";
 import { summarize } from "../performance/statistics";
-import {
-  buildProviderInvocation,
-  buildProviderSampleOrder,
-  parseCrossProviderArgs,
-  providerDefinitions,
-  type ProviderDefinition,
-} from "../performance/providers/run";
-import { CROSS_PROVIDER_IDS } from "../performance/providers/types";
-import { regexDetectorConfig } from "../performance/providers/stella-config";
-import { assertProviderEntities } from "../performance/providers/identity";
-import {
-  assertProviderInputIdentity,
-  computeProviderInputIdentity,
-} from "../performance/providers/input-identity";
 
 describe("canonical performance statistics", () => {
   test("validates worker messages at the process boundary", () => {

@@ -26,8 +26,7 @@ pre-commit:
     # hunks are scanned too, not just the hunks staged before
     # this hook ran.
     format:
-      run: bun --bun oxfmt --no-error-on-unmatched-pattern {staged_files} "!.ai/**" "!.agents/**" "!.claude/**" "!packages/benchmark/results/**" "!AGENTS.md" "!GEMINI.md"
-      stage_fixed: true
+      run: bun fmt --staged
     # Runs last (parallel: false, so ordering is honored) so it scans
     # everything staged by lint/format's `stage_fixed`, not just what was
     # staged before this hook ran.
@@ -42,7 +41,7 @@ pre-push:
     typecheck-data:
       run: bun run --filter @stll/anonymize-data typecheck
     format:
-      run: bun run format:check
+      run: bun fmt --check
     ai-skills:
       run: bun run sync-ai:check:optional
     test:

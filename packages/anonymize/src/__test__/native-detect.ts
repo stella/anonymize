@@ -12,14 +12,14 @@
  * package build, but caching the wrapper avoids the per-call digest hash).
  */
 import { createPipelineContext, type PipelineContext } from "../context";
-import { loadNativeAnonymizeBinding } from "../native-node";
 import type {
   NativeOperatorConfig,
   NativePipelineEntity,
   NativeStaticRedactionResult,
+  PreparedNativePipeline,
 } from "../native";
+import { loadNativeAnonymizeBinding } from "../native-node";
 import { createNativePipelineFromConfig } from "../native-pipeline";
-import type { PreparedNativePipeline } from "../native";
 import { pipelineConfigKey } from "../pipeline-cache-key";
 import type { Dictionaries, GazetteerEntry, PipelineConfig } from "../types";
 

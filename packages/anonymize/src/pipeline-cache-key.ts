@@ -1,6 +1,6 @@
 import {
-  isLegalFormsEnabled,
   type GazetteerEntry,
+  isLegalFormsEnabled,
   type PipelineConfig,
 } from "./types";
 import { languageSelectionKey } from "./util/language-selection";

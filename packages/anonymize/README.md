@@ -225,9 +225,10 @@ entering the existing caller-detection pipeline:
 
 ```ts
 import { createHash } from "node:crypto";
+
 import {
-  EXTERNAL_DETECTION_BATCH_VERSION,
   convert_external_detection_batch,
+  EXTERNAL_DETECTION_BATCH_VERSION,
 } from "@stll/anonymize";
 
 const document = new TextEncoder().encode("😀Alice signed.");

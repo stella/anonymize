@@ -1,6 +1,6 @@
-import type { PipelineConfig } from "./types";
-import { applyPipelineLanguageScope } from "./language-scope";
 import languageScopes from "./data/language-scopes.json";
+import { applyPipelineLanguageScope } from "./language-scope";
+import type { PipelineConfig } from "./types";
 
 type DictionaryBundleOptions = {
   countries?: readonly string[];

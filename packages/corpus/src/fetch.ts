@@ -5,9 +5,9 @@ import { sha256Hex } from "./hash";
 import { htmlToText, looksLikeHtml } from "./html-text";
 import { loadManifest, mergeManifestEntries, saveManifest } from "./manifest";
 import {
+  type DateRange,
   dateRangeOptions,
   positiveIntegerOption,
-  type DateRange,
 } from "./options";
 import { rawPath } from "./paths";
 import { loadSkipList, mergeSkipEntries, saveSkipList } from "./skiplist";

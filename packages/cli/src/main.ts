@@ -21,6 +21,11 @@ import type {
   PipelineConfig,
   PreparedNativePipeline,
 } from "@stll/anonymize";
+import {
+  AnonymizeSurfaceError,
+  exitCodeForError,
+  isAnonymizeSurfaceError,
+} from "@stll/anonymize/agent-surface";
 import { CAPABILITY_MANIFEST } from "@stll/anonymize/capabilities";
 import {
   DEFAULT_ENTITY_LABELS,
@@ -29,13 +34,6 @@ import {
 } from "@stll/anonymize/constants";
 
 import pkg from "../package.json" with { type: "json" };
-
-import {
-  AnonymizeSurfaceError,
-  exitCodeForError,
-  isAnonymizeSurfaceError,
-} from "@stll/anonymize/agent-surface";
-
 import type { CliOptions } from "./args";
 import {
   DEFAULT_THRESHOLD,
@@ -44,13 +42,13 @@ import {
   parseCountries,
   UsageError,
 } from "./args";
-import { runFeedbackCommand } from "./feedback";
 import type { DictionaryScope } from "./dictionary-scope";
 import {
   type DocxCliPipeline,
   type DocxPipelineRequest,
   runDocxCommand,
 } from "./docx";
+import { runFeedbackCommand } from "./feedback";
 import {
   type PdfCliPipeline,
   type PdfPipelineRequest,

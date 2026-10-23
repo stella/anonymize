@@ -2,9 +2,9 @@ import type { OpenRedaction as OpenRedactionDetector } from "@openredaction/core
 
 import type { GroundTruthDocument } from "../ground-truth";
 import {
-  totalUtf16CodeUnits,
   type Adapter,
   type NativePrediction,
+  totalUtf16CodeUnits,
 } from "./types";
 
 const OPENREDACTION_VERSION = "1.1.5";

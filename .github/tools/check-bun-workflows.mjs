@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
-import { pathToFileURL } from "node:url";
 import process from "node:process";
+import { pathToFileURL } from "node:url";
 
 const PACKAGE_MANAGER_RE = /^bun@[0-9]+\.[0-9]+\.[0-9]+$/;
 const BUN_VERSION_ENV_RE = /^\s*BUN_VERSION\s*:/;

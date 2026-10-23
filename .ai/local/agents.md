@@ -6,7 +6,6 @@ This is a Bun-first TypeScript monorepo for text anonymization. The library hand
 
 - `bun install`
 - `bun run lint`
-- `bun run format:check`
 - `bun run typecheck` (`bun check --no-pretty --all --project=<tsconfig>` for each checked project)
 - `bun run check:typecheck-parity`
 - `bun run test`

@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
 import type { NativePipelineEntity } from "../../native";
-import { redactNative } from "../native-detect";
 import {
   assertEntityInvariants,
   assertRedactionInvariants,
@@ -9,6 +8,7 @@ import {
 } from "../assert-invariants";
 import { contractTestConfig } from "../contract-config";
 import { loadTestDictionaries } from "../load-dictionaries";
+import { redactNative } from "../native-detect";
 
 type ExpectedEntity = {
   label: string;

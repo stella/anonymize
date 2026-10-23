@@ -36,8 +36,7 @@
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json && bun check --no-pretty --all --project=tsconfig.test.json",
     "test": "bun test src/__test__/local.test.ts src/__test__/server.test.ts src/__test__/instructions.test.ts && bun run test:node-runtime",
     "pretest:node-runtime": "test -f dist/server-entry.mjs || bun run build",
-    "test:node-runtime": "node --import tsx --test src/__test__/durable-sessions.test.ts && node scripts/test-packed-bin.mjs",
-    "format": "oxfmt ."
+    "test:node-runtime": "node --import tsx --test src/__test__/durable-sessions.test.ts && node scripts/test-packed-bin.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.31.0",
@@ -49,7 +48,7 @@
   },
   "devDependencies": {
     "@types/node": "^26.6.4",
-    "bun-types": "1.4.3",
+    "bun-types": "1.4.4",
     "fflate": "^0.8.3",
     "tsdown": "0.23.0",
     "tsx": "^4.23.15",

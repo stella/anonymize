@@ -15,12 +15,12 @@ import { tmpdir } from "node:os";
 import { join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import {
-  parseNativeDefaultSdkWorkerResult,
-  parseNativeDefaultSdkDiagnosticEvents,
-  nativeDefaultSdkProcessFailure,
-} from "./native-default-sdk-perf-contract.ts";
 import { parseCanonicalStaticRedactionResult } from "../src/native-result-codec.ts";
+import {
+  nativeDefaultSdkProcessFailure,
+  parseNativeDefaultSdkDiagnosticEvents,
+  parseNativeDefaultSdkWorkerResult,
+} from "./native-default-sdk-perf-contract.ts";
 
 /** @typedef {import("./native-default-sdk-perf-contract").NativeDefaultSdkWorkerResult} WorkerSample */
 /** @typedef {{ adapter: "ts-node" | "python", language: string, preload: boolean, pythonSdkRoot?: string }} WorkerOptions */

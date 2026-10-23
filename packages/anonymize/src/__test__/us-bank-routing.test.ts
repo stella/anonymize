@@ -1,9 +1,9 @@
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 
 import { DEFAULT_ENTITY_LABELS } from "../constants";
-import { detectNative } from "./native-detect";
 import type { PipelineConfig } from "../types";
 import { loadTestDictionaries } from "./load-dictionaries";
+import { detectNative } from "./native-detect";
 
 // Building the native prepared pipeline pays the regex-set DFA
 // build cost once; 15 s gives CI headroom.

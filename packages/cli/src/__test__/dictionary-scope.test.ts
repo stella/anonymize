@@ -3,9 +3,9 @@ import { describe, expect, test } from "bun:test";
 import type { Dictionaries } from "@stll/anonymize";
 
 import { UsageError } from "../args";
+import type { CliOptions } from "../args";
 import { filterDictionaries } from "../dictionary-scope";
 import { shouldPromptForScope } from "../main";
-import type { CliOptions } from "../args";
 
 const FULL = {
   firstNames: { cs: ["Jan"], de: ["Hans"] },

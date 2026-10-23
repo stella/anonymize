@@ -5,6 +5,7 @@ workflows.
 
 ```ts
 import { readFile } from "node:fs/promises";
+
 import { extractDocxText } from "@stll/anonymize-docx";
 
 const extraction = extractDocxText(
@@ -34,12 +35,12 @@ including caller-supplied detections, then applies the resulting replacement
 spans without flattening the document structure:
 
 ```ts
-import { getDefaultNativePipeline } from "@stll/anonymize/native-node";
 import {
-  DOCX_COVERAGE_MODES,
   anonymizeDocx,
+  DOCX_COVERAGE_MODES,
   extractDocxText,
 } from "@stll/anonymize-docx";
+import { getDefaultNativePipeline } from "@stll/anonymize/native-node";
 
 const extraction = extractDocxText(document);
 const firstBlock = extraction.blocks.at(0);

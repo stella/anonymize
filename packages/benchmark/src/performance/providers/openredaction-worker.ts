@@ -1,8 +1,8 @@
 import { createRequire } from "node:module";
 
 import { createStatelessOpenRedaction } from "../../adapters/openredaction";
-import { assertProviderInputIdentity } from "./input-identity";
 import { assertProviderEntities, outputIdentity } from "./identity";
+import { assertProviderInputIdentity } from "./input-identity";
 import type { ProviderSample } from "./types";
 
 const PROVIDER = "openredaction-default" as const;

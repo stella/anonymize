@@ -1,7 +1,5 @@
 export type BenchmarkTask =
-  | "span-redaction"
-  | "contextual-redaction"
-  | "named-entity-recognition";
+  "span-redaction" | "contextual-redaction" | "named-entity-recognition";
 
 export type BenchmarkAccess = "bundled-development" | "verified-download";
 

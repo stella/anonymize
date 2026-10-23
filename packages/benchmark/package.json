@@ -8,7 +8,6 @@
   "scripts": {
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
     "test": "bun test",
-    "format": "oxfmt . \"!results/**\" \"!vendor/**\"",
     "bench:compare": "bun src/bench.ts",
     "bench:blind": "bun src/blind.ts",
     "bench:sealed:tab": "bun src/blind.ts --full",
@@ -38,7 +37,7 @@
   },
   "devDependencies": {
     "@types/node": "^26.6.4",
-    "bun-types": "1.4.3",
+    "bun-types": "1.4.4",
     "typescript": "7.0.2",
     "@stll/typescript-config": "0.8.0"
   }

@@ -1,11 +1,10 @@
-import { createHash } from "node:crypto";
-
 import { describe, expect, test } from "bun:test";
+import { createHash } from "node:crypto";
 
 import {
   convert_external_detection_batch,
-  loadNativeAnonymizeBinding,
   type ExternalDetectionBatch,
+  loadNativeAnonymizeBinding,
 } from "@stll/anonymize";
 
 import { NYM_PROVIDER_VERSION, parseNymResult } from "../adapters/nym-assisted";

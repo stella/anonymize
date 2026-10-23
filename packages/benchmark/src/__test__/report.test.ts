@@ -1,7 +1,6 @@
+import { expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-
-import { expect, test } from "bun:test";
 
 import { type BenchResult, renderMarkdown } from "../report";
 

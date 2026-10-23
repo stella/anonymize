@@ -1,5 +1,5 @@
-import type { GroundTruthDocument } from "./ground-truth";
 import type { NativePrediction } from "./adapters/types";
+import type { GroundTruthDocument } from "./ground-truth";
 import {
   type CommonLabel,
   isCommonLabel,

@@ -1,8 +1,7 @@
+import { unzipSync } from "fflate";
 import { createHash } from "node:crypto";
 import { mkdir, readFile, rename, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
-
-import { unzipSync } from "fflate";
 
 import { parseVerifiedArtifact } from "../verified-artifact";
 

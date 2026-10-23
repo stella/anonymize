@@ -4,13 +4,12 @@ import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { CITY_LOADERS } from "../dictionaries/city-loaders";
-
 import {
   CITY_DICTIONARY_COUNTRIES,
   hasCityDictionary,
   loadCityDictionary,
 } from "../dictionaries/cities";
+import { CITY_LOADERS } from "../dictionaries/city-loaders";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DICTIONARIES_DIR = join(__dirname, "..", "dictionaries");

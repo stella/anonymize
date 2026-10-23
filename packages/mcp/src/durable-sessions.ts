@@ -258,8 +258,7 @@ export class DurableSessionStore {
   #closePromise: Promise<void> | undefined;
   readonly #directory: DirectoryIdentity;
   readonly #faultInjector:
-    | ((point: DurableSessionFaultPoint) => Promise<void> | void)
-    | undefined;
+    ((point: DurableSessionFaultPoint) => Promise<void> | void) | undefined;
   readonly #key: Uint8Array;
   readonly #lockHandle: FileHandle;
   #mutationTail: Promise<void> = Promise.resolve();

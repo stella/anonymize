@@ -1,8 +1,8 @@
 import {
-  parseCanonicalSessionMetadata,
   parseCanonicalSessionDeletionSummary,
-  parseCanonicalStaticRedactionResult,
+  parseCanonicalSessionMetadata,
   parseCanonicalSessionRedactionPlanResult,
+  parseCanonicalStaticRedactionResult,
 } from "./native-result-codec";
 import type { NativePreparedSearchConfig } from "./native-search-config";
 import type { OperatorSelection, OperatorType } from "./types";
@@ -116,10 +116,7 @@ export type CanonicalSessionRedactionPlanResult = {
 };
 
 export type NativeSessionStatus =
-  | "active"
-  | "not_yet_active"
-  | "expired"
-  | "deleted";
+  "active" | "not_yet_active" | "expired" | "deleted";
 
 export type NativeSessionLifecycle = {
   createdAtEpochSeconds: number;
@@ -886,9 +883,7 @@ export type NativeSearchPackageOptions = {
 };
 
 export type NativeSearchPackageInput =
-  | NativePreparedSearchConfig
-  | string
-  | Uint8Array;
+  NativePreparedSearchConfig | string | Uint8Array;
 
 export type SharedNativeSearchPackageOptions = {
   binding: NativeAnonymizeBinding;

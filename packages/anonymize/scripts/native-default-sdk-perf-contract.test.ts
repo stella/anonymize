@@ -1,9 +1,10 @@
 import { expect, test } from "bun:test";
+
 import {
   nativeDefaultSdkProcessFailure,
+  type NativeDefaultSdkWorkerResult,
   parseNativeDefaultSdkDiagnosticEvents,
   parseNativeDefaultSdkWorkerResult,
-  type NativeDefaultSdkWorkerResult,
 } from "./native-default-sdk-perf-contract";
 
 const summary = { minMs: 1, p50Ms: 1, p95Ms: 1, maxMs: 1 };
