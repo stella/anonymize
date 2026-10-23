@@ -129,11 +129,32 @@ test("keeps third-party quarantine and exact first-party tooling exemptions", ()
   ]) {
     expect(exceptions).toContain(name);
   }
-  expect(
-    exceptions.every(
-      (name: string) => name.startsWith("@stll/") && !name.includes("*"),
+  // Third-party exclusions are temporary: each one carries an exact UTC
+  // expiry that has not passed yet.
+  const expiring = new Map(
+    Array.from(
+      read("bunfig.toml").matchAll(
+        /^\s*"(?<name>[^"@][^"*]*)"\s*,?\s*#\s*quarantine-expires:\s*(?<timestamp>\S+)\s*$/gm,
+      ),
+      (entry) => [entry.groups?.name ?? "", entry.groups?.timestamp ?? ""],
     ),
-  ).toBe(true);
+  );
+  const excluded: unknown = exceptions;
+  if (
+    !Array.isArray(excluded) ||
+    !excluded.every((name: unknown): name is string => typeof name === "string")
+  )
+    throw new Error("Quarantine exclusions must be package names");
+  for (const name of excluded) {
+    expect(name.includes("*"), name).toBe(false);
+    if (name.startsWith("@stll/")) {
+      continue;
+    }
+    const expiry = expiring.get(name);
+    expect(expiry, name).toBeString();
+    expect(new Date(expiry ?? "").toISOString()).toBe(expiry);
+    expect(Date.parse(expiry ?? "")).toBeGreaterThan(Date.now());
+  }
 });
 
 test("every first-party quarantine exemption carries an exact UTC annotation", () => {
@@ -156,7 +177,9 @@ test("every first-party quarantine exemption carries an exact UTC annotation", (
   )
     throw new Error("Quarantine exclusions must be package names");
   const compare = (left: string, right: string) => left.localeCompare(right);
-  expect(names.toSorted(compare)).toEqual(exclusions.toSorted(compare));
+  expect(names.toSorted(compare)).toEqual(
+    exclusions.filter((name) => name.startsWith("@stll/")).toSorted(compare),
+  );
   for (const entry of entries) {
     const timestamp = entry.groups?.timestamp;
     if (timestamp === undefined) throw new Error("Missing exemption timestamp");
