@@ -153,16 +153,18 @@ verify_bun_routes() {
   [[ -n "$minimal_path" ]] || minimal_path=/usr/local/bin:/usr/bin:/bin
   root_mise="$(printenv STLL_CLOUD_TEST_ROOT_MISE || true)"
   [[ -n "$root_mise" ]] || root_mise=/root/.local/share/mise
-  bun_route 'the setup PATH' env PATH="$PATH" sh
-  bun_route 'sh -c' sh
+  # An absolute shell: a PATH entry such as a user-writable mise shims
+  # directory must never supply the program that root runs.
+  bun_route 'the setup PATH' env PATH="$PATH" /bin/sh
+  bun_route 'sh -c' /bin/sh
   bun_route 'bash -lc' "$login_shell" -l
-  bun_route 'the minimal system PATH' env -i PATH="$minimal_path" sh
+  bun_route 'the minimal system PATH' env -i PATH="$minimal_path" /bin/sh
   configured_mise="$(printenv MISE_DATA_DIR || true)"
   for mise_root in "$configured_mise" "$OUTPUT_HOME/.local/share/mise" "$root_mise"; do
     [[ -n "$mise_root" ]] || continue
     shims="$mise_root/shims"
     [[ -d "$shims" ]] || continue
-    bun_route "mise shims PATH $shims" env PATH="$shims:$PATH" sh
+    bun_route "mise shims PATH $shims" env PATH="$shims:$PATH" /bin/sh
   done
 }
 replace_image_buns() {
@@ -189,7 +191,8 @@ replace_image_buns() {
       [[ -d "$candidate" ]] && continue
       [[ "$(readlink -f -- "$candidate")" == "$(readlink -f -- "$BUN_DIR/bun")" ]] || ln -sfnT -- "$BUN_DIR/bun" "$candidate"
     done
-  done < <(printf '%s' "$PATH" | tr : '\n')
+  # The trailing newline lets read return the last PATH entry too.
+  done < <(printf '%s\n' "$PATH" | tr : '\n')
 }
 install_runtimes() (
   if [[ ! -s /etc/ssl/certs/ca-certificates.crt ]]; then
@@ -229,7 +232,6 @@ install_runtimes() (
   ln -sfnT -- "$NODE_DIR/bin/npx" /usr/local/bin/npx
   ln -sfnT -- "$BUN_DIR/bun" /usr/local/bin/bun
   replace_image_buns
-  verify_bun_routes
 )
 
 dependency_install() {
@@ -303,7 +305,8 @@ sync_dependencies() {
   prepare_dependency_state
   expected="$(dependency_hash)"
   if [[ -f "$DEPENDENCY_STAMP" ]]; then IFS= read -r installed < "$DEPENDENCY_STAMP" || true; fi
-  [[ "$installed" == "$expected" ]] && return
+  # The stamp describes an installation; without node_modules there is none.
+  [[ "$installed" == "$expected" && -d "$REPO_ROOT/node_modules" ]] && return
   rm -f -- "$DEPENDENCY_STAMP"
   dependency_install || fail 'bun.lock mismatch; dependency installation failed'
   write_dependency_stamp
@@ -548,6 +551,8 @@ if [[ "$MODE" == install ]]; then
   step services install_services
   step tools install_tools
   step shell install_shell_environment
+  # Login routes read the installed profile, so they are checked after it.
+  step routes verify_bun_routes
   step dependencies install_dependencies
 
   exit 0
