@@ -39,7 +39,6 @@
         "fflate": "^0.8.3",
         "puppeteer-core": "25.12.0",
         "tsdown": "0.23.0",
-        "typescript": "7.0.2",
         "vite": "^8.3.2",
       },
       "optionalDependencies": {
@@ -97,7 +96,6 @@
         "@stll/typescript-config": "0.8.0",
         "@types/node": "^26.6.4",
         "bun-types": "1.4.4",
-        "typescript": "7.0.2",
       },
     },
     "packages/cli": {
@@ -118,7 +116,6 @@
         "bun-types": "1.4.4",
         "fflate": "^0.8.3",
         "tsdown": "0.23.0",
-        "typescript": "7.0.2",
       },
     },
     "packages/corpus": {
@@ -132,7 +129,6 @@
         "@stll/typescript-config": "0.8.0",
         "@types/node": "^26.6.4",
         "bun-types": "1.4.4",
-        "typescript": "7.0.2",
       },
     },
     "packages/data": {
@@ -144,7 +140,6 @@
         "bun-types": "1.4.4",
         "stopwords-iso": "1.1.0",
         "tsdown": "0.23.0",
-        "typescript": "7.0.2",
       },
     },
     "packages/document-docx": {
@@ -160,7 +155,6 @@
         "bun-types": "1.4.4",
         "fflate": "^0.8.3",
         "tsdown": "0.23.0",
-        "typescript": "7.0.2",
       },
     },
     "packages/document-pdf": {
@@ -174,7 +168,6 @@
         "@types/node": "^26.6.4",
         "bun-types": "1.4.4",
         "tsdown": "0.23.0",
-        "typescript": "7.0.2",
       },
     },
     "packages/mcp": {
@@ -198,7 +191,6 @@
         "fflate": "^0.8.3",
         "tsdown": "0.23.0",
         "tsx": "^4.23.15",
-        "typescript": "7.0.2",
       },
     },
   },

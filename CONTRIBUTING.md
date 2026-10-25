@@ -134,4 +134,4 @@ Describe only public engineering context visible in the repository and diff.
 
 ## TypeScript tooling
 
-Workspace typechecks use `bun check --no-pretty --all --project=<tsconfig>` for production, test, and WASM configurations. CI compares diagnostic coverage with TypeScript using `bun run check:typecheck-parity`. Editors retain the TypeScript language service because Bun has no language server. Keep TypeScript for editors and tsdown declaration generation and diagnostic parity.
+Workspace typechecks use `bun check --no-pretty --all --project=<tsconfig>` for production, test, and WASM configurations. CI compares diagnostic coverage with TypeScript using `bun run check:typecheck-parity`. Editors retain the TypeScript language service because Bun has no language server. Keep `typescript` only in the root manifest: tsdown declaration generation, `stll-typecheck-parity` (the tsc comparison) and editors need it; workspace packages do not declare it.

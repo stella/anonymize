@@ -523,4 +523,4 @@ default alias), and the pinned Rust 1.96.0 toolchain with the
 
 ### TypeScript Tooling
 
-Use Bun for every TypeScript typecheck, including test and WASM configurations. CI runs `bun run check:typecheck-parity` for every configuration checked by workspace scripts. Editors keep the TypeScript language service because Bun has no language server. Keep `typescript` for editor support and declaration generation through tsdown and diagnostic parity.
+Use Bun for every TypeScript typecheck, including test and WASM configurations. CI runs `bun run check:typecheck-parity` for every configuration checked by workspace scripts. Editors keep the TypeScript language service because Bun has no language server. Keep `typescript` only in the root manifest: tsdown declaration generation, `stll-typecheck-parity` (the tsc comparison) and editors need it; workspace packages do not declare it.
