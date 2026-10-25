@@ -757,32 +757,69 @@ const assertDifferentPaths = (input: string, output: string): void => {
   }
 };
 
-const textInput = z.object({
+// Declarations are emitted without type inference, so each schema states its type.
+const textInput: z.ZodObject<{
+  inputPath: z.ZodString;
+  outputPath: z.ZodString;
+  sessionId: z.ZodString;
+  language: z.ZodOptional<z.ZodString>;
+}> = z.object({
   inputPath: z.string().min(1).max(PATH_MAX_CHARACTERS),
   outputPath: z.string().min(1).max(PATH_MAX_CHARACTERS),
   sessionId: z.string().regex(SESSION_ID),
   language: z.string().min(2).max(35).optional(),
 });
 
-const externalDetectionTextInput = textInput.extend({
+const externalDetectionTextInput: z.ZodObject<{
+  inputPath: z.ZodString;
+  outputPath: z.ZodString;
+  sessionId: z.ZodString;
+  language: z.ZodOptional<z.ZodString>;
+  detectionBatchPath: z.ZodString;
+}> = textInput.extend({
   detectionBatchPath: z.string().min(1).max(PATH_MAX_CHARACTERS),
 });
 
-const restoreInput = z.object({
+const restoreInput: z.ZodObject<{
+  inputPath: z.ZodString;
+  outputPath: z.ZodString;
+  sessionId: z.ZodString;
+}> = z.object({
   inputPath: z.string().min(1).max(PATH_MAX_CHARACTERS),
   outputPath: z.string().min(1).max(PATH_MAX_CHARACTERS),
   sessionId: z.string().regex(SESSION_ID),
 });
 
-const docxRestoreInput = restoreInput.extend({
+const docxRestoreInput: z.ZodObject<{
+  inputPath: z.ZodString;
+  outputPath: z.ZodString;
+  sessionId: z.ZodString;
+  allowPartialCoverage: z.ZodDefault<z.ZodOptional<z.ZodBoolean>>;
+}> = restoreInput.extend({
   allowPartialCoverage: z.boolean().optional().default(false),
 });
 
-const docxInput = textInput.extend({
+const docxInput: z.ZodObject<{
+  inputPath: z.ZodString;
+  outputPath: z.ZodString;
+  sessionId: z.ZodString;
+  language: z.ZodOptional<z.ZodString>;
+  allowPartialCoverage: z.ZodDefault<z.ZodOptional<z.ZodBoolean>>;
+}> = textInput.extend({
   allowPartialCoverage: z.boolean().optional().default(false),
 });
 
-const pdfInput = z.object({
+const pdfInput: z.ZodObject<{
+  inputPath: z.ZodString;
+  outputPath: z.ZodString;
+  ocrLanguage: z.ZodString;
+  detectionLanguage: z.ZodOptional<z.ZodString>;
+  dpi: z.ZodDefault<z.ZodOptional<z.ZodNumber>>;
+  timeoutMs: z.ZodDefault<z.ZodOptional<z.ZodNumber>>;
+  fillRgb: z.ZodDefault<
+    z.ZodOptional<z.ZodTuple<[z.ZodNumber, z.ZodNumber, z.ZodNumber], null>>
+  >;
+}> = z.object({
   inputPath: z.string().min(1).max(PATH_MAX_CHARACTERS),
   outputPath: z.string().min(1).max(PATH_MAX_CHARACTERS),
   ocrLanguage: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_.-]*$/u),

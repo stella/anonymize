@@ -14,7 +14,7 @@ import {
   type DocxBlockRewrite,
 } from "./types";
 
-export const DOCX_ANONYMIZATION_MAX_CALLER_DETECTIONS =
+export const DOCX_ANONYMIZATION_MAX_CALLER_DETECTIONS: number =
   CALLER_DETECTION_MAX_COUNT;
 
 export class DocxAnonymizationError extends Error {

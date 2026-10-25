@@ -510,9 +510,15 @@ export const DICTIONARY_META = {
     category: "International",
     country: null,
   },
-} as const satisfies Record<string, DictionaryMeta>;
+} as const;
 
-export type DictionaryId = keyof typeof DICTIONARY_META;
+// Declaration emit cannot carry a `satisfies` clause, so the entry shape is
+// checked here: this fails to compile when an entry is not a DictionaryMeta.
+type CheckedDictionaryMeta<
+  Meta extends Readonly<Record<string, DictionaryMeta>>,
+> = Meta;
+
+export type DictionaryId = keyof CheckedDictionaryMeta<typeof DICTIONARY_META>;
 
 type JsonModule = { default: readonly string[] };
 

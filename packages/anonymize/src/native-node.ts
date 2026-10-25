@@ -248,7 +248,7 @@ export const prepare_search_package = (
 export const load_prepared_package = (
   packageBytes: Uint8Array,
   options: NativeSdkOptions = {},
-) =>
+): PreparedNativeAnonymizer =>
   loadPreparedPackageWithBinding({
     binding: resolveNativeSdkBinding(options),
     packageBytes,
@@ -257,7 +257,8 @@ export const load_prepared_package = (
 export const load_prepared_package_file = (
   packagePath: string,
   options: NativeSdkOptions = {},
-) => load_prepared_package(readNativePipelinePackageFile(packagePath), options);
+): PreparedNativeAnonymizer =>
+  load_prepared_package(readNativePipelinePackageFile(packagePath), options);
 
 export const redact_text = (
   config: NativeSearchPackageInput,
@@ -379,7 +380,7 @@ export const availableDefaultNativePipelineLanguages = (): string[] => {
   return [...languages].toSorted();
 };
 
-export const available_default_native_pipeline_languages =
+export const available_default_native_pipeline_languages: typeof availableDefaultNativePipelineLanguages =
   availableDefaultNativePipelineLanguages;
 
 export const readDefaultNativePipelinePackageFileAsync = async ({
@@ -481,7 +482,7 @@ export const createPipeline = async ({
   return applyDefaultNativePipelineWarmup(pipeline, resolvedWarmup);
 };
 
-export const create_pipeline = createPipeline;
+export const create_pipeline: typeof createPipeline = createPipeline;
 
 export const preloadDefaultNativePipeline = (
   options: DefaultNativePipelinePackageOptions = {},

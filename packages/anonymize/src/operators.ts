@@ -137,7 +137,12 @@ const maskOperator: AnonymisationOperator = {
   },
 };
 
-export const OPERATOR_REGISTRY = {
+export const OPERATOR_REGISTRY: {
+  readonly replace: AnonymisationOperator;
+  readonly redact: AnonymisationOperator;
+  readonly keep: AnonymisationOperator;
+  readonly mask: AnonymisationOperator;
+} = {
   replace: replaceOperator,
   redact: redactOperator,
   keep: keepOperator,

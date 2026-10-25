@@ -187,15 +187,20 @@ export const RAW_WASM_MODULE_FUNCTION_MEMBERS = [
   "assembleStaticSearchConfigJson",
   "assembleStaticSearchPackageBytes",
   "assembleStaticSearchCompressedPackageBytes",
-] as const satisfies readonly FunctionMemberNames<RawWasmModule>[];
+] as const;
 
 export const RAW_WASM_PREPARED_SEARCH_FACTORY_MEMBERS = [
   "fromConfigJsonBytes",
   "fromPreparedPackageBytes",
   "fromTrustedPreparedPackageBytes",
-] as const satisfies readonly FunctionMemberNames<
+] as const;
+
+// Declaration emit cannot carry `satisfies`; these typed aliases perform that check.
+const RAW_ROOT_MEMBERS_ARE_FUNCTIONS: readonly FunctionMemberNames<RawWasmModule>[] =
+  RAW_WASM_MODULE_FUNCTION_MEMBERS;
+const RAW_FACTORY_MEMBERS_ARE_FUNCTIONS: readonly FunctionMemberNames<
   RawWasmModule["WasmPreparedSearch"]
->[];
+>[] = RAW_WASM_PREPARED_SEARCH_FACTORY_MEMBERS;
 
 const RAW_ROOT_EXPORTS_ARE_EXHAUSTIVE: Exclude<
   FunctionMemberNames<RawWasmModule>,
@@ -209,7 +214,12 @@ const RAW_FACTORY_EXPORTS_ARE_EXHAUSTIVE: Exclude<
 > extends never
   ? true
   : never = true;
-void [RAW_ROOT_EXPORTS_ARE_EXHAUSTIVE, RAW_FACTORY_EXPORTS_ARE_EXHAUSTIVE];
+void [
+  RAW_ROOT_MEMBERS_ARE_FUNCTIONS,
+  RAW_FACTORY_MEMBERS_ARE_FUNCTIONS,
+  RAW_ROOT_EXPORTS_ARE_EXHAUSTIVE,
+  RAW_FACTORY_EXPORTS_ARE_EXHAUSTIVE,
+];
 
 const isPropertyBag = (value: unknown): value is Record<string, unknown> =>
   (typeof value === "object" && value !== null) || typeof value === "function";

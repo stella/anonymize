@@ -40,15 +40,20 @@ export type DetectionSource =
  * probabilistic ones regardless of raw score.
  */
 export const DETECTOR_PRIORITY = {
-  [DETECTION_SOURCES.GAZETTEER]: 5,
-  [DETECTION_SOURCES.TRIGGER]: 4,
-  [DETECTION_SOURCES.LEGAL_FORM]: 3,
-  [DETECTION_SOURCES.REGEX]: 3,
-  [DETECTION_SOURCES.COUNTRY]: 3,
-  [DETECTION_SOURCES.DENY_LIST]: 2,
-  [DETECTION_SOURCES.COREFERENCE]: 2,
-  [DETECTION_SOURCES.NER]: 1,
-} as const satisfies Record<DetectionSource, number>;
+  gazetteer: 5,
+  trigger: 4,
+  "legal-form": 3,
+  regex: 3,
+  country: 3,
+  "deny-list": 2,
+  coreference: 2,
+  ner: 1,
+} as const;
+
+// Declaration emit cannot carry `satisfies`; this typed alias performs that check.
+const DETECTOR_PRIORITY_IS_TOTAL: Readonly<Record<DetectionSource, number>> =
+  DETECTOR_PRIORITY;
+void DETECTOR_PRIORITY_IS_TOTAL;
 
 /**
  * Anonymization operator types. Each operator defines
@@ -84,150 +89,146 @@ export type EntityCapability = {
 export const ENTITY_CAPABILITIES = [
   {
     label: "person",
-    selection: ENTITY_SELECTIONS.DEFAULT,
-    detectionSources: [
-      DETECTION_SOURCES.TRIGGER,
-      DETECTION_SOURCES.REGEX,
-      DETECTION_SOURCES.DENY_LIST,
-      DETECTION_SOURCES.COREFERENCE,
-    ],
+    selection: "default",
+    detectionSources: ["trigger", "regex", "deny-list", "coreference"],
   },
   {
     label: "organization",
-    selection: ENTITY_SELECTIONS.DEFAULT,
+    selection: "default",
     detectionSources: [
-      DETECTION_SOURCES.TRIGGER,
-      DETECTION_SOURCES.DENY_LIST,
-      DETECTION_SOURCES.LEGAL_FORM,
-      DETECTION_SOURCES.GAZETTEER,
-      DETECTION_SOURCES.COREFERENCE,
+      "trigger",
+      "deny-list",
+      "legal-form",
+      "gazetteer",
+      "coreference",
     ],
   },
   {
     label: "phone number",
-    selection: ENTITY_SELECTIONS.DEFAULT,
-    detectionSources: [DETECTION_SOURCES.REGEX, DETECTION_SOURCES.TRIGGER],
+    selection: "default",
+    detectionSources: ["regex", "trigger"],
   },
   {
     label: "address",
-    selection: ENTITY_SELECTIONS.DEFAULT,
-    detectionSources: [
-      DETECTION_SOURCES.REGEX,
-      DETECTION_SOURCES.TRIGGER,
-      DETECTION_SOURCES.DENY_LIST,
-    ],
+    selection: "default",
+    detectionSources: ["regex", "trigger", "deny-list"],
   },
   {
     label: "country",
-    selection: ENTITY_SELECTIONS.DEFAULT,
-    detectionSources: [DETECTION_SOURCES.COUNTRY],
+    selection: "default",
+    detectionSources: ["country"],
   },
   {
     label: "email address",
-    selection: ENTITY_SELECTIONS.DEFAULT,
-    detectionSources: [DETECTION_SOURCES.REGEX],
+    selection: "default",
+    detectionSources: ["regex"],
   },
   {
     label: "date",
-    selection: ENTITY_SELECTIONS.DEFAULT,
-    detectionSources: [DETECTION_SOURCES.REGEX, DETECTION_SOURCES.TRIGGER],
+    selection: "default",
+    detectionSources: ["regex", "trigger"],
   },
   {
     label: "date of birth",
-    selection: ENTITY_SELECTIONS.DEFAULT,
-    detectionSources: [DETECTION_SOURCES.TRIGGER],
+    selection: "default",
+    detectionSources: ["trigger"],
   },
   {
     label: "bank account number",
-    selection: ENTITY_SELECTIONS.DEFAULT,
-    detectionSources: [DETECTION_SOURCES.REGEX, DETECTION_SOURCES.TRIGGER],
+    selection: "default",
+    detectionSources: ["regex", "trigger"],
   },
   {
     label: "iban",
-    selection: ENTITY_SELECTIONS.DEFAULT,
-    detectionSources: [DETECTION_SOURCES.REGEX, DETECTION_SOURCES.TRIGGER],
+    selection: "default",
+    detectionSources: ["regex", "trigger"],
   },
   {
     label: "tax identification number",
-    selection: ENTITY_SELECTIONS.DEFAULT,
-    detectionSources: [DETECTION_SOURCES.REGEX, DETECTION_SOURCES.TRIGGER],
+    selection: "default",
+    detectionSources: ["regex", "trigger"],
   },
   {
     label: "identity card number",
-    selection: ENTITY_SELECTIONS.DEFAULT,
-    detectionSources: [DETECTION_SOURCES.REGEX, DETECTION_SOURCES.TRIGGER],
+    selection: "default",
+    detectionSources: ["regex", "trigger"],
   },
   {
     label: "birth number",
-    selection: ENTITY_SELECTIONS.DEFAULT,
-    detectionSources: [DETECTION_SOURCES.REGEX, DETECTION_SOURCES.TRIGGER],
+    selection: "default",
+    detectionSources: ["regex", "trigger"],
   },
   {
     label: "national identification number",
-    selection: ENTITY_SELECTIONS.DEFAULT,
-    detectionSources: [DETECTION_SOURCES.REGEX, DETECTION_SOURCES.TRIGGER],
+    selection: "default",
+    detectionSources: ["regex", "trigger"],
   },
   {
     label: "social security number",
-    selection: ENTITY_SELECTIONS.DEFAULT,
-    detectionSources: [DETECTION_SOURCES.REGEX, DETECTION_SOURCES.TRIGGER],
+    selection: "default",
+    detectionSources: ["regex", "trigger"],
   },
   {
     label: "registration number",
-    selection: ENTITY_SELECTIONS.DEFAULT,
-    detectionSources: [DETECTION_SOURCES.REGEX, DETECTION_SOURCES.TRIGGER],
+    selection: "default",
+    detectionSources: ["regex", "trigger"],
   },
   {
     label: "case number",
-    selection: ENTITY_SELECTIONS.DEFAULT,
-    detectionSources: [DETECTION_SOURCES.REGEX, DETECTION_SOURCES.TRIGGER],
+    selection: "default",
+    detectionSources: ["regex", "trigger"],
   },
   {
     label: "credit card number",
-    selection: ENTITY_SELECTIONS.DEFAULT,
-    detectionSources: [DETECTION_SOURCES.REGEX],
+    selection: "default",
+    detectionSources: ["regex"],
   },
   {
     label: "passport number",
-    selection: ENTITY_SELECTIONS.DEFAULT,
-    detectionSources: [DETECTION_SOURCES.REGEX, DETECTION_SOURCES.TRIGGER],
+    selection: "default",
+    detectionSources: ["regex", "trigger"],
   },
   {
     label: "crypto",
-    selection: ENTITY_SELECTIONS.DEFAULT,
-    detectionSources: [DETECTION_SOURCES.REGEX],
+    selection: "default",
+    detectionSources: ["regex"],
   },
   {
     label: "monetary amount",
-    selection: ENTITY_SELECTIONS.DEFAULT,
-    detectionSources: [DETECTION_SOURCES.REGEX, DETECTION_SOURCES.TRIGGER],
+    selection: "default",
+    detectionSources: ["regex", "trigger"],
   },
   {
     label: "land parcel",
-    selection: ENTITY_SELECTIONS.DEFAULT,
-    detectionSources: [DETECTION_SOURCES.TRIGGER],
+    selection: "default",
+    detectionSources: ["trigger"],
   },
   {
     label: "misc",
-    selection: ENTITY_SELECTIONS.DEFAULT,
-    detectionSources: [DETECTION_SOURCES.REGEX, DETECTION_SOURCES.DENY_LIST],
+    selection: "default",
+    detectionSources: ["regex", "deny-list"],
   },
   {
     label: "ip address",
-    selection: ENTITY_SELECTIONS.OPT_IN,
-    detectionSources: [DETECTION_SOURCES.REGEX],
+    selection: "opt-in",
+    detectionSources: ["regex"],
   },
   {
     label: "mac address",
-    selection: ENTITY_SELECTIONS.OPT_IN,
-    detectionSources: [DETECTION_SOURCES.REGEX],
+    selection: "opt-in",
+    detectionSources: ["regex"],
   },
   {
     label: "url",
-    selection: ENTITY_SELECTIONS.OPT_IN,
-    detectionSources: [DETECTION_SOURCES.REGEX],
+    selection: "opt-in",
+    detectionSources: ["regex"],
   },
-] as const satisfies readonly EntityCapability[];
+] as const;
+
+// Declaration emit cannot carry `satisfies`; this typed alias performs that check.
+const ENTITY_CAPABILITIES_ARE_VALID: readonly EntityCapability[] =
+  ENTITY_CAPABILITIES;
+void ENTITY_CAPABILITIES_ARE_VALID;
 
 type KnownEntityCapability = (typeof ENTITY_CAPABILITIES)[number];
 
