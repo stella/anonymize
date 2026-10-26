@@ -56,8 +56,9 @@
     "@emnapi/core": "1.11.1",
     "@emnapi/runtime": "1.11.1",
     "@hono/node-server": "2.0.10",
+    "body-parser": "2.4.0",
     "emnapi": "1.11.1",
-    "fast-uri": "3.1.8",
+    "fast-uri": "3.1.9",
     "qs": "6.16.0",
     "shell-quote": "1.11.0",
     "source-map-js": "1.2.2"
