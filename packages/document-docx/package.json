@@ -39,6 +39,6 @@
     "bun-types": "1.4.4",
     "fflate": "^0.8.3",
     "tsdown": "0.23.0",
-    "@stll/typescript-config": "0.8.0"
+    "@stll/typescript-config": "0.10.0"
   }
 }

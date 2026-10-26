@@ -522,4 +522,4 @@ default alias), and the pinned Rust 1.96.0 toolchain with the
 
 ### TypeScript Tooling
 
-Use Bun for every TypeScript typecheck, including test and WASM configurations. Editors keep the TypeScript language service because Bun has no language server. tsdown emits declarations with its oxc generator, which reads no type information, so every exported value and function needs an explicit type (a `satisfies` clause on an export becomes a typed alias check). The root manifest keeps `typescript` only because `stll-toolchain-check` from `@stll/oxlint-config` 1.9.0 resolves `typescript/bin/tsc` while the root declares `oxlint-tsgolint`; workspace packages do not declare it.
+Use Bun for every TypeScript typecheck, including test and WASM configurations. Editors keep the TypeScript language service because Bun has no language server. tsdown emits declarations with its oxc generator, which reads no type information, so every exported value and function needs an explicit type (a `satisfies` clause on an export becomes a typed alias check). No manifest declares `typescript`, the root included.
