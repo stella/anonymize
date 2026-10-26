@@ -43,11 +43,11 @@
     "@stll/anonymize-pdf": "^3.0.7"
   },
   "devDependencies": {
-    "@types/node": "^26.6.4",
+    "@types/node": "^26.6.5",
     "bun-types": "1.4.4",
     "fflate": "^0.8.3",
-    "tsdown": "0.23.0",
+    "tsdown": "0.23.1",
     "typescript": "7.0.2",
-    "@stll/typescript-config": "0.8.0"
+    "@stll/typescript-config": "0.9.0"
   }
 }
