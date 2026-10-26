@@ -21,6 +21,10 @@ test("uses shared library defaults and the complete portable safety pack", async
     ...portableSafetyPluginSpecifiers,
     "./oxlint.plugin.ts",
   ]);
+  // Every program pins the root's exact @stll/typescript-config release.
+  const sharedTypeScriptConfig: unknown = JSON.parse(read("package.json"))
+    .devDependencies["@stll/typescript-config"];
+  expect(sharedTypeScriptConfig).toMatch(/^\d+\.\d+\.\d+$/u);
   // Select the environment of the complete program: shipped Node adapters,
   // Bun benchmark/corpus programs, and runtime-neutral dictionary data.
   const environments = new Map(
@@ -52,7 +56,9 @@ test("uses shared library defaults and the complete portable safety pack", async
     const manifest = await Bun.file(
       path.replace("tsconfig.json", "package.json"),
     ).json();
-    expect(manifest.devDependencies["@stll/typescript-config"]).toBe("0.8.0");
+    expect(manifest.devDependencies["@stll/typescript-config"]).toBe(
+      sharedTypeScriptConfig,
+    );
     expect(
       Bun.resolveSync(preset, path.replace("tsconfig.json", "")),
     ).toContain("@stll");
