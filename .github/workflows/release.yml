@@ -670,7 +670,7 @@ jobs:
           wheel-contract: >-
             {"python-wheel-x86_64-unknown-linux-gnu":["manylinux_2_17_x86_64","manylinux2014_x86_64"],"python-wheel-aarch64-unknown-linux-gnu":["manylinux_2_17_aarch64","manylinux2014_aarch64"],"python-wheel-x86_64-apple-darwin":["macosx_10_12_x86_64"],"python-wheel-aarch64-apple-darwin":["macosx_11_0_arm64"],"python-wheel-x86_64-pc-windows-msvc":["win_amd64"]}
       - name: Publish wheels to PyPI
-        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+        uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
         with:
           packages-dir: dist
           skip-existing: true
