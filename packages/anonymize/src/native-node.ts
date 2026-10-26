@@ -662,10 +662,11 @@ const normalizeDefaultNativePipelineWarmup = (
     case DEFAULT_NATIVE_PIPELINE_WARMUPS.lazyRegex:
     case DEFAULT_NATIVE_PIPELINE_WARMUPS.none:
       return warmup;
+    default:
+      throw new Error(
+        'Default native pipeline warmup must be "lazy-regex" or "none"',
+      );
   }
-  throw new Error(
-    'Default native pipeline warmup must be "lazy-regex" or "none"',
-  );
 };
 
 const resolveNativeSdkBinding = ({
