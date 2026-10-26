@@ -120,7 +120,7 @@
     "bun-types": "1.4.4",
     "fast-check": "^4.10.2",
     "fflate": "^0.8.3",
-    "puppeteer-core": "25.12.0",
+    "puppeteer-core": "25.14.0",
     "tsdown": "0.23.0",
     "typescript": "7.0.2",
     "vite": "^8.3.2",
