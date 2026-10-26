@@ -41,7 +41,6 @@ a pull request, run the applicable full gates:
 bun run lint
 bun fmt --check
 bun run typecheck
-bun run check:typecheck-parity
 bun run test
 bun run check:version
 ```
@@ -134,4 +133,4 @@ Describe only public engineering context visible in the repository and diff.
 
 ## TypeScript tooling
 
-Workspace typechecks use `bun check --no-pretty --all --project=<tsconfig>` for production, test, and WASM configurations. CI compares diagnostic coverage with TypeScript using `bun run check:typecheck-parity`. Editors retain the TypeScript language service because Bun has no language server. Keep TypeScript for editors and tsdown declaration generation and diagnostic parity.
+Workspace typechecks use `bun check --no-pretty --all --project=<tsconfig>` for production, test, and WASM configurations. Editors retain the TypeScript language service because Bun has no language server. tsdown emits declarations with its oxc generator, which reads no type information, so every exported value and function needs an explicit type (a `satisfies` clause on an export becomes a typed alias check). No manifest declares `typescript`, the root included.

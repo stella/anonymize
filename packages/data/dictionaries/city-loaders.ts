@@ -246,7 +246,7 @@ export const CITY_LOADERS = {
   ZA: () => import("./cities/ZA.json") as Promise<CityJsonModule>,
   ZM: () => import("./cities/ZM.json") as Promise<CityJsonModule>,
   ZW: () => import("./cities/ZW.json") as Promise<CityJsonModule>,
-} as const satisfies Record<string, () => Promise<CityJsonModule>>;
+} as const;
 
 /** ISO 3166-1 alpha-2 code with a bundled city dictionary. */
 export type CityCountryCode = keyof typeof CITY_LOADERS;

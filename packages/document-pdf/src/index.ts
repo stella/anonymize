@@ -26,22 +26,22 @@ import {
 
 export const PDF_INSPECTION_CONTRACT_VERSION = 1 as const;
 export const PDF_RASTER_CONTRACT_VERSION = 1 as const;
-export const PDF_RASTER_MAX_PAGE_BYTES = 128 * 1024 * 1024;
-export const PDF_RASTER_MAX_TOTAL_BYTES = 512 * 1024 * 1024;
+export const PDF_RASTER_MAX_PAGE_BYTES: number = 128 * 1024 * 1024;
+export const PDF_RASTER_MAX_TOTAL_BYTES: number = 512 * 1024 * 1024;
 export const PDF_RASTER_MAX_MANUAL_REGIONS = 1_000_000;
-export const PDF_RASTER_MAX_OUTPUT_BYTES = 512 * 1024 * 1024;
-export const PDF_RASTER_REQUEST_JSON_MAX_BYTES = 64 * 1024 * 1024;
-export const PDF_DOCUMENT_MAX_BYTES = 64 * 1024 * 1024;
-export const PDF_STREAM_DECOMPRESSED_MAX_BYTES = 32 * 1024 * 1024;
-export const PDF_LOADED_PAYLOAD_MAX_BYTES = 128 * 1024 * 1024;
+export const PDF_RASTER_MAX_OUTPUT_BYTES: number = 512 * 1024 * 1024;
+export const PDF_RASTER_REQUEST_JSON_MAX_BYTES: number = 64 * 1024 * 1024;
+export const PDF_DOCUMENT_MAX_BYTES: number = 64 * 1024 * 1024;
+export const PDF_STREAM_DECOMPRESSED_MAX_BYTES: number = 32 * 1024 * 1024;
+export const PDF_LOADED_PAYLOAD_MAX_BYTES: number = 128 * 1024 * 1024;
 export const PDF_MAX_OBJECTS = 200_000;
 export const PDF_MAX_OBJECT_NODES = 1_000_000;
 export const PDF_MAX_OBJECT_DEPTH = 128;
 export const PDF_MAX_PAGES = 10_000;
 export const PDF_MAX_GLYPHS = 5_000_000;
-export const PDF_MAX_PAGE_TEXT_UTF8_BYTES = 16 * 1024 * 1024;
-export const PDF_MAX_OBSERVED_TEXT_UTF8_BYTES = 64 * 1024 * 1024;
-export const PDF_OBSERVATIONS_JSON_MAX_BYTES = 64 * 1024 * 1024;
+export const PDF_MAX_PAGE_TEXT_UTF8_BYTES: number = 16 * 1024 * 1024;
+export const PDF_MAX_OBSERVED_TEXT_UTF8_BYTES: number = 64 * 1024 * 1024;
+export const PDF_OBSERVATIONS_JSON_MAX_BYTES: number = 64 * 1024 * 1024;
 /** Renderer dimensions may differ by this many points due to numeric rounding. */
 export const PDF_PAGE_DIMENSION_TOLERANCE_POINTS = 0.25;
 

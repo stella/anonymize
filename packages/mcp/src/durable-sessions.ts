@@ -13,9 +13,9 @@ import type { FileHandle } from "node:fs/promises";
 import { isAbsolute, join, resolve } from "node:path";
 
 export const SESSION_ARCHIVE_KEY_BYTES = 32;
-export const SESSION_ARCHIVE_MAX_BYTES = 16 * 1024 * 1024 + 57;
+export const SESSION_ARCHIVE_MAX_BYTES: number = 16 * 1024 * 1024 + 57;
 export const SESSION_ARCHIVE_MAX_COUNT = 256;
-export const SESSION_ARCHIVE_TOTAL_MAX_BYTES = 256 * 1024 * 1024;
+export const SESSION_ARCHIVE_TOTAL_MAX_BYTES: number = 256 * 1024 * 1024;
 
 const ARCHIVE_NAME = /^[a-f0-9]{64}\.stlasess$/u;
 const SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;

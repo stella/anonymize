@@ -64,7 +64,7 @@ type CityJsonModule = { default: readonly string[] };
 /** City dictionary loaders keyed by ISO 3166-1 alpha-2 code. */
 export const CITY_LOADERS = {
 ${entries}
-} as const satisfies Record<string, () => Promise<CityJsonModule>>;
+} as const;
 
 /** ISO 3166-1 alpha-2 code with a bundled city dictionary. */
 export type CityCountryCode = keyof typeof CITY_LOADERS;

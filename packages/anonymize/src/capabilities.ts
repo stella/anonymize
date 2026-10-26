@@ -6,7 +6,12 @@ export const CAPABILITY_RUNTIMES = ["node", "python", "wasm"] as const;
 
 export type CapabilityRuntime = (typeof CAPABILITY_RUNTIMES)[number];
 
-export const CAPABILITY_PARITY_PROFILES = {
+export const CAPABILITY_PARITY_PROFILES: {
+  readonly core: typeof CAPABILITY_RUNTIMES;
+  readonly local: readonly ["node", "python"];
+  readonly nodeLocal: readonly ["node"];
+  readonly document: readonly ["node", "python"];
+} = {
   core: CAPABILITY_RUNTIMES,
   local: ["node", "python"],
   nodeLocal: ["node"],
@@ -40,10 +45,14 @@ export const CAPABILITY_SURFACES = [
   { id: "document.pdf.anonymize-raster", profile: "document" },
   { id: "document.pdf.rewrite-raster", profile: "document" },
   { id: "document.pdf.observe-raster-local", profile: "nodeLocal" },
-] as const satisfies readonly {
+] as const;
+
+// Declaration emit cannot carry `satisfies`; this typed alias performs that check.
+const CAPABILITY_SURFACES_ARE_PROFILED: readonly {
   id: string;
   profile: CapabilityParityProfile;
-}[];
+}[] = CAPABILITY_SURFACES;
+void CAPABILITY_SURFACES_ARE_PROFILED;
 
 export type CapabilitySurface = (typeof CAPABILITY_SURFACES)[number];
 export type CapabilitySurfaceId = CapabilitySurface["id"];
@@ -61,7 +70,13 @@ export type CapabilityManifest = {
  * The manifest contains no accuracy claims; it describes available labels,
  * activation, provenance sources, and runtime parity only.
  */
-export const CAPABILITY_MANIFEST = {
+export const CAPABILITY_MANIFEST: {
+  readonly schemaVersion: typeof CAPABILITY_MANIFEST_SCHEMA_VERSION;
+  readonly runtimes: typeof CAPABILITY_RUNTIMES;
+  readonly parityProfiles: typeof CAPABILITY_PARITY_PROFILES;
+  readonly surfaces: typeof CAPABILITY_SURFACES;
+  readonly entities: typeof ENTITY_CAPABILITIES;
+} = {
   schemaVersion: CAPABILITY_MANIFEST_SCHEMA_VERSION,
   runtimes: CAPABILITY_RUNTIMES,
   parityProfiles: CAPABILITY_PARITY_PROFILES,

@@ -487,7 +487,7 @@ export const createPipeline = async ({
   });
 };
 
-export const create_pipeline = createPipeline;
+export const create_pipeline: typeof createPipeline = createPipeline;
 
 export const redactDefaultText = async (
   fullText: string,

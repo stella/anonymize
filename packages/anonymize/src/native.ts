@@ -370,7 +370,10 @@ export const NATIVE_BINDING_PARITY_MEMBERS = {
     "planStaticEntitiesWithCallerDetections",
   ],
   plan: ["resultJson", "commit"],
-} as const satisfies {
+} as const;
+
+// Declaration emit cannot carry `satisfies`; this typed alias performs that check.
+const PARITY_MEMBERS_ARE_FUNCTIONS: {
   root: readonly FunctionMemberNames<NativeAnonymizeBinding>[];
   factories: readonly FunctionMemberNames<
     NativeAnonymizeBinding["NativePreparedSearch"]
@@ -378,7 +381,7 @@ export const NATIVE_BINDING_PARITY_MEMBERS = {
   prepared: readonly FunctionMemberNames<NativePreparedSearchBinding>[];
   session: readonly FunctionMemberNames<NativePreparedRedactionSessionBinding>[];
   plan: readonly FunctionMemberNames<NativePreparedSessionRedactionPlanBinding>[];
-};
+} = NATIVE_BINDING_PARITY_MEMBERS;
 
 const ROOT_PARITY_IS_EXHAUSTIVE: Exclude<
   FunctionMemberNames<NativeAnonymizeBinding>,
@@ -411,6 +414,7 @@ const PLAN_PARITY_IS_EXHAUSTIVE: Exclude<
   ? true
   : never = true;
 void [
+  PARITY_MEMBERS_ARE_FUNCTIONS,
   ROOT_PARITY_IS_EXHAUSTIVE,
   FACTORY_PARITY_IS_EXHAUSTIVE,
   PREPARED_PARITY_IS_EXHAUSTIVE,
@@ -453,14 +457,14 @@ export type NativeOperatorConfig = {
 
 export const CALLER_DETECTION_CONTRACT_VERSION = 2;
 export const CALLER_DETECTION_MAX_COUNT = 1_000_000;
-export const CALLER_DETECTION_TEXT_MAX_BYTES = 64 * 1024 * 1024;
-export const CALLER_DETECTION_REQUEST_JSON_MAX_BYTES = 16 * 1024 * 1024;
+export const CALLER_DETECTION_TEXT_MAX_BYTES: number = 64 * 1024 * 1024;
+export const CALLER_DETECTION_REQUEST_JSON_MAX_BYTES: number = 16 * 1024 * 1024;
 export const SESSION_CALLER_MAX_INPUTS = 100_000;
-export const SESSION_CALLER_INPUTS_JSON_MAX_BYTES = 64 * 1024 * 1024;
+export const SESSION_CALLER_INPUTS_JSON_MAX_BYTES: number = 64 * 1024 * 1024;
 
 export const EXTERNAL_DETECTION_BATCH_VERSION = 1 as const;
-export const EXTERNAL_DETECTION_BATCH_MAX_BYTES = 16 * 1024 * 1024;
-export const EXTERNAL_DETECTION_DOCUMENT_MAX_BYTES = 64 * 1024 * 1024;
+export const EXTERNAL_DETECTION_BATCH_MAX_BYTES: number = 16 * 1024 * 1024;
+export const EXTERNAL_DETECTION_DOCUMENT_MAX_BYTES: number = 64 * 1024 * 1024;
 export const EXTERNAL_DETECTION_MAX_DETECTIONS = 100_000;
 export const EXTERNAL_DETECTION_MAX_LABEL_MAPPINGS = 4_096;
 export const EXTERNAL_DETECTION_MAX_METADATA_BYTES = 256;
@@ -1624,7 +1628,8 @@ export const getNativeBindingVersion = (
   binding: NativeAnonymizeBinding,
 ): string => binding.nativePackageVersion();
 
-export const native_package_version = getNativeBindingVersion;
+export const native_package_version: typeof getNativeBindingVersion =
+  getNativeBindingVersion;
 
 export const normalize_for_search = ({
   binding,
@@ -1771,9 +1776,11 @@ export const createNativePipelineFromPackage = ({
     createNativeAnonymizerFromPackage({ binding, packageBytes }),
   );
 
-export const PreparedSearch = PreparedNativeAnonymizer;
+export const PreparedSearch: typeof PreparedNativeAnonymizer =
+  PreparedNativeAnonymizer;
 export type PreparedSearch = PreparedNativeAnonymizer;
-export const PreparedAnonymizer = PreparedNativeAnonymizer;
+export const PreparedAnonymizer: typeof PreparedNativeAnonymizer =
+  PreparedNativeAnonymizer;
 export type PreparedAnonymizer = PreparedNativeAnonymizer;
 
 const toBindingOperatorConfig = (

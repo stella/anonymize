@@ -52,7 +52,6 @@
     "fflate": "^0.8.3",
     "tsdown": "0.23.0",
     "tsx": "^4.23.15",
-    "typescript": "7.0.2",
-    "@stll/typescript-config": "0.8.0"
+    "@stll/typescript-config": "0.10.0"
   }
 }

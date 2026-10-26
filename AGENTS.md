@@ -339,7 +339,6 @@ This is a Bun-first TypeScript monorepo for text anonymization. The library hand
 - `bun install`
 - `bun run lint`
 - `bun run typecheck` (`bun check --no-pretty --all --project=<tsconfig>` for each checked project)
-- `bun run check:typecheck-parity`
 - `bun run test`
 - `bun run build`
 - `bun run check:version`
@@ -523,4 +522,4 @@ default alias), and the pinned Rust 1.96.0 toolchain with the
 
 ### TypeScript Tooling
 
-Use Bun for every TypeScript typecheck, including test and WASM configurations. CI runs `bun run check:typecheck-parity` for every configuration checked by workspace scripts. Editors keep the TypeScript language service because Bun has no language server. Keep `typescript` for editor support and declaration generation through tsdown and diagnostic parity.
+Use Bun for every TypeScript typecheck, including test and WASM configurations. Editors keep the TypeScript language service because Bun has no language server. tsdown emits declarations with its oxc generator, which reads no type information, so every exported value and function needs an explicit type (a `satisfies` clause on an export becomes a typed alias check). No manifest declares `typescript`, the root included.
