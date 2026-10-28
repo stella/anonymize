@@ -37,7 +37,7 @@ jobs:
     runs-on: [self-hosted, anonymize-perf-v1]
     timeout-minutes: 120
     env:
-      RUSTUP_TOOLCHAIN: 1.99.0
+      RUSTUP_TOOLCHAIN: 1.99.1
       UV_VERSION: 0.13.5
       PYTHON_VERSION: 3.11.12
     steps:
@@ -55,7 +55,7 @@ jobs:
 
       - name: Setup Rust
         run: |
-          rustup toolchain install 1.99.0 --profile minimal --target wasm32-unknown-unknown
+          rustup toolchain install 1.99.1 --profile minimal --target wasm32-unknown-unknown
 
       - name: Setup browser WebAssembly tools
         uses: ./.github/actions/setup-browser-wasm
