@@ -6,10 +6,6 @@ minimumReleaseAge = 432_000
 # First-party stella packages ship in coordinated release
 # waves, so allow fresh internal versions immediately.
 minimumReleaseAgeExcludes = [
-  # bun-types ships only declarations and must match the pinned Bun runtime.
-  "bun-types", # quarantine-expires: 2026-10-27T10:17:50.170Z
-  # body-parser 2.4.0 resolves a published advisory in the MCP HTTP stack.
-  "body-parser", # quarantine-expires: 2026-10-27T11:39:38.614Z
   "@stll/oxlint-plugin", # quarantine-excluded-since: 2026-10-16T21:09:03.451Z
   "@stll/typescript-config", # quarantine-excluded-since: 2026-05-31T22:16:56.000Z
   "@stll/oxlint-config", # quarantine-excluded-since: 2026-05-31T22:16:56.000Z
