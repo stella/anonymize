@@ -172,7 +172,7 @@ jobs:
 
       - name: Install uv
         run: |
-          python3 -m pip install --user "uv==0.13.1"
+          python3 -m pip install --user "uv==0.13.5"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Python typecheck
@@ -623,7 +623,7 @@ jobs:
       - name: Install uv
         if: matrix.check_wheel
         run: |
-          python3 -m pip install --user "uv==0.13.1"
+          python3 -m pip install --user "uv==0.13.5"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Verify wheel packlist and smoke test
