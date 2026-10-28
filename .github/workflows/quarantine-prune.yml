@@ -2,7 +2,7 @@ name: Package quarantine prune
 
 on:
   schedule:
-    - cron: "31 * * * *"
+    - cron: "31 4 * * *"
 
 permissions:
   contents: read
