@@ -1,5 +1,17 @@
 # @stll/anonymize-docx
 
+## 4.0.0
+
+### Patch Changes
+
+- [#625](https://github.com/stella/anonymize/pull/625) [`15d188a`](https://github.com/stella/anonymize/commit/15d188aef5059624845aed5ab64f1da21f9e5631) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update native matching, document processing, compression, binding, and MCP dependencies.
+
+- [#619](https://github.com/stella/anonymize/pull/619) [`cc1a36d`](https://github.com/stella/anonymize/commit/cc1a36d94439ee9c0830116fb95344eaabeeb10d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Publish `DOCX_ANONYMIZATION_MAX_CALLER_DETECTIONS` with its `number` type instead of `any`.
+
+- [#591](https://github.com/stella/anonymize/pull/591) [`80f90b3`](https://github.com/stella/anonymize/commit/80f90b3ebc4f0848cc3356a57e1d032719a8be09) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Validate native document operations and raster observations before consuming typed values.
+- Updated dependencies [[`15d188a`](https://github.com/stella/anonymize/commit/15d188aef5059624845aed5ab64f1da21f9e5631), [`c3d40e1`](https://github.com/stella/anonymize/commit/c3d40e1d13ddea6586cd43491c694da648187d57), [`80f90b3`](https://github.com/stella/anonymize/commit/80f90b3ebc4f0848cc3356a57e1d032719a8be09), [`470a2ae`](https://github.com/stella/anonymize/commit/470a2ae238c0ab2b0db3b90285eddd2bc672d865)]:
+  - @stll/anonymize@4.0.0
+
 ## 3.0.7
 
 ### Patch Changes
