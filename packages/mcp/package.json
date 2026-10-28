@@ -43,7 +43,7 @@
     "@stll/anonymize": "3.0.7",
     "@stll/anonymize-docx": "^3.0.7",
     "@stll/anonymize-pdf": "3.0.7",
-    "fs-native-extensions": "^1.5.1",
+    "fs-native-extensions": "^1.5.2",
     "zod": "^4.6.7"
   },
   "devDependencies": {
