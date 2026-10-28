@@ -1,5 +1,7 @@
 # Use sparse index for faster resolution.
 [registry]
+# Stable Cargo ignores this resolver hint; the shared package-quarantine CI
+# validates every new Cargo.lock registry version against crates.io timestamps.
 global-min-publish-age = "5 days"
 
 [registries.crates-io]

@@ -76,7 +76,7 @@
         "@stll/anonymize-data": "^0.0.10",
       },
       "peerDependencies": {
-        "vite": "^8.3.5",
+        "vite": ">=5 <10",
       },
       "optionalPeers": [
         "vite",
