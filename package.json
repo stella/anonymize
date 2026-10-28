@@ -27,7 +27,7 @@
     "rust:deny": "cargo ci-deny",
     "rust:snapshot-check": "cargo ci-snapshot",
     "rust:check": "bun run rust:fmt && bun run rust:lint && bun run rust:source-lint && bun run rust:test",
-    "python:typecheck": "uvx --from ty==0.0.29 ty check --extra-search-path crates/anonymize-py/python crates/anonymize-py/typecheck",
+    "python:typecheck": "uvx --from ty==0.0.91 ty check --extra-search-path crates/anonymize-py/python crates/anonymize-py/typecheck",
     "python:wheel": "node .github/tools/check-python-wheel.mjs",
     "check:v1-native": "cd packages/anonymize && bun run check:v1-native",
     "check:v1-native:full": "cd packages/anonymize && bun run check:v1-native:full",
@@ -36,8 +36,8 @@
     "check:licenses": "node .github/tools/check-license-files.mjs",
     "changeset": "changeset",
     "changeset:version": "changeset version && node scripts/sync-changeset-version.mjs && bun scripts/check-lockfile-workspace-versions.ts --write && bun install --frozen-lockfile",
-    "check:exports": "bunx publint@0.3.21 packages/anonymize && bunx @arethetypeswrong/cli@0.18.5 --pack packages/anonymize --ignore-rules no-resolution cjs-resolves-to-esm && bunx publint@0.3.21 packages/document-docx && bunx @arethetypeswrong/cli@0.18.5 --pack packages/document-docx --ignore-rules no-resolution cjs-resolves-to-esm && bunx publint@0.3.21 packages/document-pdf && bunx @arethetypeswrong/cli@0.18.5 --pack packages/document-pdf --ignore-rules no-resolution cjs-resolves-to-esm && bunx publint@0.3.21 packages/mcp && bunx @arethetypeswrong/cli@0.18.5 --pack packages/mcp --ignore-rules no-resolution cjs-resolves-to-esm",
-    "check:knip": "bunx knip@6.26.0 --no-progress",
+    "check:exports": "bunx publint@0.3.25 packages/anonymize && bunx @arethetypeswrong/cli@0.18.5 --pack packages/anonymize --ignore-rules no-resolution cjs-resolves-to-esm && bunx publint@0.3.25 packages/document-docx && bunx @arethetypeswrong/cli@0.18.5 --pack packages/document-docx --ignore-rules no-resolution cjs-resolves-to-esm && bunx publint@0.3.25 packages/document-pdf && bunx @arethetypeswrong/cli@0.18.5 --pack packages/document-pdf --ignore-rules no-resolution cjs-resolves-to-esm && bunx publint@0.3.25 packages/mcp && bunx @arethetypeswrong/cli@0.18.5 --pack packages/mcp --ignore-rules no-resolution cjs-resolves-to-esm",
+    "check:knip": "bunx knip@6.42.1 --no-progress",
     "check:toolchain": "stll-toolchain-check",
     "check:bun": "node .github/tools/check-bun-workflows.mjs",
     "check:brand-case": "node .github/tools/check-brand-case.mjs",
@@ -53,29 +53,31 @@
     "test:tooling": "bun test ./.github/tools/tooling-adoption.test.ts ./.github/tools/tooling-workflow.test.ts packages/anonymize/src/__test__/native-json-codec.test.ts ./.github/tools/eval-html-args.test.ts && node --test .github/tools/json-values.test.mjs"
   },
   "overrides": {
-    "@emnapi/core": "1.11.1",
-    "@emnapi/runtime": "1.11.1",
-    "@hono/node-server": "2.0.10",
+    "@emnapi/core": "1.11.3",
+    "@emnapi/runtime": "1.11.3",
+    "@hono/node-server": "2.1.5",
     "body-parser": "2.4.0",
-    "emnapi": "1.11.1",
+    "emnapi": "1.11.3",
     "fast-uri": "3.1.9",
-    "qs": "6.16.0",
-    "shell-quote": "1.11.0",
+    "qs": "6.16.1",
+    "shell-quote": "1.12.0",
     "source-map-js": "1.2.2"
   },
   "devDependencies": {
+    "@oxlint/plugins": "1.87.0",
     "@changesets/changelog-github": "^1.0.1",
     "@changesets/cli": "^3.0.3",
     "@stll/anonymize-data": "workspace:*",
-    "@stll/oxlint-config": "2.0.0",
+    "@stll/oxlint-config": "2.1.3",
     "@stll/typescript-config": "0.10.0",
     "lefthook": "2.2.2",
     "oxlint": "1.87.0",
     "oxlint-tsgolint": "7.0.2003",
-    "turbo": "^2.11.6",
-    "@stll/oxlint-plugin": "0.6.3",
-    "@types/node": "26.6.4",
+    "turbo": "^2.11.10",
+    "@stll/oxlint-plugin": "0.6.4",
+    "@types/node": "26.6.5",
     "bun-types": "1.4.4",
-    "tsdown": "0.23.0"
-  }
+    "tsdown": "0.23.1"
+  },
+  "trustedDependencies": []
 }

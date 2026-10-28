@@ -5,10 +5,10 @@ runs:
   using: composite
   steps:
     - name: Install wasm-bindgen CLI
-      uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
+      uses: taiki-e/install-action@5488ac5a951645ce95062214902ac4b6bc1a1037 # v2.87.32
       with:
-        tool: wasm-bindgen-cli@0.2.126
+        tool: wasm-bindgen-cli@0.2.129
 
     - name: Verify wasm-bindgen CLI
       shell: bash
-      run: test "$(wasm-bindgen --version)" = "wasm-bindgen 0.2.126"
+      run: test "$(wasm-bindgen --version)" = "wasm-bindgen 0.2.129"

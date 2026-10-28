@@ -64,18 +64,18 @@ runs:
       run: cargo install --git https://github.com/stella/tooling --rev a1bd81740ecb4b66999f56d1716e1190c4e7272f --locked stella_source_lint
 
     - if: inputs.profile == 'quality'
-      uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+      uses: stella/.github/actions/setup-bun-cached@38c67ddd7ca18eec2996f4c2e5b99e5cd80def08
       with:
         bun-version-file: package.json
 
     - if: inputs.profile == 'quality'
       name: Install pinned Rust quality tools
-      uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
+      uses: taiki-e/install-action@5488ac5a951645ce95062214902ac4b6bc1a1037 # v2.87.32
       with:
-        tool: nextest@0.9.145,cargo-deny@0.20.2,cargo-insta@1.48.0
+        tool: nextest@0.9.148,cargo-deny@0.20.2,cargo-insta@1.49.0
 
     - if: inputs.profile == 'detached'
       name: Install pinned cargo-deny
-      uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
+      uses: taiki-e/install-action@5488ac5a951645ce95062214902ac4b6bc1a1037 # v2.87.32
       with:
         tool: cargo-deny@0.20.2

@@ -172,7 +172,7 @@ jobs:
 
       - name: Install uv
         run: |
-          python3 -m pip install --user "uv==0.10.1"
+          python3 -m pip install --user "uv==0.13.5"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Python typecheck
@@ -506,7 +506,7 @@ jobs:
         && needs.pack-data.result == 'success'
         && (github.event_name == 'push'
             || inputs.publish_to_npm == true))
-    uses: stella/.github/.github/workflows/npm-artifact-publish.yml@12eb83b8c6bd42a0bead73d9c6bc30b4caad6433
+    uses: stella/.github/.github/workflows/npm-artifact-publish.yml@38c67ddd7ca18eec2996f4c2e5b99e5cd80def08
     with:
       artifact-name: data-package-stll-anonymize-data
       package-name: "@stll/anonymize-data"
@@ -623,7 +623,7 @@ jobs:
       - name: Install uv
         if: matrix.check_wheel
         run: |
-          python3 -m pip install --user "uv==0.10.1"
+          python3 -m pip install --user "uv==0.13.5"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Verify wheel packlist and smoke test
@@ -662,7 +662,7 @@ jobs:
       id-token: write # Required only for PyPI trusted publishing.
     steps:
       - name: Prepare exact Python wheel set
-        uses: stella/.github/.github/actions/pypi-publish-hardened@12eb83b8c6bd42a0bead73d9c6bc30b4caad6433
+        uses: stella/.github/.github/actions/pypi-publish-hardened@38c67ddd7ca18eec2996f4c2e5b99e5cd80def08
         with:
           expected-version: ${{ needs.verify.outputs.version }}
           project-name: stella-anonymize-core
@@ -670,12 +670,12 @@ jobs:
           wheel-contract: >-
             {"python-wheel-x86_64-unknown-linux-gnu":["manylinux_2_17_x86_64","manylinux2014_x86_64"],"python-wheel-aarch64-unknown-linux-gnu":["manylinux_2_17_aarch64","manylinux2014_aarch64"],"python-wheel-x86_64-apple-darwin":["macosx_10_12_x86_64"],"python-wheel-aarch64-apple-darwin":["macosx_11_0_arm64"],"python-wheel-x86_64-pc-windows-msvc":["win_amd64"]}
       - name: Publish wheels to PyPI
-        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+        uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
         with:
           packages-dir: dist
           skip-existing: true
       - name: Verify published PyPI files
-        uses: stella/.github/.github/actions/pypi-publish-hardened/verify@12eb83b8c6bd42a0bead73d9c6bc30b4caad6433
+        uses: stella/.github/.github/actions/pypi-publish-hardened/verify@38c67ddd7ca18eec2996f4c2e5b99e5cd80def08
         with:
           expected-version: ${{ needs.verify.outputs.version }}
           project-name: stella-anonymize-core
@@ -691,7 +691,7 @@ jobs:
         && needs.publish-pypi.result == 'success'
         && (github.event_name == 'push'
             || inputs.publish_to_npm == true))
-    uses: stella/.github/.github/workflows/npm-version-finalize.yml@12eb83b8c6bd42a0bead73d9c6bc30b4caad6433
+    uses: stella/.github/.github/workflows/npm-version-finalize.yml@38c67ddd7ca18eec2996f4c2e5b99e5cd80def08
     with:
       package-files: |
         packages/anonymize/package.json

@@ -150,7 +150,8 @@ impl NymModel {
     tokenizer
       .with_truncation(None)
       .map_err(|error| anyhow::anyhow!(error.to_string()))?;
-    let session = Session::builder()?
+    let environment = ort::init().build()?;
+    let session = Session::builder(&environment)?
       .commit_from_file(model_dir.join("model_int8.onnx"))?;
     let needs_token_type_ids = session
       .inputs()
