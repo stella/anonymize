@@ -9,7 +9,7 @@ its target dependencies never touch the default build.
 
 ## Requirements
 
-- The repository Rust 1.99.0 toolchain.
+- The repository Rust 1.99.1 toolchain.
 - `cargo-fuzz`: `cargo install cargo-fuzz --version 0.13.2 --locked`
 
 ## Targets
