@@ -37,7 +37,7 @@
     "changeset": "changeset",
     "changeset:version": "changeset version && node scripts/sync-changeset-version.mjs && bun scripts/check-lockfile-workspace-versions.ts --write && bun install --frozen-lockfile",
     "check:exports": "bunx publint@0.3.25 packages/anonymize && bunx @arethetypeswrong/cli@0.18.5 --pack packages/anonymize --ignore-rules no-resolution cjs-resolves-to-esm && bunx publint@0.3.25 packages/document-docx && bunx @arethetypeswrong/cli@0.18.5 --pack packages/document-docx --ignore-rules no-resolution cjs-resolves-to-esm && bunx publint@0.3.25 packages/document-pdf && bunx @arethetypeswrong/cli@0.18.5 --pack packages/document-pdf --ignore-rules no-resolution cjs-resolves-to-esm && bunx publint@0.3.25 packages/mcp && bunx @arethetypeswrong/cli@0.18.5 --pack packages/mcp --ignore-rules no-resolution cjs-resolves-to-esm",
-    "check:knip": "bunx knip@6.41.0 --no-progress",
+    "check:knip": "bunx knip@6.42.1 --no-progress",
     "check:toolchain": "stll-toolchain-check",
     "check:bun": "node .github/tools/check-bun-workflows.mjs",
     "check:brand-case": "node .github/tools/check-brand-case.mjs",
