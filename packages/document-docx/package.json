@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     ".": {
+      "@stll/anonymize-source": "./src/index.ts",
       "types": "./dist/index.d.mts",
       "import": "./dist/index.mjs",
       "default": "./dist/index.mjs"
