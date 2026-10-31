@@ -77,7 +77,7 @@
     "@stll/oxlint-plugin": "0.7.0",
     "@types/node": "26.6.5",
     "bun-types": "1.4.4",
-    "tsdown": "0.23.1"
+    "tsdown": "0.23.2"
   },
   "trustedDependencies": []
 }
