@@ -13,4 +13,4 @@ jobs:
     if: github.repository == 'stella/anonymize'
     permissions:
       contents: read
-    uses: stella/.github/.github/workflows/quarantine-policy.yml@38c67ddd7ca18eec2996f4c2e5b99e5cd80def08
+    uses: stella/.github/.github/workflows/quarantine-policy.yml@042baebaf071329b956555c05caf5736504c278d
