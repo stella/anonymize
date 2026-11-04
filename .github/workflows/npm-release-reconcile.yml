@@ -1,0 +1,34 @@
+name: npm release reconcile
+
+# Publishes GitHub releases that the release finalizer left as drafts because
+# npm had not yet listed every accepted package version.
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reconcile:
+    name: Reconcile
+    permissions:
+      contents: read
+    uses: stella/.github/.github/workflows/npm-release-reconcile.yml@3e9057a176377ddfa34d7897025934d1feb7ce9f
+    with:
+      package-files: |
+        packages/anonymize/package.json
+        packages/anonymize/wasm/package.json
+        packages/cli/package.json
+        packages/document-docx/package.json
+        packages/document-pdf/package.json
+        packages/mcp/package.json
+        packages/anonymize-linux-x64-gnu/package.json
+        packages/anonymize-linux-arm64-gnu/package.json
+        packages/anonymize-darwin-arm64/package.json
+        packages/anonymize-darwin-x64/package.json
+        packages/anonymize-win32-x64-msvc/package.json
+    secrets:
+      RELEASE_APP_ID: ${{ secrets.RELEASE_APP_ID }}
+      RELEASE_APP_PRIVATE_KEY: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
