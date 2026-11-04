@@ -1,5 +1,17 @@
 # Changelog
 
+## 4.0.0
+
+### Patch Changes
+
+- [#625](https://github.com/stella/anonymize/pull/625) [`15d188a`](https://github.com/stella/anonymize/commit/15d188aef5059624845aed5ab64f1da21f9e5631) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update native matching, document processing, compression, binding, and MCP dependencies.
+
+- [#592](https://github.com/stella/anonymize/pull/592) [`c3d40e1`](https://github.com/stella/anonymize/commit/c3d40e1d13ddea6586cd43491c694da648187d57) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Share Linux libc detection between the native SDK and build tooling, treating empty glibc version markers as musl.
+
+- [#591](https://github.com/stella/anonymize/pull/591) [`80f90b3`](https://github.com/stella/anonymize/commit/80f90b3ebc4f0848cc3356a57e1d032719a8be09) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Validate native and WebAssembly JSON response shapes before exposing typed SDK values.
+
+- [#583](https://github.com/stella/anonymize/pull/583) [`470a2ae`](https://github.com/stella/anonymize/commit/470a2ae238c0ab2b0db3b90285eddd2bc672d865) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Build native and WebAssembly runtimes with Rust 1.99.0 and update adapter and PDF iteration for its stable lint rules.
+
 ## 3.0.7
 
 No changes in this release.
