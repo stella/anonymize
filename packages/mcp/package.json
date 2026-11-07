@@ -39,18 +39,18 @@
     "test:node-runtime": "node --import tsx --test src/__test__/durable-sessions.test.ts && node scripts/test-packed-bin.mjs"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.32.1",
+    "@modelcontextprotocol/sdk": "^1.32.2",
     "@stll/anonymize": "3.0.7",
     "@stll/anonymize-docx": "^3.0.7",
     "@stll/anonymize-pdf": "3.0.7",
-    "fs-native-extensions": "^1.5.2",
+    "fs-native-extensions": "^1.5.3",
     "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@types/node": "^26.6.5",
+    "@types/node": "^26.6.6",
     "bun-types": "1.4.4",
     "fflate": "^0.8.3",
-    "tsdown": "0.23.1",
+    "tsdown": "0.23.4",
     "tsx": "^4.23.15",
     "@stll/typescript-config": "0.10.0"
   }
