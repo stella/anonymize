@@ -2,9 +2,9 @@
 # Install into a Python 3.11 virtualenv; see REPRODUCING.md.
 annotated-types==0.8.0
 datafog==4.9.0
-pydantic==2.14.1
-pydantic-core==2.50.1
-pydantic-settings==2.16.1
+pydantic==2.14.2
+pydantic-core==2.50.2
+pydantic-settings==2.16.2
 python-dotenv==1.2.4
 typing-extensions==4.16.0
 typing-inspection==0.4.4
