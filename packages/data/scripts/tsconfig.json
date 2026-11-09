@@ -1,4 +1,7 @@
 {
   "extends": "@stll/typescript-config/bun.json",
+  "compilerOptions": {
+    "customConditions": ["@stll/anonymize-source"]
+  },
   "include": ["**/*.ts", "**/*.js", "**/*.mjs", "**/*.cjs"]
 }
