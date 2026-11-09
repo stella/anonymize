@@ -57,7 +57,7 @@ The full `bun run rust:check` additionally runs `cargo ci-stella-lint` on the
 pinned stable toolchain. Install the shared source lint with:
 
 ```sh
-cargo install --git https://github.com/stella/tooling --rev a1bd81740ecb4b66999f56d1716e1190c4e7272f --locked stella_source_lint
+cargo install --git https://github.com/stella/tooling --rev 51a4412dfe02203c24a3495f14ec99405acb7527 --locked stella_source_lint
 ```
 
 ## Choose the right change location
