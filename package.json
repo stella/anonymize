@@ -55,11 +55,11 @@
   "overrides": {
     "@emnapi/core": "1.11.3",
     "@emnapi/runtime": "1.11.3",
-    "@hono/node-server": "2.1.5",
+    "@hono/node-server": "2.1.6",
     "body-parser": "2.4.0",
     "emnapi": "1.11.3",
     "fast-uri": "3.1.9",
-    "qs": "6.16.1",
+    "qs": "6.17.1",
     "shell-quote": "1.12.0",
     "source-map-js": "1.2.2"
   },
@@ -75,9 +75,9 @@
     "oxlint-tsgolint": "7.0.2005",
     "turbo": "^2.11.10",
     "@stll/oxlint-plugin": "0.7.1",
-    "@types/node": "26.6.5",
+    "@types/node": "26.6.6",
     "bun-types": "1.4.4",
-    "tsdown": "0.23.1"
+    "tsdown": "0.23.5"
   },
   "trustedDependencies": []
 }
