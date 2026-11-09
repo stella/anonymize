@@ -622,7 +622,8 @@ checksum = "3a0219bd7d979d58245a4f41f695e1ac9f8befdffadd7f61f1bae9e39abc6620"
 [[package]]
 name = "stella-aho-corasick-core"
 version = "1.0.4"
-source = "git+https://github.com/stella/aho-corasick?rev=38bdcbf11bfbe389c8f2b7b40eb03ac50371e1e1#38bdcbf11bfbe389c8f2b7b40eb03ac50371e1e1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a5c641a78c371edb99be86c6ed4adc847748942187a8f29e6951b8aaf13ada9d"
 dependencies = [
  "daachorse",
  "unicode-case-mapping",
@@ -677,8 +678,9 @@ dependencies = [
 
 [[package]]
 name = "stella-fuzzy-search-core"
-version = "1.1.4"
-source = "git+https://github.com/stella/fuzzy-search?rev=d87334b6e5f0458409ee354fa721bf6d4ade6ddc#d87334b6e5f0458409ee354fa721bf6d4ade6ddc"
+version = "1.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "387faac4036323de589afe9f50a2bcff6a00d434542535ca0df074adeed562b6"
 dependencies = [
  "bon",
  "unicode-case-mapping",
@@ -689,7 +691,8 @@ dependencies = [
 [[package]]
 name = "stella-regex-set-core"
 version = "1.0.5"
-source = "git+https://github.com/stella/regex-set?rev=ed4929465e1a072644c48238f7557ab21037a62c#ed4929465e1a072644c48238f7557ab21037a62c"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "56f9ea377a16c4380b6e92d479ed7557c7bfdb6da731cd0cbe6826c11f8f38fe"
 dependencies = [
  "fancy-regex 0.18.0",
  "regex",
@@ -712,8 +715,8 @@ dependencies = [
 
 [[package]]
 name = "stella-text-search-core"
-version = "1.0.11"
-source = "git+https://github.com/stella/text-search?tag=v1.0.11#79e858ac5e63d5427e69c92b97752419f22fa034"
+version = "2.0.0"
+source = "git+https://github.com/stella/text-search?tag=v2.0.0#9b55def0bb222781106ce9dbc1ae67413717be55"
 dependencies = [
  "bon",
  "stella-aho-corasick-core",
