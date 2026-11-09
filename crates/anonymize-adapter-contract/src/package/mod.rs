@@ -1268,7 +1268,7 @@ mod tests {
   #[test]
   fn compact_package_keeps_literal_lists_with_empty_entries() {
     let mut binding = package_test_config();
-    let mut empty = binding.literal_patterns[0].clone();
+    let mut empty = binding.literal_patterns.first().cloned().unwrap();
     empty.pattern = String::new();
     binding.literal_patterns.insert(0, empty);
     let config = prepared_search_config_from_binding(binding).unwrap();
