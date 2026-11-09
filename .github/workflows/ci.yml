@@ -20,7 +20,7 @@ concurrency:
 jobs:
   changeset:
     if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     steps:
@@ -114,7 +114,7 @@ jobs:
 
   rust-quality:
     name: Rust correctness and supply chain
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     steps:
@@ -153,7 +153,7 @@ jobs:
 
   detached-rust:
     name: Detached Rust workspaces
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     steps:
@@ -192,7 +192,7 @@ jobs:
 
   build:
     name: Build verified workspace
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     steps:
@@ -299,7 +299,7 @@ jobs:
 
   scaling:
     name: Native scaling regression suite
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     steps:
@@ -318,7 +318,7 @@ jobs:
   static:
     name: Static checks
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     steps:
@@ -349,7 +349,7 @@ jobs:
   tests:
     name: Tests
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     steps:
@@ -367,7 +367,7 @@ jobs:
   python:
     name: Python
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     steps:
@@ -392,7 +392,7 @@ jobs:
   packages:
     name: Package and browser compatibility
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     steps:
@@ -420,7 +420,7 @@ jobs:
   parity:
     name: Runtime parity
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     steps:
@@ -442,7 +442,7 @@ jobs:
   mcp-node22:
     name: MCP Node 22
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     steps:
@@ -477,7 +477,7 @@ jobs:
       - packages
       - parity
       - mcp-node22
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions: {}
     steps:
       - name: Require every validation lane

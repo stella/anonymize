@@ -33,6 +33,10 @@ const parseJobs = (source) => {
 
 const jobs = parseJobs(workflow);
 
+void test("PyPI publishing uses the release-policy runner", () => {
+  assert.match(jobs["publish-pypi"], /^    runs-on: ubuntu-latest$/m);
+});
+
 /** @param {string} source */
 const finalizerPackageFiles = (source) => {
   const block = source.match(/^      package-files: \|\n((?:        .+\n)+)/m);
