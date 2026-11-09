@@ -44,8 +44,11 @@ jobs:
             Zlib,
             Unicode-3.0
           # matrixmultiply, rangemap, and unicode-properties declare verified
-          # upstream MIT/Apache-2.0 licenses that GitHub cannot normalize.
+          # upstream MIT/Apache-2.0 licenses that GitHub cannot normalize;
+          # brotli-decompressor declares BSD-3-Clause/MIT (either is allowed)
+          # in a legacy slash form GitHub cannot parse.
           allow-dependencies-licenses: >-
+            pkg:cargo/brotli-decompressor,
             pkg:cargo/stella-aho-corasick-core,
             pkg:cargo/stella-fuzzy-search-core,
             pkg:cargo/stella-regex-set-core,
