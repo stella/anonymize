@@ -1,5 +1,9 @@
 # @stll/anonymize-darwin-x64
 
+## 4.0.0
+
+No changes in this release.
+
 ## 3.0.7
 
 No changes in this release.

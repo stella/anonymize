@@ -1,5 +1,9 @@
 # @stll/anonymize-wasm
 
+## 4.0.0
+
+No changes in this release.
+
 ## 3.0.7
 
 ### Patch Changes

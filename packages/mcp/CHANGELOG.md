@@ -1,5 +1,23 @@
 # @stll/anonymize-mcp
 
+## 4.0.0
+
+### Major Changes
+
+- [#563](https://github.com/stella/anonymize/pull/563) [`4e9aefe`](https://github.com/stella/anonymize/commit/4e9aefebf761d4abae3dad58bc8022b5adc238dc) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Require Node.js 22 or newer for the MCP server.
+
+### Patch Changes
+
+- [#625](https://github.com/stella/anonymize/pull/625) [`15d188a`](https://github.com/stella/anonymize/commit/15d188aef5059624845aed5ab64f1da21f9e5631) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update native matching, document processing, compression, binding, and MCP dependencies.
+
+- [#553](https://github.com/stella/anonymize/pull/553) [`0f8bd2c`](https://github.com/stella/anonymize/commit/0f8bd2c1b8bb12c3d19173582a485f61fc28afc0) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update the MCP SDK dependency.
+
+- [#591](https://github.com/stella/anonymize/pull/591) [`80f90b3`](https://github.com/stella/anonymize/commit/80f90b3ebc4f0848cc3356a57e1d032719a8be09) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Make promise boundaries explicit while preserving rejected errors from native calls and local operations.
+- Updated dependencies [[`15d188a`](https://github.com/stella/anonymize/commit/15d188aef5059624845aed5ab64f1da21f9e5631), [`cc1a36d`](https://github.com/stella/anonymize/commit/cc1a36d94439ee9c0830116fb95344eaabeeb10d), [`c3d40e1`](https://github.com/stella/anonymize/commit/c3d40e1d13ddea6586cd43491c694da648187d57), [`80f90b3`](https://github.com/stella/anonymize/commit/80f90b3ebc4f0848cc3356a57e1d032719a8be09), [`470a2ae`](https://github.com/stella/anonymize/commit/470a2ae238c0ab2b0db3b90285eddd2bc672d865), [`80f90b3`](https://github.com/stella/anonymize/commit/80f90b3ebc4f0848cc3356a57e1d032719a8be09)]:
+  - @stll/anonymize@4.0.0
+  - @stll/anonymize-docx@4.0.0
+  - @stll/anonymize-pdf@4.0.0
+
 ## 3.0.7
 
 ### Patch Changes
