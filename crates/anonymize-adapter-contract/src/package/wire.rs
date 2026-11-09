@@ -534,14 +534,16 @@ fn join_core_package_decode<T>(
 /// Plain literal patterns can be dropped from a compact package: the
 /// artifacts rebuild the index without them. The gazetteer is the exception,
 /// since preparation reads each gazetteer term from its pattern.
+/// Whether the prepared literal artifact maps pattern indexes one-to-one onto
+/// `literal_patterns`, so the list can be dropped from a compact package.
+/// An empty literal is skipped when the index is built, which shifts every
+/// later artifact index, so a list containing one is kept.
 fn core_literal_patterns_are_identity_mapped(
   config: &PreparedEngineConfig,
 ) -> bool {
   !config.search.literal_patterns.is_empty()
     && config.search.slices.gazetteer.is_empty()
-    && config
-      .search
-      .literal_patterns
-      .iter()
-      .all(|pattern| matches!(pattern, SearchPattern::Literal(_)))
+    && config.search.literal_patterns.iter().all(
+      |pattern| matches!(pattern, SearchPattern::Literal(text) if !text.is_empty()),
+    )
 }
