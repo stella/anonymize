@@ -12,12 +12,12 @@ Install these prerequisites:
 - Node.js 22.18 or newer for the TypeScript-aware build configuration
 - rustup; the repository installs Rust 1.96.0 and the
   `wasm32-unknown-unknown` target through `rust-toolchain.toml`
-- `wasm-bindgen-cli` 0.2.129 for full builds and browser tests
+- `wasm-bindgen-cli` 0.2.130 for full builds and browser tests
 
 Install the pinned WebAssembly tool with:
 
 ```bash
-cargo install wasm-bindgen-cli --version 0.2.129 --locked
+cargo install wasm-bindgen-cli --version 0.2.130 --locked
 ```
 
 Python checks additionally require `uv`. The complete Rust suite uses
@@ -57,7 +57,7 @@ The full `bun run rust:check` additionally runs `cargo ci-stella-lint` on the
 pinned stable toolchain. Install the shared source lint with:
 
 ```sh
-cargo install --git https://github.com/stella/tooling --rev a1bd81740ecb4b66999f56d1716e1190c4e7272f --locked stella_source_lint
+cargo install --git https://github.com/stella/tooling --rev 51a4412dfe02203c24a3495f14ec99405acb7527 --locked stella_source_lint
 ```
 
 ## Choose the right change location

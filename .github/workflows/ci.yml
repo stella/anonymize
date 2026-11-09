@@ -1,10 +1,10 @@
 name: CI
 
 env:
-  HAWK_RUST_TOOLCHAIN: "1.97.1"
-  HAWK_VERSION: "0.1.11"
-  HAWK_X86_64_UNKNOWN_LINUX_GNU_SHA256: "8380db63360ae94f9890d7e426cce00e479d884f516614cea998c85d5f30ab6d"
-  UV_VERSION: "0.13.5"
+  HAWK_RUST_TOOLCHAIN: "1.99.0"
+  HAWK_VERSION: "0.1.17"
+  HAWK_X86_64_UNKNOWN_LINUX_GNU_SHA256: "f5a76a43aa6be1e55e44f5eac13310193ba77729673799250065f1d201018016"
+  UV_VERSION: "0.13.7"
 
 on:
   push:
@@ -141,7 +141,7 @@ jobs:
           mkdir -p "$install_dir"
           tar -xzf "$archive" -C "$install_dir" --strip-components=1
           echo "$install_dir" >> "$GITHUB_PATH"
-          rustup toolchain install 1.97.1 --profile minimal # cargo-hawk exception tracked in stll-toolchain.json
+          rustup toolchain install 1.99.0 --profile minimal # cargo-hawk exception tracked in stll-toolchain.json
       - name: Rust checks
         run: bun run rust:check
       - name: Hawk visibility lint
