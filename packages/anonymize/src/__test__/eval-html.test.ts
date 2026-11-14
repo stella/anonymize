@@ -9,7 +9,7 @@ test("HTML evaluation renders native detections and redacted text", async () => 
   try {
     const input = join(directory, "synthetic.txt");
     const output = join(directory, "report.html");
-    await Bun.write(input, "sample@example.com");
+    await Bun.write(input, "sample@example.com\nBundesverfassungsgericht");
     const script = fileURLToPath(
       new URL("../../../../eval-html.ts", import.meta.url),
     );
@@ -27,14 +27,18 @@ test("HTML evaluation renders native detections and redacted text", async () => 
       new Response(child.stderr).text(),
     ]);
     expect(exitCode, stderr).toBe(0);
-    expect(stdout).toContain("1 docs, 1 entities");
+    expect(stdout).toContain("1 docs, 2 entities");
     const html = await Bun.file(output).text();
     expect(html).toContain("email address");
+    expect(html).toMatch(
+      /<td>Bundesverfassungsgericht<\/td>\s*<td>deny-list<\/td>/u,
+    );
     const redacted = html.match(
-      /<h3>Redacted<\/h3>\s*<div class="content">(?<text>[^<]+)<\/div>/u,
+      /<h3>Redacted<\/h3>\s*<div class="content">(?<text>[\s\S]+?)<\/div>/u,
     )?.groups?.["text"];
     expect(redacted).toBeDefined();
     expect(redacted).not.toContain("sample@example.com");
+    expect(redacted).not.toContain("Bundesverfassungsgericht");
     expect(redacted).toMatch(/\[[^\]]+\]/u);
   } finally {
     await rm(directory, { recursive: true, force: true });

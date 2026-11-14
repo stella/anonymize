@@ -1,7 +1,10 @@
 #!/usr/bin/env bun
 import { watch } from "node:fs";
 
+import { loadDictionaryBundle } from "@stll/anonymize-data/cities";
+
 import { parseEvalHtmlArgs } from "./.github/tools/eval-html-args";
+import { defaultDictionaryBundleOptions } from "./packages/anonymize/src/build-native-package";
 import {
   createNativePipelineFromConfig,
   createPipelineContext,
@@ -89,16 +92,23 @@ const contextSnippet = (fullText: string, entity: Entity): string => {
 
 // ── Pipeline ────────────────────────────────────
 
+const prepareEvaluationPipeline = async () => {
+  const dictionaries = await loadDictionaryBundle(
+    defaultDictionaryBundleOptions(CONFIG),
+  );
+  return createNativePipelineFromConfig({
+    binding: loadNativeAnonymizeBinding(),
+    config: { ...CONFIG, dictionaries },
+    gazetteerEntries: [],
+    context: createPipelineContext(),
+  });
+};
+let pipelinePromise: ReturnType<typeof prepareEvaluationPipeline> | undefined;
+
 const processDoc = async (path: string) => {
-  const ctx = createPipelineContext();
   const text = await Bun.file(path).text();
   const name = path.split("/").pop() ?? path;
-  const pipeline = await createNativePipelineFromConfig({
-    binding: loadNativeAnonymizeBinding(),
-    config: CONFIG,
-    gazetteerEntries: [],
-    context: ctx,
-  });
+  const pipeline = await (pipelinePromise ??= prepareEvaluationPipeline());
   const {
     resolvedEntities: entities,
     redaction: { redactedText },
