@@ -40,7 +40,7 @@ const CONFIG: PipelineConfig = {
   enableDenyList: true,
   denyListCountries: ["CZ", "SK", "DE", "US", "GB", "FR", "AT", "CH"],
   enableGazetteer: false,
-  enableNer: false,
+  enableLegalForms: true,
   enableConfidenceBoost: false,
   enableCoreference: true,
   enableZoneClassification: true,
