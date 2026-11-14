@@ -33,7 +33,7 @@
     "@stll/anonymize": "workspace:^",
     "@stll/anonymize-data": "^0.0.10",
     "fflate": "0.8.3",
-    "hyparquet": "1.32.0"
+    "hyparquet": "1.33.0"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",
