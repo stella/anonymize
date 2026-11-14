@@ -261,6 +261,7 @@ function runJsonScript(scriptName, env) {
   } catch (error) {
     throw new Error(
       `${scriptName} emitted invalid JSON: ${String(error)}\n${jsonLine}`,
+      { cause: error },
     );
   }
 }

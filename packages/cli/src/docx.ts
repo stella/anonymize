@@ -439,6 +439,7 @@ const acquireSessionArchiveLock = async (
     if (isNodeError(error, "EEXIST")) {
       throw new Error(
         `encrypted session archive is locked by another continuation; if no process is running, remove the stale lock "${lockPath}"`,
+        { cause: error },
       );
     }
     throw error;
@@ -662,6 +663,7 @@ const runDocxAnonymize = async (
       const message = error instanceof Error ? error.message : String(error);
       throw new Error(
         `encrypted session archive was updated, but DOCX output could not be published: ${message}`,
+        { cause: error },
       );
     }
     outputSummary(command, "anonymized", result.summary);

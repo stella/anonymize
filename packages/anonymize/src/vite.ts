@@ -78,6 +78,9 @@ const isWasmEntry = (id: string): boolean =>
 const isPackageFile = (file: string): boolean => file.endsWith(PACKAGE_SUFFIX);
 
 /** Map a selection name to its on-disk package file name. */
+const isArray = (value: unknown): value is readonly unknown[] =>
+  Array.isArray(value);
+
 const packageFileName = (name: string): string =>
   name === DEFAULT_PACKAGE_NAME
     ? DEFAULT_PACKAGE_FILE
@@ -101,7 +104,7 @@ const resolvePackageSelection = (
   if (packages === "none") {
     return { status: "ok", emit: new Set() };
   }
-  if (!Array.isArray(packages)) {
+  if (!isArray(packages)) {
     // A bare string like "cs" would otherwise iterate per character below.
     return { status: "invalid", value: String(packages) };
   }

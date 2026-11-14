@@ -62,7 +62,7 @@ describe("dotted-acronym deny-list curation", () => {
       "violated Section 10(b) of the Exchange Act [15 U.S.C. § 78j(b)]";
     const entities = await detect(text);
     const orgs = entities.filter(
-      (e) => e.label === "organization" && /U\.S\.C\./.test(e.text),
+      (e) => e.label === "organization" && e.text.includes("U.S.C."),
     );
     expect(orgs).toEqual([]);
   });
@@ -73,7 +73,7 @@ describe("dotted-acronym deny-list curation", () => {
     // and similar place-name forms in English prose.
     const text = "filed in the District of Washington D.C., per Rule 9.";
     const entities = await detect(text);
-    const acronymHits = entities.filter((e) => /D\.C\./.test(e.text));
+    const acronymHits = entities.filter((e) => e.text.includes("D.C."));
     // No deny-list hit anchored on the bare `D.C.` token.
     expect(acronymHits.every((e) => e.text.length > 4)).toBe(true);
   });

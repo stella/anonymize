@@ -5,6 +5,7 @@ import { createRequire } from "node:module";
 import { join } from "node:path";
 import { Readable } from "node:stream";
 import { pipeline as streamPipeline } from "node:stream/promises";
+import { isUint8Array } from "node:util/types";
 
 import {
   convert_external_detection_batch,
@@ -117,7 +118,11 @@ export const parseNymResult = (value: unknown): NymResult => {
 
 const sha256File = async (path: string): Promise<string> => {
   const hash = createHash("sha256");
-  for await (const chunk of createReadStream(path)) hash.update(chunk);
+  for await (const chunk of createReadStream(path)) {
+    if (!isUint8Array(chunk))
+      throw new TypeError("Artifact stream returned a non-byte chunk");
+    hash.update(chunk);
+  }
   return hash.digest("hex");
 };
 
@@ -242,7 +247,9 @@ const runNativeNym = async (
     return parseNymResult(JSON.parse(stdout) as unknown);
   } catch (error) {
     const detail = error instanceof Error ? error.message : "unknown error";
-    throw new Error(`native Nym adapter emitted an invalid result: ${detail}`);
+    throw new Error(`native Nym adapter emitted an invalid result: ${detail}`, {
+      cause: error,
+    });
   }
 };
 

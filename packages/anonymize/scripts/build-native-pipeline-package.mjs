@@ -207,6 +207,7 @@ async function loadDefaultDictionaries(pipelineConfig) {
   } catch (error) {
     throw new Error(
       `--default-dictionaries requires @stll/anonymize-data: ${formatError(error)}`,
+      { cause: error },
     );
   }
   if (typeof loaded.loadDictionaryBundle !== "function") {

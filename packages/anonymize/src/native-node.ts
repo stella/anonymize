@@ -175,7 +175,7 @@ export const loadNativeAnonymizeBinding = (
       specifier === platformPackage &&
       isHostNativeTarget({ arch, libc, platform })
         ? loadDefaultPlatformNativePackage
-        : () => requireModule(specifier);
+        : (): unknown => requireModule(specifier);
     const binding = tryLoadNativeBinding({
       specifier,
       loadModule,
@@ -351,6 +351,7 @@ export const readDefaultNativePipelinePackageFile = ({
   } catch (error) {
     throw new Error(
       `${defaultNativePipelinePackageDescription(language)} is unavailable: ${formatLoadError(error)}`,
+      { cause: error },
     );
   }
 };
@@ -375,6 +376,7 @@ export const availableDefaultNativePipelineLanguages = (): string[] => {
   } catch (error) {
     throw new Error(
       `Default native pipeline package directory is unavailable: ${formatLoadError(error)}`,
+      { cause: error },
     );
   }
   return [...languages].toSorted();
@@ -392,6 +394,7 @@ export const readDefaultNativePipelinePackageFileAsync = async ({
   } catch (error) {
     throw new Error(
       `${defaultNativePipelinePackageDescription(language)} is unavailable: ${formatLoadError(error)}`,
+      { cause: error },
     );
   }
 };
