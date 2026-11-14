@@ -32,7 +32,7 @@ test("HTML evaluation renders native detections and redacted text", async () => 
     expect(html).toContain("email address");
     const redacted = html.match(
       /<h3>Redacted<\/h3>\s*<div class="content">(?<text>[^<]+)<\/div>/u,
-    )?.groups?.text;
+    )?.groups?.["text"];
     expect(redacted).toBeDefined();
     expect(redacted).not.toContain("sample@example.com");
     expect(redacted).toMatch(/\[[^\]]+\]/u);

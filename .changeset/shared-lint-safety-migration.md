@@ -2,7 +2,6 @@
 "@stll/anonymize-docx": patch
 "@stll/anonymize": patch
 "@stll/anonymize-wasm": patch
-"@stll/anonymize-data": patch
 "@stll/anonymize-cli": patch
 "@stll/anonymize-pdf": patch
 ---
