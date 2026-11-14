@@ -3,7 +3,6 @@ name: CI
 env:
   HAWK_RUST_TOOLCHAIN: "1.99.1"
   HAWK_VERSION: "0.1.17"
-  HAWK_X86_64_UNKNOWN_LINUX_GNU_SHA256: "f5a76a43aa6be1e55e44f5eac13310193ba77729673799250065f1d201018016"
   UV_VERSION: "0.13.7"
 
 on:
@@ -132,15 +131,11 @@ jobs:
           expected_hawk_script="cargo +${HAWK_RUST_TOOLCHAIN} hawk check --target-dir target/hawk -D warnings -A hawk::dead_public -A hawk::unnecessary_public"
           jq -e --arg expected "$expected_hawk_script" \
             '.scripts["rust:hawk"] == $expected' package.json >/dev/null
-          archive="$RUNNER_TEMP/cargo-hawk.tar.gz"
-          install_dir="$RUNNER_TEMP/cargo-hawk"
-          curl --proto '=https' --tlsv1.2 --retry 3 -fsSL \
-            -o "$archive" \
-            "https://github.com/astral-sh/hawk/releases/download/${HAWK_VERSION}/cargo-hawk-x86_64-unknown-linux-gnu.tar.gz"
-          echo "${HAWK_X86_64_UNKNOWN_LINUX_GNU_SHA256}  ${archive}" | sha256sum --check
-          mkdir -p "$install_dir"
-          tar -xzf "$archive" -C "$install_dir" --strip-components=1
-          echo "$install_dir" >> "$GITHUB_PATH"
+          rustup component add rustc-dev --toolchain 1.99.1
+          RUSTC_BOOTSTRAP=1 cargo +1.99.1 install cargo-hawk \
+            --version "${HAWK_VERSION}" --locked --root "$RUNNER_TEMP/hawk"
+          echo "$RUNNER_TEMP/hawk/bin" >> "$GITHUB_PATH"
+
       - name: Rust checks
         run: bun run rust:check
       - name: Hawk visibility lint
