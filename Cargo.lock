@@ -1634,9 +1634,9 @@ dependencies = [
 
 [[package]]
 name = "stella-docx-kernel"
-version = "0.41.0"
+version = "0.43.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "403d940360ec445713e405971e6b79456988dbead53f118a5b1e499b1c68a4bc"
+checksum = "354131bcd3c8b5f5fce5f3dc19e93011cb0b9a75592e00703ad43a9a0f2949c9"
 dependencies = [
  "miniz_oxide",
  "quick-xml",
