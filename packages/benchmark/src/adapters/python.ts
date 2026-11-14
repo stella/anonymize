@@ -262,7 +262,9 @@ export const createPythonAdapter = ({
         parsed = parsePythonResult(rawResult);
       } catch (error) {
         const detail = error instanceof Error ? error.message : "unknown error";
-        throw new Error(`${name} adapter protocol failure: ${detail}`);
+        throw new Error(`${name} adapter protocol failure: ${detail}`, {
+          cause: error,
+        });
       }
 
       const textById = new Map(docs.map((doc) => [doc.id, doc.text]));

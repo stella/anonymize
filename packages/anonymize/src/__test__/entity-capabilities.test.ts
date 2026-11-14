@@ -16,7 +16,7 @@ type LabeledEntry = {
 const isLabeledEntries = (value: unknown): value is LabeledEntry[] =>
   Array.isArray(value) &&
   value.every(
-    (entry) =>
+    (entry: unknown) =>
       typeof entry === "object" &&
       entry !== null &&
       "label" in entry &&

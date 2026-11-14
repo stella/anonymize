@@ -1,15 +1,15 @@
 #!/usr/bin/env bun
-import { watch } from "fs";
+import { watch } from "node:fs";
 
 import { parseEvalHtmlArgs } from "./.github/tools/eval-html-args";
 import {
+  createNativePipelineFromConfig,
   createPipelineContext,
   DEFAULT_ENTITY_LABELS,
-  DEFAULT_OPERATOR_CONFIG,
-  redactText,
-  runPipeline,
+  loadNativeAnonymizeBinding,
 } from "./packages/anonymize/src/index";
-import type { Entity, PipelineConfig } from "./packages/anonymize/src/types";
+import type { NativePipelineEntity as Entity } from "./packages/anonymize/src/native";
+import type { PipelineConfig } from "./packages/anonymize/src/types";
 
 // ── Constants ───────────────────────────────────
 
@@ -93,19 +93,17 @@ const processDoc = async (path: string) => {
   const ctx = createPipelineContext();
   const text = await Bun.file(path).text();
   const name = path.split("/").pop() ?? path;
-  const entities = await runPipeline({
-    fullText: text,
+  const pipeline = await createNativePipelineFromConfig({
+    binding: loadNativeAnonymizeBinding(),
     config: CONFIG,
     gazetteerEntries: [],
     context: ctx,
   });
+  const {
+    resolvedEntities: entities,
+    redaction: { redactedText },
+  } = pipeline.redactText(text);
   entities.sort((a, b) => a.start - b.start);
-  const { redactedText } = redactText(
-    text,
-    entities,
-    DEFAULT_OPERATOR_CONFIG,
-    ctx,
-  );
   return { name, text, entities, redactedText };
 };
 
@@ -334,8 +332,7 @@ const { outputPath, watchMode, inputs } = parseEvalHtmlArgs(
 
 if (inputs.length === 0) {
   console.error(
-    "Usage: bun eval-html.ts [--watch] " +
-      "<input.txt> [...] [--output out.html]",
+    "Usage: bun eval-html.ts [--watch] <input.txt> [...] [--output out.html]",
   );
   process.exit(1);
 }
@@ -347,7 +344,7 @@ const run = async () => {
   const ms = (performance.now() - start).toFixed(0);
   const total = docs.reduce((s, d) => s + d.entities.length, 0);
   console.log(
-    `${docs.length} docs, ${total} entities ` + `(${ms}ms) → ${outputPath}`,
+    `${docs.length} docs, ${total} entities (${ms}ms) → ${outputPath}`,
   );
 };
 

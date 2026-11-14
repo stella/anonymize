@@ -119,7 +119,7 @@ type NamedInput = {
 
 const readInputs = async (files: string[]): Promise<NamedInput[]> => {
   if (files.length === 0) {
-    if (process.stdin.isTTY === true) {
+    if (process.stdin.isTTY) {
       throw new UsageError(
         "no input files and stdin is a terminal (see --help)",
       );
@@ -167,7 +167,7 @@ const looksTextual = async (path: string): Promise<boolean> => {
   try {
     const buffer = Buffer.alloc(TEXT_SNIFF_BYTES);
     const { bytesRead } = await handle.read(buffer, 0, TEXT_SNIFF_BYTES, 0);
-    return buffer.subarray(0, bytesRead).indexOf(0) === -1;
+    return !buffer.subarray(0, bytesRead).includes(0);
   } finally {
     await handle.close();
   }
@@ -766,8 +766,8 @@ const runAnonymise = async (
   }
 
   const scoped = shouldPromptForScope(opts, {
-    stdinIsTTY: process.stdin.isTTY === true,
-    stderrIsTTY: process.stderr.isTTY === true,
+    stdinIsTTY: process.stdin.isTTY,
+    stderrIsTTY: process.stderr.isTTY,
   })
     ? { ...opts, countries: await promptForCountries() }
     : opts;

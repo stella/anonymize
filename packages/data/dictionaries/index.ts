@@ -522,156 +522,119 @@ export type DictionaryId = keyof CheckedDictionaryMeta<typeof DICTIONARY_META>;
 
 type JsonModule = { default: readonly string[] };
 
-// SAFETY: dynamic import() of JSON modules returns
-// { default: T } in Bun. The cast is required because
-// TS infers a wider type for dynamic imports.
 const LOADERS: Record<DictionaryId, () => Promise<JsonModule>> = {
   // ── Names ──────────────────────────────────────────
-  "names/global": () => import("./names/global.json") as Promise<JsonModule>,
+  "names/global": () => import("./names/global.json"),
   // ── First names (Wikidata CC0) ──────────────────
-  "names/first/cs": () =>
-    import("./names/first/cs.json") as Promise<JsonModule>,
-  "names/first/sk": () =>
-    import("./names/first/sk.json") as Promise<JsonModule>,
-  "names/first/de": () =>
-    import("./names/first/de.json") as Promise<JsonModule>,
-  "names/first/pl": () =>
-    import("./names/first/pl.json") as Promise<JsonModule>,
-  "names/first/hu": () =>
-    import("./names/first/hu.json") as Promise<JsonModule>,
-  "names/first/ro": () =>
-    import("./names/first/ro.json") as Promise<JsonModule>,
-  "names/first/fr": () =>
-    import("./names/first/fr.json") as Promise<JsonModule>,
-  "names/first/es": () =>
-    import("./names/first/es.json") as Promise<JsonModule>,
-  "names/first/it": () =>
-    import("./names/first/it.json") as Promise<JsonModule>,
-  "names/first/en": () =>
-    import("./names/first/en.json") as Promise<JsonModule>,
-  "names/first/sv": () =>
-    import("./names/first/sv.json") as Promise<JsonModule>,
+  "names/first/cs": () => import("./names/first/cs.json"),
+  "names/first/sk": () => import("./names/first/sk.json"),
+  "names/first/de": () => import("./names/first/de.json"),
+  "names/first/pl": () => import("./names/first/pl.json"),
+  "names/first/hu": () => import("./names/first/hu.json"),
+  "names/first/ro": () => import("./names/first/ro.json"),
+  "names/first/fr": () => import("./names/first/fr.json"),
+  "names/first/es": () => import("./names/first/es.json"),
+  "names/first/it": () => import("./names/first/it.json"),
+  "names/first/en": () => import("./names/first/en.json"),
+  "names/first/sv": () => import("./names/first/sv.json"),
   // ── Surnames (Wikidata CC0) ─────────────────────
-  "names/surnames/cs": () =>
-    import("./names/surnames/cs.json") as Promise<JsonModule>,
-  "names/surnames/sk": () =>
-    import("./names/surnames/sk.json") as Promise<JsonModule>,
-  "names/surnames/de": () =>
-    import("./names/surnames/de.json") as Promise<JsonModule>,
-  "names/surnames/pl": () =>
-    import("./names/surnames/pl.json") as Promise<JsonModule>,
-  "names/surnames/hu": () =>
-    import("./names/surnames/hu.json") as Promise<JsonModule>,
-  "names/surnames/ro": () =>
-    import("./names/surnames/ro.json") as Promise<JsonModule>,
-  "names/surnames/fr": () =>
-    import("./names/surnames/fr.json") as Promise<JsonModule>,
-  "names/surnames/es": () =>
-    import("./names/surnames/es.json") as Promise<JsonModule>,
-  "names/surnames/it": () =>
-    import("./names/surnames/it.json") as Promise<JsonModule>,
-  "names/surnames/en": () =>
-    import("./names/surnames/en.json") as Promise<JsonModule>,
-  "names/surnames/sv": () =>
-    import("./names/surnames/sv.json") as Promise<JsonModule>,
+  "names/surnames/cs": () => import("./names/surnames/cs.json"),
+  "names/surnames/sk": () => import("./names/surnames/sk.json"),
+  "names/surnames/de": () => import("./names/surnames/de.json"),
+  "names/surnames/pl": () => import("./names/surnames/pl.json"),
+  "names/surnames/hu": () => import("./names/surnames/hu.json"),
+  "names/surnames/ro": () => import("./names/surnames/ro.json"),
+  "names/surnames/fr": () => import("./names/surnames/fr.json"),
+  "names/surnames/es": () => import("./names/surnames/es.json"),
+  "names/surnames/it": () => import("./names/surnames/it.json"),
+  "names/surnames/en": () => import("./names/surnames/en.json"),
+  "names/surnames/sv": () => import("./names/surnames/sv.json"),
 
   // ── Countries ──────────────────────────────────────
-  "countries/translations": () =>
-    import("./countries/translations.json") as Promise<JsonModule>,
+  "countries/translations": () => import("./countries/translations.json"),
 
   // ── Cities: loaded via loadCityDictionary() in ./cities
 
   // ── Courts ─────────────────────────────────────────
-  "courts/AT": () => import("./courts/AT.json") as Promise<JsonModule>,
-  "courts/AU": () => import("./courts/AU.json") as Promise<JsonModule>,
-  "courts/BE": () => import("./courts/BE.json") as Promise<JsonModule>,
-  "courts/BG": () => import("./courts/BG.json") as Promise<JsonModule>,
-  "courts/BR": () => import("./courts/BR.json") as Promise<JsonModule>,
-  "courts/CA": () => import("./courts/CA.json") as Promise<JsonModule>,
-  "courts/CZ": () => import("./courts/CZ.json") as Promise<JsonModule>,
-  "courts/DE": () => import("./courts/DE.json") as Promise<JsonModule>,
-  "courts/DK": () => import("./courts/DK.json") as Promise<JsonModule>,
-  "courts/ES": () => import("./courts/ES.json") as Promise<JsonModule>,
-  "courts/FI": () => import("./courts/FI.json") as Promise<JsonModule>,
-  "courts/FR": () => import("./courts/FR.json") as Promise<JsonModule>,
-  "courts/GB": () => import("./courts/GB.json") as Promise<JsonModule>,
-  "courts/HR": () => import("./courts/HR.json") as Promise<JsonModule>,
-  "courts/HU": () => import("./courts/HU.json") as Promise<JsonModule>,
-  "courts/IE": () => import("./courts/IE.json") as Promise<JsonModule>,
-  "courts/IT": () => import("./courts/IT.json") as Promise<JsonModule>,
-  "courts/NL": () => import("./courts/NL.json") as Promise<JsonModule>,
-  "courts/NO": () => import("./courts/NO.json") as Promise<JsonModule>,
-  "courts/PL": () => import("./courts/PL.json") as Promise<JsonModule>,
-  "courts/PT": () => import("./courts/PT.json") as Promise<JsonModule>,
-  "courts/RO": () => import("./courts/RO.json") as Promise<JsonModule>,
-  "courts/SE": () => import("./courts/SE.json") as Promise<JsonModule>,
-  "courts/SI": () => import("./courts/SI.json") as Promise<JsonModule>,
-  "courts/SK": () => import("./courts/SK.json") as Promise<JsonModule>,
-  "courts/US": () => import("./courts/US.json") as Promise<JsonModule>,
+  "courts/AT": () => import("./courts/AT.json"),
+  "courts/AU": () => import("./courts/AU.json"),
+  "courts/BE": () => import("./courts/BE.json"),
+  "courts/BG": () => import("./courts/BG.json"),
+  "courts/BR": () => import("./courts/BR.json"),
+  "courts/CA": () => import("./courts/CA.json"),
+  "courts/CZ": () => import("./courts/CZ.json"),
+  "courts/DE": () => import("./courts/DE.json"),
+  "courts/DK": () => import("./courts/DK.json"),
+  "courts/ES": () => import("./courts/ES.json"),
+  "courts/FI": () => import("./courts/FI.json"),
+  "courts/FR": () => import("./courts/FR.json"),
+  "courts/GB": () => import("./courts/GB.json"),
+  "courts/HR": () => import("./courts/HR.json"),
+  "courts/HU": () => import("./courts/HU.json"),
+  "courts/IE": () => import("./courts/IE.json"),
+  "courts/IT": () => import("./courts/IT.json"),
+  "courts/NL": () => import("./courts/NL.json"),
+  "courts/NO": () => import("./courts/NO.json"),
+  "courts/PL": () => import("./courts/PL.json"),
+  "courts/PT": () => import("./courts/PT.json"),
+  "courts/RO": () => import("./courts/RO.json"),
+  "courts/SE": () => import("./courts/SE.json"),
+  "courts/SI": () => import("./courts/SI.json"),
+  "courts/SK": () => import("./courts/SK.json"),
+  "courts/US": () => import("./courts/US.json"),
 
   // ── Banks ──────────────────────────────────────────
-  "banks/AT": () => import("./banks/AT.json") as Promise<JsonModule>,
-  "banks/AU": () => import("./banks/AU.json") as Promise<JsonModule>,
-  "banks/BE": () => import("./banks/BE.json") as Promise<JsonModule>,
-  "banks/BG": () => import("./banks/BG.json") as Promise<JsonModule>,
-  "banks/BR": () => import("./banks/BR.json") as Promise<JsonModule>,
-  "banks/CA": () => import("./banks/CA.json") as Promise<JsonModule>,
-  "banks/CZ": () => import("./banks/CZ.json") as Promise<JsonModule>,
-  "banks/DE": () => import("./banks/DE.json") as Promise<JsonModule>,
-  "banks/DK": () => import("./banks/DK.json") as Promise<JsonModule>,
-  "banks/ES": () => import("./banks/ES.json") as Promise<JsonModule>,
-  "banks/FI": () => import("./banks/FI.json") as Promise<JsonModule>,
-  "banks/FR": () => import("./banks/FR.json") as Promise<JsonModule>,
-  "banks/GB": () => import("./banks/GB.json") as Promise<JsonModule>,
-  "banks/HR": () => import("./banks/HR.json") as Promise<JsonModule>,
-  "banks/HU": () => import("./banks/HU.json") as Promise<JsonModule>,
-  "banks/IE": () => import("./banks/IE.json") as Promise<JsonModule>,
-  "banks/IT": () => import("./banks/IT.json") as Promise<JsonModule>,
-  "banks/NL": () => import("./banks/NL.json") as Promise<JsonModule>,
-  "banks/NO": () => import("./banks/NO.json") as Promise<JsonModule>,
-  "banks/PL": () => import("./banks/PL.json") as Promise<JsonModule>,
-  "banks/PT": () => import("./banks/PT.json") as Promise<JsonModule>,
-  "banks/RO": () => import("./banks/RO.json") as Promise<JsonModule>,
-  "banks/SE": () => import("./banks/SE.json") as Promise<JsonModule>,
-  "banks/SI": () => import("./banks/SI.json") as Promise<JsonModule>,
-  "banks/SK": () => import("./banks/SK.json") as Promise<JsonModule>,
-  "banks/US": () => import("./banks/US.json") as Promise<JsonModule>,
+  "banks/AT": () => import("./banks/AT.json"),
+  "banks/AU": () => import("./banks/AU.json"),
+  "banks/BE": () => import("./banks/BE.json"),
+  "banks/BG": () => import("./banks/BG.json"),
+  "banks/BR": () => import("./banks/BR.json"),
+  "banks/CA": () => import("./banks/CA.json"),
+  "banks/CZ": () => import("./banks/CZ.json"),
+  "banks/DE": () => import("./banks/DE.json"),
+  "banks/DK": () => import("./banks/DK.json"),
+  "banks/ES": () => import("./banks/ES.json"),
+  "banks/FI": () => import("./banks/FI.json"),
+  "banks/FR": () => import("./banks/FR.json"),
+  "banks/GB": () => import("./banks/GB.json"),
+  "banks/HR": () => import("./banks/HR.json"),
+  "banks/HU": () => import("./banks/HU.json"),
+  "banks/IE": () => import("./banks/IE.json"),
+  "banks/IT": () => import("./banks/IT.json"),
+  "banks/NL": () => import("./banks/NL.json"),
+  "banks/NO": () => import("./banks/NO.json"),
+  "banks/PL": () => import("./banks/PL.json"),
+  "banks/PT": () => import("./banks/PT.json"),
+  "banks/RO": () => import("./banks/RO.json"),
+  "banks/SE": () => import("./banks/SE.json"),
+  "banks/SI": () => import("./banks/SI.json"),
+  "banks/SK": () => import("./banks/SK.json"),
+  "banks/US": () => import("./banks/US.json"),
 
   // ── Insurance ──────────────────────────────────────
-  "insurance/CZ": () => import("./insurance/CZ.json") as Promise<JsonModule>,
-  "insurance/DE": () => import("./insurance/DE.json") as Promise<JsonModule>,
+  "insurance/CZ": () => import("./insurance/CZ.json"),
+  "insurance/DE": () => import("./insurance/DE.json"),
 
   // ── Education ──────────────────────────────────────
-  "education/universities-AT": () =>
-    import("./education/universities-AT.json") as Promise<JsonModule>,
-  "education/universities-CZ": () =>
-    import("./education/universities-CZ.json") as Promise<JsonModule>,
-  "education/universities-DE": () =>
-    import("./education/universities-DE.json") as Promise<JsonModule>,
-  "education/universities-SK": () =>
-    import("./education/universities-SK.json") as Promise<JsonModule>,
+  "education/universities-AT": () => import("./education/universities-AT.json"),
+  "education/universities-CZ": () => import("./education/universities-CZ.json"),
+  "education/universities-DE": () => import("./education/universities-DE.json"),
+  "education/universities-SK": () => import("./education/universities-SK.json"),
 
   // ── Government ─────────────────────────────────────
-  "government/ministries-AT": () =>
-    import("./government/ministries-AT.json") as Promise<JsonModule>,
-  "government/ministries-CZ": () =>
-    import("./government/ministries-CZ.json") as Promise<JsonModule>,
-  "government/ministries-DE": () =>
-    import("./government/ministries-DE.json") as Promise<JsonModule>,
-  "government/ministries-GB": () =>
-    import("./government/ministries-GB.json") as Promise<JsonModule>,
-  "government/ministries-SK": () =>
-    import("./government/ministries-SK.json") as Promise<JsonModule>,
+  "government/ministries-AT": () => import("./government/ministries-AT.json"),
+  "government/ministries-CZ": () => import("./government/ministries-CZ.json"),
+  "government/ministries-DE": () => import("./government/ministries-DE.json"),
+  "government/ministries-GB": () => import("./government/ministries-GB.json"),
+  "government/ministries-SK": () => import("./government/ministries-SK.json"),
 
   // ── Healthcare ─────────────────────────────────────
-  "healthcare/hospitals-CZ": () =>
-    import("./healthcare/hospitals-CZ.json") as Promise<JsonModule>,
-  "healthcare/hospitals-DE": () =>
-    import("./healthcare/hospitals-DE.json") as Promise<JsonModule>,
+  "healthcare/hospitals-CZ": () => import("./healthcare/hospitals-CZ.json"),
+  "healthcare/hospitals-DE": () => import("./healthcare/hospitals-DE.json"),
 
   // ── International ──────────────────────────────────
   "international/eu-institutions": () =>
-    import("./international/eu-institutions.json") as Promise<JsonModule>,
+    import("./international/eu-institutions.json"),
 };
 
 const cache = new Map<DictionaryId, readonly string[]>();

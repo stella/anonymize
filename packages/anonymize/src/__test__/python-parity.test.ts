@@ -1699,7 +1699,9 @@ describe("python binding parity", () => {
           if (error instanceof Error) {
             return error.message;
           }
-          throw new TypeError("expected an Error from the Node binding");
+          throw new TypeError("expected an Error from the Node binding", {
+            cause: error,
+          });
         }
         throw new Error("invalid external detection batch was accepted");
       });

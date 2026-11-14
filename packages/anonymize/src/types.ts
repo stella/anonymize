@@ -479,4 +479,4 @@ export { DEFAULT_ENTITY_LABELS } from "./constants";
 
 export const isLegalFormsEnabled = (
   config: Pick<PipelineConfig, "enableLegalForms">,
-): boolean => config.enableLegalForms !== false;
+): boolean => config.enableLegalForms;
