@@ -396,6 +396,226 @@ fn uppercase_residual_prose_separates_address_evidence() {
   }
 }
 
+/// Prose before the second address splits it from the first, which must not
+/// cost it the street written before its house number: the first address in
+/// a text keeps that street, so the second one has to as well.
+#[test]
+fn a_later_address_keeps_the_street_before_its_house_number() {
+  let prepared = barrier_address_engine();
+  for separator in ["\n", "\n\n", " "] {
+    let text = format!(
+      "Paris 75001.{separator}It moved to Pikrtova 1737/1a, Paris 75002."
+    );
+    let result = prepared
+      .redact_static_entities(&text, &OperatorConfig::default())
+      .expect("static redaction should succeed");
+
+    assert_eq!(
+      address_texts(&result),
+      ["Paris 75001", "Pikrtova 1737/1a, Paris 75002"],
+      "separator {separator:?}",
+    );
+  }
+
+  // The street can be another entity's text; the house number still opens
+  // the address.
+  let result = prepared
+    .redact_static_entities(
+      "Paris 75001.\nIt moved to office@example.test 88, Paris 75002.",
+      &OperatorConfig::default(),
+    )
+    .expect("static redaction should succeed");
+  assert_eq!(address_texts(&result), ["Paris 75001", "88, Paris 75002"]);
+}
+
+#[test]
+fn a_later_address_keeps_the_street_before_its_comma() {
+  let prepared = barrier_address_engine();
+  for (text, later) in [
+    (
+      "Paris 75001.\nJan Novák\nŠkolní, Paris 75002.",
+      "Školní, Paris 75002",
+    ),
+    (
+      "Paris 75001.\nJan Novák\nŠkolní,\tParis 75002.",
+      "Školní,\tParis 75002",
+    ),
+    (
+      "Paris 75001.\nJan Novák\nŠkolní,\u{a0}Paris 75002.",
+      "Školní,\u{a0}Paris 75002",
+    ),
+    (
+      "Paris 75001.\nJan Novák\nŠkolní,\nParis 75002.",
+      "Školní, Paris 75002",
+    ),
+    (
+      "Paris 75001.\nJan Novák\nŠkolní,\n\nParis 75002.",
+      "Paris 75002",
+    ),
+    (
+      "Paris 75001.\nJan Novák\nŠkolní\nParis 75002.",
+      "Paris 75002",
+    ),
+    (
+      "Paris 75001.\nJan Novák\nŠkolní,\u{c}Paris 75002.",
+      "Paris 75002",
+    ),
+    ("Paris 75001.\nTel. 601,\nParis 75002.", "Paris 75002"),
+    (
+      "Paris 75001. It moved to Rue Lepic, Paris 75002.",
+      "Rue Lepic, Paris 75002",
+    ),
+    ("Paris 75001. It moved, Paris 75002.", "Paris 75002"),
+    ("Paris 75001. It moved to Lepic Paris 75002.", "Paris 75002"),
+  ] {
+    let result = prepared
+      .redact_static_entities(text, &OperatorConfig::default())
+      .expect("static redaction should succeed");
+
+    assert_eq!(address_texts(&result), ["Paris 75001", later], "{text:?}");
+  }
+}
+
+#[test]
+fn the_first_address_keeps_the_street_before_its_comma() {
+  let prepared = barrier_address_engine();
+  for (text, address) in [
+    ("Jan Novák\nŠkolní, Paris 75001.", "Školní, Paris 75001"),
+    ("Jan Novák\nŠkolní,\tParis 75001.", "Školní,\tParis 75001"),
+    (
+      "Jan Novák\nŠkolní,\u{a0}Paris 75001.",
+      "Školní,\u{a0}Paris 75001",
+    ),
+    ("Jan Novák\nŠkolní,\nParis 75001.", "Školní, Paris 75001"),
+    ("Jan Novák\nŠkolní,\n\nParis 75001.", "Paris 75001"),
+    ("Jan Novák\nŠkolní\nParis 75001.", "Paris 75001"),
+    ("Jan Novák\rŠkolní, Paris 75001.", "Školní, Paris 75001"),
+    ("Jan Novák\u{c}Paris 75001.", "Paris 75001"),
+    ("Tel. 601,\nParis 75001.", "Paris 75001"),
+  ] {
+    let result = prepared
+      .redact_static_entities(text, &OperatorConfig::default())
+      .expect("static redaction should succeed");
+
+    assert_eq!(address_texts(&result), [address], "{text:?}");
+  }
+}
+
+#[test]
+fn a_house_number_with_a_unit_letter_before_a_comma_keeps_its_street() {
+  let prepared = barrier_address_engine();
+  for (text, later) in [
+    (
+      "Paris 75001. It moved to Pikrtova 1737/1a, Paris 75002.",
+      "Pikrtova 1737/1a, Paris 75002",
+    ),
+    (
+      "Paris 75001. It moved to Pikrtova 1737/1a,\nParis 75002.",
+      "Pikrtova 1737/1a, Paris 75002",
+    ),
+    (
+      "Paris 75001.\nIt moved to Pikrtova 1737/1a,\nParis 75002.",
+      "Pikrtova 1737/1a, Paris 75002",
+    ),
+    (
+      "Paris 75001.\nIt moved to Pikrtova 1737/1a,\n\nParis 75002.",
+      "Paris 75002",
+    ),
+    ("Paris 75001. Reference 2024Q4, Paris 75002.", "Paris 75002"),
+  ] {
+    let result = prepared
+      .redact_static_entities(text, &OperatorConfig::default())
+      .expect("static redaction should succeed");
+
+    assert_eq!(address_texts(&result), ["Paris 75001", later], "{text:?}");
+  }
+
+  let result = prepared
+    .redact_static_entities(
+      "Jan Novák\nPikrtova 1737/1a,\nParis 75001.",
+      &OperatorConfig::default(),
+    )
+    .expect("static redaction should succeed");
+  assert_eq!(address_texts(&result), ["Pikrtova 1737/1a, Paris 75001"]);
+}
+
+#[test]
+fn a_hyphenated_street_name_is_kept_like_any_other() {
+  let prepared = barrier_address_engine();
+  for (text, later) in [
+    (
+      "Paris 75001. It moved to Victor-Hugo, Paris 75002.",
+      "Victor-Hugo, Paris 75002",
+    ),
+    (
+      "Paris 75001. It moved to Victor-Hugo 12, Paris 75002.",
+      "Victor-Hugo 12, Paris 75002",
+    ),
+  ] {
+    let result = prepared
+      .redact_static_entities(text, &OperatorConfig::default())
+      .expect("static redaction should succeed");
+
+    assert_eq!(address_texts(&result), ["Paris 75001", later], "{text:?}");
+  }
+
+  let result = prepared
+    .redact_static_entities(
+      "Jan Novák\nVictor-Hugo, Paris 75001.",
+      &OperatorConfig::default(),
+    )
+    .expect("static redaction should succeed");
+  assert_eq!(address_texts(&result), ["Victor-Hugo, Paris 75001"]);
+}
+
+#[test]
+fn a_typographic_hyphen_in_a_street_name_is_kept() {
+  let prepared = barrier_address_engine();
+  let result = prepared
+    .redact_static_entities(
+      "Paris 75001. It moved to Victor\u{2011}Hugo, Paris 75002.",
+      &OperatorConfig::default(),
+    )
+    .expect("static redaction should succeed");
+
+  assert_eq!(
+    address_texts(&result),
+    ["Paris 75001", "Victor\u{2011}Hugo, Paris 75002"],
+  );
+}
+
+#[test]
+fn a_distance_gap_is_not_bridged_by_the_street_walk() {
+  let prepared = barrier_address_engine();
+  let text = format!("Paris 75001{}Paris 75002", " ".repeat(279));
+  let result = prepared
+    .redact_static_entities(&text, &OperatorConfig::default())
+    .expect("static redaction should succeed");
+
+  assert_eq!(address_texts(&result), ["Paris 75001", "Paris 75002"]);
+}
+
+#[test]
+fn a_blank_line_of_any_kind_stops_the_street_before_a_comma() {
+  let prepared = barrier_address_engine();
+  for blank in ["\u{85}\u{85}", "\u{b}\u{b}", "\r\n\r\n", "\u{2028}\u{2028}"] {
+    for text in [
+      format!("Jan Novák\nŠkolní,{blank}Paris 75001."),
+      format!("Paris 75001.\nJan Novák\nŠkolní,{blank}Paris 75002."),
+    ] {
+      let result = prepared
+        .redact_static_entities(&text, &OperatorConfig::default())
+        .expect("static redaction should succeed");
+      let addresses = address_texts(&result);
+
+      assert!(
+        addresses.iter().all(|address| !address.contains("Školní")),
+        "{text:?} gave {addresses:?}",
+      );
+    }
+  }
+}
+
 #[test]
 fn dotted_residual_prose_before_an_entity_separates_address_evidence() {
   let prepared = barrier_address_engine();
