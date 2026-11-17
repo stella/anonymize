@@ -24,6 +24,10 @@ const STANDALONE_STREET_SCORE: f64 = 0.65;
 const COMPOUND_STREET_SUFFIX_MIN_CHARS: usize = 5;
 /// Cap on street-name words joined to the right of a standalone street seed.
 const STANDALONE_STREET_MAX_TAIL_WORDS: usize = 6;
+/// What ends a line for the left walks, which skip any other whitespace.
+const LINE_BREAKS: [char; 7] = [
+  '\n', '\r', '\u{000b}', '\u{000c}', '\u{0085}', '\u{2028}', '\u{2029}',
+];
 const ADDRESS_CLUSTER_MAX_GAP: usize = 150;
 /// Ordinary words and UTF-16 text units tolerated between two address seeds
 /// before the gap reads as prose rather than as a separator. The unit bound
@@ -924,7 +928,11 @@ impl PreparedAddressSeedData {
         .iter()
         .any(|seed| seed.kind == SeedType::StreetWord);
     let left_pos = match (seed_bounded_left, growth) {
-      (true, _) => cluster.start,
+      (true, _) => expand_bounded_street_left(BoundedStreetLeft {
+        full_text,
+        start: cluster.start,
+        left_bound,
+      }),
       (_, SpanGrowth::StreetNameOnly) => {
         expand_standalone_street_left(full_text, cluster.start, left_bound)
       }
@@ -1987,7 +1995,7 @@ fn expand_standalone_street_left(
     };
     if full_text
       .get(word_start..candidate)
-      .is_some_and(|slice| slice.contains('\n'))
+      .is_some_and(|slice| slice.contains(LINE_BREAKS))
     {
       break;
     }
@@ -2003,6 +2011,137 @@ fn expand_standalone_street_left(
     candidate = word_start;
   }
   start
+}
+
+#[derive(Clone, Copy)]
+struct BoundedStreetLeft<'a> {
+  full_text: &'a str,
+  start: usize,
+  left_bound: usize,
+}
+
+#[derive(Clone, Copy)]
+struct WordAt<'a> {
+  full_text: &'a str,
+  word_start: usize,
+  left_bound: usize,
+  word: &'a str,
+}
+
+#[derive(Clone, Copy)]
+struct CommaGap<'a> {
+  full_text: &'a str,
+  word_end: usize,
+  pos: usize,
+}
+
+/// A cluster that prose split off its predecessor may not grow over that
+/// prose, but a street written before its house number ("Pikrtova 1737/1a,
+/// 140 00 Praha", "Hauptstraße 5, 10115 Berlin") or, with no number, before a
+/// comma ("Školní, 301 00 Plzeň") is the address itself. Take it, or the house
+/// number alone, only when that number or comma sits right before the cluster.
+fn expand_bounded_street_left(args: BoundedStreetLeft<'_>) -> usize {
+  let BoundedStreetLeft {
+    full_text,
+    start,
+    left_bound,
+  } = args;
+  let Some((first_start, first_end, first)) =
+    word_before_for_address(full_text, start, left_bound)
+  else {
+    return start;
+  };
+  if full_text
+    .get(first_start..start)
+    .is_some_and(|slice| slice.contains(LINE_BREAKS))
+    && !(is_street_or_numbered_street(WordAt {
+      full_text,
+      word_start: first_start,
+      left_bound,
+      word: first,
+    }) && comma_closes_its_line(CommaGap {
+      full_text,
+      word_end: first_end,
+      pos: start,
+    }))
+  {
+    return start;
+  }
+  if !within_text_window(full_text, first_start, start, ADDRESS_CLUSTER_MAX_GAP)
+  {
+    return start;
+  }
+  let opens_address = is_house_number_word(first)
+    || (is_street_name_word(first)
+      && full_text
+        .get(first_end..start)
+        .is_some_and(|gap| gap.trim() == ","));
+  if !opens_address {
+    return start;
+  }
+  let mut left_pos = first_start;
+  for _ in 0..STANDALONE_STREET_MAX_TAIL_WORDS {
+    let Some((word_start, word_end, word)) =
+      word_before_for_address(full_text, left_pos, left_bound)
+    else {
+      break;
+    };
+    // A comma before a street word closes what came earlier ("Reception,
+    // Školní, ..."); the street name itself runs on over whitespace only.
+    if !is_street_name_word(word)
+      || !full_text
+        .get(word_end..left_pos)
+        .is_some_and(|gap| gap.chars().all(char::is_whitespace))
+      || !within_text_window(
+        full_text,
+        word_start,
+        start,
+        ADDRESS_CLUSTER_MAX_GAP,
+      )
+      || full_text
+        .get(word_start..left_pos)
+        .is_some_and(|slice| slice.contains(LINE_BREAKS))
+    {
+      break;
+    }
+    left_pos = word_start;
+  }
+  left_pos
+}
+
+/// What a comma-closed line may end in: a street name, or a house number with
+/// the street name on the same line before it ("Pikrtova 1737/1a,"); a bare
+/// number ("Tel. 601,") is no address.
+fn is_street_or_numbered_street(at: WordAt<'_>) -> bool {
+  let WordAt {
+    full_text,
+    word_start,
+    left_bound,
+    word,
+  } = at;
+  is_street_name_word(word)
+    || (is_house_number_word(word)
+      && word_before_for_address(full_text, word_start, left_bound)
+        .is_some_and(|(street_start, _, street)| {
+          is_street_name_word(street)
+            && !full_text
+              .get(street_start..word_start)
+              .is_some_and(|gap| gap.contains(LINE_BREAKS))
+        }))
+}
+
+/// A line closed by a comma goes on in the next one ("Školní,\n301 00 Plzeň"),
+/// so the word before that comma may join the address; a blank line may not.
+fn comma_closes_its_line(comma_gap: CommaGap<'_>) -> bool {
+  let CommaGap {
+    full_text,
+    word_end,
+    pos,
+  } = comma_gap;
+  full_text
+    .get(word_end..pos)
+    .and_then(|gap| gap.strip_prefix(','))
+    .is_some_and(|rest| rest.trim().is_empty() && !has_paragraph_break(rest))
 }
 
 /// A house number opens the address ("14 Rue de la Paix", "221B Baker
@@ -2230,7 +2369,11 @@ fn is_house_number_part(part: &str) -> bool {
 }
 
 fn is_street_name_word(word: &str) -> bool {
-  if word.chars().count() < 2 || !word.chars().all(char::is_alphabetic) {
+  if word.chars().count() < 2
+    || !word
+      .split(is_dash)
+      .all(|part| !part.is_empty() && part.chars().all(char::is_alphabetic))
+  {
     return false;
   }
   word.chars().next().is_some_and(char::is_uppercase)
@@ -2894,7 +3037,7 @@ fn has_paragraph_break(text: &str) -> bool {
       previous_was_carriage_return = false;
       continue;
     }
-    if matches!(ch, '\r' | '\n' | '\u{2028}') {
+    if matches!(ch, '\r' | '\n' | '\u{000b}' | '\u{0085}' | '\u{2028}') {
       line_breaks = line_breaks.saturating_add(1);
       if line_breaks >= 2 {
         return true;
@@ -3057,15 +3200,34 @@ fn expand_left(full_text: &str, start: usize, left_bound: usize) -> usize {
     else {
       break;
     };
+    // A gap the clustering would read as a distance gap ends the address.
     if word.len() < 2
       || !starts_uppercase_or_digit(word)
       || is_left_address_label(word)
+      || !within_text_window(
+        full_text,
+        word_end,
+        left_pos,
+        ADDRESS_CLUSTER_MAX_GAP,
+      )
     {
       break;
     }
     if full_text
       .get(word_start..left_pos)
-      .is_some_and(|slice| slice.contains('\n'))
+      .is_some_and(|slice| slice.contains(LINE_BREAKS))
+      && !(left_pos == start
+        && is_street_or_numbered_street(WordAt {
+          full_text,
+          word_start,
+          left_bound,
+          word,
+        })
+        && comma_closes_its_line(CommaGap {
+          full_text,
+          word_end,
+          pos: left_pos,
+        }))
     {
       break;
     }
@@ -3087,7 +3249,7 @@ fn word_before_for_address(
     let Some((prev_start, ch)) = previous_char(text, end) else {
       break;
     };
-    if ch == ' ' || ch == ',' {
+    if ch == ',' || ch.is_whitespace() {
       end = prev_start;
       continue;
     }
@@ -3279,7 +3441,15 @@ fn resolve_newline_boundary(
     }
   }
 
-  if (street_above && destination_below) || (street_below && destination_above)
+  // A street grown over the line its comma closes ("Školní,\n301 00 Plzeň")
+  // carries no seed of its own.
+  let street_line_above = street_above
+    || (!destination_above
+      && text
+        .get(..relative_newline)
+        .is_some_and(|above| above.trim_end().ends_with(',')));
+  if (street_line_above && destination_below)
+    || (street_below && destination_above)
   {
     return NewlineBoundaryResolution::Keep;
   }
