@@ -15,14 +15,14 @@ const byName = (left, right) => left.localeCompare(right);
 const expectedContract = {
   "python-wheel-aarch64-apple-darwin": ["macosx_11_0_arm64"],
   "python-wheel-aarch64-unknown-linux-gnu": [
-    "manylinux_2_17_aarch64",
     "manylinux2014_aarch64",
+    "manylinux_2_17_aarch64",
   ],
   "python-wheel-x86_64-apple-darwin": ["macosx_10_12_x86_64"],
   "python-wheel-x86_64-pc-windows-msvc": ["win_amd64"],
   "python-wheel-x86_64-unknown-linux-gnu": [
-    "manylinux_2_17_x86_64",
     "manylinux2014_x86_64",
+    "manylinux_2_17_x86_64",
   ],
 };
 
