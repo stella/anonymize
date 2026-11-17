@@ -11,9 +11,9 @@
 - [#619](https://github.com/stella/anonymize/pull/619) [`cc1a36d`](https://github.com/stella/anonymize/commit/cc1a36d94439ee9c0830116fb95344eaabeeb10d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Publish `DOCX_ANONYMIZATION_MAX_CALLER_DETECTIONS` with its `number` type instead of `any`.
 
 - [#645](https://github.com/stella/anonymize/pull/645) [`f0a7fa7`](https://github.com/stella/anonymize/commit/f0a7fa72f8db4f99c77494bae67523494b2e3531) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Validate rewrite plan values at untyped boundaries while preserving the existing replacement and location checks.
-  
+
   Preserve underlying native file errors and validate dynamically loaded filesystem bytes before preparing WASM pipeline packages.
-  
+
   Infer dictionary loader types, preserve CLI error causes, and validate PDF cleanup failures without unsafe exception annotations.
 
 - [#591](https://github.com/stella/anonymize/pull/591) [`80f90b3`](https://github.com/stella/anonymize/commit/80f90b3ebc4f0848cc3356a57e1d032719a8be09) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Validate native document operations and raster observations before consuming typed values.

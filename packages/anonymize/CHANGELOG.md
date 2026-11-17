@@ -11,9 +11,9 @@
 - [#645](https://github.com/stella/anonymize/pull/645) [`f0a7fa7`](https://github.com/stella/anonymize/commit/f0a7fa72f8db4f99c77494bae67523494b2e3531) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update text search to 2.0 (literal matches are selected globally across engine routes, with pattern index breaking equal-span ties), the PDF parser to lopdf 0.47, fancy-regex to 0.20, and the native binding, DOCX and MCP dependencies. The prepared text-search artifact format changed: prepared pipeline packages persisted with an earlier release fail to load and must be prepared again with this release. Empty literal patterns are skipped instead of failing the whole search index.
 
 - [#645](https://github.com/stella/anonymize/pull/645) [`f0a7fa7`](https://github.com/stella/anonymize/commit/f0a7fa72f8db4f99c77494bae67523494b2e3531) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Validate rewrite plan values at untyped boundaries while preserving the existing replacement and location checks.
-  
+
   Preserve underlying native file errors and validate dynamically loaded filesystem bytes before preparing WASM pipeline packages.
-  
+
   Infer dictionary loader types, preserve CLI error causes, and validate PDF cleanup failures without unsafe exception annotations.
 
 - [#592](https://github.com/stella/anonymize/pull/592) [`c3d40e1`](https://github.com/stella/anonymize/commit/c3d40e1d13ddea6586cd43491c694da648187d57) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Share Linux libc detection between the native SDK and build tooling, treating empty glibc version markers as musl.
