@@ -203,7 +203,19 @@ jobs:
           test ! -e packages/data/dist
           bun run --filter @stll/anonymize typecheck
       - name: Audit Bun dependencies
-        run: bun audit
+        # GHSA-fc5q-39xc-vjpf: picomatch <=4.0.7 backtracks on single-branch
+        # repeated extglobs. 4.0.7 is the latest release and no patched
+        # version exists. picomatch reaches the tree only through build and
+        # release tooling (tsdown and vite via tinyglobby, changesets, the
+        # shared lint config); no published package depends on it, and no
+        # code here matches untrusted glob patterns. The ignore lapses on
+        # 2026-12-17; take the patched release as soon as one is published.
+        run: |
+          ignore=()
+          if [[ "$(date -u +%F)" < "2026-12-17" ]]; then
+            ignore+=(--ignore=GHSA-fc5q-39xc-vjpf)
+          fi
+          bun audit "${ignore[@]}"
       - uses: ./.github/actions/setup-rust-ci
         with:
           profile: build
