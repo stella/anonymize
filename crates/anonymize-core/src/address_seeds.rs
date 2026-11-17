@@ -2067,7 +2067,8 @@ fn expand_bounded_street_left(args: BoundedStreetLeft<'_>) -> usize {
   {
     return start;
   }
-  if start.saturating_sub(first_end) > ADDRESS_CLUSTER_MAX_GAP {
+  if !within_text_window(full_text, first_start, start, ADDRESS_CLUSTER_MAX_GAP)
+  {
     return start;
   }
   let opens_address = is_house_number_word(first)
@@ -2086,6 +2087,12 @@ fn expand_bounded_street_left(args: BoundedStreetLeft<'_>) -> usize {
       break;
     };
     if !is_street_name_word(word)
+      || !within_text_window(
+        full_text,
+        word_start,
+        start,
+        ADDRESS_CLUSTER_MAX_GAP,
+      )
       || full_text
         .get(word_start..left_pos)
         .is_some_and(|slice| slice.contains(LINE_BREAKS))
@@ -3188,9 +3195,16 @@ fn expand_left(full_text: &str, start: usize, left_bound: usize) -> usize {
     else {
       break;
     };
+    // A gap the clustering would read as a distance gap ends the address.
     if word.len() < 2
       || !starts_uppercase_or_digit(word)
       || is_left_address_label(word)
+      || !within_text_window(
+        full_text,
+        word_end,
+        left_pos,
+        ADDRESS_CLUSTER_MAX_GAP,
+      )
     {
       break;
     }

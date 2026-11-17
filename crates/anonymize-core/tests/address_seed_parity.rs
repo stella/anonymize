@@ -595,6 +595,35 @@ fn a_distance_gap_is_not_bridged_by_the_street_walk() {
   assert_eq!(address_texts(&result), ["Paris 75001", "Paris 75002"]);
 }
 
+/// A long gap anywhere in the left walk ends it, not only one right before
+/// the cluster: a span that bridged it would outgrow the address limit and
+/// lose the destination as well.
+#[test]
+fn the_street_walk_stays_within_the_text_window() {
+  let prepared = barrier_address_engine();
+  let spaces = " ".repeat(279);
+  for (text, addresses) in [
+    (
+      format!("Paris 75001. It moved to Pikrtova{spaces}1737/1a, Paris 75002."),
+      vec!["Paris 75001", "1737/1a, Paris 75002"],
+    ),
+    (
+      format!("Pikrtova{spaces}1737/1a,\nParis 75001."),
+      vec!["1737/1a, Paris 75001"],
+    ),
+    (
+      format!("Pikrtova{spaces}1737/1a, Paris 75001."),
+      vec!["1737/1a, Paris 75001"],
+    ),
+  ] {
+    let result = prepared
+      .redact_static_entities(&text, &OperatorConfig::default())
+      .expect("static redaction should succeed");
+
+    assert_eq!(address_texts(&result), addresses, "{text:?}");
+  }
+}
+
 #[test]
 fn a_blank_line_of_any_kind_stops_the_street_before_a_comma() {
   let prepared = barrier_address_engine();
