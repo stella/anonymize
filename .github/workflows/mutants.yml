@@ -36,7 +36,7 @@ jobs:
         # nextest is the test runner used by cargo-mutants. taiki-e/install-action
         # verifies release checksums, unlike a raw `curl | tar`. Version-pinned
         # for reproducibility, matching the exact-version pins above.
-        uses: taiki-e/install-action@68a389c788b2cd04016ce8c80ee23b80d2ab3d68 # v2.88.1
+        uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
         with:
           tool: nextest@0.9.148,cargo-mutants@27.1.0
 
