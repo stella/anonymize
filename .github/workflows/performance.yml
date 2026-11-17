@@ -44,7 +44,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@3e9057a176377ddfa34d7897025934d1feb7ce9f
+        uses: stella/.github/actions/setup-bun-cached@156afa9596e6a469c10e329f459168d34a00e0fd
         with:
           bun-version-file: "package.json"
 
