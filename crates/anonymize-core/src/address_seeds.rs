@@ -2081,12 +2081,17 @@ fn expand_bounded_street_left(args: BoundedStreetLeft<'_>) -> usize {
   }
   let mut left_pos = first_start;
   for _ in 0..STANDALONE_STREET_MAX_TAIL_WORDS {
-    let Some((word_start, _, word)) =
+    let Some((word_start, word_end, word)) =
       word_before_for_address(full_text, left_pos, left_bound)
     else {
       break;
     };
+    // A comma before a street word closes what came earlier ("Reception,
+    // Školní, ..."); the street name itself runs on over whitespace only.
     if !is_street_name_word(word)
+      || !full_text
+        .get(word_end..left_pos)
+        .is_some_and(|gap| gap.chars().all(char::is_whitespace))
       || !within_text_window(
         full_text,
         word_start,

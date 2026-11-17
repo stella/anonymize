@@ -595,6 +595,33 @@ fn a_distance_gap_is_not_bridged_by_the_street_walk() {
   assert_eq!(address_texts(&result), ["Paris 75001", "Paris 75002"]);
 }
 
+/// A comma before a street word closes whatever came earlier: the street
+/// name runs on only over whitespace, so a word ending in a comma stays out.
+#[test]
+fn a_comma_before_the_street_ends_a_later_address() {
+  let prepared = barrier_address_engine();
+  for (text, later) in [
+    (
+      "Paris 75001. It moved to Reception, Školní, Paris 75002.",
+      "Školní, Paris 75002",
+    ),
+    (
+      "Paris 75001. It moved to Reception, Pikrtova 1737/1a, Paris 75002.",
+      "Pikrtova 1737/1a, Paris 75002",
+    ),
+    (
+      "Paris 75001. It moved to Reception, Rue Lepic, Paris 75002.",
+      "Rue Lepic, Paris 75002",
+    ),
+  ] {
+    let result = prepared
+      .redact_static_entities(text, &OperatorConfig::default())
+      .expect("static redaction should succeed");
+
+    assert_eq!(address_texts(&result), ["Paris 75001", later], "{text:?}");
+  }
+}
+
 /// A long gap anywhere in the left walk ends it, not only one right before
 /// the cluster: a span that bridged it would outgrow the address limit and
 /// lose the destination as well.
