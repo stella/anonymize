@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, rename, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { isUint8Array } from "node:util/types";
 
 import { parseVerifiedArtifact } from "../verified-artifact";
 
@@ -221,9 +222,14 @@ const readBoundedResponse = async (response: Response): Promise<Uint8Array> => {
   const reader = response.body.getReader();
   let length = 0;
   while (true) {
-    const { done, value } = await reader.read();
-    if (done) {
+    const result = await reader.read();
+    if (result.done) {
       break;
+    }
+    const value: unknown = result.value;
+    if (!isUint8Array(value)) {
+      await reader.cancel();
+      throw new Error("TAB download returned a non-byte response chunk");
     }
     length += value.byteLength;
     if (length > TAB_MAX_BYTES) {

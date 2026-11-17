@@ -581,6 +581,9 @@ const utf8ByteLengthWithin = (
   return bytes;
 };
 
+const isArray = (value: unknown): value is readonly unknown[] =>
+  Array.isArray(value);
+
 const validateCallerDetectionInput = (
   fullText: string,
   detections: readonly NativeCallerDetection[],
@@ -806,7 +809,7 @@ const serializeCallerDetectionRequest = (
 const toBindingSessionCallerInputs = (
   inputs: readonly NativeSessionCallerRedactionInput[],
 ) => {
-  if (!Array.isArray(inputs)) {
+  if (!isArray(inputs)) {
     throw new TypeError("Session caller inputs must be an array");
   }
   if (inputs.length > SESSION_CALLER_MAX_INPUTS) {

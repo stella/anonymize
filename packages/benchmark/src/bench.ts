@@ -202,7 +202,7 @@ const run = async (): Promise<void> => {
       continue;
     }
 
-    const supported = [...supportedLabels(mapping)].sort() as CommonLabel[];
+    const supported = [...supportedLabels(mapping)].sort();
     const supportedSet = new Set<CommonLabel>(supported);
     const predictions: ReadonlyMap<string, readonly NativePrediction[]> =
       outcome.predictions;

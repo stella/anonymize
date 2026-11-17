@@ -38,7 +38,7 @@ jobs:
         # for reproducibility, matching the exact-version pins above.
         uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
         with:
-          tool: nextest@0.9.148,cargo-mutants@27.1.0
+          tool: nextest@0.9.151,cargo-mutants@27.1.0
 
       - name: Cache Rust build
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0

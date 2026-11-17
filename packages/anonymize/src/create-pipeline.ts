@@ -67,17 +67,17 @@ const loadSemanticDictionaries = (
   }
   // Keep dictionary chunks out of the default-package import path. Bundlers
   // load only the chunks needed to assemble an unbundled semantic scope.
-  let dictionaries: Promise<Dictionaries>;
-  dictionaries = import("@stll/anonymize-data/cities")
-    .then(({ loadDictionaryBundle }: AnonymizeDataModule) =>
-      loadDictionaryBundle(defaultDictionaryBundleOptions(config)),
-    )
-    .catch((error: unknown) => {
-      if (dictionaryCache.get(key) === dictionaries) {
-        dictionaryCache.delete(key);
-      }
-      throw error;
-    });
+  const dictionaries: Promise<Dictionaries> =
+    import("@stll/anonymize-data/cities")
+      .then(({ loadDictionaryBundle }: AnonymizeDataModule) =>
+        loadDictionaryBundle(defaultDictionaryBundleOptions(config)),
+      )
+      .catch((error: unknown) => {
+        if (dictionaryCache.get(key) === dictionaries) {
+          dictionaryCache.delete(key);
+        }
+        throw error;
+      });
   setCachedEntry(dictionaryCache, key, dictionaries);
   return dictionaries;
 };
@@ -125,8 +125,10 @@ export const createSemanticPipeline = ({
     return cached;
   }
   const config = pipelineConfigFor(selection);
-  let pipeline: Promise<PreparedNativePipeline>;
-  pipeline = loadSemanticDictionaries(key, config)
+  const pipeline: Promise<PreparedNativePipeline> = loadSemanticDictionaries(
+    key,
+    config,
+  )
     .then((dictionaries) =>
       createNativePipelineFromConfig({
         binding,

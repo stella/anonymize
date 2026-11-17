@@ -30,7 +30,7 @@ export const parsePiiShieldEntities = (
   ) {
     throw new Error(`PII-Shield returned malformed output for ${documentId}`);
   }
-  return value.entities.map((item) => {
+  return value.entities.map((item: unknown) => {
     if (
       item === null ||
       typeof item !== "object" ||

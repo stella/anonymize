@@ -119,7 +119,7 @@ describe("ExternalDetectionBatch v1", () => {
 
   test("rejects an injected binding with a missing parity member", async () => {
     const staleBinding = new Proxy(binding, {
-      get: (target, property, receiver) =>
+      get: (target, property, receiver): unknown =>
         property === "convertExternalDetectionBatch"
           ? undefined
           : Reflect.get(target, property, receiver),
