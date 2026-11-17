@@ -298,14 +298,29 @@ const isMissingFileError = (error: unknown): boolean =>
   "code" in error &&
   error.code === "ENOENT";
 
+const isFileReader = (value: unknown): value is (url: URL) => unknown =>
+  typeof value === "function";
+
 /** Read a `file:` URL through node:fs. The import is dynamic and gated behind
  * the `file:` check (never reached in browsers); the specifier is a runtime
  * value so the bundler leaves it alone, mirroring the runtime glue import in
  * {@link loadWasmBinding}, so browser bundles never pull in node:fs. */
 const readFileUrlBytes = async (fileUrl: string): Promise<Uint8Array> => {
   // oxlint-disable-next-line stll/no-dynamic-import-specifier -- Resolve verified emitted assets at runtime.
-  const { readFile } = await import(/* @vite-ignore */ NODE_FS_MODULE);
-  return new Uint8Array(await readFile(new URL(fileUrl)));
+  const module: unknown = await import(/* @vite-ignore */ NODE_FS_MODULE);
+  if (
+    typeof module !== "object" ||
+    module === null ||
+    !("readFile" in module) ||
+    !isFileReader(module.readFile)
+  ) {
+    throw new TypeError("Node filesystem module does not expose readFile");
+  }
+  const bytes: unknown = await module.readFile(new URL(fileUrl));
+  if (!(bytes instanceof Uint8Array)) {
+    throw new TypeError("Node filesystem readFile did not return bytes");
+  }
+  return new Uint8Array(bytes);
 };
 
 // --- Prepared-package loaders (the primary browser flow) ---------------------
@@ -428,7 +443,11 @@ export const getDefaultPipeline = (
     // rejection like the rest of this async surface, not a synchronous throw
     // (this function isn't declared `async`, so an uncaught throw here would
     // escape synchronously instead of rejecting the returned promise).
-    return Promise.reject(error);
+    return Promise.reject(
+      error instanceof Error
+        ? error
+        : new Error("Pipeline language validation failed", { cause: error }),
+    );
   }
   const cached = defaultPipelineCache.get(key);
   if (cached !== undefined) {

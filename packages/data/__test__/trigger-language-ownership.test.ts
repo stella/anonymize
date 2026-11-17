@@ -7,6 +7,9 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const CONFIG_DIR = join(__dirname, "..", "config");
 const TRIGGER_CONFIG_RE = /^triggers\.(.+)\.json$/;
 
+const isArray = (value: unknown): value is readonly unknown[] =>
+  Array.isArray(value);
+
 const phraseOwners = new Map<string, string[]>();
 
 for (const fileName of readdirSync(CONFIG_DIR).sort()) {
@@ -19,7 +22,7 @@ for (const fileName of readdirSync(CONFIG_DIR).sort()) {
   const groups: unknown = JSON.parse(
     readFileSync(join(CONFIG_DIR, fileName), "utf-8"),
   );
-  if (!Array.isArray(groups)) {
+  if (!isArray(groups)) {
     throw new TypeError(`${fileName} must contain an array`);
   }
 
@@ -28,7 +31,7 @@ for (const fileName of readdirSync(CONFIG_DIR).sort()) {
       typeof group !== "object" ||
       group === null ||
       !("triggers" in group) ||
-      !Array.isArray(group.triggers)
+      !isArray(group.triggers)
     ) {
       throw new TypeError(`${fileName} contains a group without triggers`);
     }

@@ -38,13 +38,13 @@ describe("pipeline language selection", () => {
   });
 
   test("rejects empty and unsupported language selections", () => {
-    expect(() =>
+    expect((): unknown =>
       Reflect.apply(normalizePipelineLanguageSelection, undefined, [[]]),
     ).toThrow("must not be empty");
-    expect(() =>
+    expect((): unknown =>
       Reflect.apply(normalizePipelineLanguageSelection, undefined, ["nl"]),
     ).toThrow("Unsupported pipeline language");
-    expect(() =>
+    expect((): unknown =>
       Reflect.apply(normalizePipelineLanguageSelection, undefined, [
         "toString",
       ]),

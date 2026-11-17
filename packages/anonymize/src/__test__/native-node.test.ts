@@ -823,7 +823,7 @@ describe("native node loader", () => {
   test("rejects unknown default native pipeline warmup modes", () => {
     const binding = fakeNativeBinding(PACKAGE_VERSION);
 
-    expect(() =>
+    expect((): unknown =>
       Reflect.apply(getDefaultNativePipeline, undefined, [
         {
           binding,
@@ -1001,7 +1001,9 @@ describe("native node loader", () => {
         observedAtEpochSeconds: 150,
       }).redaction.redactedText,
     ).toBe("");
-    expect(JSON.parse(lifecycle.toPlaintextJsonAt(150)).schema_version).toBe(2);
+    expect(JSON.parse(lifecycle.toPlaintextJsonAt(150))).toMatchObject({
+      schema_version: 2,
+    });
     expect(lifecycle.delete()).toEqual({
       sessionId: "case_2",
       deletedMappingCount: 0,

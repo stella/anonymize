@@ -1266,6 +1266,33 @@ mod tests {
   }
 
   #[test]
+  fn compact_package_keeps_literal_lists_with_empty_entries() {
+    let mut binding = package_test_config();
+    let mut empty = binding.literal_patterns.first().cloned().unwrap();
+    empty.pattern = String::new();
+    binding.literal_patterns.insert(0, empty);
+    let config = prepared_search_config_from_binding(binding).unwrap();
+    let artifact_bytes = PreparedEngineArtifacts::default().to_bytes().unwrap();
+
+    let bytes = prepared_search_core_package_to_compressed_bytes(
+      &config,
+      &artifact_bytes,
+    )
+    .unwrap();
+    let decoded =
+      prepared_search_core_package_decode_from_bytes_with_timings(&bytes)
+        .unwrap();
+
+    // The empty literal is skipped when the index is built, so the artifact's
+    // pattern indexes are not identity-mapped; the list must survive so the
+    // reloaded index can restore the original indexes.
+    assert_eq!(
+      decoded.config.search.literal_patterns,
+      config.search.literal_patterns
+    );
+  }
+
+  #[test]
   fn prepared_search_core_compressed_package_decodes_config_and_artifacts() {
     let config =
       prepared_search_config_from_binding(package_test_config()).unwrap();

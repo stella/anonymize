@@ -32,6 +32,20 @@ pub enum SearchPattern {
   },
 }
 
+impl SearchPattern {
+  /// A literal that matches nothing; the literal engine rejects these.
+  const fn is_empty_literal(&self) -> bool {
+    match self {
+      Self::Literal(pattern) | Self::LiteralWithOptions { pattern, .. } => {
+        pattern.is_empty()
+      }
+      Self::Regex(_) | Self::RegexWithOptions { .. } | Self::Fuzzy { .. } => {
+        false
+      }
+    }
+  }
+}
+
 #[derive(
   bon::Builder,
   Clone,
@@ -591,6 +605,12 @@ fn partition_patterns(
 
   for (index, entry) in patterns.into_iter().enumerate() {
     let pattern_index = pattern_index(index)?;
+    // An empty literal cannot mark any text and the literal engine rejects
+    // it, which would fail the whole index. Skip it here; every remaining
+    // pattern keeps its original index through the per-engine index lists.
+    if entry.is_empty_literal() {
+      continue;
+    }
     match entry {
       SearchPattern::Literal(pattern) => {
         literals.push(text_search::PatternEntry::Auto(pattern));
@@ -1058,7 +1078,51 @@ impl PatternRemap {
 
 #[cfg(test)]
 mod tests {
-  use super::PatternRemap;
+  use super::{PatternRemap, SearchIndex, SearchOptions, SearchPattern};
+  use crate::types::SearchMatch;
+
+  #[test]
+  #[allow(clippy::expect_used)]
+  fn empty_literals_are_skipped_without_shifting_pattern_indexes() {
+    let index = SearchIndex::new(
+      vec![
+        SearchPattern::Literal(String::new()),
+        SearchPattern::Literal("Acme".to_owned()),
+        SearchPattern::LiteralWithOptions {
+          pattern: String::new(),
+          case_insensitive: Some(true),
+          whole_words: Some(true),
+        },
+        SearchPattern::LiteralWithOptions {
+          pattern: "Prague".to_owned(),
+          case_insensitive: Some(true),
+          whole_words: Some(true),
+        },
+      ],
+      SearchOptions::default(),
+    )
+    .expect("empty literals must not fail the index");
+
+    let matches = index
+      .find_iter("Acme moved to prague.")
+      .expect("search succeeds");
+
+    assert_eq!(
+      matches,
+      vec![
+        SearchMatch::Literal {
+          pattern: 1,
+          start: 0,
+          end: 4,
+        },
+        SearchMatch::Literal {
+          pattern: 3,
+          start: 14,
+          end: 20,
+        },
+      ]
+    );
+  }
 
   #[test]
   fn pattern_remap_uses_identity_for_contiguous_indexes() {

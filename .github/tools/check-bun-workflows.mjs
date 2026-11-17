@@ -10,9 +10,6 @@ const BUN_VERSION_FILE_RE =
   /^\s*bun-version-file\s*:\s*["']?package\.json["']?\s*$/;
 const SETUP_BUN_RE =
   /^(?:oven-sh\/setup-bun|stella\/\.github\/actions\/setup-bun-cached)@/;
-const RAW_BUN_RE = /^oven-sh\/setup-bun@/;
-const CACHED_BUN_RE = /^stella\/\.github\/actions\/setup-bun-cached@/;
-const TURBO_CACHE_RE = /^rharkor\/caching-for-turbo@/;
 /** @param {string} line */
 const isConfigLine = (line) => !line.trimStart().startsWith("#");
 
@@ -103,7 +100,7 @@ const hasPublishToken = (workflow, job) => {
       (key) =>
         permissions[key] === "write" ||
         (typeof permissions[key] === "string" &&
-          permissions[key].includes("$" + "{{")),
+          permissions[key].includes("${{")),
     )
   );
 };
@@ -198,7 +195,7 @@ export const bunCacheProblems = (workflow) => {
         );
       }
       if (
-        RAW_BUN_RE.test(uses) &&
+        uses.startsWith("oven-sh/setup-bun@") &&
         !publishing.has(name) &&
         inputs["no-cache"] !== true
       ) {
@@ -208,11 +205,15 @@ export const bunCacheProblems = (workflow) => {
       }
       if (
         noCache &&
-        (CACHED_BUN_RE.test(uses) || /^actions\/cache(?:\/[^@]+)?@/.test(uses))
+        (uses.startsWith("stella/.github/actions/setup-bun-cached@") ||
+          /^actions\/cache(?:\/[^@]+)?@/.test(uses))
       ) {
         problems.push(`${name}: ${uses} is not eligible in a no-cache job`);
       }
-      if (TURBO_CACHE_RE.test(uses) && inputs["server-port"] !== "0") {
+      if (
+        uses.startsWith("rharkor/caching-for-turbo@") &&
+        inputs["server-port"] !== "0"
+      ) {
         problems.push(`${name}: ${uses} must set server-port: "0"`);
       }
       return problems;

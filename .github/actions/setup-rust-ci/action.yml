@@ -54,14 +54,14 @@ runs:
           target/
           fuzz/target/
           packages/benchmark/native/nym-adapter/target/
-        key: ${{ runner.os }}-cargo-${{ inputs.cache-scope }}-1.99.1-source-lint-a1bd81740ecb4b66999f56d1716e1190c4e7272f-${{ hashFiles('Cargo.lock', 'fuzz/Cargo.lock', 'packages/benchmark/native/nym-adapter/Cargo.lock') }}
+        key: ${{ runner.os }}-cargo-${{ inputs.cache-scope }}-1.99.1-source-lint-51a4412dfe02203c24a3495f14ec99405acb7527-${{ hashFiles('Cargo.lock', 'fuzz/Cargo.lock', 'packages/benchmark/native/nym-adapter/Cargo.lock') }}
         restore-keys: |
-          ${{ runner.os }}-cargo-${{ inputs.cache-scope }}-1.99.1-source-lint-a1bd81740ecb4b66999f56d1716e1190c4e7272f-
+          ${{ runner.os }}-cargo-${{ inputs.cache-scope }}-1.99.1-source-lint-51a4412dfe02203c24a3495f14ec99405acb7527-
 
     - if: inputs.profile == 'quality'
       name: Install stable Rust source lint
       shell: bash
-      run: cargo install --git https://github.com/stella/tooling --rev a1bd81740ecb4b66999f56d1716e1190c4e7272f --locked stella_source_lint
+      run: cargo install --git https://github.com/stella/tooling --rev 51a4412dfe02203c24a3495f14ec99405acb7527 --locked stella_source_lint
 
     - if: inputs.profile == 'quality'
       uses: stella/.github/actions/setup-bun-cached@3e9057a176377ddfa34d7897025934d1feb7ce9f
@@ -70,12 +70,12 @@ runs:
 
     - if: inputs.profile == 'quality'
       name: Install pinned Rust quality tools
-      uses: taiki-e/install-action@5488ac5a951645ce95062214902ac4b6bc1a1037 # v2.87.32
+      uses: taiki-e/install-action@b80e2bb2635f28eb98b9fce1e2f0887e1535c6b2 # v2.90.0
       with:
-        tool: nextest@0.9.148,cargo-deny@0.20.2,cargo-insta@1.49.0
+        tool: nextest@0.9.151,cargo-deny@0.20.2,cargo-insta@1.49.0
 
     - if: inputs.profile == 'detached'
       name: Install pinned cargo-deny
-      uses: taiki-e/install-action@5488ac5a951645ce95062214902ac4b6bc1a1037 # v2.87.32
+      uses: taiki-e/install-action@b80e2bb2635f28eb98b9fce1e2f0887e1535c6b2 # v2.90.0
       with:
         tool: cargo-deny@0.20.2
