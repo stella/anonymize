@@ -1511,7 +1511,7 @@ dependencies = [
 
 [[package]]
 name = "stella-anonymize-adapter-contract"
-version = "3.0.7"
+version = "4.0.0"
 dependencies = [
  "blake3",
  "lz4_flex",
@@ -1526,7 +1526,7 @@ dependencies = [
 
 [[package]]
 name = "stella-anonymize-binding-core"
-version = "3.0.7"
+version = "4.0.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -1537,7 +1537,7 @@ dependencies = [
 
 [[package]]
 name = "stella-anonymize-core"
-version = "3.0.7"
+version = "4.0.0"
 dependencies = [
  "bon",
  "chacha20poly1305",
@@ -1562,7 +1562,7 @@ dependencies = [
 
 [[package]]
 name = "stella-anonymize-docx-core"
-version = "3.0.7"
+version = "4.0.0"
 dependencies = [
  "percent-encoding",
  "roxmltree",
@@ -1575,7 +1575,7 @@ dependencies = [
 
 [[package]]
 name = "stella-anonymize-napi"
-version = "3.0.7"
+version = "4.0.0"
 dependencies = [
  "blake3",
  "napi",
@@ -1591,7 +1591,7 @@ dependencies = [
 
 [[package]]
 name = "stella-anonymize-pdf-core"
-version = "3.0.7"
+version = "4.0.0"
 dependencies = [
  "lopdf",
  "num-traits",
@@ -1603,7 +1603,7 @@ dependencies = [
 
 [[package]]
 name = "stella-anonymize-py"
-version = "3.0.7"
+version = "4.0.0"
 dependencies = [
  "pyo3",
  "pyo3-build-config",
@@ -1618,7 +1618,7 @@ dependencies = [
 
 [[package]]
 name = "stella-anonymize-wasm"
-version = "3.0.7"
+version = "4.0.0"
 dependencies = [
  "js-sys",
  "serde",
@@ -1633,7 +1633,7 @@ dependencies = [
 
 [[package]]
 name = "stella-document-rules-core"
-version = "3.0.7"
+version = "4.0.0"
 dependencies = [
  "proptest",
  "salsa",

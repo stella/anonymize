@@ -1,5 +1,25 @@
 # @stll/anonymize-docx
 
+## 4.0.0
+
+### Patch Changes
+
+- [#625](https://github.com/stella/anonymize/pull/625) [`15d188a`](https://github.com/stella/anonymize/commit/15d188aef5059624845aed5ab64f1da21f9e5631) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update native matching, document processing, compression, binding, and MCP dependencies.
+
+- [#645](https://github.com/stella/anonymize/pull/645) [`f0a7fa7`](https://github.com/stella/anonymize/commit/f0a7fa72f8db4f99c77494bae67523494b2e3531) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update text search to 2.0 (literal matches are selected globally across engine routes, with pattern index breaking equal-span ties), the PDF parser to lopdf 0.47, fancy-regex to 0.20, and the native binding, DOCX and MCP dependencies. The prepared text-search artifact format changed: prepared pipeline packages persisted with an earlier release fail to load and must be prepared again with this release. Empty literal patterns are skipped instead of failing the whole search index.
+
+- [#619](https://github.com/stella/anonymize/pull/619) [`cc1a36d`](https://github.com/stella/anonymize/commit/cc1a36d94439ee9c0830116fb95344eaabeeb10d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Publish `DOCX_ANONYMIZATION_MAX_CALLER_DETECTIONS` with its `number` type instead of `any`.
+
+- [#645](https://github.com/stella/anonymize/pull/645) [`f0a7fa7`](https://github.com/stella/anonymize/commit/f0a7fa72f8db4f99c77494bae67523494b2e3531) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Validate rewrite plan values at untyped boundaries while preserving the existing replacement and location checks.
+  
+  Preserve underlying native file errors and validate dynamically loaded filesystem bytes before preparing WASM pipeline packages.
+  
+  Infer dictionary loader types, preserve CLI error causes, and validate PDF cleanup failures without unsafe exception annotations.
+
+- [#591](https://github.com/stella/anonymize/pull/591) [`80f90b3`](https://github.com/stella/anonymize/commit/80f90b3ebc4f0848cc3356a57e1d032719a8be09) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Validate native document operations and raster observations before consuming typed values.
+- Updated dependencies [[`faad2a2`](https://github.com/stella/anonymize/commit/faad2a202c57ba1002d05757c727ff9733f682e3), [`15d188a`](https://github.com/stella/anonymize/commit/15d188aef5059624845aed5ab64f1da21f9e5631), [`f0a7fa7`](https://github.com/stella/anonymize/commit/f0a7fa72f8db4f99c77494bae67523494b2e3531), [`f0a7fa7`](https://github.com/stella/anonymize/commit/f0a7fa72f8db4f99c77494bae67523494b2e3531), [`c3d40e1`](https://github.com/stella/anonymize/commit/c3d40e1d13ddea6586cd43491c694da648187d57), [`80f90b3`](https://github.com/stella/anonymize/commit/80f90b3ebc4f0848cc3356a57e1d032719a8be09), [`470a2ae`](https://github.com/stella/anonymize/commit/470a2ae238c0ab2b0db3b90285eddd2bc672d865)]:
+  - @stll/anonymize@4.0.0
+
 ## 3.0.7
 
 ### Patch Changes

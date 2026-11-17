@@ -1,5 +1,27 @@
 # Changelog
 
+## 4.0.0
+
+### Patch Changes
+
+- [#648](https://github.com/stella/anonymize/pull/648) [`faad2a2`](https://github.com/stella/anonymize/commit/faad2a202c57ba1002d05757c727ff9733f682e3) Thanks [@ItsEmilyJpg](https://github.com/ItsEmilyJpg)! - Keep the street of an address that follows prose or another address when it is written before the house number or before a comma, and when a tab, a non-breaking space or a line break follows that comma.
+
+- [#625](https://github.com/stella/anonymize/pull/625) [`15d188a`](https://github.com/stella/anonymize/commit/15d188aef5059624845aed5ab64f1da21f9e5631) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update native matching, document processing, compression, binding, and MCP dependencies.
+
+- [#645](https://github.com/stella/anonymize/pull/645) [`f0a7fa7`](https://github.com/stella/anonymize/commit/f0a7fa72f8db4f99c77494bae67523494b2e3531) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update text search to 2.0 (literal matches are selected globally across engine routes, with pattern index breaking equal-span ties), the PDF parser to lopdf 0.47, fancy-regex to 0.20, and the native binding, DOCX and MCP dependencies. The prepared text-search artifact format changed: prepared pipeline packages persisted with an earlier release fail to load and must be prepared again with this release. Empty literal patterns are skipped instead of failing the whole search index.
+
+- [#645](https://github.com/stella/anonymize/pull/645) [`f0a7fa7`](https://github.com/stella/anonymize/commit/f0a7fa72f8db4f99c77494bae67523494b2e3531) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Validate rewrite plan values at untyped boundaries while preserving the existing replacement and location checks.
+  
+  Preserve underlying native file errors and validate dynamically loaded filesystem bytes before preparing WASM pipeline packages.
+  
+  Infer dictionary loader types, preserve CLI error causes, and validate PDF cleanup failures without unsafe exception annotations.
+
+- [#592](https://github.com/stella/anonymize/pull/592) [`c3d40e1`](https://github.com/stella/anonymize/commit/c3d40e1d13ddea6586cd43491c694da648187d57) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Share Linux libc detection between the native SDK and build tooling, treating empty glibc version markers as musl.
+
+- [#591](https://github.com/stella/anonymize/pull/591) [`80f90b3`](https://github.com/stella/anonymize/commit/80f90b3ebc4f0848cc3356a57e1d032719a8be09) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Validate native and WebAssembly JSON response shapes before exposing typed SDK values.
+
+- [#583](https://github.com/stella/anonymize/pull/583) [`470a2ae`](https://github.com/stella/anonymize/commit/470a2ae238c0ab2b0db3b90285eddd2bc672d865) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Build native and WebAssembly runtimes with Rust 1.99.0 and update adapter and PDF iteration for its stable lint rules.
+
 ## 3.0.7
 
 No changes in this release.
