@@ -1,3 +1,4 @@
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import {
   chmod,
@@ -11,12 +12,10 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-
 import { inspectPdf, PDF_DOCUMENT_MAX_BYTES } from "@stll/anonymize-pdf";
 
 import { UsageError } from "../args";
-import { runPdfCommand, type PdfCliPipeline } from "../pdf";
+import { type PdfCliPipeline, runPdfCommand } from "../pdf";
 
 const rejectionOf = async (promise: Promise<unknown>) => {
   try {

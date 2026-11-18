@@ -3,9 +3,9 @@ import { strToU8, unzipSync, zipSync } from "fflate";
 
 import {
   DocxRestorationError,
+  type DocxRestorationSession,
   extractDocxText,
   restoreDocxText,
-  type DocxRestorationSession,
 } from "../index";
 
 const CONTENT_TYPES_NAMESPACE =

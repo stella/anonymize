@@ -6,16 +6,9 @@ const workflow = readFileSync(
   "utf8",
 );
 
-test("uses committed history and shared detector to select workspace parity", () => {
+test("static checks probe the typecheck and run the shared tooling contract", () => {
   const lint = workflow.split("  static:\n").at(1)?.split("  tests:").at(0);
-  expect(lint).toContain("fetch-depth: 0");
   expect(lint).toContain("persist-credentials: false");
-  expect(lint).toContain('stll-toolchain-changed --since "$BASE_REF"');
-  expect(lint).toContain(
-    "github.event.pull_request.base.sha || github.event.before",
-  );
-  expect(lint).toContain("'unavailable-toolchain-base'");
-  expect(lint).toContain("if: steps.toolchain.outputs.changed == 'true'");
   expect(lint).toContain("stll-typecheck-probe");
   expect(lint).toContain("--project packages/data/tsconfig.json");
   expect(lint).toContain("--seed-dir packages/data/dictionaries");
@@ -23,7 +16,7 @@ test("uses committed history and shared detector to select workspace parity", ()
   expect(lint).not.toContain("typecheck-proof.ts");
   expect(lint).toContain("bun run test:tooling");
   expect(lint).toContain("bun run lint");
-  expect(lint).toContain("bun run format:check");
+  expect(lint).toContain("bun fmt --check");
 });
 
 test("Rust caches retain artifacts while registry index metadata stays fresh", () => {

@@ -18,7 +18,7 @@ export type SupportedLanguage =
 const isSupportedLanguage = (language: string): language is SupportedLanguage =>
   Object.hasOwn(languageScopes.languages, language);
 
-export const SUPPORTED_LANGUAGES = Object.freeze(
+export const SUPPORTED_LANGUAGES: readonly SupportedLanguage[] = Object.freeze(
   Object.keys(languageScopes.languages).filter(isSupportedLanguage).toSorted(),
 );
 

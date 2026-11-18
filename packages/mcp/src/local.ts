@@ -1,42 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import {
-  CAPABILITY_MANIFEST,
-  type NativeCallerDetection,
-  type NativeTextReplacement,
-  type PreparedNativePipeline,
-} from "@stll/anonymize";
-import {
-  AnonymizeSurfaceError,
-  classifyToEnvelope,
-  type AnonymizeErrorCode,
-  type AnonymizeErrorEnvelope,
-} from "@stll/anonymize/agent-surface";
-import {
-  FEEDBACK_KINDS,
-  MAX_FEEDBACK_BODY_CHARS,
-  MAX_FEEDBACK_TITLE_CHARS,
-  buildFeedbackSubmission,
-} from "@stll/anonymize/feedback";
-import {
-  DOCX_ARCHIVE_MAX_BYTES,
-  DOCX_ANONYMIZATION_ERROR_CODES,
-  DOCX_COVERAGE_MODES,
-  DocxAnonymizationError,
-  anonymizeDocx,
-  extractDocxText,
-  restoreDocxText,
-  type DocxAnonymizationSession,
-  type DocxRestorationSession,
-} from "@stll/anonymize-docx";
-import {
-  PDF_DOCUMENT_MAX_BYTES,
-  PDF_LOCAL_PROVIDER_ERROR_CODES,
-  PdfLocalProviderError,
-  anonymizePdfRaster,
-  renderPdfWithPopplerTesseract,
-} from "@stll/anonymize-pdf";
-import * as nativeNode from "@stll/anonymize/native-node";
+import { randomUUID } from "node:crypto";
 import {
   constants as fsConstants,
   link,
@@ -46,7 +10,6 @@ import {
   stat,
   unlink,
 } from "node:fs/promises";
-import { randomUUID } from "node:crypto";
 import {
   dirname,
   extname,
@@ -57,8 +20,45 @@ import {
 } from "node:path";
 import * as z from "zod/v4";
 
-import pkg from "../package.json" with { type: "json" };
+import {
+  CAPABILITY_MANIFEST,
+  type NativeCallerDetection,
+  type NativeTextReplacement,
+  type PreparedNativePipeline,
+} from "@stll/anonymize";
+import {
+  anonymizeDocx,
+  DOCX_ANONYMIZATION_ERROR_CODES,
+  DOCX_ARCHIVE_MAX_BYTES,
+  DOCX_COVERAGE_MODES,
+  DocxAnonymizationError,
+  type DocxAnonymizationSession,
+  type DocxRestorationSession,
+  extractDocxText,
+  restoreDocxText,
+} from "@stll/anonymize-docx";
+import {
+  anonymizePdfRaster,
+  PDF_DOCUMENT_MAX_BYTES,
+  PDF_LOCAL_PROVIDER_ERROR_CODES,
+  PdfLocalProviderError,
+  renderPdfWithPopplerTesseract,
+} from "@stll/anonymize-pdf";
+import {
+  type AnonymizeErrorCode,
+  type AnonymizeErrorEnvelope,
+  AnonymizeSurfaceError,
+  classifyToEnvelope,
+} from "@stll/anonymize/agent-surface";
+import {
+  buildFeedbackSubmission,
+  FEEDBACK_KINDS,
+  MAX_FEEDBACK_BODY_CHARS,
+  MAX_FEEDBACK_TITLE_CHARS,
+} from "@stll/anonymize/feedback";
+import * as nativeNode from "@stll/anonymize/native-node";
 
+import pkg from "../package.json" with { type: "json" };
 import { DurableSessionStore } from "./durable-sessions";
 
 const TEXT_MAX_BYTES = 64 * 1024 * 1024;
@@ -757,32 +757,69 @@ const assertDifferentPaths = (input: string, output: string): void => {
   }
 };
 
-const textInput = z.object({
+// Declarations are emitted without type inference, so each schema states its type.
+const textInput: z.ZodObject<{
+  inputPath: z.ZodString;
+  outputPath: z.ZodString;
+  sessionId: z.ZodString;
+  language: z.ZodOptional<z.ZodString>;
+}> = z.object({
   inputPath: z.string().min(1).max(PATH_MAX_CHARACTERS),
   outputPath: z.string().min(1).max(PATH_MAX_CHARACTERS),
   sessionId: z.string().regex(SESSION_ID),
   language: z.string().min(2).max(35).optional(),
 });
 
-const externalDetectionTextInput = textInput.extend({
+const externalDetectionTextInput: z.ZodObject<{
+  inputPath: z.ZodString;
+  outputPath: z.ZodString;
+  sessionId: z.ZodString;
+  language: z.ZodOptional<z.ZodString>;
+  detectionBatchPath: z.ZodString;
+}> = textInput.extend({
   detectionBatchPath: z.string().min(1).max(PATH_MAX_CHARACTERS),
 });
 
-const restoreInput = z.object({
+const restoreInput: z.ZodObject<{
+  inputPath: z.ZodString;
+  outputPath: z.ZodString;
+  sessionId: z.ZodString;
+}> = z.object({
   inputPath: z.string().min(1).max(PATH_MAX_CHARACTERS),
   outputPath: z.string().min(1).max(PATH_MAX_CHARACTERS),
   sessionId: z.string().regex(SESSION_ID),
 });
 
-const docxRestoreInput = restoreInput.extend({
+const docxRestoreInput: z.ZodObject<{
+  inputPath: z.ZodString;
+  outputPath: z.ZodString;
+  sessionId: z.ZodString;
+  allowPartialCoverage: z.ZodDefault<z.ZodOptional<z.ZodBoolean>>;
+}> = restoreInput.extend({
   allowPartialCoverage: z.boolean().optional().default(false),
 });
 
-const docxInput = textInput.extend({
+const docxInput: z.ZodObject<{
+  inputPath: z.ZodString;
+  outputPath: z.ZodString;
+  sessionId: z.ZodString;
+  language: z.ZodOptional<z.ZodString>;
+  allowPartialCoverage: z.ZodDefault<z.ZodOptional<z.ZodBoolean>>;
+}> = textInput.extend({
   allowPartialCoverage: z.boolean().optional().default(false),
 });
 
-const pdfInput = z.object({
+const pdfInput: z.ZodObject<{
+  inputPath: z.ZodString;
+  outputPath: z.ZodString;
+  ocrLanguage: z.ZodString;
+  detectionLanguage: z.ZodOptional<z.ZodString>;
+  dpi: z.ZodDefault<z.ZodOptional<z.ZodNumber>>;
+  timeoutMs: z.ZodDefault<z.ZodOptional<z.ZodNumber>>;
+  fillRgb: z.ZodDefault<
+    z.ZodOptional<z.ZodTuple<[z.ZodNumber, z.ZodNumber, z.ZodNumber], null>>
+  >;
+}> = z.object({
   inputPath: z.string().min(1).max(PATH_MAX_CHARACTERS),
   outputPath: z.string().min(1).max(PATH_MAX_CHARACTERS),
   ocrLanguage: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_.-]*$/u),
@@ -1154,7 +1191,7 @@ export class LocalAnonymizeService {
       fillRgb: input.fillRgb,
     });
     await this.#faults.beforeOutputPublish?.();
-    await destination.write(anonymized.document);
+    await safeWrite(destination, anonymized.document);
     return {
       operation: "anonymize",
       format: "pdf",
@@ -1184,7 +1221,7 @@ export class LocalAnonymizeService {
       const result = lease.entry.session.redact_text(text);
       await this.#persistSession(input.sessionId, lease.entry.session);
       await this.#faults.beforeOutputPublish?.();
-      await destination.write(result.redaction.redactedText);
+      await safeWrite(destination, result.redaction.redactedText);
       this.#commitSession(lease);
       return {
         operation: "anonymize",
@@ -1282,7 +1319,7 @@ export class LocalAnonymizeService {
       plan.commit();
       await this.#persistSession(input.sessionId, lease.entry.session);
       await this.#faults.beforeOutputPublish?.();
-      await destination.write(redactedText);
+      await safeWrite(destination, redactedText);
       this.#commitSession(lease);
       return {
         operation: "anonymize",
@@ -1318,7 +1355,7 @@ export class LocalAnonymizeService {
     const lease = await this.#readSession(input.sessionId);
     try {
       const restored = lease.entry.session.restoreText(text);
-      await destination.write(restored);
+      await safeWrite(destination, restored);
       this.#commitSession(lease);
       return {
         operation: "restore",
@@ -1365,7 +1402,7 @@ export class LocalAnonymizeService {
       });
       await this.#persistSession(input.sessionId, lease.entry.session);
       await this.#faults.beforeOutputPublish?.();
-      await destination.write(result.document);
+      await safeWrite(destination, result.document);
       this.#commitSession(lease);
       return {
         operation: "anonymize",
@@ -1414,7 +1451,7 @@ export class LocalAnonymizeService {
           "Re-run with allowPartialCoverage: true to accept partial restoration.",
         );
       }
-      await destination.write(result.document);
+      await safeWrite(destination, result.document);
       this.#commitSession(lease);
       return {
         operation: "restore",

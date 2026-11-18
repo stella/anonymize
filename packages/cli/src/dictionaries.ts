@@ -124,9 +124,7 @@ export const loadCliDictionaries = async ({
   const denyListMeta: Record<string, DictionaryMeta> = {};
   for (const { id, entries } of denyEntries) {
     denyList[id] = entries;
-    // SAFETY: anonymize-data categories match
-    // DenyListCategory at runtime.
-    denyListMeta[id] = DICTIONARY_META[id] as DictionaryMeta;
+    denyListMeta[id] = DICTIONARY_META[id];
   }
 
   const citiesByCountry: Record<string, readonly string[]> = {};

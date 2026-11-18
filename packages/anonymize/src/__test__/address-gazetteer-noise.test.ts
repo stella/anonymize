@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test";
+
 import type { NativePipelineEntity } from "../native";
 import type { PipelineConfig } from "../types";
-import { detectNative } from "./native-detect";
 import { loadTestDictionaries } from "./load-dictionaries";
+import { detectNative } from "./native-detect";
 
 const dictionaries = await loadTestDictionaries();
 

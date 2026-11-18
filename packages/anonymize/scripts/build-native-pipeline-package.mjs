@@ -4,14 +4,14 @@ import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import {
+  applyPipelineLanguageScope,
+  defaultDictionaryBundleOptions,
+} from "../dist/build-native-package.mjs";
+import {
   DEFAULT_NATIVE_PIPELINE_CONFIG,
   prepareNativePipelinePackage,
   SUPPORTED_LANGUAGES,
 } from "../dist/index.mjs";
-import {
-  applyPipelineLanguageScope,
-  defaultDictionaryBundleOptions,
-} from "../dist/build-native-package.mjs";
 import { loadNativeAnonymizeBinding } from "../dist/native-node.mjs";
 import { readNativePackageInput } from "./native-script-contracts.mjs";
 
@@ -207,6 +207,7 @@ async function loadDefaultDictionaries(pipelineConfig) {
   } catch (error) {
     throw new Error(
       `--default-dictionaries requires @stll/anonymize-data: ${formatError(error)}`,
+      { cause: error },
     );
   }
   if (typeof loaded.loadDictionaryBundle !== "function") {

@@ -5,9 +5,9 @@
 # Supported platform: Ubuntu 24.04 (noble), amd64/arm64, root or passwordless sudo.
 set -euo pipefail
 
-usage() { echo 'Usage: cloud-setup.sh install|start' >&2; exit 2; }
+usage() { echo 'Usage: cloud-setup.sh install|start|session' >&2; exit 2; }
 [[ "$#" == 1 ]] || usage
-case "$1" in install|start) MODE="$1" ;; *) usage ;; esac
+case "$1" in install|start|session) MODE="$1" ;; *) usage ;; esac
 fail() { echo "cloud-setup: $*" >&2; exit 1; }
 trap 'echo "cloud-setup: command failed at line $LINENO" >&2' ERR
 # Each phase logs its start and duration so a stalled phase is visible in the task log.
@@ -45,8 +45,8 @@ service_run() (
   done
   exec runuser -u stll-cloud -- "$@"
 )
-BUN_VERSION='1.4.3'
-NODE_VERSION='26.10.0'
+BUN_VERSION='1.4.4'
+NODE_VERSION='26.12.1'
 NODE_DIR="/opt/stll-cloud/node/$NODE_VERSION"
 BUN_DIR="/opt/stll-cloud/bun/$BUN_VERSION"
 export PATH="$NODE_DIR/bin:$BUN_DIR:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
@@ -56,8 +56,8 @@ BUN_CACHE="/var/cache/stll-cloud/bun/$OUTPUT_UID"
 [[ "$(awk 'NF { if (++count > 1 || NF != 1) exit 1; value=$1 } END { if (count != 1) exit 1; print value }' "$REPO_ROOT/.node-version")" == "$NODE_VERSION" ]] || fail 'Node selector changed; regenerate cloud-setup.sh'
 cd -- "$REPO_ROOT"
 case "$(uname -m)" in
-  x86_64) ARCH=amd64; NODE_ARCH=x64; BUN_ARCH=x64 ;;
-  aarch64|arm64) ARCH=arm64; NODE_ARCH=arm64; BUN_ARCH=aarch64 ;;
+  x86_64) ARCH=amd64; NODE_ARCH=x64; BUN_ARCH=x64; NODE_SHA256='6170b2d474e1c626f43cff3adc118df9fe3b573258a4fc3d850c8dbc6b079bbd'; BUN_SHA256='bf8ccbfb2b0b80159e0f9a6d15c55317add8077534dbc6130a3edb52fccb395c' ;;
+  aarch64|arm64) ARCH=arm64; NODE_ARCH=arm64; BUN_ARCH=aarch64; NODE_SHA256='42aa04922591ee5d4dbc7740d452621acf28508239daa512f5ee8c47ee224fdb'; BUN_SHA256='baa6bb36f51d6e58561e02bbea825038a9df454f673d6d776e8bbf86f8c7850e' ;;
   *) fail 'Only amd64 and arm64 are supported' ;;
 esac
 
@@ -135,6 +135,63 @@ runtime_ready() {
   node_ready || fail 'Pinned Node, npm or npx is unavailable; run install'
   [[ -x "$BUN_DIR/bun" && "$($BUN_DIR/bun --version)" == "$BUN_VERSION" ]] || fail 'Pinned Bun is unavailable; run install'
 }
+bun_route() {
+  local label="$1" resolved version
+  shift
+  resolved="$("$@" -c 'command -v bun')" || fail "Bun is unavailable through $label"
+  version="$("$@" -c 'bun --version')" || fail "Bun at $resolved failed through $label"
+  [[ "$version" == "$BUN_VERSION" ]] || fail "Bun at $resolved resolves version $version through $label; expected $BUN_VERSION"
+}
+verify_bun_routes() {
+  local configured_mise login_shell minimal_path mise_root root_mise shims
+  # Test-only overrides keep route executables and image locations inside fixtures.
+  login_shell="$(printenv STLL_CLOUD_TEST_LOGIN_SHELL || true)"
+  [[ -n "$login_shell" ]] || login_shell=bash
+  minimal_path="$(printenv STLL_CLOUD_TEST_MINIMAL_PATH || true)"
+  [[ -n "$minimal_path" ]] || minimal_path=/usr/local/bin:/usr/bin:/bin
+  root_mise="$(printenv STLL_CLOUD_TEST_ROOT_MISE || true)"
+  [[ -n "$root_mise" ]] || root_mise=/root/.local/share/mise
+  # An absolute shell: a PATH entry such as a user-writable mise shims
+  # directory must never supply the program that root runs.
+  bun_route 'the setup PATH' env PATH="$PATH" /bin/sh
+  bun_route 'sh -c' /bin/sh
+  bun_route 'bash -lc' "$login_shell" -l
+  bun_route 'the minimal system PATH' env -i PATH="$minimal_path" /bin/sh
+  configured_mise="$(printenv MISE_DATA_DIR || true)"
+  for mise_root in "$configured_mise" "$OUTPUT_HOME/.local/share/mise" "$root_mise"; do
+    [[ -n "$mise_root" ]] || continue
+    shims="$mise_root/shims"
+    [[ -d "$shims" ]] || continue
+    bun_route "mise shims PATH $shims" env PATH="$shims:$PATH" /bin/sh
+  done
+}
+replace_image_buns() {
+  local candidate configured_mise directory mise_root root_mise
+  configured_mise="$(printenv MISE_DATA_DIR || true)"
+  root_mise="$(printenv STLL_CLOUD_TEST_ROOT_MISE || true)"
+  [[ -n "$root_mise" ]] || root_mise=/root/.local/share/mise
+  for mise_root in "$configured_mise" "$OUTPUT_HOME/.local/share/mise" "$root_mise"; do
+    [[ -n "$mise_root" ]] || continue
+    if [[ -d "$mise_root/installs/bun" ]]; then
+      while IFS= read -r -d '' candidate; do
+        [[ -d "$candidate" ]] || ln -sfnT -- "$BUN_DIR/bun" "$candidate"
+      done < <(find "$mise_root/installs/bun" \( -type f -o -type l \) \( -name bun -o -name bunx \) -print0)
+    fi
+    for candidate in "$mise_root/shims/bun" "$mise_root/shims/bunx"; do
+      [[ -e "$candidate" || -L "$candidate" ]] || continue
+      [[ -d "$candidate" ]] || ln -sfnT -- "$BUN_DIR/bun" "$candidate"
+    done
+  done
+  while IFS= read -r directory; do
+    [[ -n "$directory" ]] || directory=.
+    for candidate in "$directory/bun" "$directory/bunx"; do
+      [[ -e "$candidate" || -L "$candidate" ]] || continue
+      [[ -d "$candidate" ]] && continue
+      [[ "$(readlink -f -- "$candidate")" == "$(readlink -f -- "$BUN_DIR/bun")" ]] || ln -sfnT -- "$BUN_DIR/bun" "$candidate"
+    done
+  # The trailing newline lets read return the last PATH entry too.
+  done < <(printf '%s\n' "$PATH" | tr : '\n')
+}
 install_runtimes() (
   if [[ ! -s /etc/ssl/certs/ca-certificates.crt ]]; then
     command -v update-ca-certificates >/dev/null || fail 'System CA certificate bundle is missing; restore ca-certificates in the base image offline before install'
@@ -152,6 +209,7 @@ install_runtimes() (
   if ! node_ready; then
     node_archive="node-v$NODE_VERSION-linux-$NODE_ARCH.tar.xz"
     download_file "https://nodejs.org/dist/v$NODE_VERSION/$node_archive" "$scratch/$node_archive" 120
+    (cd "$scratch"; printf '%s  %s\n' "$NODE_SHA256" "$node_archive" | sha256sum --strict -c -)
     download_file "https://nodejs.org/dist/v$NODE_VERSION/SHASUMS256.txt" "$scratch/node-sums" 45
     (cd "$scratch"; awk -v name="$node_archive" '$2 == name { print; count++ } END { if (count != 1) exit 1 }' node-sums | sha256sum --strict -c -)
     install -d -m 755 "$NODE_DIR"
@@ -161,10 +219,12 @@ install_runtimes() (
     bun_folder="bun-linux-$BUN_ARCH"
     bun_archive="$bun_folder.zip"
     download_file "https://github.com/oven-sh/bun/releases/download/bun-v$BUN_VERSION/$bun_archive" "$scratch/$bun_archive" 120
+    (cd "$scratch"; printf '%s  %s\n' "$BUN_SHA256" "$bun_archive" | sha256sum --strict -c -)
     download_file "https://github.com/oven-sh/bun/releases/download/bun-v$BUN_VERSION/SHASUMS256.txt" "$scratch/bun-sums" 45
     (cd "$scratch"; awk -v name="$bun_archive" '$2 == name || $2 == "*" name { print $1 "  " name; count++ } END { if (count != 1) exit 1 }' bun-sums | sha256sum --strict -c -)
     unzip -q "$scratch/$bun_archive" -d "$scratch/bun"
     install -d -m 755 "$BUN_DIR"
+    [[ ! -d "$BUN_DIR/bun" ]] || fail 'Install target is a directory; remove it and rerun install:' "$BUN_DIR/bun"
     install -m 755 "$scratch/bun/$bun_folder/bun" "$BUN_DIR/bun"
   fi
   runtime_ready
@@ -172,6 +232,7 @@ install_runtimes() (
   ln -sfnT -- "$NODE_DIR/bin/npm" /usr/local/bin/npm
   ln -sfnT -- "$NODE_DIR/bin/npx" /usr/local/bin/npx
   ln -sfnT -- "$BUN_DIR/bun" /usr/local/bin/bun
+  replace_image_buns
 )
 
 dependency_install() {
@@ -210,6 +271,15 @@ process.stdout.write([...hosts].sort().join(","));
   network_run "$download_hosts" 240 runuser -u "$OUTPUT_USER" -- env HOME="$OUTPUT_HOME" BUN_INSTALL_CACHE_DIR="$BUN_CACHE" PATH="$PATH" BUN_CONFIG_HTTP_IDLE_TIMEOUT=20 "$BUN_DIR/bun" install --frozen-lockfile
 }
 
+# The frozen install is the check: it reads every input the package manager
+# uses and changes nothing on a current tree, so no stamp stands in for it.
+install_dependencies() {
+  dependency_install
+}
+sync_dependencies() {
+  dependency_install || fail 'bun.lock mismatch; dependency installation failed'
+}
+
 
 # Prevent package maintainer scripts from starting unmanaged system services.
 apt_install() (
@@ -243,20 +313,20 @@ apt_install() (
   policy_state=installed
   printf '%s\n' '#!/bin/sh' 'exit 101' > /usr/sbin/policy-rc.d
   chmod 755 /usr/sbin/policy-rc.d
-  local package
-  for package in "$@"; do
-    if [[ "$package" == */* ]]; then
-      # apt cannot fetch local archives with --download-only, so their installs
-      # stay one call. Package triggers can be slow on cloud filesystems; the
-      # longer whole-call deadline covers them while Acquire timeouts still
-      # bound each network request.
-      APT_DEADLINE=600 DEBIAN_FRONTEND=noninteractive apt_network install -y --no-install-recommends "$@"
-      return
-    fi
-  done
   # The network deadline covers downloads only; unpacking and maintainer scripts
   # (for example locale generation or cluster creation) run offline afterwards.
   DEBIAN_FRONTEND=noninteractive apt_network install -y --no-install-recommends --download-only "$@"
+  local package pending
+  for package in "$@"; do
+    if [[ "$package" == */* ]]; then
+      # apt rejects --no-download for local archives, so prove instead that
+      # only local file: archives remain; --print-uris reads local state only.
+      pending="$(set -o pipefail; DEBIAN_FRONTEND=noninteractive apt-get --print-uris -qq -y --no-install-recommends install "$@" | awk '$1 !~ /^\047file:/')"
+      [[ -z "$pending" ]] || fail "Package downloads remain after the bounded download step: $pending"
+      DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "$@"
+      return
+    fi
+  done
   DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends --no-download "$@"
 )
 
@@ -280,12 +350,12 @@ fetch_verified() {
 
 export RUSTUP_HOME=/opt/stll-cloud/rustup
 export CARGO_HOME=/opt/stll-cloud/cargo
-export RUSTUP_TOOLCHAIN='1.99.0'
+export RUSTUP_TOOLCHAIN='1.99.1'
 export RUSTUP_AUTO_INSTALL=0
 rust_run() {
   local mode="$1"
   shift
-  set -- runuser -u "$OUTPUT_USER" -- env HOME="$OUTPUT_HOME" RUSTUP_HOME="$RUSTUP_HOME" CARGO_HOME="$CARGO_HOME" RUSTUP_AUTO_INSTALL=0 RUSTUP_TOOLCHAIN=1.99.0 RUSTUP_DIST_SERVER=https://static.rust-lang.org RUSTUP_UPDATE_ROOT=https://static.rust-lang.org/rustup PATH="$PATH" "$@"
+  set -- runuser -u "$OUTPUT_USER" -- env HOME="$OUTPUT_HOME" RUSTUP_HOME="$RUSTUP_HOME" CARGO_HOME="$CARGO_HOME" RUSTUP_AUTO_INSTALL=0 RUSTUP_TOOLCHAIN=1.99.1 RUSTUP_DIST_SERVER=https://static.rust-lang.org RUSTUP_UPDATE_ROOT=https://static.rust-lang.org/rustup PATH="$PATH" "$@"
   case "$mode" in
     local) "$@" ;;
     network) network_run static.rust-lang.org 180 "$@" ;;
@@ -299,12 +369,12 @@ primary_rust_ready() {
   done
   [[ -x "$CARGO_HOME/bin/rustup" ]] || return 1
   [[ "$(rust_run local "$CARGO_HOME/bin/rustup" --version 2>/dev/null)" == 'rustup 1.29.1 '* ]] || return 1
-  [[ "$(rust_run local "$CARGO_HOME/bin/rustc" +1.99.0 --version)" == 'rustc 1.99.0 '* ]] || return 1
+  [[ "$(rust_run local "$CARGO_HOME/bin/rustc" +1.99.1 --version)" == 'rustc 1.99.1 '* ]] || return 1
   local host
-  host="$(rust_run local "$CARGO_HOME/bin/rustc" +1.99.0 -vV | awk '$1 == "host:" { print $2 }')" || return 1
-  rust_run local "$CARGO_HOME/bin/rustup" component list --toolchain '1.99.0' --installed | awk -v name='clippy' -v host="$host" '$1 == name || $1 == name "-" host { found=1 } END { exit !found }' || return 1
-  rust_run local "$CARGO_HOME/bin/rustup" component list --toolchain '1.99.0' --installed | awk -v name='rustfmt' -v host="$host" '$1 == name || $1 == name "-" host { found=1 } END { exit !found }' || return 1
-  rust_run local "$CARGO_HOME/bin/rustup" target list --toolchain '1.99.0' --installed | awk -v name='wasm32-unknown-unknown' '$1 == name { found=1 } END { exit !found }' || return 1
+  host="$(rust_run local "$CARGO_HOME/bin/rustc" +1.99.1 -vV | awk '$1 == "host:" { print $2 }')" || return 1
+  rust_run local "$CARGO_HOME/bin/rustup" component list --toolchain '1.99.1' --installed | awk -v name='clippy' -v host="$host" '$1 == name || $1 == name "-" host { found=1 } END { exit !found }' || return 1
+  rust_run local "$CARGO_HOME/bin/rustup" component list --toolchain '1.99.1' --installed | awk -v name='rustfmt' -v host="$host" '$1 == name || $1 == name "-" host { found=1 } END { exit !found }' || return 1
+  rust_run local "$CARGO_HOME/bin/rustup" target list --toolchain '1.99.1' --installed | awk -v name='wasm32-unknown-unknown' '$1 == name { found=1 } END { exit !found }' || return 1
   return 0
 }
 rust_ready() {
@@ -342,15 +412,16 @@ esac
   fi
   rust_run local "$CARGO_HOME/bin/rustup" set auto-self-update disable
   if ! primary_rust_ready; then
-    rust_run network "$CARGO_HOME/bin/rustup" toolchain install 1.99.0 --profile minimal --no-self-update '--component' 'clippy' '--component' 'rustfmt' '--target' 'wasm32-unknown-unknown'
+    rust_run network "$CARGO_HOME/bin/rustup" toolchain install 1.99.1 --profile minimal --no-self-update '--component' 'clippy' '--component' 'rustfmt' '--target' 'wasm32-unknown-unknown'
   fi
 
-  rust_run local "$CARGO_HOME/bin/rustup" default 1.99.0
+  rust_run local "$CARGO_HOME/bin/rustup" default 1.99.1
   verify_rust
   for tool in rustup cargo rustc rustdoc cargo-clippy clippy-driver rustfmt cargo-fmt; do
     # Launchers persist the system homes in fresh shells without profile sourcing.
-    printf '%s\n' '#!/bin/sh' 'export RUSTUP_HOME=/opt/stll-cloud/rustup' 'export CARGO_HOME=/opt/stll-cloud/cargo' 'export RUSTUP_AUTO_INSTALL=0' 'export RUSTUP_TOOLCHAIN=1.99.0' "exec /opt/stll-cloud/cargo/bin/$tool \"\$@\"" > "$scratch/$tool"
+    printf '%s\n' '#!/bin/sh' 'export RUSTUP_HOME=/opt/stll-cloud/rustup' 'export CARGO_HOME=/opt/stll-cloud/cargo' 'export RUSTUP_AUTO_INSTALL=0' 'export RUSTUP_TOOLCHAIN=1.99.1' "exec /opt/stll-cloud/cargo/bin/$tool \"\$@\"" > "$scratch/$tool"
     if ! cmp -s "$scratch/$tool" "/usr/local/bin/$tool"; then
+      [[ ! -d "/usr/local/bin/$tool" ]] || fail 'Install target is a directory; remove it and rerun install:' "/usr/local/bin/$tool"
       install -m 755 "$scratch/$tool" "/usr/local/bin/$tool"
     fi
   done
@@ -375,7 +446,7 @@ install_shell_environment() (
   trap 'rm -f -- "$temporary"' EXIT
   cat > "$temporary" <<'STLL_CLOUD_PROFILE'
 # Generated by stll-cloud-setup; managed cloud shell environment.
-# Remove managed entries before prepending, including repeated shell startup.
+# Remove current and previous managed runtimes before prepending the selectors.
 _stll_cloud_remaining="${PATH-}"
 _stll_cloud_result=''
 _stll_cloud_separator=''
@@ -385,16 +456,16 @@ while :; do
     *) _stll_cloud_part="$_stll_cloud_remaining"; _stll_cloud_more=no ;;
   esac
   case "$_stll_cloud_part" in
-    '/opt/stll-cloud/node/26.10.0/bin'|'/opt/stll-cloud/bun/1.4.3'|/usr/local/bin) ;;
+    /opt/stll-cloud/node/*/bin|/opt/stll-cloud/bun/*|/usr/local/bin) ;;
     *) _stll_cloud_result="$_stll_cloud_result$_stll_cloud_separator$_stll_cloud_part"; _stll_cloud_separator=: ;;
   esac
   [ "$_stll_cloud_more" = yes ] || break
 done
-export PATH='/opt/stll-cloud/node/26.10.0/bin:/opt/stll-cloud/bun/1.4.3:/usr/local/bin'"${_stll_cloud_separator:+:}$_stll_cloud_result"
+export PATH='/opt/stll-cloud/node/26.12.1/bin:/opt/stll-cloud/bun/1.4.4:/usr/local/bin'"${_stll_cloud_separator:+:}$_stll_cloud_result"
 unset _stll_cloud_remaining _stll_cloud_result _stll_cloud_separator _stll_cloud_part _stll_cloud_more
 export RUSTUP_HOME=/opt/stll-cloud/rustup
 export CARGO_HOME=/opt/stll-cloud/cargo
-export RUSTUP_TOOLCHAIN='1.99.0'
+export RUSTUP_TOOLCHAIN='1.99.1'
 export RUSTUP_AUTO_INSTALL=0
 STLL_CLOUD_PROFILE
   if ! cmp -s "$temporary" '/etc/profile.d/stll-cloud.sh'; then install -m 644 "$temporary" '/etc/profile.d/stll-cloud.sh'; fi
@@ -431,12 +502,14 @@ done
 )
 verify_shell_environment() {
   [[ -f '/etc/profile.d/stll-cloud.sh' && ! -L '/etc/profile.d/stll-cloud.sh' && "$(stat -c '%h:%u' '/etc/profile.d/stll-cloud.sh')" == 1:0 ]] || fail 'Managed shell environment is unavailable; run install'
-  [[ "$(sha256sum -- '/etc/profile.d/stll-cloud.sh' | cut -d ' ' -f1)" == '056727e845ab7ff91ead2816d447c2c56c18249546768769d36468d7b38dc595' ]] || fail 'Managed shell environment differs; run install'
+  [[ "$(sha256sum -- '/etc/profile.d/stll-cloud.sh' | cut -d ' ' -f1)" == '73486000990cd00a731b5df4a4a7774c7ceb6af5f182c94b293bd78374dd6d2b' ]] || fail 'Managed shell environment differs; run install'
 }
 
 
-[[ -f 'rust-toolchain.toml' && ! -L 'rust-toolchain.toml' ]] && [[ "$(sha256sum -- 'rust-toolchain.toml' | cut -d ' ' -f1)" == '9405904e36f6d61208cf6726e607ac063bbe98bc44ecd2a148b9627aa9466553' ]] || fail 'rust-toolchain.toml changed; regenerate cloud-setup.sh'
+[[ -f 'rust-toolchain.toml' && ! -L 'rust-toolchain.toml' ]] && [[ "$(sha256sum -- 'rust-toolchain.toml' | cut -d ' ' -f1)" == '96db5e020ccd8d86fdc60a37bdbd7aff549793bc231373682e47e39487b4f909' ]] || fail 'rust-toolchain.toml changed; regenerate cloud-setup.sh'
 [[ ! -e 'rust-toolchain' && ! -L 'rust-toolchain' ]] || fail 'rust-toolchain appeared; regenerate cloud-setup.sh'
+
+
 
 
 
@@ -447,14 +520,26 @@ if [[ "$MODE" == install ]]; then
   step services install_services
   step tools install_tools
   step shell install_shell_environment
-  step dependencies dependency_install
+  # Login routes read the installed profile, so they are checked after it.
+  step routes verify_bun_routes
+  step dependencies install_dependencies
 
   exit 0
 fi
-step runtime-check runtime_ready
-step tool-check verify_tools
-step shell install_shell_environment
-step shell-check verify_shell_environment
 
-step state prepare_state
-step service-start start_services
+start_environment() {
+  step runtime-check runtime_ready
+  step dependencies sync_dependencies
+  step tool-check verify_tools
+  step shell install_shell_environment
+  step shell-check verify_shell_environment
+
+  step state prepare_state
+  step service-start start_services
+
+}
+if [[ "$MODE" == session ]]; then
+  start_environment >&2
+else
+  start_environment
+fi

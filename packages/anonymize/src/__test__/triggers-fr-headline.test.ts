@@ -1,9 +1,9 @@
 import { beforeAll, describe, expect, test } from "bun:test";
 
 import { DEFAULT_ENTITY_LABELS } from "../constants";
-import { detectNative } from "./native-detect";
 import type { PipelineConfig } from "../types";
 import { loadTestDictionaries } from "./load-dictionaries";
+import { detectNative } from "./native-detect";
 
 const dictionaries = await loadTestDictionaries();
 

@@ -3,10 +3,10 @@ import { join } from "node:path";
 
 import type { GroundTruthDocument } from "../ground-truth";
 import {
-  totalUtf16CodeUnits,
   type Adapter,
   type AdapterOutcome,
   type NativePrediction,
+  totalUtf16CodeUnits,
 } from "./types";
 
 const PYTHON_ADAPTER_TIMEOUT_MS = 10 * 60 * 1000;
@@ -262,7 +262,9 @@ export const createPythonAdapter = ({
         parsed = parsePythonResult(rawResult);
       } catch (error) {
         const detail = error instanceof Error ? error.message : "unknown error";
-        throw new Error(`${name} adapter protocol failure: ${detail}`);
+        throw new Error(`${name} adapter protocol failure: ${detail}`, {
+          cause: error,
+        });
       }
 
       const textById = new Map(docs.map((doc) => [doc.id, doc.text]));

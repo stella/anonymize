@@ -1,6 +1,5 @@
-import { createHash } from "node:crypto";
-
 import { describe, expect, test } from "bun:test";
+import { createHash } from "node:crypto";
 
 import { createBenchmarkAdapters } from "../adapters";
 import {

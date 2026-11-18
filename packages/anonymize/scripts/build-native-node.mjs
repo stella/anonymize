@@ -10,10 +10,10 @@ import {
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { gzipSync } from "node:zlib";
-import { detectNativeLibc } from "../native-libc.mjs";
-import { nativeLibraryName } from "./native-script-contracts.mjs";
 
+import { detectNativeLibc } from "../native-libc.mjs";
 import languageScopes from "../src/data/language-scopes.json" with { type: "json" };
+import { nativeLibraryName } from "./native-script-contracts.mjs";
 
 const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const repoRoot = dirname(dirname(packageRoot));

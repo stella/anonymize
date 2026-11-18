@@ -8,6 +8,7 @@
 
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
+
 import { syncWorkspaceVersions } from "./lib/bun-lock-workspace-versions";
 
 const ROOT = join(import.meta.dirname, "..");

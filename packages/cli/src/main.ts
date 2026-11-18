@@ -21,6 +21,11 @@ import type {
   PipelineConfig,
   PreparedNativePipeline,
 } from "@stll/anonymize";
+import {
+  AnonymizeSurfaceError,
+  exitCodeForError,
+  isAnonymizeSurfaceError,
+} from "@stll/anonymize/agent-surface";
 import { CAPABILITY_MANIFEST } from "@stll/anonymize/capabilities";
 import {
   DEFAULT_ENTITY_LABELS,
@@ -29,13 +34,6 @@ import {
 } from "@stll/anonymize/constants";
 
 import pkg from "../package.json" with { type: "json" };
-
-import {
-  AnonymizeSurfaceError,
-  exitCodeForError,
-  isAnonymizeSurfaceError,
-} from "@stll/anonymize/agent-surface";
-
 import type { CliOptions } from "./args";
 import {
   DEFAULT_THRESHOLD,
@@ -44,13 +42,13 @@ import {
   parseCountries,
   UsageError,
 } from "./args";
-import { runFeedbackCommand } from "./feedback";
 import type { DictionaryScope } from "./dictionary-scope";
 import {
   type DocxCliPipeline,
   type DocxPipelineRequest,
   runDocxCommand,
 } from "./docx";
+import { runFeedbackCommand } from "./feedback";
 import {
   type PdfCliPipeline,
   type PdfPipelineRequest,
@@ -121,7 +119,7 @@ type NamedInput = {
 
 const readInputs = async (files: string[]): Promise<NamedInput[]> => {
   if (files.length === 0) {
-    if (process.stdin.isTTY === true) {
+    if (process.stdin.isTTY) {
       throw new UsageError(
         "no input files and stdin is a terminal (see --help)",
       );
@@ -169,7 +167,7 @@ const looksTextual = async (path: string): Promise<boolean> => {
   try {
     const buffer = Buffer.alloc(TEXT_SNIFF_BYTES);
     const { bytesRead } = await handle.read(buffer, 0, TEXT_SNIFF_BYTES, 0);
-    return buffer.subarray(0, bytesRead).indexOf(0) === -1;
+    return !buffer.subarray(0, bytesRead).includes(0);
   } finally {
     await handle.close();
   }
@@ -768,8 +766,8 @@ const runAnonymise = async (
   }
 
   const scoped = shouldPromptForScope(opts, {
-    stdinIsTTY: process.stdin.isTTY === true,
-    stderrIsTTY: process.stderr.isTTY === true,
+    stdinIsTTY: process.stdin.isTTY,
+    stderrIsTTY: process.stderr.isTTY,
   })
     ? { ...opts, countries: await promptForCountries() }
     : opts;

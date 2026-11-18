@@ -20,37 +20,37 @@
  * worker dependency.
  */
 
+import { createSemanticPipeline } from "./create-pipeline";
 import {
+  convert_external_detection_batch as convertExternalDetectionBatchWithBinding,
   createNativeAnonymizerFromPackage,
   createNativePipelineFromPackage,
-  isNativeAnonymizeBinding,
-  convert_external_detection_batch as convertExternalDetectionBatchWithBinding,
   diagnostics_json as diagnosticsJsonWithBinding,
   diagnostics_stream_json as diagnosticsStreamJsonWithBinding,
-  type NativeAnonymizeBinding,
   type ExternalDetectionBatch,
+  isNativeAnonymizeBinding,
+  native_package_version as nativePackageVersionWithBinding,
+  type NativeAnonymizeBinding,
   type NativeCallerDetection,
   type NativeDiagnosticsBatchCallback,
   type NativeOperatorConfig,
   type NativeResultEventCallback,
   type NativeSearchPackageInput,
   type NativeStaticRedactionResult,
-  native_package_version as nativePackageVersionWithBinding,
   normalize_for_search as normalizeForSearchWithBinding,
+  prepare_search_package as prepareSearchPackageWithBinding,
   PreparedNativeAnonymizer,
   PreparedNativePipeline,
-  prepare_search_package as prepareSearchPackageWithBinding,
   redact_text as redactTextWithBinding,
   redact_text_json as redactTextJsonWithBinding,
   redact_text_stream_json as redactTextStreamJsonWithBinding,
   summary_diagnostics_json as summaryDiagnosticsJsonWithBinding,
 } from "./native";
-import { createWasmBinding, isRawWasmModule } from "./wasm-binding";
-import { createSemanticPipeline } from "./create-pipeline";
 import {
   normalizePipelineLanguageSelection,
   type PipelineLanguageSelection,
 } from "./pipeline-language";
+import { createWasmBinding, isRawWasmModule } from "./wasm-binding";
 
 export * from "./native";
 export { deanonymise, exportRedactionKey } from "./redact";
@@ -298,14 +298,29 @@ const isMissingFileError = (error: unknown): boolean =>
   "code" in error &&
   error.code === "ENOENT";
 
+const isFileReader = (value: unknown): value is (url: URL) => unknown =>
+  typeof value === "function";
+
 /** Read a `file:` URL through node:fs. The import is dynamic and gated behind
  * the `file:` check (never reached in browsers); the specifier is a runtime
  * value so the bundler leaves it alone, mirroring the runtime glue import in
  * {@link loadWasmBinding}, so browser bundles never pull in node:fs. */
 const readFileUrlBytes = async (fileUrl: string): Promise<Uint8Array> => {
   // oxlint-disable-next-line stll/no-dynamic-import-specifier -- Resolve verified emitted assets at runtime.
-  const { readFile } = await import(/* @vite-ignore */ NODE_FS_MODULE);
-  return new Uint8Array(await readFile(new URL(fileUrl)));
+  const module: unknown = await import(/* @vite-ignore */ NODE_FS_MODULE);
+  if (
+    typeof module !== "object" ||
+    module === null ||
+    !("readFile" in module) ||
+    !isFileReader(module.readFile)
+  ) {
+    throw new TypeError("Node filesystem module does not expose readFile");
+  }
+  const bytes: unknown = await module.readFile(new URL(fileUrl));
+  if (!(bytes instanceof Uint8Array)) {
+    throw new TypeError("Node filesystem readFile did not return bytes");
+  }
+  return new Uint8Array(bytes);
 };
 
 // --- Prepared-package loaders (the primary browser flow) ---------------------
@@ -428,7 +443,11 @@ export const getDefaultPipeline = (
     // rejection like the rest of this async surface, not a synchronous throw
     // (this function isn't declared `async`, so an uncaught throw here would
     // escape synchronously instead of rejecting the returned promise).
-    return Promise.reject(error);
+    return Promise.reject(
+      error instanceof Error
+        ? error
+        : new Error("Pipeline language validation failed", { cause: error }),
+    );
   }
   const cached = defaultPipelineCache.get(key);
   if (cached !== undefined) {
@@ -487,7 +506,7 @@ export const createPipeline = async ({
   });
 };
 
-export const create_pipeline = createPipeline;
+export const create_pipeline: typeof createPipeline = createPipeline;
 
 export const redactDefaultText = async (
   fullText: string,

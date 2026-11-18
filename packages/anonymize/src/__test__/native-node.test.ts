@@ -13,22 +13,22 @@ import { fileURLToPath } from "node:url";
 import {
   CALLER_DETECTION_REQUEST_JSON_MAX_BYTES,
   NATIVE_BINDING_PARITY_MEMBERS,
-  PreparedNativeAnonymizer,
-  SESSION_CALLER_INPUTS_JSON_MAX_BYTES,
   type NativeAnonymizeBinding,
   type NativeCallerDetection,
   type NativeDiagnosticsBatchCallback,
   type NativePreparedRedactionSessionBinding,
   type NativePreparedSearchBinding,
+  PreparedNativeAnonymizer,
+  SESSION_CALLER_INPUTS_JSON_MAX_BYTES,
 } from "../native";
 import {
   available_default_native_pipeline_languages,
   availableDefaultNativePipelineLanguages,
   create_native_pipeline_from_default_package,
   create_pipeline,
-  createPipeline,
   createNativePipelineFromDefaultPackage,
   createNativePipelineFromPackageFile,
+  createPipeline,
   diagnostics_json,
   diagnostics_stream_json,
   get_default_native_pipeline,
@@ -38,6 +38,7 @@ import {
   loadNativeAnonymizeBinding,
   native_package_version,
   normalize_for_search,
+  type PipelineLanguageSelection,
   preload_default_native_pipeline,
   preloadDefaultNativePipeline,
   preloadDefaultNativePipelineAsync,
@@ -52,7 +53,6 @@ import {
   redact_text_json,
   redact_text_stream_json,
   summary_diagnostics_json,
-  type PipelineLanguageSelection,
 } from "../native-node";
 import {
   SHARED_NATIVE_SDK_DEFAULT_PACKAGE_FUNCTIONS,
@@ -823,7 +823,7 @@ describe("native node loader", () => {
   test("rejects unknown default native pipeline warmup modes", () => {
     const binding = fakeNativeBinding(PACKAGE_VERSION);
 
-    expect(() =>
+    expect((): unknown =>
       Reflect.apply(getDefaultNativePipeline, undefined, [
         {
           binding,
@@ -1001,7 +1001,9 @@ describe("native node loader", () => {
         observedAtEpochSeconds: 150,
       }).redaction.redactedText,
     ).toBe("");
-    expect(JSON.parse(lifecycle.toPlaintextJsonAt(150)).schema_version).toBe(2);
+    expect(JSON.parse(lifecycle.toPlaintextJsonAt(150))).toMatchObject({
+      schema_version: 2,
+    });
     expect(lifecycle.delete()).toEqual({
       sessionId: "case_2",
       deletedMappingCount: 0,

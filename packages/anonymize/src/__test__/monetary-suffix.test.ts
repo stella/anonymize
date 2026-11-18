@@ -2,8 +2,8 @@ import { describe, expect, setDefaultTimeout, test } from "bun:test";
 
 import { DEFAULT_ENTITY_LABELS } from "../constants";
 import type { PipelineConfig } from "../types";
-import { detectNative } from "./native-detect";
 import { loadTestDictionaries } from "./load-dictionaries";
+import { detectNative } from "./native-detect";
 
 // Pipeline context build is CPU-bound; mirror the budget
 // used by the other regex-focused suites.

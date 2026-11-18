@@ -1,6 +1,7 @@
-import { readFileSync, readdirSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import process from "node:process";
+
 import { parseJsonObject } from "./json-values.mjs";
 
 const APACHE_LICENSE = "Apache-2.0";

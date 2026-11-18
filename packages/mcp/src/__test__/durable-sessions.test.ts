@@ -1,17 +1,14 @@
-import assert from "node:assert/strict";
-import { afterEach, describe, test } from "node:test";
-import { extractDocxText } from "@stll/anonymize-docx";
-import { getDefaultNativePipeline } from "@stll/anonymize";
 import { strToU8, zipSync } from "fflate";
-import { createHash } from "node:crypto";
+import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
   chmod,
   copyFile,
-  mkdtemp,
   mkdir,
-  readFile,
+  mkdtemp,
   readdir,
+  readFile,
   realpath,
   rename,
   rm,
@@ -21,14 +18,18 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { afterEach, describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 
+import { getDefaultNativePipeline } from "@stll/anonymize";
+import { extractDocxText } from "@stll/anonymize-docx";
+
 import {
-  DurableSessionStore,
   DURABLE_SESSION_FAULT_POINTS,
+  DurableSessionStore,
+  type DurableSessionStoreOptions,
   SESSION_ARCHIVE_MAX_BYTES,
   SESSION_ARCHIVE_MAX_COUNT,
-  type DurableSessionStoreOptions,
 } from "../durable-sessions";
 import { LocalAnonymizeService, PathScope } from "../local";
 import { requirePresent } from "./require-present";

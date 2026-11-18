@@ -1,6 +1,6 @@
 {
   "name": "@stll/anonymize-cli",
-  "version": "3.0.7",
+  "version": "4.0.0",
   "description": "Command-line PII detection and anonymization powered by @stll/anonymize",
   "keywords": [
     "anonymization",
@@ -34,21 +34,19 @@
     "build": "tsdown",
     "prepublishOnly": "bun run build",
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json && bun check --no-pretty --all --project=tsconfig.test.json",
-    "test": "bun test --timeout 60000",
-    "format": "oxfmt ."
+    "test": "bun test --timeout 60000"
   },
   "dependencies": {
-    "@stll/anonymize": "^3.0.7",
+    "@stll/anonymize": "^4.0.0",
     "@stll/anonymize-data": "^0.0.10",
-    "@stll/anonymize-docx": "^3.0.7",
-    "@stll/anonymize-pdf": "^3.0.7"
+    "@stll/anonymize-docx": "^4.0.0",
+    "@stll/anonymize-pdf": "^4.0.0"
   },
   "devDependencies": {
-    "@types/node": "^26.6.4",
-    "bun-types": "1.4.3",
+    "@types/node": "^26.6.6",
+    "bun-types": "1.4.4",
     "fflate": "^0.8.3",
-    "tsdown": "0.23.0",
-    "typescript": "7.0.2",
-    "@stll/typescript-config": "0.8.0"
+    "tsdown": "0.23.7",
+    "@stll/typescript-config": "0.10.0"
   }
 }

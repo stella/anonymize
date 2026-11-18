@@ -110,3 +110,40 @@ void test("manual publishing fails closed outside main", () => {
   assert.match(jobs.verify, /github\.ref != 'refs\/heads\/main'/);
   assert.match(jobs.verify, /inputs\.publish_to_npm/);
 });
+
+void test("the release reconciler checks the packages the release publishes", () => {
+  const reconcile = readFileSync(
+    new URL("../workflows/npm-release-reconcile.yml", import.meta.url),
+    "utf8",
+  );
+  /** @param {string} source */
+  const packageFiles = (source) =>
+    [...source.matchAll(/package-files: \|\n((?: {8}\S.*\n)+)/gu)].map(
+      (match) => match[1],
+    );
+  const [reconciled, ...extra] = packageFiles(reconcile);
+  assert.ok(reconciled, "reconciler package-files input is missing");
+  assert.deepEqual(extra, []);
+  // The finalizer is the only release job that lists package manifests.
+  assert.deepEqual(packageFiles(workflow), [reconciled]);
+  const pin = reconcile.match(
+    /uses: stella\/\.github\/\.github\/workflows\/npm-release-reconcile\.yml@([0-9a-f]{40})\n/u,
+  )?.[1];
+  const finalizerPin = jobs["github-release"].match(
+    /uses: stella\/\.github\/\.github\/workflows\/npm-version-finalize\.yml@([0-9a-f]{40})\n/u,
+  )?.[1];
+  assert.ok(pin, "reconciler shared workflow pin is missing");
+  assert.equal(pin, finalizerPin);
+  /** @param {string} source */
+  const releaseAppSecrets = (source) =>
+    [
+      ...source.matchAll(
+        /^ {6}(RELEASE_APP_(?:ID|PRIVATE_KEY)): (\$\{\{ secrets\.[A-Z0-9_]+ \}\})$/gmu,
+      ),
+    ].map((match) => `${match[1]}=${match[2]}`);
+  assert.equal(releaseAppSecrets(reconcile).length, 2);
+  assert.deepEqual(
+    releaseAppSecrets(reconcile),
+    releaseAppSecrets(jobs["github-release"]),
+  );
+});

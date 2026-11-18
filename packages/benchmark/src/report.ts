@@ -1,5 +1,5 @@
-import { COMMON_LABELS, type CommonLabel } from "./taxonomy";
 import type { Prf } from "./metrics";
+import { COMMON_LABELS, type CommonLabel } from "./taxonomy";
 
 const SCRUBADUB_LIBRARY_NAME = "scrubadub";
 const REDACT_PII_LIBRARY_NAME = "redact-pii";

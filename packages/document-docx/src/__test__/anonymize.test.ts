@@ -1,15 +1,16 @@
 import { describe, expect, test } from "bun:test";
 import { strToU8, zipSync } from "fflate";
+
 import { CALLER_DETECTION_MAX_COUNT } from "@stll/anonymize";
 
 import {
+  anonymizeDocx,
   DOCX_ANONYMIZATION_MAX_CALLER_DETECTIONS,
   DOCX_COVERAGE_MODES,
   DocxAnonymizationError,
-  anonymizeDocx,
+  type DocxAnonymizationSession,
   extractDocxText,
   restoreDocxText,
-  type DocxAnonymizationSession,
 } from "../index";
 
 const CONTENT_TYPES_NAMESPACE =

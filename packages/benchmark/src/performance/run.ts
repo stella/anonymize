@@ -7,11 +7,11 @@ import { benchmarkGitRevision } from "../git-revision";
 import { verifyCanonicalHost } from "./host";
 import {
   DEFAULT_PERFORMANCE_SCENARIO_ID,
+  parsePerformanceScenarioId,
   PERFORMANCE_INPUT_SOURCE,
   PERFORMANCE_SCENARIO_SCHEMA_VERSION,
-  type PerformanceScenarioId,
   performanceInputSourceDigest,
-  parsePerformanceScenarioId,
+  type PerformanceScenarioId,
 } from "./input";
 import {
   assertPerformanceReport,
