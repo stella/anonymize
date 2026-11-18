@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+
 import { loadGroundTruthFile } from "../ground-truth";
 
 export const PERFORMANCE_INPUT_SOURCE =

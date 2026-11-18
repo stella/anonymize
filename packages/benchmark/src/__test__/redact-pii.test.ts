@@ -1,6 +1,5 @@
-import { createHash } from "node:crypto";
-
 import { describe, expect, test } from "bun:test";
+import { createHash } from "node:crypto";
 
 import { createRedactPiiAdapter } from "../adapters/redact-pii";
 import { loadGroundTruth } from "../ground-truth";

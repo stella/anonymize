@@ -2,7 +2,6 @@ import { describe, expect, test } from "bun:test";
 
 import { OPERATOR_TYPES } from "../constants";
 import type { CanonicalStaticRedactionResult } from "../native";
-
 import {
   createWasmBinding,
   isRawWasmModule,
@@ -286,7 +285,7 @@ describe("WASM result and byte contracts", () => {
       }),
     );
 
-    expect(result.redaction.redacted_text).toBe("text");
+    expect(result).toMatchObject({ redaction: { redacted_text: "text" } });
     expect(JSON.parse(requestJson)).toEqual(callerRequest);
   });
 });

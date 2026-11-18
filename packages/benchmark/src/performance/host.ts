@@ -1,5 +1,5 @@
-import { cpus, loadavg, platform, totalmem } from "node:os";
 import { readFileSync } from "node:fs";
+import { cpus, loadavg, platform, totalmem } from "node:os";
 
 export const CANONICAL_HOST_LABEL = "anonymize-perf-v1";
 export const DEFAULT_HOST_PROFILE_PATH =

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { existsSync, readFileSync } from "node:fs";
 /**
  * Headless-browser smoke test for the @stll/anonymize-wasm BROWSER path.
  *
@@ -30,7 +31,6 @@
  * Run: `node scripts/smoke-wasm-browser.mjs` (from packages/anonymize).
  */
 import { createServer } from "node:http";
-import { existsSync, readFileSync } from "node:fs";
 import { dirname, extname, join, normalize, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import puppeteer from "puppeteer-core";
@@ -326,7 +326,7 @@ const validate = (result, expectedPdfJson, expectedPdfError) => {
     pdfInspectionJson,
     pdfError,
   } = result;
-  if (singleThread !== true) {
+  if (!singleThread) {
     throw new Error("browser binding did not prove single-thread memory");
   }
   const expectedExternalDetection = [
@@ -492,7 +492,9 @@ await withTimeout(main(), OVERALL_TIMEOUT_MS, "browser smoke")
   // A force-killed browser can leave puppeteer transport handles open, keeping
   // the event loop alive. Exit explicitly once the assertions have passed.
   .then(() => process.exit(0))
-  .catch((error) => {
-    console.error(String(error?.stack ?? error));
+  .catch((/** @type {unknown} */ error) => {
+    console.error(
+      error instanceof Error ? (error.stack ?? error.message) : String(error),
+    );
     process.exit(1);
   });

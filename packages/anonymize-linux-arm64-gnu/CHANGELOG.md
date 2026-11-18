@@ -1,5 +1,9 @@
 # @stll/anonymize-linux-arm64-gnu
 
+## 4.0.0
+
+No changes in this release.
+
 ## 3.0.7
 
 No changes in this release.

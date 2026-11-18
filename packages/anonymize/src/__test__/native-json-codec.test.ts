@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
 import fc from "fast-check";
+import { readFileSync } from "node:fs";
 
 import { parseNativePreparedSearchConfig } from "../native-config-codec";
 import { isRecord } from "../native-json-codec";

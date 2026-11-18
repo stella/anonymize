@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import languageScopes from "../data/language-scopes.json";
+import { loadDictionaryBundle } from "../../../data/dictionaries/cities";
 import { defaultDictionaryBundleOptions } from "../build-native-package";
+import languageScopes from "../data/language-scopes.json";
 import { applyPipelineLanguageScope } from "../language-scope";
 import { DEFAULT_NATIVE_PIPELINE_CONFIG } from "../native-default-config";
-import { loadDictionaryBundle } from "../../../data/dictionaries/cities";
 import {
   normalizePipelineLanguageSelection,
   pipelineLanguageSelectionKey,
@@ -38,13 +38,13 @@ describe("pipeline language selection", () => {
   });
 
   test("rejects empty and unsupported language selections", () => {
-    expect(() =>
+    expect((): unknown =>
       Reflect.apply(normalizePipelineLanguageSelection, undefined, [[]]),
     ).toThrow("must not be empty");
-    expect(() =>
+    expect((): unknown =>
       Reflect.apply(normalizePipelineLanguageSelection, undefined, ["nl"]),
     ).toThrow("Unsupported pipeline language");
-    expect(() =>
+    expect((): unknown =>
       Reflect.apply(normalizePipelineLanguageSelection, undefined, [
         "toString",
       ]),

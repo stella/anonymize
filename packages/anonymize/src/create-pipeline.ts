@@ -1,13 +1,13 @@
-import type { Dictionaries, PipelineConfig } from "./types";
-import type { NativeAnonymizeBinding, PreparedNativePipeline } from "./native";
 import { defaultDictionaryBundleOptions } from "./build-native-package";
-import { createNativePipelineFromConfig } from "./native-pipeline";
-import { DEFAULT_NATIVE_PIPELINE_CONFIG } from "./native-default-config";
 import { applyPipelineLanguageScope } from "./language-scope";
+import type { NativeAnonymizeBinding, PreparedNativePipeline } from "./native";
+import { DEFAULT_NATIVE_PIPELINE_CONFIG } from "./native-default-config";
+import { createNativePipelineFromConfig } from "./native-pipeline";
 import {
-  pipelineLanguageSelectionKey,
   type NormalizedPipelineLanguageSelection,
+  pipelineLanguageSelectionKey,
 } from "./pipeline-language";
+import type { Dictionaries, PipelineConfig } from "./types";
 
 type CreateSemanticPipelineOptions = {
   binding: NativeAnonymizeBinding;
@@ -67,17 +67,17 @@ const loadSemanticDictionaries = (
   }
   // Keep dictionary chunks out of the default-package import path. Bundlers
   // load only the chunks needed to assemble an unbundled semantic scope.
-  let dictionaries: Promise<Dictionaries>;
-  dictionaries = import("@stll/anonymize-data/cities")
-    .then(({ loadDictionaryBundle }: AnonymizeDataModule) =>
-      loadDictionaryBundle(defaultDictionaryBundleOptions(config)),
-    )
-    .catch((error: unknown) => {
-      if (dictionaryCache.get(key) === dictionaries) {
-        dictionaryCache.delete(key);
-      }
-      throw error;
-    });
+  const dictionaries: Promise<Dictionaries> =
+    import("@stll/anonymize-data/cities")
+      .then(({ loadDictionaryBundle }: AnonymizeDataModule) =>
+        loadDictionaryBundle(defaultDictionaryBundleOptions(config)),
+      )
+      .catch((error: unknown) => {
+        if (dictionaryCache.get(key) === dictionaries) {
+          dictionaryCache.delete(key);
+        }
+        throw error;
+      });
   setCachedEntry(dictionaryCache, key, dictionaries);
   return dictionaries;
 };
@@ -125,8 +125,10 @@ export const createSemanticPipeline = ({
     return cached;
   }
   const config = pipelineConfigFor(selection);
-  let pipeline: Promise<PreparedNativePipeline>;
-  pipeline = loadSemanticDictionaries(key, config)
+  const pipeline: Promise<PreparedNativePipeline> = loadSemanticDictionaries(
+    key,
+    config,
+  )
     .then((dictionaries) =>
       createNativePipelineFromConfig({
         binding,

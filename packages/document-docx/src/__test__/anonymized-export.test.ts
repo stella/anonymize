@@ -1,9 +1,10 @@
 import { describe, expect, test } from "bun:test";
+import { strToU8, unzipSync, zipSync } from "fflate";
+
 import {
   loadNativeAnonymizeBinding,
   setNativeBindingOverride,
 } from "@stll/anonymize";
-import { strToU8, unzipSync, zipSync } from "fflate";
 
 import {
   DocxAnonymizedExportError,
@@ -129,7 +130,7 @@ describe("rewriteDocxForAnonymizedExport", () => {
     const finalized: Uint8Array[] = [];
     setNativeBindingOverride(
       new Proxy(binding, {
-        get: (target, key, receiver) =>
+        get: (target, key, receiver): unknown =>
           key === "finalizeDocxAnonymizedExportNative"
             ? (document: Uint8Array) => {
                 finalized.push(document);

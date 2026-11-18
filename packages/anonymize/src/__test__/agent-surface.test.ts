@@ -3,9 +3,9 @@ import { describe, expect, test } from "bun:test";
 import {
   ANONYMIZE_ERROR_CODES,
   AnonymizeSurfaceError,
+  classifyToEnvelope,
   ERROR_CODE_EXIT_MAP,
   EXIT_CODES,
-  classifyToEnvelope,
   exitCodeForError,
   toErrorEnvelope,
 } from "../agent-surface";

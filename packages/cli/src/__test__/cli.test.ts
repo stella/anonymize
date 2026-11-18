@@ -1,4 +1,5 @@
 import { expect, setDefaultTimeout, test } from "bun:test";
+import { strToU8, zipSync } from "fflate";
 import { existsSync } from "node:fs";
 import {
   chmod,
@@ -15,7 +16,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { extractDocxText } from "@stll/anonymize-docx";
-import { strToU8, zipSync } from "fflate";
 
 setDefaultTimeout(60_000);
 

@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
-import { detectNative } from "../native-detect";
 import { contractTestConfig } from "../contract-config";
 import { loadTestDictionaries } from "../load-dictionaries";
+import { detectNative } from "../native-detect";
 
 const dictionaries = await loadTestDictionaries();
 

@@ -1,6 +1,6 @@
 import {
-  isLegalFormsEnabled,
   type GazetteerEntry,
+  isLegalFormsEnabled,
   type PipelineConfig,
 } from "./types";
 import { languageSelectionKey } from "./util/language-selection";
@@ -74,7 +74,7 @@ export const pipelineConfigKey = (
     `${config.threshold}:` +
     `${config.enableConfidenceBoost}:` +
     `${config.enableHotwordRules === true}:` +
-    `${config.enableCoreference === true}:` +
+    `${config.enableCoreference}:` +
     `${config.enableZoneClassification === true}:` +
     `${config.labels.toSorted().join(",")}:` +
     `${config.denyListCountries?.toSorted().join(",") ?? ""}:` +
@@ -84,6 +84,6 @@ export const pipelineConfigKey = (
     `${customRegexFingerprint}:` +
     `${config.enableGazetteer}:${gazFingerprint}:` +
     `${config.enableCountries !== false}:` +
-    `${config.standaloneStreetDetection ?? "off"}`
+    (config.standaloneStreetDetection ?? "off")
   );
 };

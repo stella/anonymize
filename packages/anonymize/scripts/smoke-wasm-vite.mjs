@@ -8,6 +8,7 @@ import { dirname, extname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import puppeteer from "puppeteer-core";
 import { build } from "vite";
+
 import stllAnonymizeWasm from "../wasm/dist/vite.mjs";
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");

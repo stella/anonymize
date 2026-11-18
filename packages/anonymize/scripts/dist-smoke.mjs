@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 /**
  * Smoke test against the built artifact. The regression suite
  * imports from src, so it cannot see failures that only exist in
@@ -9,28 +10,26 @@
  * Run after `bun run build`: `bun run smoke:dist`.
  */
 import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import {
-  copyPublishedFiles,
-  parsePublishedFiles,
-} from "./pruned-runtime-files.mjs";
-
+import { CAPABILITY_MANIFEST } from "../dist/capabilities.mjs";
 import {
   createPipelineContext,
   getDefaultNativePipeline,
   redactDefaultText,
 } from "../dist/index.mjs";
-import { CAPABILITY_MANIFEST } from "../dist/capabilities.mjs";
-import { createNativeAnonymizerFromPackage } from "../dist/native.mjs";
 import {
   createNativePipelineFromDefaultPackage,
   createNativePipelineFromPackageFile,
   loadNativeAnonymizeBinding,
 } from "../dist/native-node.mjs";
+import { createNativeAnonymizerFromPackage } from "../dist/native.mjs";
 import { assertBuiltCapabilities } from "./native-script-contracts.mjs";
+import {
+  copyPublishedFiles,
+  parsePublishedFiles,
+} from "./pruned-runtime-files.mjs";
 
 if (typeof globalThis.Bun === "undefined") {
   throw new Error("dist native smoke must run under Bun");

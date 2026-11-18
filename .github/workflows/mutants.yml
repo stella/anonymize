@@ -22,23 +22,23 @@ concurrency:
 jobs:
   mutants:
     name: cargo-mutants (redaction core)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup Rust
         run: |
-          rustup toolchain install 1.99.0 --profile minimal
-          rustup default 1.99.0
+          rustup toolchain install 1.99.1 --profile minimal
+          rustup default 1.99.1
 
       - name: Install pinned Rust tools (checksum-verified)
         # nextest is the test runner used by cargo-mutants. taiki-e/install-action
         # verifies release checksums, unlike a raw `curl | tar`. Version-pinned
         # for reproducibility, matching the exact-version pins above.
-        uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
+        uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
         with:
-          tool: nextest@0.9.145,cargo-mutants@27.1.0
+          tool: nextest@0.9.151,cargo-mutants@27.1.0
 
       - name: Cache Rust build
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -48,9 +48,9 @@ jobs:
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
             target/
-          key: ${{ runner.os }}-mutants-1.99.0-${{ hashFiles('Cargo.lock') }}
+          key: ${{ runner.os }}-mutants-1.99.1-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-mutants-1.99.0-
+            ${{ runner.os }}-mutants-1.99.1-
 
       - name: Run cargo-mutants
         # Scoped to the offset/redaction/normalization logic (~200 mutants),
@@ -72,7 +72,7 @@ jobs:
 
       - name: Upload mutants report
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: mutants-report
           path: mutants-out/

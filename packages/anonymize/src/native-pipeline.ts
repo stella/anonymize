@@ -1,15 +1,15 @@
-import { parseNativePreparedSearchConfig } from "./native-config-codec";
 import type { PipelineContext } from "./context";
 import { defaultContext } from "./context";
 import { applyPipelineLanguageScope } from "./language-scope";
+import {
+  createNativePipelineFromPackage,
+  type NativeAnonymizeBinding,
+  PreparedNativePipeline,
+} from "./native";
+import { parseNativePreparedSearchConfig } from "./native-config-codec";
 import type { NativePreparedSearchConfig } from "./native-search-config";
 import { pipelineConfigKey } from "./pipeline-cache-key";
 import type { Dictionaries, GazetteerEntry, PipelineConfig } from "./types";
-import {
-  createNativePipelineFromPackage,
-  PreparedNativePipeline,
-  type NativeAnonymizeBinding,
-} from "./native";
 
 export {
   PreparedNativePipeline,

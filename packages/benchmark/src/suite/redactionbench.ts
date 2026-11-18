@@ -1,8 +1,8 @@
+import { parquetReadObjects } from "hyparquet";
 import { createHash } from "node:crypto";
 import { mkdir, readFile, rename, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
-
-import { parquetReadObjects } from "hyparquet";
+import { isUint8Array } from "node:util/types";
 
 import { parseVerifiedArtifact } from "../verified-artifact";
 
@@ -157,9 +157,16 @@ const readBounded = async (response: Response): Promise<Uint8Array> => {
   const chunks: Uint8Array[] = [];
   let length = 0;
   while (true) {
-    const { done, value } = await reader.read();
-    if (done) {
+    const result = await reader.read();
+    if (result.done) {
       break;
+    }
+    const value: unknown = result.value;
+    if (!isUint8Array(value)) {
+      await reader.cancel();
+      throw new Error(
+        "RedactionBench download returned a non-byte response chunk",
+      );
     }
     length += value.byteLength;
     if (length > MAX_BYTES) {

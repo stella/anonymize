@@ -98,8 +98,8 @@ not redistributed here.
 
 - Project: DataFog Python
 - Source: https://github.com/DataFog/datafog-python
-- Version: `4.8.0`
-- Release: https://github.com/DataFog/datafog-python/releases/tag/v4.8.0
+- Version: pinned in [requirements-datafog.txt](python/requirements-datafog.txt)
+- Releases: https://github.com/DataFog/datafog-python/releases
 - License: MIT (see the upstream repository for the canonical license text)
 - Configuration: core `regex` engine only; optional spaCy and GLiNER engines
   are not installed or invoked

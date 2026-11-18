@@ -346,7 +346,8 @@ export const assertPerformanceReport: (
     const scenarioIndex = Math.floor(
       index / configuration["inputBytes"].length,
     );
-    const expectedScenario = configuration["scenarios"].at(scenarioIndex);
+    const expectedScenario: unknown =
+      configuration["scenarios"].at(scenarioIndex);
     if (!isPerformanceScenarioId(expectedScenario)) {
       throw new Error("configured scenario is invalid");
     }

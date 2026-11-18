@@ -1,35 +1,35 @@
-import { createRequire } from "node:module";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import process from "node:process";
-import { detectNativeLibc } from "../native-libc.mjs";
-import { loadNativeBinding as loadDefaultPlatformNativePackage } from "../index.cjs";
 
+import { loadNativeBinding as loadDefaultPlatformNativePackage } from "../index.cjs";
+import { detectNativeLibc } from "../native-libc.mjs";
+import { assertSupportedBunRuntime } from "./bun-version";
+import { createSemanticPipeline } from "./create-pipeline";
 import {
   assertNativeBindingVersion,
-  createNativePipelineFromPackage,
-  isNativeAnonymizeBinding,
-  type NativeOperatorConfig,
-  type NativeAnonymizeBinding,
-  type NativeNormalizeOptions,
-  type NativeSearchPackageInput,
-  PreparedNativeAnonymizer,
-  PreparedNativePipeline,
-  type NativeStaticRedactionResult,
-  diagnostics_json as diagnosticsJsonWithBinding,
   convert_external_detection_batch as convertExternalDetectionBatchWithBinding,
+  createNativePipelineFromPackage,
+  diagnostics_json as diagnosticsJsonWithBinding,
   diagnostics_stream_json as diagnosticsStreamJsonWithBinding,
+  isNativeAnonymizeBinding,
   load_prepared_package as loadPreparedPackageWithBinding,
   native_package_version as nativePackageVersionWithBinding,
+  type NativeAnonymizeBinding,
+  type NativeNormalizeOptions,
+  type NativeOperatorConfig,
+  type NativeSearchPackageInput,
+  type NativeStaticRedactionResult,
   normalize_for_search as normalizeForSearchWithBinding,
   prepare_search_package as prepareSearchPackageWithBinding,
+  PreparedNativeAnonymizer,
+  PreparedNativePipeline,
   redact_text as redactTextWithBinding,
   redact_text_json as redactTextJsonWithBinding,
   redact_text_stream_json as redactTextStreamJsonWithBinding,
   summary_diagnostics_json as summaryDiagnosticsJsonWithBinding,
 } from "./native";
-import { assertSupportedBunRuntime } from "./bun-version";
-import { createSemanticPipeline } from "./create-pipeline";
 import {
   normalizePipelineLanguageSelection,
   type PipelineLanguageSelection,
@@ -175,7 +175,7 @@ export const loadNativeAnonymizeBinding = (
       specifier === platformPackage &&
       isHostNativeTarget({ arch, libc, platform })
         ? loadDefaultPlatformNativePackage
-        : () => requireModule(specifier);
+        : (): unknown => requireModule(specifier);
     const binding = tryLoadNativeBinding({
       specifier,
       loadModule,
@@ -248,7 +248,7 @@ export const prepare_search_package = (
 export const load_prepared_package = (
   packageBytes: Uint8Array,
   options: NativeSdkOptions = {},
-) =>
+): PreparedNativeAnonymizer =>
   loadPreparedPackageWithBinding({
     binding: resolveNativeSdkBinding(options),
     packageBytes,
@@ -257,7 +257,8 @@ export const load_prepared_package = (
 export const load_prepared_package_file = (
   packagePath: string,
   options: NativeSdkOptions = {},
-) => load_prepared_package(readNativePipelinePackageFile(packagePath), options);
+): PreparedNativeAnonymizer =>
+  load_prepared_package(readNativePipelinePackageFile(packagePath), options);
 
 export const redact_text = (
   config: NativeSearchPackageInput,
@@ -350,6 +351,7 @@ export const readDefaultNativePipelinePackageFile = ({
   } catch (error) {
     throw new Error(
       `${defaultNativePipelinePackageDescription(language)} is unavailable: ${formatLoadError(error)}`,
+      { cause: error },
     );
   }
 };
@@ -374,12 +376,13 @@ export const availableDefaultNativePipelineLanguages = (): string[] => {
   } catch (error) {
     throw new Error(
       `Default native pipeline package directory is unavailable: ${formatLoadError(error)}`,
+      { cause: error },
     );
   }
   return [...languages].toSorted();
 };
 
-export const available_default_native_pipeline_languages =
+export const available_default_native_pipeline_languages: typeof availableDefaultNativePipelineLanguages =
   availableDefaultNativePipelineLanguages;
 
 export const readDefaultNativePipelinePackageFileAsync = async ({
@@ -391,6 +394,7 @@ export const readDefaultNativePipelinePackageFileAsync = async ({
   } catch (error) {
     throw new Error(
       `${defaultNativePipelinePackageDescription(language)} is unavailable: ${formatLoadError(error)}`,
+      { cause: error },
     );
   }
 };
@@ -481,7 +485,7 @@ export const createPipeline = async ({
   return applyDefaultNativePipelineWarmup(pipeline, resolvedWarmup);
 };
 
-export const create_pipeline = createPipeline;
+export const create_pipeline: typeof createPipeline = createPipeline;
 
 export const preloadDefaultNativePipeline = (
   options: DefaultNativePipelinePackageOptions = {},
@@ -661,10 +665,11 @@ const normalizeDefaultNativePipelineWarmup = (
     case DEFAULT_NATIVE_PIPELINE_WARMUPS.lazyRegex:
     case DEFAULT_NATIVE_PIPELINE_WARMUPS.none:
       return warmup;
+    default:
+      throw new Error(
+        'Default native pipeline warmup must be "lazy-regex" or "none"',
+      );
   }
-  throw new Error(
-    'Default native pipeline warmup must be "lazy-regex" or "none"',
-  );
 };
 
 const resolveNativeSdkBinding = ({

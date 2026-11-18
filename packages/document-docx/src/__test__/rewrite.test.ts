@@ -5,12 +5,12 @@ import { join } from "node:path";
 
 import {
   DOCX_ENTRY_MAX_BYTES,
+  type DocxBlockRewrite,
   DocxExtractionError,
   DocxRewriteError,
+  type DocxRewriteErrorCode,
   extractDocxText,
   rewriteDocxText,
-  type DocxBlockRewrite,
-  type DocxRewriteErrorCode,
 } from "../index";
 
 const CONTENT_TYPES_NAMESPACE =

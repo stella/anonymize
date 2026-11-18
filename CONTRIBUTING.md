@@ -12,12 +12,12 @@ Install these prerequisites:
 - Node.js 22.18 or newer for the TypeScript-aware build configuration
 - rustup; the repository installs Rust 1.96.0 and the
   `wasm32-unknown-unknown` target through `rust-toolchain.toml`
-- `wasm-bindgen-cli` 0.2.126 for full builds and browser tests
+- `wasm-bindgen-cli` 0.2.130 for full builds and browser tests
 
 Install the pinned WebAssembly tool with:
 
 ```bash
-cargo install wasm-bindgen-cli --version 0.2.126 --locked
+cargo install wasm-bindgen-cli --version 0.2.130 --locked
 ```
 
 Python checks additionally require `uv`. The complete Rust suite uses
@@ -39,9 +39,8 @@ a pull request, run the applicable full gates:
 
 ```bash
 bun run lint
-bun run format:check
+bun fmt --check
 bun run typecheck
-bun run check:typecheck-parity
 bun run test
 bun run check:version
 ```
@@ -58,7 +57,7 @@ The full `bun run rust:check` additionally runs `cargo ci-stella-lint` on the
 pinned stable toolchain. Install the shared source lint with:
 
 ```sh
-cargo install --git https://github.com/stella/tooling --rev a1bd81740ecb4b66999f56d1716e1190c4e7272f --locked stella_source_lint
+cargo install --git https://github.com/stella/tooling --rev 51a4412dfe02203c24a3495f14ec99405acb7527 --locked stella_source_lint
 ```
 
 ## Choose the right change location
@@ -134,4 +133,4 @@ Describe only public engineering context visible in the repository and diff.
 
 ## TypeScript tooling
 
-Workspace typechecks use `bun check --no-pretty --all --project=<tsconfig>` for production, test, and WASM configurations. CI compares diagnostic coverage with TypeScript using `bun run check:typecheck-parity`. Editors retain the TypeScript language service because Bun has no language server. Keep TypeScript for editors and tsdown declaration generation and diagnostic parity.
+Workspace typechecks use `bun check --no-pretty --all --project=<tsconfig>` for production, test, and WASM configurations. Editors retain the TypeScript language service because Bun has no language server. tsdown emits declarations with its oxc generator, which reads no type information, so every exported value and function needs an explicit type (a `satisfies` clause on an export becomes a typed alias check). No manifest declares `typescript`, the root included.

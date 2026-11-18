@@ -15,13 +15,15 @@ lifetime, restoration, and what metadata can still carry PII.
 | Encrypted session archive import/export   | Yes  | Yes    | Yes  | DOCX only | No; managed store    |
 | DOCX extraction/coverage API              | Yes  | Yes    | No   | No        | Aggregate inspection |
 | DOCX rewrite/anonymize/restore            | Yes  | Yes    | No   | Yes       | Yes                  |
+| DOCX anonymized export                    | Yes  | Yes    | No   | No        | No                   |
 | PDF structure/coverage inspection         | Yes  | Yes    | Yes  | No        | No                   |
 | PDF destructive raster output             | Yes  | Yes    | No   | Yes       | Yes, path-only       |
 | Runtime capability discovery              | Yes  | No     | Yes  | Yes       | Manifest + tools     |
 
-Node and Python DOCX adapters share bounded extraction, rewrite, and restoration
-planning in Rust. Availability gates require every surface in a parity profile,
-and committed behavioral vectors run through both bindings.
+Node and Python DOCX adapters share bounded extraction, rewrite, anonymized
+export, and restoration planning in Rust. Availability gates require every
+surface in a parity profile, and committed behavioral vectors run through both
+bindings.
 
 The local MCP server deliberately exposes a narrower workflow surface. It uses
 stdio only, requires explicit absolute input and output paths under configured

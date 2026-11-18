@@ -1,3 +1,6 @@
+import { afterAll, describe, expect, setDefaultTimeout, test } from "bun:test";
+import { strToU8, zipSync } from "fflate";
+import { Buffer } from "node:buffer";
 /**
  * Python-binding parity.
  *
@@ -17,49 +20,44 @@
  * native-adapter-parity.test.ts).
  */
 import { spawnSync } from "node:child_process";
-import { Buffer } from "node:buffer";
 import { createHash } from "node:crypto";
 import {
   copyFileSync,
   cpSync,
   existsSync,
   mkdtempSync,
-  readFileSync,
   readdirSync,
+  readFileSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterAll, describe, expect, setDefaultTimeout, test } from "bun:test";
-import { strToU8, zipSync } from "fflate";
-
 import {
   DocxAnonymizedExportError,
   extractDocxText,
   rewriteDocxForAnonymizedExport,
 } from "../../../document-docx/src/index";
-
+import {
+  CAPABILITY_PARITY_PROFILES,
+  CAPABILITY_SURFACES,
+  type CapabilitySurfaceId,
+} from "../capabilities";
 import {
   CALLER_DETECTION_CONTRACT_VERSION,
+  convert_external_detection_batch,
   EXTERNAL_DETECTION_BATCH_MAX_BYTES,
   EXTERNAL_DETECTION_DOCUMENT_MAX_BYTES,
   EXTERNAL_DETECTION_MAX_DETECTIONS,
   EXTERNAL_DETECTION_MAX_LABEL_MAPPINGS,
   EXTERNAL_DETECTION_MAX_METADATA_BYTES,
   EXTERNAL_DETECTION_PROVIDER_ID_MAX_BYTES,
-  convert_external_detection_batch,
   getDefaultNativePipeline,
   loadNativeAnonymizeBinding,
   redact_default_text_json,
   SUPPORTED_LANGUAGES,
 } from "../native-node";
-import {
-  CAPABILITY_PARITY_PROFILES,
-  CAPABILITY_SURFACES,
-  type CapabilitySurfaceId,
-} from "../capabilities";
 
 setDefaultTimeout(600_000);
 
@@ -1913,7 +1911,9 @@ describe("python binding parity", () => {
           if (error instanceof Error) {
             return error.message;
           }
-          throw new TypeError("expected an Error from the Node binding");
+          throw new TypeError("expected an Error from the Node binding", {
+            cause: error,
+          });
         }
         throw new Error("invalid external detection batch was accepted");
       });

@@ -1,6 +1,6 @@
 {
   "name": "@stll/anonymize-mcp",
-  "version": "3.0.7",
+  "version": "4.0.0",
   "description": "Path-only local MCP server for stella PII anonymization",
   "type": "module",
   "bin": {
@@ -8,6 +8,7 @@
   },
   "exports": {
     ".": {
+      "@stll/anonymize-source": "./src/index.ts",
       "types": "./dist/index.d.mts",
       "import": "./dist/index.mjs",
       "default": "./dist/index.mjs"
@@ -36,24 +37,22 @@
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json && bun check --no-pretty --all --project=tsconfig.test.json",
     "test": "bun test src/__test__/local.test.ts src/__test__/server.test.ts src/__test__/instructions.test.ts && bun run test:node-runtime",
     "pretest:node-runtime": "test -f dist/server-entry.mjs || bun run build",
-    "test:node-runtime": "node --import tsx --test src/__test__/durable-sessions.test.ts && node scripts/test-packed-bin.mjs",
-    "format": "oxfmt ."
+    "test:node-runtime": "node --import tsx --test src/__test__/durable-sessions.test.ts && node scripts/test-packed-bin.mjs"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.31.0",
-    "@stll/anonymize": "3.0.7",
-    "@stll/anonymize-docx": "^3.0.7",
-    "@stll/anonymize-pdf": "3.0.7",
-    "fs-native-extensions": "^1.5.1",
-    "zod": "^4.6.5"
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "@stll/anonymize": "4.0.0",
+    "@stll/anonymize-docx": "^4.0.0",
+    "@stll/anonymize-pdf": "4.0.0",
+    "fs-native-extensions": "^1.5.3",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@types/node": "^26.6.4",
-    "bun-types": "1.4.3",
+    "@types/node": "^26.6.6",
+    "bun-types": "1.4.4",
     "fflate": "^0.8.3",
-    "tsdown": "0.23.0",
+    "tsdown": "0.23.7",
     "tsx": "^4.23.15",
-    "typescript": "7.0.2",
-    "@stll/typescript-config": "0.8.0"
+    "@stll/typescript-config": "0.10.0"
   }
 }

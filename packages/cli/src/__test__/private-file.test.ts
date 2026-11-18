@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import {
-  lstat,
   link,
+  lstat,
   mkdtemp,
-  readFile,
   readdir,
+  readFile,
   stat,
   symlink,
   writeFile,
