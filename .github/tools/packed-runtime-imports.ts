@@ -5,14 +5,19 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const isRuntimeScript = (path: string) =>
   /\.(?:[cm]?[jt]s|[jt]sx)$/u.test(path) && !/\.d\.[cm]?ts$/u.test(path);
 
+// Conditions no consumer runtime resolves: declarations, and the
+// workspace-only source condition that points programs at unpacked sources.
+const nonRuntimeConditions = new Set([
+  "types",
+  "typings",
+  "@stll/anonymize-source",
+]);
 const exportTargets = (value: unknown): string[] => {
   if (typeof value === "string") return [value];
   if (Array.isArray(value)) return value.flatMap(exportTargets);
   if (!isRecord(value)) return [];
   return Object.entries(value).flatMap(([condition, target]) =>
-    condition === "types" || condition === "typings"
-      ? []
-      : exportTargets(target),
+    nonRuntimeConditions.has(condition) ? [] : exportTargets(target),
   );
 };
 
