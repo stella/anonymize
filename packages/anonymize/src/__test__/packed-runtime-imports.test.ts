@@ -24,7 +24,13 @@ const fixture = () =>
 const manifest = {
   main: "./other.cjs",
   bin: { command: "./scripts/cli.mjs" },
-  exports: { ".": { types: "./missing.d.ts", import: "./dist/value.mjs" } },
+  exports: {
+    ".": {
+      "@stll/anonymize-source": "./src/unpacked.ts",
+      types: "./missing.d.ts",
+      import: "./dist/value.mjs",
+    },
+  },
 };
 
 test("every shipped script and transitive static import must be packed", () => {
