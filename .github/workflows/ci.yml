@@ -200,11 +200,13 @@ jobs:
         run: bun run check:toolchain
       - name: Typecheck workspace sources before any build
         run: |
-          if compgen -G 'packages/*/dist' > /dev/null; then
+          if compgen -G 'packages/*/dist' > /dev/null ||
+            [ -e packages/anonymize/wasm/dist ]; then
             echo "::error::build outputs exist before the source typecheck"
             exit 1
           fi
-          bun run typecheck
+          # --force: a cached result from a checkout with outputs proves nothing.
+          bun run typecheck --force
       - name: Audit Bun dependencies
         # GHSA-fc5q-39xc-vjpf: picomatch <=4.0.7 backtracks on single-branch
         # repeated extglobs. 4.0.7 is the latest release and no patched

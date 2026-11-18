@@ -11,8 +11,8 @@ import {
 import config from "../../oxlint.config";
 import { isJsonObject, parseJsonObject } from "./json-values.mjs";
 
-// Workspace-only export condition: programs read sibling packages from their
-// sources, so lint and typecheck never need build outputs.
+// Workspace-only export condition: programs resolve sibling packages to their
+// sources, so typecheck never needs build outputs.
 const sourceCondition = "@stll/anonymize-source";
 
 const read = (path: string) =>
@@ -125,6 +125,8 @@ test("every program reads workspace packages from their sources", async () => {
       path,
       conditions: [sourceCondition],
     });
+  // Workspace packages that programs import. The nested wasm package is only
+  // smoke-tested from its built output, so it has no source condition.
   const manifests = [...new Bun.Glob("packages/*/package.json").scanSync()];
   for (const manifestPath of manifests) {
     const manifest = parseJsonObject(await Bun.file(manifestPath).text());
@@ -146,6 +148,14 @@ test("every program reads workspace packages from their sources", async () => {
         manifestPath,
         entry,
         first: sourceCondition,
+      });
+      // A package export target is `./`-relative and stays in the package.
+      expect({ manifestPath, entry, source }).toEqual({
+        manifestPath,
+        entry,
+        source: expect.stringMatching(
+          /^\.\/(?!.*(?:^|\/)\.\.(?:\/|$)).+\.ts$/u,
+        ),
       });
       expect(
         typeof source === "string" &&
