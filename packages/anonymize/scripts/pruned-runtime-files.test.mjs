@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import {
-  mkdtempSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
   rmSync,
   symlinkSync,

@@ -17,10 +17,7 @@ export type PatternSlice = {
 };
 
 type NativeSearchPatternKind =
-  | "literal"
-  | "literal-with-options"
-  | "regex"
-  | "fuzzy";
+  "literal" | "literal-with-options" | "regex" | "fuzzy";
 
 export type NativeSearchPattern = {
   kind: NativeSearchPatternKind;

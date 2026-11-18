@@ -5,16 +5,16 @@ import { extractDocxText } from "./extract";
 import { docxLocationKey, docxLocationsEqual } from "./location";
 import { rewriteDocxText } from "./rewrite";
 import {
+  type AnonymizeDocxOptions,
   DOCX_ANONYMIZATION_ERROR_CODES,
   DOCX_COVERAGE_MODES,
-  type AnonymizeDocxOptions,
   type DocxAnonymizationErrorCode,
   type DocxAnonymizationResult,
   type DocxBlockCallerDetections,
   type DocxBlockRewrite,
 } from "./types";
 
-export const DOCX_ANONYMIZATION_MAX_CALLER_DETECTIONS =
+export const DOCX_ANONYMIZATION_MAX_CALLER_DETECTIONS: number =
   CALLER_DETECTION_MAX_COUNT;
 
 export class DocxAnonymizationError extends Error {

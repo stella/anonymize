@@ -1,9 +1,9 @@
+import { describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { describe, expect, test } from "bun:test";
-
+import { runSealedBoundary } from "../sealed-boundary";
 import {
   assertSealedAggregateReport,
   assertSupportedSealedAggregateReport,
@@ -17,9 +17,8 @@ import {
   serializeSealedAggregateReport,
   type SupportedSealedAggregateReport,
 } from "../sealed-report";
-import { parseVerifiedArtifact } from "../verified-artifact";
-import { runSealedBoundary } from "../sealed-boundary";
 import { BENCHMARK_CORPORA } from "../suite/registry";
+import { parseVerifiedArtifact } from "../verified-artifact";
 
 const report = (): SealedAggregateReport => ({
   schemaVersion: SEALED_AGGREGATE_REPORT_SCHEMA_VERSION,

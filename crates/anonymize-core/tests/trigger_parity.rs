@@ -867,7 +867,7 @@ fn match_pattern_trigger_surfaces_backtrack_budget_exhaustion() {
     "Ref",
     "registration number",
     TriggerStrategy::MatchPattern {
-      pattern: String::from(r"(a+)+\1$"),
+      pattern: String::from(r"(a|aa)+\1$"),
       flags: None,
     },
   );

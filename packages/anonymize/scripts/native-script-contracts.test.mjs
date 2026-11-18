@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { detectNativeLibc } from "../native-libc.mjs";
 
+import { detectNativeLibc } from "../native-libc.mjs";
 import {
-  NATIVE_LIBRARY_FILES,
   assertBuiltCapabilities,
+  NATIVE_LIBRARY_FILES,
   nativeLibraryName,
   readNativePackageInput,
 } from "./native-script-contracts.mjs";

@@ -1,5 +1,4 @@
 import languageScopes from "./data/language-scopes.json";
-
 import type { PipelineConfig } from "./types";
 
 type LanguageScope = {

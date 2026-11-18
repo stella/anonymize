@@ -2,8 +2,8 @@ import { join } from "node:path";
 
 import { createBenchmarkAdapters } from "./adapters";
 import { createNymAssistedAdapter } from "./adapters/nym-assisted";
-import type { GroundTruthDocument } from "./ground-truth";
 import { benchmarkSourceGitSha } from "./git-revision";
+import type { GroundTruthDocument } from "./ground-truth";
 import { runSealedBoundary } from "./sealed-boundary";
 import {
   type GermanLerAggregateMetrics,

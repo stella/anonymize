@@ -1,23 +1,23 @@
+import { OPERATOR_TYPES, type OperatorType } from "./constants";
 import type {
-  NativeBindingRedactionEntry,
-  NativeBindingOperatorEntry,
   CanonicalPipelineEntity,
-  CanonicalStaticRedactionResult,
-  CanonicalSessionMetadata,
   CanonicalSessionDeletionSummary,
+  CanonicalSessionMetadata,
   CanonicalSessionRedactionPlanResult,
+  CanonicalStaticRedactionResult,
+  NativeBindingOperatorEntry,
+  NativeBindingRedactionEntry,
   NativeSessionStatus,
 } from "./native";
-import { OPERATOR_TYPES, type OperatorType } from "./constants";
 import {
   arrayOf,
+  type Fields,
   isNumber,
   isString,
+  literalUnion,
   objectOf,
   oneOf,
-  literalUnion,
   optional,
-  type Fields,
 } from "./native-json-codec";
 
 const isNull = (value: unknown) => value === null;

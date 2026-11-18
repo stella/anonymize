@@ -1,15 +1,15 @@
 import { join } from "node:path";
 
 import { createBenchmarkAdapters } from "./adapters";
-import type { GroundTruthDocument } from "./ground-truth";
 import { benchmarkSourceGitSha } from "./git-revision";
+import type { GroundTruthDocument } from "./ground-truth";
 import { runSealedBoundary } from "./sealed-boundary";
 import {
+  normalizeSealedProviderVersion,
   type RedactionBenchAggregateMetrics,
   SEALED_AGGREGATE_REPORT_SCHEMA_VERSION,
   type SealedAggregateReport,
   type SealedLibraryResult,
-  normalizeSealedProviderVersion,
   writeSealedAggregateReport,
 } from "./sealed-report";
 import {

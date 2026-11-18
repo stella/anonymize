@@ -31,8 +31,8 @@ setDefaultTimeout(60_000);
 import { DEFAULT_ENTITY_LABELS } from "../constants";
 import type { NativePipelineEntity } from "../native";
 import type { Dictionaries, PipelineConfig } from "../types";
-import { detectNative } from "./native-detect";
 import { loadTestDictionaries } from "./load-dictionaries";
+import { detectNative } from "./native-detect";
 
 const baseConfig: Omit<PipelineConfig, "dictionaries"> = {
   threshold: 0.3,

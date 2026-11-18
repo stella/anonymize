@@ -1,20 +1,20 @@
 import { loadNativeAnonymizeBinding } from "@stll/anonymize";
 
 import {
-  DOCX_PART_TYPES,
-  DOCX_EXTRACTION_ERROR_CODES,
-  DOCX_REWRITE_ERROR_CODES,
-  type DocxBlockRewrite,
-  type DocxBlockLocation,
-  type DocxExtractionErrorCode,
-  type DocxRewriteErrorCode,
-  type DocxRewriteResult,
-} from "./types";
-import {
   DOCX_UNCOMPRESSED_MAX_BYTES,
   DOCX_XML_MAX_DEPTH,
   DocxExtractionError,
 } from "./extract";
+import {
+  DOCX_EXTRACTION_ERROR_CODES,
+  DOCX_PART_TYPES,
+  DOCX_REWRITE_ERROR_CODES,
+  type DocxBlockLocation,
+  type DocxBlockRewrite,
+  type DocxExtractionErrorCode,
+  type DocxRewriteErrorCode,
+  type DocxRewriteResult,
+} from "./types";
 
 export class DocxRewriteError extends Error {
   readonly code: DocxRewriteErrorCode;
@@ -46,7 +46,7 @@ const ownDataRecord = (value: unknown, fields?: readonly string[]): object => {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     return invalidLocation("DOCX rewrite locations must be plain objects");
   }
-  const prototype = Object.getPrototypeOf(value);
+  const prototype: unknown = Object.getPrototypeOf(value);
   if (prototype !== Object.prototype && prototype !== null) {
     return invalidLocation("DOCX rewrite locations must be plain objects");
   }
@@ -85,8 +85,11 @@ const isDocxPartType = (
 ): value is DocxBlockLocation["part"]["type"] =>
   Object.values(DOCX_PART_TYPES).some((type) => type === value);
 
+const isArray = (value: unknown): value is readonly unknown[] =>
+  Array.isArray(value);
+
 const copyPath = (path: unknown): number[] => {
-  if (!Array.isArray(path)) {
+  if (!isArray(path)) {
     return invalidLocation("DOCX rewrite location paths must be arrays");
   }
   if (path.length > DOCX_XML_MAX_DEPTH) {
@@ -98,8 +101,12 @@ const copyPath = (path: unknown): number[] => {
   const copy: number[] = [];
   for (let pathIndex = 0; pathIndex < path.length; pathIndex += 1) {
     const descriptor = Object.getOwnPropertyDescriptor(path, pathIndex);
-    const index = descriptor?.value;
-    if (index === undefined || !Number.isSafeInteger(index) || index < 0) {
+    const index: unknown = descriptor?.value;
+    if (
+      typeof index !== "number" ||
+      !Number.isSafeInteger(index) ||
+      index < 0
+    ) {
       throw new DocxRewriteError(
         DOCX_REWRITE_ERROR_CODES.invalidReplacement,
         "DOCX rewrite location paths must contain non-negative integers",
@@ -193,7 +200,7 @@ const preflightRewritePlan = (
         "DOCX rewrite plans must not contain sparse blocks",
       );
     }
-    if (!Array.isArray(rewrite.replacements)) {
+    if (!isArray(rewrite.replacements)) {
       throw new DocxRewriteError(
         DOCX_REWRITE_ERROR_CODES.invalidReplacement,
         "DOCX block rewrite replacements must be an array",

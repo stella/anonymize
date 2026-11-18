@@ -14,13 +14,13 @@ import { parseArgs } from "node:util";
 
 import type { NativeOpenSessionArchiveOptions } from "@stll/anonymize";
 import {
-  DOCX_COVERAGE_MODES,
   anonymizeDocx,
-  restoreDocxText,
+  DOCX_COVERAGE_MODES,
   type DocxAnonymizationSession,
   type DocxAnonymizationSummary,
   type DocxRestorationResult,
   type DocxRestorationSession,
+  restoreDocxText,
 } from "@stll/anonymize-docx";
 
 import { parseCountries, UsageError } from "./args";
@@ -66,8 +66,7 @@ type DocxCommand =
   | ({ type: "restore" } & DocxCommonOptions);
 
 export type DocxPipelineRequest =
-  | { type: "anonymize"; detection: DocxDetectionOptions }
-  | { type: "restore" };
+  { type: "anonymize"; detection: DocxDetectionOptions } | { type: "restore" };
 
 type DocxCliSession = DocxAnonymizationSession &
   DocxRestorationSession & {
@@ -440,6 +439,7 @@ const acquireSessionArchiveLock = async (
     if (isNodeError(error, "EEXIST")) {
       throw new Error(
         `encrypted session archive is locked by another continuation; if no process is running, remove the stale lock "${lockPath}"`,
+        { cause: error },
       );
     }
     throw error;
@@ -663,6 +663,7 @@ const runDocxAnonymize = async (
       const message = error instanceof Error ? error.message : String(error);
       throw new Error(
         `encrypted session archive was updated, but DOCX output could not be published: ${message}`,
+        { cause: error },
       );
     }
     outputSummary(command, "anonymized", result.summary);

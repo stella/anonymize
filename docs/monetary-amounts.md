@@ -93,8 +93,8 @@ entity in place while still recording that it was processed, so a document can
 have its deal sizes censored and nothing else:
 
 ```ts
-import { DEFAULT_ENTITY_LABELS } from "@stll/anonymize/constants";
 import { getDefaultNativePipeline } from "@stll/anonymize";
+import { DEFAULT_ENTITY_LABELS } from "@stll/anonymize/constants";
 
 const pipeline = getDefaultNativePipeline({ language: "en" });
 const operators = Object.fromEntries(
@@ -216,8 +216,9 @@ well.
 - Consistency is by normalized surface form: `$25,000,000`, `USD 25,000,000`,
   and `$25m` are three placeholders, not one.
 - With the all-language package an organization name may absorb prose between
-  two capitalized words (`Northwind Ventures LLC invested in Acme Holdings
-  Ltd.` becomes one organization) because languages such as Czech or French
+  two capitalized words
+  (`Northwind Ventures LLC invested in Acme Holdings Ltd.` becomes one
+  organization) because languages such as Czech or French
   capitalize only the first word of a name. The `en` package closes that
   bridge to a connector set (`of`, `the`, `and`, `for`, `&`, `de`, `von`, …),
   so English prose between two organizations is left in place.

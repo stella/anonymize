@@ -214,7 +214,7 @@ const inspectPageGeometry = (
   try {
     const inspection = decodePdfInspection(inspect(document));
     if (
-      inspection.encrypted === true ||
+      inspection.encrypted ||
       inspection.pageCount < 1 ||
       inspection.pageCount > PDF_MAX_PAGES
     ) {
@@ -648,8 +648,14 @@ export const renderPdfWithPopplerTesseract = async (
           pixels: page.pixels,
         });
       } finally {
-        await unlink(pagePath).catch((error: NodeJS.ErrnoException) => {
-          if (error.code === "ENOENT") return;
+        await unlink(pagePath).catch((error: unknown) => {
+          if (
+            typeof error === "object" &&
+            error !== null &&
+            "code" in error &&
+            error.code === "ENOENT"
+          )
+            return;
           throw providerError(
             PDF_LOCAL_PROVIDER_ERROR_CODES.cleanupFailed,
             "local PDF page raster could not be removed",

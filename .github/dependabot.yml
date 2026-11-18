@@ -37,12 +37,17 @@ updates:
           - version-update:semver-major
           - version-update:semver-minor
           - version-update:semver-patch
-      - dependency-name: oxfmt
+      - dependency-name: lefthook
         update-types:
           - version-update:semver-major
           - version-update:semver-minor
           - version-update:semver-patch
-      - dependency-name: lefthook
+      - dependency-name: npm
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: pnpm
         update-types:
           - version-update:semver-major
           - version-update:semver-minor
@@ -53,11 +58,6 @@ updates:
           - version-update:semver-minor
           - version-update:semver-patch
       - dependency-name: "@typescript/native"
-        update-types:
-          - version-update:semver-major
-          - version-update:semver-minor
-          - version-update:semver-patch
-      - dependency-name: typescript-compat
         update-types:
           - version-update:semver-major
           - version-update:semver-minor
@@ -96,6 +96,9 @@ updates:
     cooldown:
       default-days: 5
     groups:
+      stella-shared:
+        patterns:
+          - stella/.github/*
       dependencies:
         patterns:
           - "*"

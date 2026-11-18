@@ -1,11 +1,11 @@
 import { parseArgs } from "node:util";
 
 import {
+  buildFeedbackSubmission,
   FEEDBACK_KINDS,
+  type FeedbackKind,
   MAX_FEEDBACK_BODY_CHARS,
   MAX_FEEDBACK_TITLE_CHARS,
-  buildFeedbackSubmission,
-  type FeedbackKind,
 } from "@stll/anonymize/feedback";
 
 import { UsageError } from "./args";

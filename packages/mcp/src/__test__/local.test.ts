@@ -1,17 +1,15 @@
-import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { extractDocxText } from "@stll/anonymize-docx";
-import { inspectPdf } from "@stll/anonymize-pdf";
+import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import { strToU8, zipSync } from "fflate";
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import {
   chmod,
-  mkdtemp,
   link as createHardLink,
   mkdir,
+  mkdtemp,
   readFile,
   realpath,
   rename,
@@ -24,10 +22,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 
+import { extractDocxText } from "@stll/anonymize-docx";
+import { inspectPdf } from "@stll/anonymize-pdf";
+
 import {
+  createAnonymizeMcpServer,
   LocalAnonymizeService,
   PathScope,
-  createAnonymizeMcpServer,
 } from "../local";
 import { requirePresent } from "./require-present";
 
@@ -88,9 +89,7 @@ const temporaryDirectory = async (): Promise<string> => {
 };
 
 type ExternalOffsetUnit =
-  | "unicode-code-point"
-  | "utf16-code-unit"
-  | "utf8-byte";
+  "unicode-code-point" | "utf16-code-unit" | "utf8-byte";
 
 const externalBatch = (
   document: Uint8Array,

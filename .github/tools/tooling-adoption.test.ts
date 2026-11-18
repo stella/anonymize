@@ -8,9 +8,16 @@ import {
 } from "@stll/oxlint-plugin";
 
 import config from "../../oxlint.config";
+import { isJsonObject, parseJsonObject } from "./json-values.mjs";
 
 const read = (path: string) =>
   readFileSync(new URL(`../../${path}`, import.meta.url), "utf8");
+
+const object = (value: unknown) => {
+  if (!isJsonObject(value)) throw new TypeError("Expected an object");
+  return value;
+};
+const property = (value: unknown, name: string) => object(value)[name];
 
 test("uses shared library defaults and the complete portable safety pack", async () => {
   expect(config.rules).toMatchObject(portableSafetyRules);
@@ -21,6 +28,12 @@ test("uses shared library defaults and the complete portable safety pack", async
     ...portableSafetyPluginSpecifiers,
     "./oxlint.plugin.ts",
   ]);
+  // Every program pins the root's exact @stll/typescript-config release.
+  const sharedTypeScriptConfig: unknown = property(
+    property(parseJsonObject(read("package.json")), "devDependencies"),
+    "@stll/typescript-config",
+  );
+  expect(sharedTypeScriptConfig).toMatch(/^\d+\.\d+\.\d+$/u);
   // Select the environment of the complete program: shipped Node adapters,
   // Bun benchmark/corpus programs, and runtime-neutral dictionary data.
   const environments = new Map(
@@ -41,18 +54,20 @@ test("uses shared library defaults and the complete portable safety pack", async
     const environment = environments.get(path);
     if (environment === undefined)
       throw new Error(`Unclassified program: ${path}`);
-    const tsconfig = await Bun.file(path).json();
+    const tsconfig = parseJsonObject(await Bun.file(path).text());
     const preset = `@stll/typescript-config/${environment}.json`;
     expect(tsconfig.extends).toBe(preset);
-    expect(Object.keys(tsconfig.compilerOptions ?? {})).toEqual(
+    expect(Object.keys(object(tsconfig.compilerOptions ?? {}))).toEqual(
       path === "packages/anonymize/tsconfig.json"
         ? ["customConditions", "lib"]
         : [],
     );
-    const manifest = await Bun.file(
-      path.replace("tsconfig.json", "package.json"),
-    ).json();
-    expect(manifest.devDependencies["@stll/typescript-config"]).toBe("0.8.0");
+    const manifest = parseJsonObject(
+      await Bun.file(path.replace("tsconfig.json", "package.json")).text(),
+    );
+    expect(property(manifest.devDependencies, "@stll/typescript-config")).toBe(
+      sharedTypeScriptConfig,
+    );
     expect(
       Bun.resolveSync(preset, path.replace("tsconfig.json", "")),
     ).toContain("@stll");
@@ -72,7 +87,7 @@ test("test and tool programs use the shared Bun environment", async () => {
     "packages/mcp/scripts/tsconfig.json",
     "packages/mcp/test-fixtures/tsconfig.json",
   ]) {
-    const tsconfig = await Bun.file(path).json();
+    const tsconfig = parseJsonObject(await Bun.file(path).text());
     expect(tsconfig.extends).toBe("@stll/typescript-config/bun.json");
     if (path === "packages/anonymize/tsconfig.test.json") {
       expect(tsconfig.compilerOptions).toEqual({
@@ -85,18 +100,22 @@ test("test and tool programs use the shared Bun environment", async () => {
 });
 
 test("declares runtime-only generated cloud setup with Rust checks", () => {
-  const toolchain = JSON.parse(read("stll-toolchain.json"));
-  expect(toolchain.cloud.install).toBe("bun install --frozen-lockfile");
-  const rust = Bun.TOML.parse(read("rust-toolchain.toml"));
-  expect(rust.toolchain.components).toEqual(["rustfmt", "clippy"]);
-  expect(rust.toolchain.targets).toEqual(["wasm32-unknown-unknown"]);
+  const toolchain = parseJsonObject(read("stll-toolchain.json"));
+  expect(property(toolchain.cloud, "install")).toBe(
+    "bun install --frozen-lockfile",
+  );
+  const rust = object(Bun.TOML.parse(read("rust-toolchain.toml")));
+  expect(property(rust.toolchain, "components")).toEqual(["rustfmt", "clippy"]);
+  expect(property(rust.toolchain, "targets")).toEqual([
+    "wasm32-unknown-unknown",
+  ]);
   const script = read(".agents/cloud-setup.sh");
   expect(script).toContain("Generated");
   expect(script).toContain(read(".node-version").trim());
   expect(script).toContain("install --frozen-lockfile");
   expect(script).not.toContain(".env.cloud");
-  const settings = JSON.parse(read(".claude/settings.json"));
-  expect(settings.hooks.SessionStart).toHaveLength(1);
+  const settings = parseJsonObject(read(".claude/settings.json"));
+  expect(property(settings.hooks, "SessionStart")).toHaveLength(1);
 });
 
 test("workspaces importing Node modules declare their own Node types", () => {
@@ -107,8 +126,11 @@ test("workspaces importing Node modules declare their own Node types", () => {
     if (!/\b(?:from\s*|import\s*\()\s*["']node:/u.test(read(file))) continue;
     const owner = file.split("/").slice(0, 2).join("/");
     owners.add(owner);
-    const manifest = JSON.parse(read(`${owner}/package.json`));
-    expect(manifest.devDependencies["@types/node"], owner).toBeDefined();
+    const manifest = parseJsonObject(read(`${owner}/package.json`));
+    expect(
+      property(manifest.devDependencies, "@types/node"),
+      owner,
+    ).toBeDefined();
     expect(
       Bun.resolveSync("@types/node/package.json", `${process.cwd()}/${owner}`),
     ).toContain("@types");
@@ -118,10 +140,10 @@ test("workspaces importing Node modules declare their own Node types", () => {
 });
 
 test("keeps third-party quarantine and exact first-party tooling exemptions", () => {
-  const bunfig = Bun.TOML.parse(read("bunfig.toml"));
-  expect(bunfig.install.minimumReleaseAge).toBe(432_000);
-  expect(bunfig.install.linker).toBe("isolated");
-  const exceptions = bunfig.install.minimumReleaseAgeExcludes;
+  const bunfig = object(Bun.TOML.parse(read("bunfig.toml")));
+  expect(property(bunfig.install, "minimumReleaseAge")).toBe(432_000);
+  expect(property(bunfig.install, "linker")).toBe("isolated");
+  const exceptions = property(bunfig.install, "minimumReleaseAgeExcludes");
   for (const name of [
     "@stll/oxlint-config",
     "@stll/oxlint-plugin",
@@ -129,16 +151,37 @@ test("keeps third-party quarantine and exact first-party tooling exemptions", ()
   ]) {
     expect(exceptions).toContain(name);
   }
-  expect(
-    exceptions.every(
-      (name: string) => name.startsWith("@stll/") && !name.includes("*"),
+  // Third-party exclusions are temporary: each one carries an exact UTC
+  // expiry that has not passed yet.
+  const expiring = new Map(
+    Array.from(
+      read("bunfig.toml").matchAll(
+        /^\s*"(?<name>[^"@][^"*]*)"\s*,?\s*#\s*quarantine-expires:\s*(?<timestamp>\S+)\s*$/gm,
+      ),
+      (entry) => [entry.groups?.name ?? "", entry.groups?.timestamp ?? ""],
     ),
-  ).toBe(true);
+  );
+  const excluded: unknown = exceptions;
+  if (
+    !Array.isArray(excluded) ||
+    !excluded.every((name: unknown): name is string => typeof name === "string")
+  )
+    throw new Error("Quarantine exclusions must be package names");
+  for (const name of excluded) {
+    expect(name.includes("*"), name).toBe(false);
+    if (name.startsWith("@stll/")) {
+      continue;
+    }
+    const expiry = expiring.get(name);
+    expect(expiry, name).toBeString();
+    expect(new Date(expiry ?? "").toISOString()).toBe(expiry);
+    expect(Date.parse(expiry ?? "")).toBeGreaterThan(Date.now());
+  }
 });
 
 test("every first-party quarantine exemption carries an exact UTC annotation", () => {
   const source = read("bunfig.toml");
-  const parsed = Bun.TOML.parse(source);
+  const parsed = object(Bun.TOML.parse(source));
   const entries = Array.from(
     source.matchAll(
       /^\s*"(?<name>@stll\/[^"*]+)"\s*,?\s*#\s*quarantine-excluded-since:\s*(?<timestamp>\S+)\s*$/gm,
@@ -149,14 +192,19 @@ test("every first-party quarantine exemption carries an exact UTC annotation", (
     if (name === undefined) throw new Error("Missing exemption package name");
     return name;
   });
-  const exclusions: unknown = parsed.install.minimumReleaseAgeExcludes;
+  const exclusions: unknown = property(
+    parsed.install,
+    "minimumReleaseAgeExcludes",
+  );
   if (
     !Array.isArray(exclusions) ||
     !exclusions.every((entry: unknown) => typeof entry === "string")
   )
     throw new Error("Quarantine exclusions must be package names");
   const compare = (left: string, right: string) => left.localeCompare(right);
-  expect(names.toSorted(compare)).toEqual(exclusions.toSorted(compare));
+  expect(names.toSorted(compare)).toEqual(
+    exclusions.filter((name) => name.startsWith("@stll/")).toSorted(compare),
+  );
   for (const entry of entries) {
     const timestamp = entry.groups?.timestamp;
     if (timestamp === undefined) throw new Error("Missing exemption timestamp");

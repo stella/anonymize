@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
+import { parsePythonResult } from "../adapters/python";
 import {
   DATAFOG_PROVIDER,
   PYTHON_BENCHMARK_PROVIDERS,
 } from "../adapters/python-providers";
-import { parsePythonResult } from "../adapters/python";
 import { totalUtf16CodeUnits } from "../adapters/types";
 import { DATAFOG_MAPPING, supportedLabels } from "../taxonomy";
 

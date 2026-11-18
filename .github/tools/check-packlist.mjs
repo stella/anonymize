@@ -1,13 +1,13 @@
-import process from "node:process";
-import { parseNpmPack } from "./json-values.mjs";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import process from "node:process";
 
 import {
   assertWasmArtifactSize,
   WASM_RUNTIME_ARTIFACTS,
 } from "../../packages/anonymize/scripts/wasm-artifact-policy.mjs";
+import { parseNpmPack } from "./json-values.mjs";
 
 const LEGAL_FILES = ["LICENSE", "NOTICE"];
 const ROOT_LEGAL_FILE_CONTENTS = new Map(

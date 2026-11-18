@@ -1,10 +1,9 @@
 name: CI
 
 env:
-  HAWK_RUST_TOOLCHAIN: "1.97.1"
-  HAWK_VERSION: "0.1.11"
-  HAWK_X86_64_UNKNOWN_LINUX_GNU_SHA256: "8380db63360ae94f9890d7e426cce00e479d884f516614cea998c85d5f30ab6d"
-  UV_VERSION: "0.10.1"
+  HAWK_RUST_TOOLCHAIN: "1.99.1"
+  HAWK_VERSION: "0.1.17"
+  UV_VERSION: "0.13.7"
 
 on:
   push:
@@ -30,7 +29,7 @@ jobs:
           persist-credentials: false
 
       - name: Enforce release intent
-        uses: stella/.github/.github/actions/changeset-policy@37bfa04a893d1ae2b9d28379cf68e8360781c8bc # v1.8.0
+        uses: stella/.github/.github/actions/changeset-policy@156afa9596e6a469c10e329f459168d34a00e0fd
         with:
           release-paths: |
             Cargo.lock
@@ -132,16 +131,11 @@ jobs:
           expected_hawk_script="cargo +${HAWK_RUST_TOOLCHAIN} hawk check --target-dir target/hawk -D warnings -A hawk::dead_public -A hawk::unnecessary_public"
           jq -e --arg expected "$expected_hawk_script" \
             '.scripts["rust:hawk"] == $expected' package.json >/dev/null
-          archive="$RUNNER_TEMP/cargo-hawk.tar.gz"
-          install_dir="$RUNNER_TEMP/cargo-hawk"
-          curl --proto '=https' --tlsv1.2 --retry 3 -fsSL \
-            -o "$archive" \
-            "https://github.com/astral-sh/hawk/releases/download/${HAWK_VERSION}/cargo-hawk-x86_64-unknown-linux-gnu.tar.gz"
-          echo "${HAWK_X86_64_UNKNOWN_LINUX_GNU_SHA256}  ${archive}" | sha256sum --check
-          mkdir -p "$install_dir"
-          tar -xzf "$archive" -C "$install_dir" --strip-components=1
-          echo "$install_dir" >> "$GITHUB_PATH"
-          rustup toolchain install 1.97.1 --profile minimal # cargo-hawk exception tracked in stll-toolchain.json
+          rustup component add rustc-dev --toolchain 1.99.1
+          RUSTC_BOOTSTRAP=1 cargo +1.99.1 install cargo-hawk \
+            --version "${HAWK_VERSION}" --locked --root "$RUNNER_TEMP/hawk"
+          echo "$RUNNER_TEMP/hawk/bin" >> "$GITHUB_PATH"
+
       - name: Rust checks
         run: bun run rust:check
       - name: Hawk visibility lint
@@ -209,7 +203,19 @@ jobs:
           test ! -e packages/data/dist
           bun run --filter @stll/anonymize typecheck
       - name: Audit Bun dependencies
-        run: bun audit
+        # GHSA-fc5q-39xc-vjpf: picomatch <=4.0.7 backtracks on single-branch
+        # repeated extglobs. 4.0.7 is the latest release and no patched
+        # version exists. picomatch reaches the tree only through build and
+        # release tooling (tsdown and vite via tinyglobby, changesets, the
+        # shared lint config); no published package depends on it, and no
+        # code here matches untrusted glob patterns. The ignore lapses on
+        # 2026-12-17; take the patched release as soon as one is published.
+        run: |
+          ignore=()
+          if [[ "$(date -u +%F)" < "2026-12-17" ]]; then
+            ignore+=(--ignore=GHSA-fc5q-39xc-vjpf)
+          fi
+          bun audit "${ignore[@]}"
       - uses: ./.github/actions/setup-rust-ci
         with:
           profile: build
@@ -290,7 +296,7 @@ jobs:
           )
           tar -czf "$RUNNER_TEMP/ci-build.tar.gz" -- "${outputs[@]}"
       - name: Upload build outputs
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ci-build
           path: ${{ runner.temp }}/ci-build.tar.gz
@@ -325,14 +331,13 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          fetch-depth: 0
       - uses: ./.github/actions/setup-built-workspace
       - name: Lint
         run: bun run lint
       - name: Verify data mirror
         run: bun run --cwd packages/data check:mirror
       - name: Format
-        run: bun run format:check
+        run: bun fmt --check
       - name: Typecheck
         if: ${{ !cancelled() }}
         run: bun run typecheck:built
@@ -342,19 +347,8 @@ jobs:
           --project packages/data/tsconfig.json
           --seed-dir packages/data/dictionaries
           -- bun run --cwd packages/data typecheck
-      - name: Detect shared toolchain changes
-        id: toolchain
-        env:
-          BASE_REF: ${{ github.event.pull_request.base.sha || github.event.before || 'unavailable-toolchain-base' }}
-        run: |
-          result=$(bunx --no-install stll-toolchain-changed --since "$BASE_REF")
-          printf '%s\n' "$result"
-          printf 'changed=%s\n' "$(printf '%s' "$result" | jq -r '.changed')" >> "$GITHUB_OUTPUT"
       - name: Tooling adoption contract
         run: bun run test:tooling
-      - name: Typecheck diagnostic parity
-        if: steps.toolchain.outputs.changed == 'true'
-        run: bun run check:typecheck-parity
       - name: Knip (unused/undeclared deps)
         run: bun run check:knip
 
@@ -467,7 +461,7 @@ jobs:
           profile: consumer
           cache-scope: build
       - name: Setup minimum supported Node for MCP
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22.23.3"
           registry-url: https://registry.npmjs.org

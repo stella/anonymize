@@ -1,3 +1,5 @@
+import type { PipelineContext } from "./context";
+import { defaultContext } from "./context";
 import {
   DEFAULT_OPERATOR_CONFIG,
   maskReplacementSpans,
@@ -12,8 +14,6 @@ import type {
   OperatorType,
   RedactionResult,
 } from "./types";
-import type { PipelineContext } from "./context";
-import { defaultContext } from "./context";
 
 const WHITESPACE_RE = /\s+/g;
 const NON_PHONE_DIGIT_RE = /\D/g;

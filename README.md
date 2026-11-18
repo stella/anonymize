@@ -238,7 +238,7 @@ guide](packages/benchmark/REPRODUCING.md).
 bun install --frozen-lockfile
 bun run build
 bun run lint
-bun run format:check
+bun fmt --check
 bun run typecheck
 bun run test
 bun run check:version

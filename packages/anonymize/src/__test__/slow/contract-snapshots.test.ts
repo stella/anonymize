@@ -1,12 +1,11 @@
+import { describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
-import { describe, expect, test } from "bun:test";
-
 import type { NativePipelineEntity } from "../../native";
-import { redactNative } from "../native-detect";
 import { contractTestConfig } from "../contract-config";
 import { loadTestDictionaries } from "../load-dictionaries";
+import { redactNative } from "../native-detect";
 
 const FIXTURES_DIR = join(import.meta.dir, "..", "fixtures", "contracts");
 const UPDATE_SNAPSHOTS = process.env["UPDATE_CONTRACT_SNAPSHOTS"] === "1";

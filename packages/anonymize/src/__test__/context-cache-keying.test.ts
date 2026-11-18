@@ -18,11 +18,11 @@ import { describe, expect, setDefaultTimeout, test } from "bun:test";
 
 setDefaultTimeout(60_000);
 
-import { createPipelineContext } from "../context";
 import { DEFAULT_ENTITY_LABELS } from "../constants";
+import { createPipelineContext } from "../context";
 import type { PipelineConfig } from "../types";
-import { detectNative } from "./native-detect";
 import { loadTestDictionaries } from "./load-dictionaries";
+import { detectNative } from "./native-detect";
 
 // Config that builds the name corpus WITHOUT dictionaries (name corpus and
 // deny list disabled), mirroring the comma-party-names style config.

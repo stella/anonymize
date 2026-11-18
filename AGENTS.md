@@ -338,9 +338,7 @@ This is a Bun-first TypeScript monorepo for text anonymization. The library hand
 
 - `bun install`
 - `bun run lint`
-- `bun run format:check`
 - `bun run typecheck` (`bun check --no-pretty --all --project=<tsconfig>` for each checked project)
-- `bun run check:typecheck-parity`
 - `bun run test`
 - `bun run build`
 - `bun run check:version`
@@ -503,7 +501,7 @@ default alias), and the pinned Rust 1.96.0 toolchain with the
   wasm-bindgen module uses ordinary single-thread memory. Run
   `smoke:wasm-runtimes` after loader changes; run
   `smoke:wasm-browser` to prove the ordinary non-isolated browser path. The
-  generator requires exactly wasm-bindgen CLI 0.2.126. Keep the shared runtime
+  generator requires exactly wasm-bindgen CLI 0.2.130. Keep the shared runtime
   artifact policy enforced during both dist assembly and tarball validation;
   do not bypass its size ceilings or closed `dist/native/` file set.
 - **Build before test / Python.** `bun run build` generates the `.stlanonpkg`
@@ -517,11 +515,11 @@ default alias), and the pinned Rust 1.96.0 toolchain with the
   `get.nexte.st` (CI installs the pinned prebuilt). Doctests run separately via
   `cargo ci-test-doc` on stock cargo. `bun run rust:check` also runs
   `cargo ci-stella-lint` on the pinned stable toolchain. Install its binary with
-  `cargo install --git https://github.com/stella/tooling --rev a1bd81740ecb4b66999f56d1716e1190c4e7272f --locked stella_source_lint`.
+  `cargo install --git https://github.com/stella/tooling --rev 51a4412dfe02203c24a3495f14ec99405acb7527 --locked stella_source_lint`.
 - **Python surface is optional** and needs `uv` (not preinstalled);
   `python:typecheck`/`python:wheel` and the Python parity tests are skipped
   without it.
 
 ### TypeScript Tooling
 
-Use Bun for every TypeScript typecheck, including test and WASM configurations. CI runs `bun run check:typecheck-parity` for every configuration checked by workspace scripts. Editors keep the TypeScript language service because Bun has no language server. Keep `typescript` for editor support and declaration generation through tsdown and diagnostic parity.
+Use Bun for every TypeScript typecheck, including test and WASM configurations. Editors keep the TypeScript language service because Bun has no language server. tsdown emits declarations with its oxc generator, which reads no type information, so every exported value and function needs an explicit type (a `satisfies` clause on an export becomes a typed alias check). No manifest declares `typescript`, the root included.

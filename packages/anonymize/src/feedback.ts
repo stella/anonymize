@@ -10,8 +10,8 @@
  */
 
 import {
-  sanitizeFeedbackText,
   type SanitizeFeedbackResult,
+  sanitizeFeedbackText,
 } from "./feedback-sanitize";
 
 export const FEEDBACK_KINDS = [
