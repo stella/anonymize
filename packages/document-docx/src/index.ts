@@ -8,9 +8,14 @@ export {
   extractDocxText,
 } from "./extract";
 export { DocxRewriteError, rewriteDocxText } from "./rewrite";
+export {
+  DocxAnonymizedExportError,
+  rewriteDocxForAnonymizedExport,
+} from "./anonymized-export";
 export { DocxRestorationError, restoreDocxText } from "./restore";
 export {
   DOCX_ANONYMIZATION_ERROR_CODES,
+  DOCX_ANONYMIZED_EXPORT_ERROR_CODES,
   DOCX_COVERAGE_MODES,
   DOCX_EXTRACTION_ERROR_CODES,
   DOCX_PART_TYPES,
@@ -20,6 +25,9 @@ export {
 export type {
   AnonymizeDocxOptions,
   DocxAnonymizationErrorCode,
+  DocxAnonymizedExportErrorCode,
+  DocxAnonymizedExportReport,
+  DocxAnonymizedExportResult,
   DocxAnonymizationPolicy,
   DocxAnonymizationResult,
   DocxAnonymizationSession,
@@ -48,6 +56,7 @@ export type {
   DocxTextSegment,
   DocxWorkflowCoverage,
   RestoreDocxTextOptions,
+  RewriteDocxForAnonymizedExportOptions,
 } from "./types";
 export {
   DOCX_ANONYMIZATION_MAX_CALLER_DETECTIONS,
