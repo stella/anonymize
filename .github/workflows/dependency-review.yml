@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   dependency-review:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     if: github.event.pull_request.draft != true
 
