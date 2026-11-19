@@ -58,18 +58,19 @@ pub(super) fn take_support_input(
   let state_abbreviations = config
     .false_positive_filters
     .as_ref()
-    .map(|filters| filters.us_state_abbreviations.iter().cloned().collect())
-    .unwrap_or_default();
+    .map_or_default(|filters| {
+      filters.us_state_abbreviations.iter().cloned().collect()
+    });
   let document_heading_words = config
     .false_positive_filters
     .as_ref()
-    .map(|filters| filters.document_heading_words.iter().cloned().collect())
-    .unwrap_or_default();
+    .map_or_default(|filters| {
+      filters.document_heading_words.iter().cloned().collect()
+    });
   let mut signature = config.signature_data.take();
   let signature_party_role_labels = legal_forms
     .as_ref()
-    .map(|data| data.role_heads.clone())
-    .unwrap_or_default();
+    .map_or_default(|data| data.role_heads.clone());
   if let (Some(legal_forms), Some(signature)) =
     (legal_forms.as_ref(), signature.as_mut())
   {
@@ -105,8 +106,7 @@ pub(super) fn prepare_support_data(
   let mut legal_form_soft_wrap_boundary_labels = input
     .address_seed
     .as_ref()
-    .map(|data| data.boundary_words.clone())
-    .unwrap_or_default();
+    .map_or_default(|data| data.boundary_words.clone());
   legal_form_soft_wrap_boundary_labels.extend(input.document_heading_words);
   let prepared = crate::exec::scope(|scope| {
     let hotwords = scope.spawn(|| prepare_timed_hotword_data(input.hotwords));

@@ -1083,8 +1083,7 @@ fn collect_deny_list_matches(
     let custom_pattern_labels = data
       .custom_labels
       .get(local_index)
-      .map(StringGroup::to_strings)
-      .unwrap_or_default();
+      .map_or_default(StringGroup::to_strings);
     let custom_edges_are_valid = custom_match_has_valid_edges(
       full_text,
       offsets,
@@ -2340,8 +2339,7 @@ fn person_soft_wrap_context(
   let label = previous_line.unwrap_or_default().trim();
   let normalized_label = label
     .strip_suffix(':')
-    .map(str::trim)
-    .unwrap_or_default()
+    .map_or_default(str::trim)
     .to_lowercase();
   if person_field_labels
     .iter()
@@ -2398,7 +2396,7 @@ const fn is_line_break(ch: char) -> bool {
   matches!(ch, '\r' | '\n' | '\u{2028}' | '\u{2029}')
 }
 
-fn is_supported_name_separator(ch: char) -> bool {
+const fn is_supported_name_separator(ch: char) -> bool {
   is_line_break(ch) || ch == '\t' || (ch.is_whitespace() && !ch.is_control())
 }
 

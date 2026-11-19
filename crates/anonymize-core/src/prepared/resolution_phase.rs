@@ -142,8 +142,7 @@ impl PreparedEngine {
       .data
       .signatures
       .as_ref()
-      .map(PreparedSignatureData::person_span_terminators)
-      .unwrap_or_default()
+      .map_or_default(PreparedSignatureData::person_span_terminators)
   }
 
   fn address_directional_abbreviations(&self) -> Option<&BTreeSet<String>> {

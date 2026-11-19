@@ -297,8 +297,7 @@ impl<'a> StaticDetectorContext<'a> {
     let empty_title_tokens = BTreeSet::new();
     let person_value_labels = self
       .signature_data()?
-      .map(PreparedSignatureData::person_value_labels)
-      .unwrap_or_default();
+      .map_or_default(PreparedSignatureData::person_value_labels);
     process_trigger_matches(ProcessTriggerMatchesArgs {
       matches: self.regex_matches()?,
       slice: self.triggers_slice()?,
