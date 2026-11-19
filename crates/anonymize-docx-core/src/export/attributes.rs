@@ -1434,9 +1434,8 @@ mod tests {
     context: &str,
   ) -> Result<(), Box<dyn std::error::Error>> {
     let attributes = result.map_err(|error| format!("{context}: {error}"))?;
-    let expected = expected
-      .map(|value| vec![(name.to_owned(), value.clone())])
-      .unwrap_or_default();
+    let expected =
+      expected.map_or_default(|value| vec![(name.to_owned(), value.clone())]);
     assert_eq!(attributes, expected, "{context}");
     Ok(())
   }
