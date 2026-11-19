@@ -22,6 +22,9 @@ unicode-properties = "0.1.4"
 stella-anonymize-core = { path = "../crates/anonymize-core" }
 stella-anonymize-adapter-contract = { path = "../crates/anonymize-adapter-contract" }
 
+[lints.cargo]
+unused_dependencies = "deny"
+
 # Detach from the parent workspace so `cargo build --workspace` at the repo root
 # never pulls in the fuzz targets or their target dependencies.
 [workspace]
