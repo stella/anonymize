@@ -1,5 +1,13 @@
 # Changelog
 
+## 4.1.0
+
+### Patch Changes
+
+- [#661](https://github.com/stella/anonymize/pull/661) [`bf49c98`](https://github.com/stella/anonymize/commit/bf49c98d332ee3ef3df65c8a49faf5ac60ea86ee) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Raise the Rust crates' minimum supported Rust version to 1.100, use the standard `trim_prefix` and `trim_suffix` string helpers, and reject unused Cargo dependencies at build time.
+
+- [#658](https://github.com/stella/anonymize/pull/658) [`b8ccfa2`](https://github.com/stella/anonymize/commit/b8ccfa2c56dd38c3ca2c0c6088953cc68af84bcb) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Build the native and WebAssembly runtimes with Rust 1.100.0.
+
 ## 4.0.0
 
 ### Patch Changes

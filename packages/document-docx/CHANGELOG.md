@@ -1,5 +1,18 @@
 # @stll/anonymize-docx
 
+## 4.1.0
+
+### Minor Changes
+
+- [#510](https://github.com/stella/anonymize/pull/510) [`6be5055`](https://github.com/stella/anonymize/commit/6be5055c4f4cc60510f32425da3cdaa16c5063f2) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add an atomic anonymized DOCX export API that removes hidden document metadata, rejects unsupported content, and validates the rewritten package before returning it.
+  
+  Validate XML nesting iteratively before recursive parsing and lower the exclusive nesting limit to 128 to reserve parser stack space.
+
+### Patch Changes
+
+- Updated dependencies [[`bf49c98`](https://github.com/stella/anonymize/commit/bf49c98d332ee3ef3df65c8a49faf5ac60ea86ee), [`b8ccfa2`](https://github.com/stella/anonymize/commit/b8ccfa2c56dd38c3ca2c0c6088953cc68af84bcb)]:
+  - @stll/anonymize@4.1.0
+
 ## 4.0.0
 
 ### Patch Changes
