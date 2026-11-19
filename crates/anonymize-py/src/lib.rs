@@ -1648,8 +1648,8 @@ fn plan_docx_restoration_json(
   serde_json::to_string(&plan).map_err(|error| to_py_serde_error(&error))
 }
 
-#[pymodule(gil_used = false)]
-fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
+#[pymodule(name = "_native", gil_used = false)]
+fn native(module: &Bound<'_, PyModule>) -> PyResult<()> {
   module.add_class::<PyPreparedSearch>()?;
   module.add_class::<PyPreparedRedactionSession>()?;
   module.add_class::<PyPreparedSessionRedactionPlan>()?;
