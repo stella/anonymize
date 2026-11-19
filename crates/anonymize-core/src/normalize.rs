@@ -136,7 +136,7 @@ pub(crate) fn normalize_entity_text(label: &str, text: &str) -> String {
   }
   if upper == "PHONE_NUMBER" || upper == "PHONE" {
     let digits: String = text.chars().filter(char::is_ascii_digit).collect();
-    return digits.strip_prefix("00").unwrap_or(&digits).to_owned();
+    return digits.trim_prefix("00").to_owned();
   }
   if upper == "CRYPTO" {
     return normalize_crypto_text(text);

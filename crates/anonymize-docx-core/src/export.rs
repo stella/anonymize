@@ -1403,10 +1403,7 @@ fn canonical_relationship_target(path: &str, resolved: &str) -> String {
   let directory = source
     .rsplit_once('/')
     .map_or("", |(directory, _)| directory);
-  resolved
-    .strip_prefix(&format!("{directory}/"))
-    .unwrap_or(resolved)
-    .to_owned()
+  resolved.trim_prefix(&format!("{directory}/")).to_owned()
 }
 
 fn relationships_root(document: &Document<'_>) -> Result<(), DocxRewriteError> {

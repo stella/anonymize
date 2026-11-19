@@ -420,7 +420,7 @@ impl PreparedNameCorpusData {
   ) -> ClassifiedToken<'a> {
     let text = word.text;
     let lower = text.to_lowercase();
-    let stripped = lower.strip_suffix('.').unwrap_or(&lower);
+    let stripped = lower.trim_suffix('.');
     if self.title_tokens.contains(stripped) {
       return ClassifiedToken {
         text,
