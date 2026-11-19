@@ -1,6 +1,11 @@
 //! Binding-facing DTOs for the prepared-search configuration and
 //! operator contracts.
 
+// Serde derives a field enum with no variants for each `{}` variant under
+// `deny_unknown_fields` (see `BindingTriggerStrategy`). That derive output sits
+// beside the enum rather than inside it, so the lint level is set here.
+#![allow(clippy::empty_enums)]
+
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
