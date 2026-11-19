@@ -28,18 +28,18 @@ runs:
     - name: Install stable Rust
       shell: bash
       run: |
-        rustup toolchain install 1.99.1 --profile minimal
-        rustup default 1.99.1
+        rustup toolchain install 1.100.0 --profile minimal
+        rustup default 1.100.0
 
     - if: inputs.profile == 'build'
       name: Install WebAssembly target
       shell: bash
-      run: rustup target add wasm32-unknown-unknown --toolchain 1.99.1
+      run: rustup target add wasm32-unknown-unknown --toolchain 1.100.0
 
     - if: inputs.profile == 'quality' || inputs.profile == 'detached'
       name: Install Rust quality components
       shell: bash
-      run: rustup component add rustfmt clippy --toolchain 1.99.1
+      run: rustup component add rustfmt clippy --toolchain 1.100.0
 
     - name: Cache Rust build
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -54,9 +54,9 @@ runs:
           target/
           fuzz/target/
           packages/benchmark/native/nym-adapter/target/
-        key: ${{ runner.os }}-cargo-${{ inputs.cache-scope }}-1.99.1-source-lint-51a4412dfe02203c24a3495f14ec99405acb7527-${{ hashFiles('Cargo.lock', 'fuzz/Cargo.lock', 'packages/benchmark/native/nym-adapter/Cargo.lock') }}
+        key: ${{ runner.os }}-cargo-${{ inputs.cache-scope }}-1.100.0-source-lint-51a4412dfe02203c24a3495f14ec99405acb7527-${{ hashFiles('Cargo.lock', 'fuzz/Cargo.lock', 'packages/benchmark/native/nym-adapter/Cargo.lock') }}
         restore-keys: |
-          ${{ runner.os }}-cargo-${{ inputs.cache-scope }}-1.99.1-source-lint-51a4412dfe02203c24a3495f14ec99405acb7527-
+          ${{ runner.os }}-cargo-${{ inputs.cache-scope }}-1.100.0-source-lint-51a4412dfe02203c24a3495f14ec99405acb7527-
 
     - if: inputs.profile == 'quality'
       name: Install stable Rust source lint

@@ -10,7 +10,7 @@ Install these prerequisites:
 
 - Bun 1.4, pinned in `package.json`
 - Node.js 22.18 or newer for the TypeScript-aware build configuration
-- rustup; the repository installs Rust 1.96.0 and the
+- rustup; the repository installs Rust 1.100.0 and the
   `wasm32-unknown-unknown` target through `rust-toolchain.toml`
 - `wasm-bindgen-cli` 0.2.130 for full builds and browser tests
 

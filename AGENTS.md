@@ -486,7 +486,7 @@ support resource, but the rule metadata and behavior stay module-local.
 ## Cursor Cloud specific instructions
 
 The VM snapshot already provides Bun 1.3.14, Node 22 (via nvm, set as the
-default alias), and the pinned Rust 1.96.0 toolchain with the
+default alias), and the pinned Rust 1.100.0 toolchain with the
 `wasm32-unknown-unknown` target. The startup update script only runs
 `bun install`; standard commands are in [Repository Specifics](#repository-specifics) above and in
 `package.json` scripts. Non-obvious caveats:

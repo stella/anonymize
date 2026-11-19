@@ -1,8 +1,8 @@
 name: CI
 
 env:
-  HAWK_RUST_TOOLCHAIN: "1.99.1"
-  HAWK_VERSION: "0.1.17"
+  HAWK_RUST_TOOLCHAIN: "1.100.0"
+  HAWK_VERSION: "0.1.18"
   UV_VERSION: "0.13.7"
 
 on:
@@ -131,8 +131,8 @@ jobs:
           expected_hawk_script="cargo +${HAWK_RUST_TOOLCHAIN} hawk check --target-dir target/hawk -D warnings -A hawk::dead_public -A hawk::unnecessary_public"
           jq -e --arg expected "$expected_hawk_script" \
             '.scripts["rust:hawk"] == $expected' package.json >/dev/null
-          rustup component add rustc-dev --toolchain 1.99.1
-          RUSTC_BOOTSTRAP=1 cargo +1.99.1 install cargo-hawk \
+          rustup component add rustc-dev --toolchain 1.100.0
+          RUSTC_BOOTSTRAP=1 cargo +1.100.0 install cargo-hawk \
             --version "${HAWK_VERSION}" --locked --root "$RUNNER_TEMP/hawk"
           echo "$RUNNER_TEMP/hawk/bin" >> "$GITHUB_PATH"
 
