@@ -508,8 +508,7 @@ mod tests {
     };
     Ok(
       build_standalone_street_data(&context)?
-        .map(|data| data.street_type_words)
-        .unwrap_or_default(),
+        .map_or_default(|data| data.street_type_words),
     )
   }
 
@@ -531,8 +530,7 @@ mod tests {
     let shared = build_address_shared_data(&context)?;
     Ok(
       build_address_seed_data(&context, &shared)?
-        .map(|data| data.unit_abbreviations)
-        .unwrap_or_default(),
+        .map_or_default(|data| data.unit_abbreviations),
     )
   }
 
@@ -554,8 +552,7 @@ mod tests {
     let shared = build_address_shared_data(&context)?;
     Ok(
       build_address_seed_data(&context, &shared)?
-        .map(|data| data.directional_abbreviations)
-        .unwrap_or_default(),
+        .map_or_default(|data| data.directional_abbreviations),
     )
   }
 

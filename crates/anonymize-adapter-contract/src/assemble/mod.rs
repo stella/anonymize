@@ -389,8 +389,7 @@ fn build_literals(
 ) -> Result<Literals, AssembleError> {
   let (deny_originals, deny_sources) = inputs
     .deny_list_data
-    .map(deny_list::deny_originals_and_sources)
-    .unwrap_or_default();
+    .map_or_default(deny_list::deny_originals_and_sources);
 
   // `hasCustomLiteralBoundaryOverride`: a custom-deny entry with non-alphanumeric
   // edges (word-boundary literals would not match it).

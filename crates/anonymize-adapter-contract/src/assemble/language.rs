@@ -47,8 +47,7 @@ fn configured_languages(config: &PipelineConfig) -> Vec<String> {
   config
     .language
     .as_ref()
-    .map(|language| vec![language.clone()])
-    .unwrap_or_default()
+    .map_or_default(|language| vec![language.clone()])
 }
 
 /// Mirrors `uniquePush`: append values not already present, order preserved.

@@ -1342,8 +1342,7 @@ mod tests {
       .unwrap_or("wrapper");
     let required = super::required_identifier_attribute(element, Some(parent))
       .filter(|required| *required != attribute)
-      .map(|required| format!(" w:{required}=\"202555\""))
-      .unwrap_or_default();
+      .map_or_default(|required| format!(" w:{required}=\"202555\""));
     let xml = format!(
       "<w:{parent} xmlns:w=\"{WORD}\"><w:{element} w:{attribute}=\"{value}\"{required}/></w:{parent}>"
     );

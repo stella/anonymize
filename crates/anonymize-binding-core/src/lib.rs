@@ -1015,10 +1015,7 @@ mod tests {
     let max_bytes = stella_anonymize_core::REDACTION_TEXT_MAX_BYTES;
     let oversized = "a".repeat(max_bytes.saturating_add(1));
     let describe = |result: std::result::Result<(), BindingFacadeError>| {
-      result
-        .err()
-        .map(|error| error.to_string())
-        .unwrap_or_default()
+      result.err().map_or_default(|error| error.to_string())
     };
 
     let engine_message = describe(
