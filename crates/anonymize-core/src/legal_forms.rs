@@ -1746,7 +1746,7 @@ impl CandidateContainmentIndex {
       if let Some(max_end) = self.institutional_max_ends.get_mut(position) {
         *max_end = (*max_end).max(candidate.end);
       }
-      position = position.saturating_add(position & position.wrapping_neg());
+      position = position.saturating_add(position.isolate_lowest_one());
     }
   }
 
@@ -2932,7 +2932,7 @@ fn trim_leading_clause(
           .get(..start)
           .and_then(|prefix| prefix.chars().next_back())
           .is_some_and(char::is_whitespace);
-      let after_ws = lower.get(end..).map(leading_ws_len).unwrap_or_default();
+      let after_ws = lower.get(end..).map_or_default(leading_ws_len);
       if before_ok && after_ws > 0 {
         cut = cut.max(to_orig(end.saturating_add(after_ws)));
       }
@@ -2948,7 +2948,7 @@ fn trim_leading_clause(
       let start = search_from.saturating_add(relative);
       let end = start.saturating_add(prefix.len());
       search_from = end;
-      let after_ws = lower.get(end..).map(leading_ws_len).unwrap_or_default();
+      let after_ws = lower.get(end..).map_or_default(leading_ws_len);
       let after_orig = to_orig(end.saturating_add(after_ws));
       // The company name after the prefix must be capitalized. Read the
       // original text (in original byte offsets), not the lowercased copy, or

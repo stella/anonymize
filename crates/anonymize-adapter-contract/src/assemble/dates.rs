@@ -86,7 +86,7 @@ fn value_to_strings(value: &Value) -> Vec<String> {
 
 /// JS `name.replace(/\.$/, "").length` measured in UTF-16 code units.
 fn length_without_trailing_dot(name: &str) -> usize {
-  let stripped = name.strip_suffix('.').unwrap_or(name);
+  let stripped = name.trim_suffix('.');
   stripped.encode_utf16().count()
 }
 

@@ -18,7 +18,7 @@ edition = "2024"
 # Minimum supported Rust version, matching the pinned toolchain
 # (rust-toolchain.toml). With resolver "3" this also makes dependency
 # resolution MSRV-aware and fails fast on an older rustc.
-rust-version = "1.96"
+rust-version = "1.100"
 license = "Apache-2.0"
 publish = false
 repository = "https://github.com/stella/anonymize"
@@ -37,6 +37,9 @@ unused_imports = "deny"
 unused_macros = "deny"
 unused_mut = "deny"
 unused_variables = "deny"
+
+[workspace.lints.cargo]
+unused_dependencies = "deny"
 
 [workspace.lints.rustdoc]
 broken_intra_doc_links = "deny"

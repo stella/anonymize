@@ -1342,8 +1342,7 @@ mod tests {
       .unwrap_or("wrapper");
     let required = super::required_identifier_attribute(element, Some(parent))
       .filter(|required| *required != attribute)
-      .map(|required| format!(" w:{required}=\"202555\""))
-      .unwrap_or_default();
+      .map_or_default(|required| format!(" w:{required}=\"202555\""));
     let xml = format!(
       "<w:{parent} xmlns:w=\"{WORD}\"><w:{element} w:{attribute}=\"{value}\"{required}/></w:{parent}>"
     );
@@ -1435,9 +1434,8 @@ mod tests {
     context: &str,
   ) -> Result<(), Box<dyn std::error::Error>> {
     let attributes = result.map_err(|error| format!("{context}: {error}"))?;
-    let expected = expected
-      .map(|value| vec![(name.to_owned(), value.clone())])
-      .unwrap_or_default();
+    let expected =
+      expected.map_or_default(|value| vec![(name.to_owned(), value.clone())]);
     assert_eq!(attributes, expected, "{context}");
     Ok(())
   }

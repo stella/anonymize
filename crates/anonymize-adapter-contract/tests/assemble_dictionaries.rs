@@ -7,8 +7,7 @@ use stella_anonymize_core::assemble::{Dictionaries, PipelineConfig};
 
 fn base_config_json(with_dictionaries: Option<&str>) -> String {
   let dictionaries = with_dictionaries
-    .map(|json| format!(r#","dictionaries":{json}"#))
-    .unwrap_or_default();
+    .map_or_default(|json| format!(r#","dictionaries":{json}"#));
   format!(
     r#"{{
       "threshold": 0.5,

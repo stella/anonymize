@@ -97,8 +97,7 @@ fn relationship_identifiers(
     }
     let identifier = node.attribute("Id").unwrap_or_default();
     let target = resolved
-      .map(|target| paths.get(&target).cloned().unwrap_or(target))
-      .unwrap_or_default();
+      .map_or_default(|target| paths.get(&target).cloned().unwrap_or(target));
     retained.push((
       allowed_relationship_suffix(relation_type).unwrap_or(relation_type),
       target,

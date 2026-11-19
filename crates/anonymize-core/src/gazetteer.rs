@@ -908,16 +908,13 @@ impl SequenceTrie {
       let separators = if position == 0 {
         Vec::new()
       } else {
-        gaps
-          .next()
-          .map(|gap| {
-            gap
-              .keys()
-              .into_iter()
-              .map(|key| (self.intern_gap_key(key), gap.max_chars))
-              .collect()
-          })
-          .unwrap_or_default()
+        gaps.next().map_or_default(|gap| {
+          gap
+            .keys()
+            .into_iter()
+            .map(|key| (self.intern_gap_key(key), gap.max_chars))
+            .collect()
+        })
       };
       let next = self.nodes.len();
       let Some(current) = self.nodes.get_mut(node) else {

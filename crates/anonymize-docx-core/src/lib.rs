@@ -390,8 +390,8 @@ fn is_owned_placeholder_candidate(
   value: &str,
   encoded_session_id: &str,
 ) -> bool {
-  let inner = value.strip_prefix('[').unwrap_or(value);
-  let inner = inner.strip_suffix(']').unwrap_or(inner);
+  let inner = value.trim_prefix('[');
+  let inner = inner.trim_suffix(']');
   let Some((prefix, _count)) = inner.rsplit_once('_') else {
     return false;
   };
@@ -1220,7 +1220,7 @@ fn parse_content_types(
         "DOCX content-type override is incomplete",
       )
     })?;
-    let path = raw_path.strip_prefix('/').unwrap_or(&raw_path).to_owned();
+    let path = raw_path.trim_prefix('/').to_owned();
     if !safe_entry_path(&path) || !paths.insert(path.clone()) {
       return Err(error(
         DocxErrorCode::InvalidPackage,
@@ -1257,7 +1257,7 @@ fn parse_main_target(bytes: &[u8]) -> Result<String, DocxError> {
         "DOCX main-document relationship must be internal",
       ));
     }
-    let normalized = target.strip_prefix('/').unwrap_or(&target).to_owned();
+    let normalized = target.trim_prefix('/').to_owned();
     if !safe_entry_path(&normalized) || normalized.contains(':') {
       return Err(error(
         DocxErrorCode::InvalidPackage,
