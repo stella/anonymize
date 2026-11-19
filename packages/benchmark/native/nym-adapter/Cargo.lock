@@ -1005,7 +1005,6 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "ort",
- "ort-sys",
  "serde",
  "serde_json",
  "sha2",
