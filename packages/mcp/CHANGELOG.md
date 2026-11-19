@@ -1,5 +1,14 @@
 # @stll/anonymize-mcp
 
+## 4.1.0
+
+### Patch Changes
+
+- Updated dependencies [[`6be5055`](https://github.com/stella/anonymize/commit/6be5055c4f4cc60510f32425da3cdaa16c5063f2), [`bf49c98`](https://github.com/stella/anonymize/commit/bf49c98d332ee3ef3df65c8a49faf5ac60ea86ee), [`b8ccfa2`](https://github.com/stella/anonymize/commit/b8ccfa2c56dd38c3ca2c0c6088953cc68af84bcb)]:
+  - @stll/anonymize-docx@4.1.0
+  - @stll/anonymize@4.1.0
+  - @stll/anonymize-pdf@4.1.0
+
 ## 4.0.0
 
 ### Major Changes
