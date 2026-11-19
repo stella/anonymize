@@ -370,11 +370,7 @@ fn should_reject_entity(args: ShouldRejectEntityArgs<'_>) -> Result<bool> {
   {
     return Ok(true);
   }
-  if entity.label == ADDRESS_LABEL && should_reject_address(entity, filters) {
-    return Ok(true);
-  }
-
-  Ok(false)
+  Ok(entity.label == ADDRESS_LABEL && should_reject_address(entity, filters))
 }
 
 fn should_reject_address(

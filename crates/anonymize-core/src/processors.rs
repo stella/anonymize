@@ -3041,11 +3041,7 @@ fn custom_match_has_valid_edges(
   let next = full_text
     .get(end_byte..)
     .and_then(|suffix| suffix.chars().next());
-  if next.is_some_and(char::is_alphanumeric) {
-    return Ok(false);
-  }
-
-  Ok(true)
+  Ok(!next.is_some_and(char::is_alphanumeric))
 }
 
 /// A hyphen compound joins two word characters (`Dodd-Frank`, `Dodd–Frank`,
